@@ -166,7 +166,8 @@ function guardWorkflows(pal, serverKnown) {
     const known = serverKnown.workflows || new Set();
     pal.workflows.entry = node.filter(e => {
         if (known.has(e.string)) return true;                 // existing workflow — edit is fine
-        const wt = e.Workflow && e.Workflow.workflowType;
+        const obj = e.Workflow || e.workflow;
+        const wt = obj && obj.workflowType;
         if (WORKFLOW_TYPES.has(Number(wt))) return true;      // well-formed new workflow
         skipped.push({ type: "workflows", file: e.string,
             reason: "new workflow missing/invalid workflowType — set it in pal.json (web=9, console=7, library=4, transaction=2)" });
@@ -178,15 +179,31 @@ function guardWorkflows(pal, serverKnown) {
 // A pal with a web workflow (workflowType 9) is only a "Web Pal" on the server if
 // layout.webWorkflow names that workflow. palsync builds web workflows (scaffold / agent edits)
 // WITHOUT setting that pointer, so a freshly-pushed web pal validates as "Pal is not a Web Pal".
-// If exactly one web workflow exists and the pointer is unset, register it automatically; respect
-// an existing pointer, and stay out of it when 0 (not a web pal) or >1 (ambiguous — user decides).
+// If layout.webWorkflow is unset, point it at the first web workflow (workflowType 9).
 // Mutates pal.layout. Returns the registered filename, or null if nothing was changed.
 function ensureWebRegistration(pal) {
     if (!pal.layout || pal.layout.webWorkflow) return null;
-    const webWf = (pal.allWorkflows || []).filter(e => e.Workflow && Number(e.Workflow.workflowType) === 9);
-    if (webWf.length !== 1) return null;
+    const webWf = (pal.allWorkflows || []).filter(e => {
+        const obj = e.Workflow || e.workflow;
+        return obj && Number(obj.workflowType) === 9;
+    });
+    if (webWf.length === 0) return null;
     pal.layout.webWorkflow = webWf[0].string;
     return webWf[0].string;
+}
+
+// Similar to webRegistration: if layout.consoleWorkflow is unset, point it at the first console
+// workflow (workflowType 7) so the pal has a default entry point in the PalBuilder console.
+// Mutates pal.layout. Returns the registered filename, or null if nothing was changed.
+function ensureConsoleRegistration(pal) {
+    if (!pal.layout || pal.layout.consoleWorkflow) return null;
+    const consoleWf = (pal.allWorkflows || []).filter(e => {
+        const obj = e.Workflow || e.workflow;
+        return obj && Number(obj.workflowType) === 7;
+    });
+    if (consoleWf.length === 0) return null;
+    pal.layout.consoleWorkflow = consoleWf[0].string;
+    return consoleWf[0].string;
 }
 
 function buildSaveTask(pal) {
@@ -253,10 +270,13 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
     const skipped = guardUncreatableTypes(pal, workspaceDir, serverKnown)
         .concat(guardWorkflows(pal, serverKnown));
     const strayCreatable = findStrayCreatable(pal, workspaceDir);
-    // Register the web workflow so the server treats this as a Web Pal (else TestWeb returns
-    // "Pal is not a Web Pal"). Done after guardWorkflows so a stripped malformed entry can't be
-    // registered. The pointer is sent with this save; pull afterwards to sync it into pal.json.
+// Register the web/console workflow so the server treats this as a Web/Console Pal (else TestWeb
+    // returns "Pal is not a Web Pal"). Done after guardWorkflows so a stripped malformed entry
+    // can't be registered. The pointer is sent with this save; pull afterwards to sync it into
+    // pal.json.
     const webRegistered = ensureWebRegistration(pal);
+    const consoleRegistered = ensureConsoleRegistration(pal);
+
     const injected = await pal.injectFileContent();
     const saveResp = await CloudPistonAPIManager.savePal(session, pal, id);
     const validation = normalizeValidation(saveResp);
@@ -274,6 +294,7 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
         baseline.snapshot(workspaceDir, pushedPaths);
     }
 
+
     // serverPaths: what the server tracks after this save = the pushed manifest (uncreatable
     // strays already stripped by the guard above). Callers rebuild fileHashes from this.
     // lint carries any pre-push WARNINGS (errors would have blocked above) so the agent sees them
@@ -287,4 +308,4 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
              serverPaths: pushedPaths, webRegistered };
 }
 
-module.exports = { push, buildSaveTask, normalizeValidation, guardWorkflows, ensureWebRegistration };
+module.exports = { push, buildSaveTask, normalizeValidation, guardWorkflows, ensureWebRegistration, ensureConsoleRegistration };

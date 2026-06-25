@@ -27,10 +27,10 @@ test("does nothing when there is no web workflow", () => {
     assert.ok(!("webWorkflow" in pal.layout));
 });
 
-test("stays out of it when multiple web workflows exist (ambiguous)", () => {
+test("picks the first one when multiple web workflows exist (not ambiguous)", () => {
     const pal = palWith({}, [webWf("a.js"), webWf("b.js")]);
-    assert.equal(ensureWebRegistration(pal), null);
-    assert.ok(!pal.layout.webWorkflow);
+    assert.equal(ensureWebRegistration(pal), "a.js");
+    assert.equal(pal.layout.webWorkflow, "a.js");
 });
 
 test("no layout -> null (nothing to register on)", () => {

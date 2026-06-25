@@ -83,12 +83,19 @@ function applyTemplate(workspaceDir, name, { palName } = {}) {
     for (const f of manifest.files || []) {
         const rel = f.path;                                   // e.g. "pages/home.html"
         const folder = rel.split("/")[0];
-        const entryString = rel.slice(folder.length + 1);     // path inside the folder
+        let entryString = rel.slice(folder.length + 1);       // path inside the folder
         const type = ENTRY_TYPES[folder];
         if (!type) { skipped.push({ rel, reason: "unsupported folder \"" + folder + "\" — template bug" }); continue; }
 
+        // Enforcement: workflows MUST have a .js extension for the server compile engine.
+        // If the template manifest or the user omitted it, fix it here so the file on disk
+        // and the pal.json entry both carry it.
+        if (type.workflowTyped && !entryString.toLowerCase().endsWith(".js")) {
+            entryString += ".js";
+        }
+
         const srcAbs = path.join(dir, rel);
-        const destAbs = path.join(workspaceDir, ...rel.split("/"));
+        const destAbs = path.join(workspaceDir, folder, ...entryString.split("/"));
         // A manifest entry whose source file is missing must not crash the whole scaffold —
         // skip it and report so the rest of the starter still applies.
         if (!fs.existsSync(srcAbs)) { skipped.push({ rel, reason: "template file missing from the starter — skipped (report to maintainers)" }); continue; }
@@ -100,7 +107,7 @@ function applyTemplate(workspaceDir, name, { palName } = {}) {
         if (fs.existsSync(destAbs)) { skipped.push({ rel, reason: "file already exists — left untouched" }); continue; }
         fs.mkdirSync(path.dirname(destAbs), { recursive: true });
         fs.writeFileSync(destAbs, content, "utf8");
-        created.push(rel);
+        created.push(folder + "/" + entryString);
 
         // pal.json entry (idempotent — skip if an entry already exists).
         if (pal[type.key] === "" || pal[type.key] == null) pal[type.key] = { entry: [] };
@@ -117,6 +124,28 @@ function applyTemplate(workspaceDir, name, { palName } = {}) {
     }
 
     fs.writeFileSync(palJsonPath, JSON.stringify(pal, null, 2), "utf8");
+
+    // Point layout pointers if missing (webWorkflow / consoleWorkflow).
+    if (pal.layout) {
+        // webWorkflow: point to first type 9 if missing
+        if (!pal.layout.webWorkflow) {
+            const webWf = (pal.workflows && pal.workflows.entry || []).find(e => {
+                const obj = e.Workflow || e.workflow;
+                return obj && Number(obj.workflowType) === 9;
+            });
+            if (webWf) pal.layout.webWorkflow = webWf.string;
+        }
+        // consoleWorkflow: point to first type 7 if missing
+        if (!pal.layout.consoleWorkflow) {
+            const conWf = (pal.workflows && pal.workflows.entry || []).find(e => {
+                const obj = e.Workflow || e.workflow;
+                return obj && Number(obj.workflowType) === 7;
+            });
+            if (conWf) pal.layout.consoleWorkflow = conWf.string;
+        }
+        fs.writeFileSync(palJsonPath, JSON.stringify(pal, null, 2), "utf8");
+    }
+
     return { template: name, palType, created, skipped, workflows, entriesAdded };
 }
 

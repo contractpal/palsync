@@ -25,6 +25,7 @@ test("console-app starter creates a workflow entry with the console workflowType
     const wf = pal.workflows.entry.find(e => e.string === "console.js");
     assert.ok(wf, "expected a workflows entry for console.js");
     assert.equal(wf.Workflow.workflowType, 7);               // palTypeConsole -> 7
+    assert.equal(pal.layout.consoleWorkflow, "console.js", "Should auto-register consoleWorkflow pointer");
     assert.equal(wf.Workflow.contentType, "text/javascript");
     assert.ok(fs.existsSync(path.join(ws, "workflows", "console.js")), "workflow file written to disk");
     assert.ok(r.created.includes("workflows/console.js"), "workflow reported as created");

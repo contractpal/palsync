@@ -7,12 +7,42 @@
 const { loadClack } = require("../platform/uiPrompts");
 const { authenticate } = require("../core/session");
 const keychain = require("../platform/keychain");
+const config = require("../platform/config");
 
 // Known clouds; users can also enter a custom URL. Remembered selection handled by the launcher.
-const CLOUDS = [
+const DEFAULT_CLOUDS = [
     { name: "Cloudpiston", url: "https://secure.cloudpiston.com" },
     { name: "Nimblewire", url: "https://secure.nimblewire.net" }
 ];
+
+function getClouds() {
+    const custom = config.get("customClouds", []);
+    return [...DEFAULT_CLOUDS, ...custom];
+}
+
+function addCustomCloud(url) {
+    if (!url || typeof url !== "string") return;
+    url = url.trim();
+    if (!url) return;
+
+    // Ensure protocol for URL parsing
+    let normalizedUrl = url;
+    if (!/^https?:\/\//i.test(url)) normalizedUrl = "https://" + url;
+
+    try {
+        const parsed = new URL(normalizedUrl);
+        const name = parsed.hostname || url;
+
+        if (DEFAULT_CLOUDS.some(c => c.url === normalizedUrl)) return;
+        const custom = config.get("customClouds", []);
+        if (custom.some(c => c.url === normalizedUrl)) return;
+
+        custom.push({ name, url: normalizedUrl });
+        config.set("customClouds", custom);
+    } catch (e) {
+        // Ignore invalid URLs
+    }
+}
 
 function cancelGuard(clack, value) {
     if (clack.isCancel(value)) { clack.cancel("Login cancelled."); process.exit(130); }
@@ -22,6 +52,7 @@ function cancelGuard(clack, value) {
 // Default interactive prompts (TTY). Each returns the user's input.
 const defaultPrompts = {
     async pickCloud(clouds) {
+        if (!clouds) clouds = getClouds();
         const clack = await loadClack();
         const choice = cancelGuard(clack, await clack.select({
             message: "Select cloud",
@@ -57,7 +88,7 @@ const defaultPrompts = {
 async function login({ cloudUrl, username, prompts = defaultPrompts, forcePrompt = false } = {}) {
     let prompted = false;
 
-    if (!cloudUrl) { cloudUrl = await prompts.pickCloud(CLOUDS); prompted = true; }
+    if (!cloudUrl) { cloudUrl = await prompts.pickCloud(getClouds()); prompted = true; }
 
     if (!username) {
         const cachedUsers = keychain.listUsernames(cloudUrl);
@@ -78,6 +109,8 @@ async function login({ cloudUrl, username, prompts = defaultPrompts, forcePrompt
         try {
             const session = await authenticate(cloudUrl, username, password);
             keychain.setCredential(cloudUrl, username, password); // persist validated creds
+            // If it was a custom cloud URL, remember it for next time.
+            addCustomCloud(cloudUrl);
             return { session, cloudUrl, username, prompted };
         } catch (err) {
             // Invalid creds: drop any cached value and re-prompt the password.
@@ -91,4 +124,4 @@ async function login({ cloudUrl, username, prompts = defaultPrompts, forcePrompt
     }
 }
 
-module.exports = { login, CLOUDS, defaultPrompts };
+module.exports = { login, getClouds, defaultPrompts };
