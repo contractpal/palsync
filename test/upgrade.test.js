@@ -8,8 +8,8 @@ test("repoSlug: derives owner/repo from package.json repository", () => {
     assert.equal(repoSlug(), "contractpal/palsync");
 });
 
-test("installedSha: null in a dev clone (no git-install metadata)", () => {
-    // This repo's own package.json has no _resolved/gitHead, so a dev run reports unknown —
-    // which makes `palsync upgrade` always reinstall the latest HEAD.
+test("installedSha: null when no SHA stamp is present (dev clone / first run)", () => {
+    // A dev clone has no .installed-sha stamp, so it reports unknown — which makes the first
+    // `palsync upgrade` reinstall and write the stamp, after which it no-ops when current.
     assert.equal(installedSha(), null);
 });

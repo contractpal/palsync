@@ -11,7 +11,15 @@
 // GitHub API → if they differ (or ours is unknown), run `npm install -g github:<repo>#<sha>`
 // (inherits the user's npm prefix). `--check` reports without installing.
 const { spawnSync } = require("child_process");
+const fs = require("fs");
+const path = require("path");
 const pkg = require("../../package.json");
+
+// npm strips _resolved/gitHead from installed git packages and keeps no global lockfile, so the
+// only durable record of which commit this build came from is one we write ourselves: after a
+// successful install we stamp the SHA here. npm wipes the package dir on each reinstall, so the
+// file is recreated every upgrade and can't go stale.
+const SHA_STAMP = path.join(__dirname, "..", "..", ".installed-sha");
 
 // Owner/repo from package.json repository (any GitHub URL form), else a sane default.
 function repoSlug() {
@@ -20,14 +28,14 @@ function repoSlug() {
     return m ? m[1] : "contractpal/palsync";
 }
 
-// The commit this build was installed from. npm records it on git installs: `_resolved` carries
-// `...#<sha>`, with `gitHead` as a fallback. null in a dev clone (no git install metadata) — which
-// makes upgrade always reinstall, the intended "always latest" behavior for non-installed runs.
+// The commit this build was installed from, read from the stamp a prior `palsync upgrade` wrote.
+// null on the first run after a manual `npm install` (no stamp yet) or in a dev clone — which makes
+// upgrade reinstall once and then stamp, after which it correctly no-ops when current.
 function installedSha() {
-    const m = pkg._resolved && String(pkg._resolved).match(/#([0-9a-f]{40})\b/i);
-    if (m) return m[1].toLowerCase();
-    if (pkg.gitHead) return String(pkg.gitHead).toLowerCase();
-    return null;
+    try {
+        const s = fs.readFileSync(SHA_STAMP, "utf8").trim().toLowerCase();
+        return /^[0-9a-f]{40}$/.test(s) ? s : null;
+    } catch { return null; }
 }
 
 // HEAD SHA of the repo's default branch. Accept: …sha makes the API return the bare SHA as text.
@@ -79,6 +87,8 @@ async function run(argv) {
         console.error("npm install failed. Install manually:  npm install -g github:" + slug + "#" + latest);
         return 1;
     }
+    // Stamp the freshly-installed dir (npm just rewrote it) so the next run knows it's current.
+    try { fs.writeFileSync(SHA_STAMP, latest + "\n"); } catch { /* best effort; falls back to reinstall-each-time */ }
     console.log("Upgraded to " + latest.slice(0, 7) + ". (New shell or `hash -r` if `palsync --version` looks stale.)");
     return 0;
 }

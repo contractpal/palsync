@@ -41,3 +41,6 @@ com/
 .cce/
 # Claude Code local settings written by cce init
 .claude/settings.local.json
+
+# palsync upgrade SHA stamp (per-install, written at runtime)
+.installed-sha
