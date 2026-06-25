@@ -283,28 +283,82 @@ async function pruneSkills(workspaceDir, rootDir, keepNames) {
     return removed;
 }
 
-// Read the version stamp off a workspace's CLAUDE.palsync.md and compare to the installed build.
-// `palsync status` uses this to flag a workspace that predates the current build (relaunch refreshes it).
-async function contextStatus(workspaceDir) {
-    const txt = await readIfExists(path.join(workspaceDir, "CLAUDE.palsync.md"));
-    if (txt == null) return { present: false, version: null, current: VERSION, stale: true };
-    const m = txt.match(STAMP_RE);
-    const version = m ? m[1] : null;
-    return { present: true, version, current: VERSION, stale: version !== VERSION };
+// Remove a workspace's managed block from a file, preserving any user content outside the markers.
+// Deletes the file outright if nothing but whitespace remains. No-op if the file or block is absent.
+async function stripManaged(filePath) {
+    const existing = await readIfExists(filePath);
+    if (existing == null) return false;
+    const b = existing.indexOf(BEGIN), e = existing.indexOf(END);
+    if (b === -1 || e === -1 || e <= b) return false;
+    const rest = existing.slice(0, b) + existing.slice(e + END.length);
+    if (rest.trim() === "") { await fs.rm(filePath, { force: true }); return true; }
+    await fs.writeFile(filePath, rest, "utf8");
+    return true;
 }
 
-// Inject everything into workspaceDir. Returns a summary of what was written.
-//   agent ("claude" default | "codex" | "pi") decides which destinations get written. The Claude path
-//   (.claude/skills + CLAUDE.md + CLAUDE.palsync.md) is ALWAYS written; Claude Code reads CLAUDE.md and
-//   resolves its `@CLAUDE.palsync.md` import. Codex/Pi ADDITIONALLY get the same skills at the .agents/
-//   open standard + an AGENTS.md carrying the full doc inline (Claude Code does not read .agents/ or
-//   AGENTS.md — verified; that path exists only for the other agents).
+// A workspace carries files for ONE agent — the one it was last launched with. When the selected agent
+// isn't Claude, remove the Claude-owned artifacts (and vice-versa) so a Pi/Codex pal isn't littered with
+// dead CLAUDE.* files and duplicate .claude/skills. Only palsync-owned content is touched; user notes in
+// CLAUDE.md/AGENTS.md and user-authored skills survive.
+async function cleanClaudeArtifacts(workspaceDir) {
+    await fs.rm(path.join(workspaceDir, "CLAUDE.palsync.md"), { force: true });
+    await stripManaged(path.join(workspaceDir, "CLAUDE.md"));
+    return pruneSkills(workspaceDir, ".claude", []);
+}
+async function cleanAgentsArtifacts(workspaceDir) {
+    await stripManaged(path.join(workspaceDir, "AGENTS.md"));
+    return pruneSkills(workspaceDir, ".agents", []);
+}
+
+// Read the version stamp off whichever owned doc this workspace carries (CLAUDE.palsync.md for Claude,
+// AGENTS.md for Codex/Pi) and compare to the installed build. `palsync status` uses this to flag a
+// workspace that predates the current build (relaunch refreshes it).
+async function contextStatus(workspaceDir) {
+    for (const file of ["CLAUDE.palsync.md", "AGENTS.md"]) {
+        const txt = await readIfExists(path.join(workspaceDir, file));
+        if (txt == null) continue;
+        const m = txt.match(STAMP_RE);
+        const version = m ? m[1] : null;
+        return { present: true, file, version, current: VERSION, stale: version !== VERSION };
+    }
+    return { present: false, file: null, version: null, current: VERSION, stale: true };
+}
+
+// Inject context into workspaceDir for the SELECTED agent only, and clean the other agent's
+// palsync-owned artifacts so a workspace carries exactly the files its agent reads.
+//   claude → .claude/skills + CLAUDE.palsync.md (the owned doc) + a tiny CLAUDE.md block that
+//            `@CLAUDE.palsync.md`-imports it. Claude Code reads CLAUDE.md and resolves the import.
+//   codex/pi → .agents/skills + AGENTS.md carrying the full doc inline (their @import support is
+//            unreliable; Claude Code does not read .agents/ or AGENTS.md — verified). Pi uses the CLI
+//            flavor (palsync subcommands, no session lock); Codex uses the MCP flavor.
 async function inject(workspaceDir, { palName, withSeo = false, agent = "claude" } = {}) {
     const skills = effectiveSkills(withSeo);
     const keep = skills.map(s => s.name);
+    const skillNames = keep.slice();
 
-    // (A) CLAUDE path — always written. The owned doc (contract + etiquette) goes in CLAUDE.palsync.md;
-    //     CLAUDE.md gets a tiny managed block that @imports it. Prune stale palsync-owned skills.
+    if (agent === "codex" || agent === "pi") {
+        await copySkillSet(workspaceDir, ".agents", skills);
+        const prunedAgents = await pruneSkills(workspaceDir, ".agents", keep);
+        const agentsDoc = await buildPalsyncDoc(palName, { cli: agent === "pi" });
+        const agentsPath = path.join(workspaceDir, "AGENTS.md");
+        const existingAgents = await readIfExists(agentsPath);
+        const mergedAgents = mergeManaged(existingAgents, agentsBlock(agentsDoc));
+        await fs.writeFile(agentsPath, mergedAgents.content, "utf8");
+        const cleanedClaude = await cleanClaudeArtifacts(workspaceDir);
+        return {
+            agent,
+            skills: [],
+            agentSkills: skillNames.map(name => path.join(".agents/skills", name, "SKILL.md")),
+            seoInjected: withSeo,
+            seoSkills: withSeo ? SEO_SKILLS.map(s => s.name) : [],
+            agentsMd: { path: "AGENTS.md", mode: mergedAgents.mode, userContentPreserved: existingAgents != null },
+            prunedSkills: prunedAgents,
+            cleanedClaudeSkills: cleanedClaude,
+            version: VERSION
+        };
+    }
+
+    // Claude (default).
     await copySkillSet(workspaceDir, ".claude", skills);
     const prunedClaude = await pruneSkills(workspaceDir, ".claude", keep);
     await fs.writeFile(path.join(workspaceDir, "CLAUDE.palsync.md"),
@@ -313,36 +367,21 @@ async function inject(workspaceDir, { palName, withSeo = false, agent = "claude"
     const existingClaude = await readIfExists(claudePath);
     const mergedClaude = mergeManaged(existingClaude, importBlock());
     await fs.writeFile(claudePath, mergedClaude.content, "utf8");
-
-    // (B) AGENTS.md path — for agents that read the AGENTS.md open standard (Codex, Pi). Same skills at
-    //     the .agents/ root, plus AGENTS.md carrying the FULL doc inline (their @import support is
-    //     unreliable). Pi has no MCP, so its doc is the CLI flavor; Codex uses the MCP flavor.
-    let agentsMd = null;
-    if (agent === "codex" || agent === "pi") {
-        await copySkillSet(workspaceDir, ".agents", skills);
-        await pruneSkills(workspaceDir, ".agents", keep);
-        const agentsDoc = await buildPalsyncDoc(palName, { cli: agent === "pi" });
-        const agentsPath = path.join(workspaceDir, "AGENTS.md");
-        const existingAgents = await readIfExists(agentsPath);
-        const mergedAgents = mergeManaged(existingAgents, agentsBlock(agentsDoc));
-        await fs.writeFile(agentsPath, mergedAgents.content, "utf8");
-        agentsMd = { path: "AGENTS.md", mode: mergedAgents.mode, userContentPreserved: existingAgents != null };
-    }
-
-    const skillNames = skills.map(s => s.name);
+    const cleanedAgents = await cleanAgentsArtifacts(workspaceDir);
     return {
         agent,
         skills: skillNames.map(name => path.join(".claude/skills", name, "SKILL.md")),
-        agentSkills: (agent === "codex" || agent === "pi") ? skillNames.map(name => path.join(".agents/skills", name, "SKILL.md")) : [],
+        agentSkills: [],
         seoInjected: withSeo,
         seoSkills: withSeo ? SEO_SKILLS.map(s => s.name) : [],
         claudePalsync: "CLAUDE.palsync.md",
         claudeMd: { path: "CLAUDE.md", mode: mergedClaude.mode, userContentPreserved: existingClaude != null },
         prunedSkills: prunedClaude,
-        version: VERSION,
-        agentsMd
+        cleanedAgentsSkills: cleanedAgents,
+        version: VERSION
     };
 }
 
 module.exports = { inject, mergeManaged, importBlock, agentsBlock, buildPalsyncDoc, syncSection,
-    pruneSkills, contextStatus, BEGIN, END, BUNDLE_DIR, VERSION, ALWAYS_ON_SKILLS, SEO_SKILLS, effectiveSkills };
+    pruneSkills, stripManaged, cleanClaudeArtifacts, cleanAgentsArtifacts, contextStatus,
+    BEGIN, END, BUNDLE_DIR, VERSION, ALWAYS_ON_SKILLS, SEO_SKILLS, effectiveSkills };
