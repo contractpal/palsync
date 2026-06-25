@@ -58,6 +58,7 @@ test("switching a workspace's agent cleans the other agent's palsync files, keep
     await ci.inject(ws, { palName: "Demo", agent: "pi" });               // switch to Pi
     assert.ok(!fs.existsSync(path.join(ws, "CLAUDE.palsync.md")), "owned doc removed on switch");
     assert.ok(!fs.existsSync(path.join(ws, ".claude/skills/pal-spec")), "palsync claude skills pruned on switch");
+    assert.ok(!fs.existsSync(path.join(ws, ".claude")), "emptied .claude dir removed on switch");
     assert.ok(fs.existsSync(path.join(ws, "AGENTS.md")), "AGENTS.md written on switch");
     const claudeMd = fs.readFileSync(path.join(ws, "CLAUDE.md"), "utf8");
     assert.ok(claudeMd.includes("# My own notes"), "user's CLAUDE.md notes survive");

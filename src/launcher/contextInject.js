@@ -300,14 +300,25 @@ async function stripManaged(filePath) {
 // isn't Claude, remove the Claude-owned artifacts (and vice-versa) so a Pi/Codex pal isn't littered with
 // dead CLAUDE.* files and duplicate .claude/skills. Only palsync-owned content is touched; user notes in
 // CLAUDE.md/AGENTS.md and user-authored skills survive.
+// Remove a dir only if it is now empty (rmdir fails with ENOTEMPTY otherwise) — so an emptied
+// .claude/skills (and .claude itself) goes, but a dir still holding user settings is left alone.
+async function rmDirIfEmpty(dir) {
+    try { await fs.rmdir(dir); return true; } catch (e) { return false; }
+}
+async function pruneAgentRoot(workspaceDir, rootDir) {
+    const removed = await pruneSkills(workspaceDir, rootDir, []);
+    await rmDirIfEmpty(path.join(workspaceDir, rootDir, "skills"));
+    await rmDirIfEmpty(path.join(workspaceDir, rootDir));
+    return removed;
+}
 async function cleanClaudeArtifacts(workspaceDir) {
     await fs.rm(path.join(workspaceDir, "CLAUDE.palsync.md"), { force: true });
     await stripManaged(path.join(workspaceDir, "CLAUDE.md"));
-    return pruneSkills(workspaceDir, ".claude", []);
+    return pruneAgentRoot(workspaceDir, ".claude");
 }
 async function cleanAgentsArtifacts(workspaceDir) {
     await stripManaged(path.join(workspaceDir, "AGENTS.md"));
-    return pruneSkills(workspaceDir, ".agents", []);
+    return pruneAgentRoot(workspaceDir, ".agents");
 }
 
 // Read the version stamp off whichever owned doc this workspace carries (CLAUDE.palsync.md for Claude,
