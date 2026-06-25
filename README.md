@@ -24,7 +24,7 @@ silently clobber someone else's work.
 ## Install / Update
 
 ```sh
-npm install -g github:MasterWushi/palsync
+npm install -g github:contractpal/palsync
 ```
 
 That command installs the global `palsync` command (plus `palsync-mcp`, which the agent launches
@@ -51,7 +51,7 @@ palsync --version
 If you ever need to force a clean reinstall by hand, `--force` bypasses npm's cache:
 
 ```sh
-npm install -g github:MasterWushi/palsync --force
+npm install -g github:contractpal/palsync --force
 ```
 
 ### `palsync --version` shows an old version after install
@@ -69,9 +69,9 @@ cat "$(npm root -g)/palsync/package.json" | grep version   # what npm just wrote
 Fix by installing with the npm tied to the bin that actually wins:
 
 ```sh
-"$(dirname "$(which palsync)")/../lib/node_modules/.bin/npm" install -g github:MasterWushi/palsync
+"$(dirname "$(which palsync)")/../lib/node_modules/.bin/npm" install -g github:contractpal/palsync
 # or, plainly: invoke the matching npm directly, e.g.
-/opt/homebrew/bin/npm install -g github:MasterWushi/palsync   # for Homebrew node
+/opt/homebrew/bin/npm install -g github:contractpal/palsync   # for Homebrew node
 ```
 
 Or uninstall the stale copy first (run the *winning* npm), then reinstall normally.

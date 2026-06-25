@@ -15,7 +15,7 @@ const pkg = require("../../package.json");
 function repoSlug() {
     const url = pkg.repository && (typeof pkg.repository === "string" ? pkg.repository : pkg.repository.url) || "";
     const m = String(url).match(/github\.com[/:]([^/]+\/[^/.]+)/i);
-    return m ? m[1] : "MasterWushi/palsync";
+    return m ? m[1] : "contractpal/palsync";
 }
 
 function parseSemver(s) {

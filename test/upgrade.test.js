@@ -25,5 +25,5 @@ test("pickLatestTag: highest semver, ignores non-semver tags", () => {
 });
 
 test("repoSlug: derives owner/repo from package.json repository", () => {
-    assert.equal(repoSlug(), "MasterWushi/palsync");
+    assert.equal(repoSlug(), "contractpal/palsync");
 });
