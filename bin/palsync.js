@@ -13,7 +13,9 @@ const pkg = require("../package.json");
 // the team can report exactly which build they're on). Handled before anything else.
 const argv = process.argv.slice(2);
 if (argv.includes("--version") || argv.includes("-v")) {
-    process.stdout.write("palsync " + pkg.version + "\n");
+    const { installedSha } = require("../src/cli/upgradeCommand");
+    const sha = installedSha();
+    process.stdout.write("palsync " + pkg.version + (sha ? " (" + sha.slice(0, 7) + ")" : "") + "\n");
     process.exit(0);
 }
 
