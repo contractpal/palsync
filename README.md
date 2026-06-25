@@ -31,18 +31,19 @@ That command installs the global `palsync` command (plus `palsync-mcp`, which th
 automatically, and `palpush`, a headless deploy CLI). **No build step** — the OS-keychain dependency
 ships prebuilt.
 
-**To update, run `palsync upgrade`** — it checks the latest GitHub release tag and, if newer, reinstalls
-from that immutable tag:
+**To update, run `palsync upgrade`** — it checks the tip of the repo's default branch and, if your
+build differs, reinstalls from that exact commit:
 
 ```sh
-palsync upgrade          # update to the latest release tag (no-op if already current)
+palsync upgrade          # update to the latest commit (no-op if already current)
 palsync upgrade --check  # report whether an update exists, without installing
 ```
 
 Why a subcommand and not a plain reinstall: `npm install -g github:<repo>` re-uses npm's **cached**
 resolution of the default branch, so a plain reinstall often silently keeps the old build. `palsync
-upgrade` installs an immutable tag (`github:…#vX.Y.Z`) — a ref npm hasn't cached — so the update
-actually lands. Confirm the build you ended up with:
+upgrade` installs the immutable commit SHA (`github:…#<sha>`) — a ref npm hasn't cached — so the
+update always lands, and it always tracks the latest code (no release tagging required). Confirm the
+build you ended up with:
 
 ```sh
 palsync --version
