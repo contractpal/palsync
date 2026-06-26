@@ -1,6 +1,6 @@
 ---
 name: pal-loop
-description: "Execute a pal build autonomously from SPEC.md + EXECUTION.md (produced by the pal-spec skill): one task at a time, verify with palsync tools, checkpoint to disk, escalate when blocked. Use this skill when the user says 'run the loop', 'build the spec', 'continue the build', 'resume the build', or when a workspace contains an EXECUTION.md with unfinished tasks. State lives in files, not in your context — any session can resume."
+description: "Execute a pal build autonomously from SPEC.md + EXECUTION.md (produced by the pal-spec skill): one task at a time, verify with palsync tools, checkpoint to disk, escalate when blocked. Use this skill when the user says 'run the loop', 'build the spec', 'continue the build', 'resume the build', or when a workspace contains an EXECUTION.md with unfinished tasks. Honors the spec's mode (full|lite), the §13 reality-check gate, and the §9 required-skills manifest. State lives in files, not in your context — any session can resume."
 ---
 
 # pal-loop — execute SPEC.md task by task
@@ -8,7 +8,8 @@ description: "Execute a pal build autonomously from SPEC.md + EXECUTION.md (prod
 You are the execution engine for a spec produced by the **pal-spec** skill. The contract:
 the spec contains every decision; your job is faithful execution plus honest verification.
 **Do not redesign, do not improve the copy, do not add scope.** If the spec is wrong or
-incomplete, that's a blocker for the human — not a creative opportunity.
+incomplete, that's a blocker for the human — not a creative opportunity, and never something
+you fix by editing SPEC.md yourself.
 
 State lives ON DISK (EXECUTION.md), never only in your context. Update the file at every
 state change, immediately — if the session dies mid-task, the next session must see the truth.
@@ -17,50 +18,97 @@ state change, immediately — if the session dies mid-task, the next session mus
 
 ## Before the first task (once per session)
 
-1. Read `SPEC.md` and `EXECUTION.md` in the workspace root, fully.
-2. If `SPEC.md` says `status: draft` → STOP. Tell the user: "The spec is not approved yet —
-   review it and change status to approved, or run the pal-spec interview to finish it."
-3. If the workspace is not a git repository, run `git init && git add -A && git commit -m "loop start"`.
-   Commit after every completed task — this is the rollback mechanism. (Local only; never push
-   this git repo anywhere.)
-4. Read the skills the tasks will need: palbuilder-frontend (+ palbuilder-backend for
-   workflows, design-build for UI, seo-core for web pages). Read them BEFORE coding, once.
-5. Run `pal_status`. If the server is newer than the last pull, run `pal_pull` first.
+1. Read `SPEC.md` and `EXECUTION.md` in the workspace root, fully. Note `mode:` (full | lite)
+   and `pal: ... (web | console)` — both change how you verify below.
+2. **Gate — spec must be ready:**
+   - `status: draft` → STOP: "The spec isn't approved — review it and set status: approved, or
+     run the pal-spec interview to finish it."
+   - Prefer a structured marker: if SPEC.md frontmatter has `reality_check: pass | blocked |
+     not_run`, trust it — `blocked` → STOP, `not_run`/absent → fall through to the text check.
+     (pal-spec should set this when the gate clears; it's a harder contract than grepping prose.)
+   - Text fallback: read **§13 Reality check**; any `HARD FLAG` line not marked resolved → STOP
+     and list them: "Unresolved hard flags — resolve these or re-run the pal-spec reality check."
+   - No §13 and no marker (spec predates the gate) → proceed, but record a caveat in the session
+     summary that the reality check never ran.
+3. If the workspace is not a git repo, `git init && git add -A && git commit -m "loop start"`.
+   Commit after every completed task. **git here is a LOCAL checkpoint/history only** — the
+   PalBuilder server is the source of truth, so git tracks the local mirror, not server state. A
+   `git checkout` reverts your local files; it does NOT undo a change you already pushed (see the
+   recovery path under On fail / delegation). Never push this git repo anywhere.
+4. **Load the skills SPEC.md §9 lists — exactly those, before coding, once.** Do not guess the
+   set; §9 is the manifest (it may include palbuilder-jobs-http or palbuilder-websockets, which
+   are easy to forget). palbuilder-frontend and design-build are always present there.
+5. Run `pal_status`. If the server is newer than the last pull, `pal_pull` first.
 
 ## The task cycle (repeat until done or blocked)
 
 1. **Pick** the first task in EXECUTION.md whose status is `todo` and whose `depends` are all
-   `done`. If none exists, go to "Ending a session" below.
-2. **Tier check.** If the task's tier is `frontier` and you are not a frontier-class model
-   (when unsure, ask yourself whether the task requires NEW structure rather than following
-   the spec — if yes and you are a small model): set status `needs-frontier`, log a checkpoint
-   line, and move to the next eligible task. Do NOT attempt it badly.
-   (Orchestrators MAY instead dispatch tasks to subagents sized by tier — cheap→Haiku,
-   standard→Sonnet — when the harness supports subagents with a model parameter.)
-3. **Mark** the task `in_progress` in EXECUTION.md. Write the file now, not later.
-4. **Execute** the task exactly as specced: copy from SPEC.md §3 verbatim (these exact words
-   ship), design per §4, SEO head values per §5, schemas per §6. Follow the palbuilder/design/
-   seo skills for HOW; the spec is WHAT.
-5. **Verify** with the task's success condition — these are tool outputs, not your opinion:
-   - `pal_validate` → must report 0 errors (warnings: read them; fix what's real).
-   - `pal_push` (respect the spec's push policy: `checkpoint` = ask the user first).
-   - `pal_preview` (web) → CHECK the rendered HTML actually contains the exact strings the
-     success condition names. Seeing it is the verification.
-   - `pal_seo_audit` (web pages) → 0 errors; fix warnings unless the spec says otherwise.
-   - `pal_sync_datasets` after pushing a new/changed dataset definition.
-6. **On pass:** set status `done`; append one checkpoint line (date, task id, tool-output
-   summary); `git add -A && git commit -m "<task id>: <task name>"`. Continue to step 1.
-7. **On fail:** fix and re-verify, up to TWO fix attempts. Still failing → set status
-   `blocked`, write a Blockers entry that names: what failed (exact tool output), what you
-   tried, and the decision or input you need from the human. Then continue with the next
-   INDEPENDENT task (one that doesn't depend on the blocked one). Never silently skip
-   verification to get past a failure, and never use skipValidation/force to bury one.
+   `done`. If none, go to "Ending a session."
+2. **Tier check.** If the task tier is `frontier` and you are not a frontier-class model (when
+   unsure: does it require NEW structure rather than following the spec? if yes and you're a
+   small model): set `needs-frontier`, log a checkpoint line, move to the next eligible task. Do
+   NOT attempt it badly. (Orchestrators MAY instead dispatch by tier to sized subagents —
+   cheap→Haiku, standard→Sonnet — when the harness supports a model parameter.)
+3. **Human-gate check.** Console workflow *compile* is now verifiable headlessly (`pal_test`
+   runs `TestConsole.do` and returns fresh server validation), so it is NOT a human gate. The
+   only thing you cannot verify yourself is a console screen's *visual render* — it renders in
+   the platform console chrome via a browser, so `pal_preview` opens it for the user, not you. If
+   a task's success condition requires confirming a console render looks right, do the buildable
+   part, verify everything you can (validate, test, data read-back), then set `needs-human` with
+   a Blockers entry prefixed `HUMAN GATE:` naming exactly what to eyeball (open screen X, confirm
+   it renders + the happy path). Continue with independent tasks. Web renders are agent-visible
+   (`pal_preview` returns the HTML), so web tasks have no human gate.
+4. **Mark** the task `in_progress` in EXECUTION.md. Write the file now, not later.
+5. **Execute** exactly as specced, using v2 SPEC.md sections:
+   - Copy: **§4** — verbatim, these exact words ship.
+   - Layout: **§6** composition; apply the design system via **design-build**
+     (DESIGN_SYSTEM.md / COMPONENTS.md). The spec carries no colors/fonts by design.
+   - SEO head values: **§7** (web only).
+   - Schemas: **§8a** (datasets to CREATE). **§8b** datasets are CONSUMED, read-only — never
+     create or alter them; before any task that reads one, confirm the §8b fields it relies on
+     exist in the live dataset (`pal_status` / a read action). A missing §8b field is a blocker.
+   Follow the palbuilder / design / seo skills for HOW; the spec is WHAT.
+6. **Verify** with the task's success condition — tool outputs, not your opinion. Verify offline
+   FIRST (`pal_validate`) so a bad result is caught before it ever reaches the server:
+   - `pal_validate` → 0 errors (instant offline check; read warnings, fix what's real).
+   - `pal_push` (respect push policy: `checkpoint` = ask the user first).
+   - `pal_test` → fresh SERVER validation, workflow VALIDATED, 0 notes. This compiles the
+     workflow for real — **console AND web** — and is the compile feedback the save API doesn't
+     give. Always run it after pushing a workflow change. Read `messages` too (whole-test
+     failures like "Pal is not a Web Pal" live there, separate from per-rule results).
+   - **Web pages:** `pal_preview` → CHECK the returned server-rendered HTML actually contains the
+     exact strings the success condition names (seeing it is the verification); `pal_seo_audit`
+     → 0 errors.
+   - **Console screens:** compile is covered by `pal_test` above (do verify it). The *render* is
+     not agent-visible → do not mark `done` on render; set `needs-human` for the §12 eyeball gate.
+     Verify any data effect indirectly: after a write, run the read-back action the spec names and
+     confirm the row.
+   - `pal_sync_datasets` after pushing a **§8a** dataset definition (never for §8b).
+   Note: `pal_preview`/`pal_seo_audit`/`pal_test` all act on the LAST PUSHED version — push before
+   verifying your latest edits.
+7. **On pass:** set `done`; append one checkpoint line (date, task id, tool-output summary);
+   `git add -A && git commit -m "<task id>: <task name>"`. Continue.
+8. **On fail:** fix and re-verify, up to TWO attempts. Still failing → `blocked`, with a
+   Blockers entry naming: what failed (exact tool output), what you tried, the decision/input
+   you need. Continue with the next INDEPENDENT task. Never skip verification to get past a
+   failure; never use skipValidation/force to bury one.
+   - **If the bad change was already pushed:** restore the good local version (`git checkout` of
+     the file, or the prior commit) and **re-push** to overwrite the server — git alone does not
+     roll the server back. If the re-push is refused for drift, `pal_pull`/`pal_merge` then push.
+
+### Mode (full | lite)
+- **full:** a §5 behavior shipped without its specced edge-case handling, or any §12 per-feature
+  criterion unmet, is a defect → blocker.
+- **lite:** edge cases listed as deferred are expected, not defects — verify the floor + the
+  happy-path criterion per primary action and move on. Don't manufacture full-mode rigor.
 
 ## Hard rules
 
 - **Never deploy.** Deployment is a human action in PalBuilder — standing policy.
-- **Never touch anything listed in SPEC.md §9 (out of scope).**
+- **Never touch anything in SPEC.md §11 (the NEVER / out-of-scope list), and never create or
+  alter a §8b consumed dataset.**
 - **Never invent content.** Missing copy/fact/asset = blocker, not improvisation.
+- **Never edit SPEC.md to fix a problem.** Spec wrong/incomplete = blocker for the human.
 - **Never leave EXECUTION.md stale.** Every status change is written to disk the moment it
   happens. Do not summarize the table — edit it.
 - **Destructive operations** (dataset recreate, lock override, force push) follow their tools'
@@ -68,44 +116,92 @@ state change, immediately — if the session dies mid-task, the next session mus
 
 ## Ending a session
 
-Stop when: all tasks are `done`; or only `blocked`/`needs-frontier` tasks remain; or the user
+Stop when: all tasks `done`; only `blocked` / `needs-frontier` / `needs-human` remain; the user
 asked you to stop; or you are degrading (context pressure, repeated mistakes — be honest).
 
 Write a session summary at the top of EXECUTION.md's Checkpoints section:
 ```
-== session <n> (<date>): <x> done, <y> blocked, <z> needs-frontier. Next: <task id or "review blockers">.
+== session <n> (<date>), mode <full|lite>: <a> done, <b> blocked, <c> needs-frontier, <d> needs-human.
+   Next: <task id or "review blockers / clear human gates">.
 ```
-Then report to the user in this order: what shipped (with preview URL if web), what's blocked
-and the exact decision each blocker needs, what needs a frontier model, what's next.
+Then report, in order: what shipped (preview URL if web); what's blocked and the exact decision
+each needs; what needs a frontier model; what's at a HUMAN GATE and the exact action required;
+what's next.
 
 ## Resuming
 
-A new session resumes by reading EXECUTION.md — nothing else is needed. Trust the file over
-any memory of prior sessions: statuses in the file are the truth. Re-run `pal_status` before
-the first push of a resumed session (the server may have moved; `pal_pull`/`pal_merge`
-handle it).
+A new session resumes by reading EXECUTION.md — nothing else. Trust the file over any memory of
+prior sessions: statuses in the file are the truth. Re-run `pal_status` before the first push of
+a resumed session (`pal_pull` / `pal_merge` handle a moved server). `needs-human` tasks stay
+parked until the person confirms the gate — don't retry them headlessly.
 
 ---
 
-## Delegation recipe (proven)
+## Delegation protocol (orchestrator → subagents, any harness)
 
-When dispatching a task to a subagent, the prompt MUST contain — in this order:
+Use this whenever one orchestrator farms tasks out to subagents. It is written against
+**capabilities, not tool names**, so it holds on Claude Code, OpenCode / Pi.dev, Cursor, or any
+harness that can spawn a subagent. Goal: the same handoff produces the same result every time,
+whichever harness or model is underneath. (The palsync `pal_*` tools are the same everywhere —
+they are the substrate, not a harness feature.)
 
-1. **MANDATORY READS** — design-law and spec files first (SPEC.md, design tokens, brand rules),
-   then sibling files to clone patterns from (list by absolute path).
-2. **Copy is law** — approved copy quoted verbatim or pointed at (exact file + section). The
-   subagent ships it VERBATIM, no paraphrasing, no improvement.
-3. **Clone target** — name an existing file the subagent must clone markup/structure from.
-   Never describe a pattern you can point at; point at it.
-4. **HARD RULES block** — non-negotiable constraints, every time:
+### 0. Preconditions — check once before delegating
+- **Subagents available?** If the harness cannot spawn one, do NOT simulate it — run the task
+  inline via the normal task cycle. Delegation is an optimization, never a requirement.
+- **Per-subagent model selectable?** If yes, map tier→model (cheap→small, standard→mid; frontier
+  you handle yourself). If no, spawn the default and rely on the task-cycle tier check.
+- **Parallel or serial?** Dispatch in parallel ONLY tasks the build plan marked parallel-safe
+  AND that share no files. Anything touching a shared file (a fragment, `pal.json`, a dataset) is
+  serialized. If two subagents might push at once, `pal_lock` before / `pal_unlock` after, or
+  serialize the pushes. Concurrency on shared files is the #1 way a delegated build corrupts
+  itself — when in doubt, serialize.
+
+### 1. Governing principles
+- **The subagent starts blind.** Assume zero shared context and zero memory of the spec. Every
+  thing it needs is in the brief or at an absolute path you tell it to read. A reference it can't
+  resolve is a guess you didn't want.
+- **One task, bounded.** One EXECUTION.md task per subagent, one verify cycle. It does not pick
+  its own work, read other tasks, or expand scope.
+- **The orchestrator owns truth.** The subagent's report is a hypothesis you verify with tools.
+  A subagent is never the thing that marks a task `done`.
+
+### 2. The handoff brief — fill EVERY slot (same template, every harness)
+A brief with an empty slot is invalid. Do not dispatch it.
+
+1. **TASK** — the single task id + one-line goal. Nothing beyond it.
+2. **MANDATORY READS (absolute paths, in order)** — SPEC.md; DESIGN_SYSTEM.md + COMPONENTS.md;
+   then the sibling file(s) to clone from. Read before writing anything.
+3. **COPY IS LAW** — approved copy from SPEC.md §4, quoted verbatim or pointed at by exact
+   section. Ships verbatim: no paraphrase, no "improvement."
+4. **CLONE TARGET** — the exact existing file whose markup/structure to copy. Point, don't
+   describe. No clone target usually means the task is frontier — reconsider delegating it.
+5. **HARD RULES** (verbatim, every time):
    - XHTML: all void tags self-closed
    - ASCII only — no named entities except `&amp;` `&lt;` `&gt;` `&quot;` `&apos;`
    - No `<script>` inside fragments
-   - `pal.json` entries required for every new file
-   - Existing CSS classes only — do not invent class names
-5. **Required RETURN format** — the subagent must return:
-   - A traceability table: what shipped vs what was specified (spec item | shipped value | match)
-   - An explicit deviations line: "Deviations: none" or list each deviation with reason.
+   - `pal.json` entry required for every new file
+   - Existing CSS classes only — never invent class names
+   - Touch ONLY the files this task names — never the §11 NEVER-list, never a §8b consumed dataset
+6. **DONE =** — the task's exact success condition (tool output + exact string/state). The
+   subagent self-checks against this before returning.
+7. **RETURN CONTRACT** — the subagent returns this and only this:
+   - files changed (absolute paths)
+   - traceability table: spec item | shipped value | match (y/n)
+   - deviations line: "Deviations: none" or each deviation + reason
+   - the success-condition self-check it ran, with the tool output
+
+### 3. After the subagent returns — every time, no exceptions
+1. **Re-verify independently** — never trust the report. Run the task's tools yourself
+   (`pal_validate`, `pal_test`; web → `pal_fetch` + grep the served HTML for the expected
+   strings; console → the §12 human-eyeball gate). See "Verify independently" below.
+2. **Pass** → mark `done`, checkpoint, commit. **Fail or over-claim** → restore the good state:
+   `git checkout` the subagent's local changes (clean slate beats half-applied). If the subagent
+   had already pushed, re-push the restored local to overwrite the server (`pal_pull`/`pal_merge`
+   first if drift-refused) — git checkout fixes only local. Then either re-dispatch ONCE with the
+   failure named in the brief, or escalate (`needs-frontier`, `blocked`, or `needs-human`). Two
+   failed dispatches on one task = stop delegating it; do it yourself or block it.
+3. **Never** let a subagent's "done" stand without your tool verification. That one rule is what
+   makes delegation safe across every harness.
 
 ---
 
@@ -113,12 +209,13 @@ When dispatching a task to a subagent, the prompt MUST contain — in this order
 
 Never accept a subagent's self-report as truth. After every push:
 
-- Run `pal_fetch` on each touched page and grep the served HTML for the expected H1, section
-  heading, or CSS class. If the element isn't in the fetched HTML, it didn't ship.
-- Run `pal_validate` before push and read push output for the stray-file warning.
-- Open the preview for the human at every pause — the human eyeball is the design gate.
-  Tooling cannot replace visual sign-off.
+- `pal_fetch` each touched **web** page and grep the served HTML for the expected H1, heading,
+  or CSS class. Not in the fetched HTML = it didn't ship. (Console renders aren't fetchable this
+  way — they go through the §12 human-eyeball gate instead.)
+- `pal_validate` before push; read push output for the stray-file warning.
+- Open the preview for the human at every pause — the human eyeball is the design gate. Tooling
+  cannot replace visual sign-off.
 
-**Why:** subagents have over-claimed in practice — reporting elements that didn't exist in the
-served HTML, misreading pages, marking tasks done when verification wasn't run. The orchestrator
-owns truth; the subagent's self-report is a hypothesis, not a result.
+**Why:** subagents have over-claimed in practice — reporting elements absent from the served
+HTML, misreading pages, marking tasks done when verification wasn't run. The orchestrator owns
+truth; the subagent's self-report is a hypothesis, not a result.

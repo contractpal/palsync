@@ -2,12 +2,15 @@
 
 You are editing source for a **PalBuilder (CloudPiston)** pal — a server-side
 Java/JavaScript platform. This file is your always-on contract. Read it before
-every task. For deep detail, read the two reference files in this repo
-(`docs/palbuilder-frontend.md`, `docs/palbuilder-backend.md`) and the official
-docs at https://secure.cloudpiston.com/cpal/cp-api/index.html.
+every task. For deep detail, read the injected skill files in `.claude/skills/`
+(`palbuilder-frontend/SKILL.md` for pages/fragments/c: tags,
+`palbuilder-backend/SKILL.md` for workflow JS) and the official docs at
+https://secure.cloudpiston.com/cpal/cp-api/index.html. Specialized work has its
+own skills too: `palbuilder-jobs-http` (background jobs / server-side HTTP),
+`palbuilder-websockets` (real-time), `design-build` (visual system), `seo-core` (SEO).
 
 PalBuilder is proprietary. **You do not know this dialect from training.** When
-unsure about a tag, an attribute, or an API method, look it up in the reference
+unsure about a tag, an attribute, or an API method, look it up in the skill
 files or the docs — never guess. A guessed attribute is a hard build error, not
 a warning.
 
@@ -92,8 +95,14 @@ subfolders. Pull refreshes the former; the latter survive forever.
 5. **`onclick` is not valid on `c:a`.** For a server action use `c:a action=...`.
    For JS-only behavior use a plain `<button onclick="fn()">` or
    `<a href="#" onclick="fn(); return false;">`.
-6. **`const` does not exist in workflow JS.** Use `var`; signal immutability with
-   `UPPER_SNAKE_CASE`. Strings use double quotes, always.
+6. **Workflow JS runs a restricted ES3-style engine.** Modern syntax throws at
+   compile time:
+   - **No object literals** — `{}` throws; this is the #1 breaker. Build maps with
+     `c.createData()` (key→value) and row sets with `c.createDataList(name, [cols])`,
+     never `{ a: 1 }`.
+   - **No `let`/`const`** — use `var`; signal immutability with `UPPER_SNAKE_CASE`.
+   - **No arrow functions** — use `function`.
+   - Strings use double quotes, always.
 
 ---
 
@@ -116,7 +125,7 @@ Common `c:` tags: `c:a` (action/nav link), `c:upload` (`allow` is required; use
 keywords like `image`/`pdf`, never MIME strings; one per page), `c:list`
 (needs `name` + `id`), `c:set`, `c:if`, `c:choose/when/otherwise`, `c:fragment`,
 `c:download`, `c:field`, `c:ignore`. Full attribute lists:
-`docs/palbuilder-frontend.md` and
+`.claude/skills/palbuilder-frontend/SKILL.md` and
 https://secure.cloudpiston.com/cpal/cp-api/console-tags/summary.html
 
 ---
@@ -162,7 +171,7 @@ setInt(...)`, then `ajax.addPayload(payload)` or `page.addPayload(payload)`.
 unused files: delete them.
 
 Full `ConsoleController` method list and request/payload APIs:
-`docs/palbuilder-backend.md` and
+`.claude/skills/palbuilder-backend/SKILL.md` and
 https://secure.cloudpiston.com/cpal/cp-api/console/index.html
 
 ---
