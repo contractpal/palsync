@@ -66,8 +66,14 @@ function availableWorkflows(serverPal) {
 // Build the runnable preview URL. CREDENTIAL-BEARING — never return/log this; hand straight to
 // the browser opener. profileId/workflowName only matter for console/transaction.
 function buildPreviewUrl(session, token, kind, profileId, workflowName) {
-    let url = token + "&cp-auth=" + Buffer.from(session.username + ":" + session.password).toString("base64");
+    //let url = token + "&cp-auth=" + Buffer.from(session.username + ":" + session.password).toString("base64");
+    let url = token;
     if (kind !== "web") {
+        if (session.sessionAuthToken)
+        {
+            const auth=session.sessionAuthToken;
+            url+="&cp-auth="+auth.substring(auth.indexOf(":")+1);
+        }
         if (profileId) url += "&nxProfileId=" + profileId;
         if (workflowName) url += "&cp-workflow=" + workflowName;
     }

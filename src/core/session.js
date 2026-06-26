@@ -15,13 +15,15 @@ async function authenticate(url, username, password) {
         password,
         userId: undefined,
         environment: { url },
-        lockInfo: undefined
+        lockInfo: undefined,
+        sessionAuthToken: undefined
     };
     const ping = await CloudPistonAPIManager.authenticate(session);
     if (!ping || !ping.success) {
         throw new Error("Authentication failed (Ping.do) for " + username + " @ " + url);
     }
     session.userId = ping.userPath;
+    session.sessionAuthToken=ping.sessionAuthToken;
     return session;
 }
 

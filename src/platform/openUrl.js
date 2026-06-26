@@ -13,10 +13,12 @@ function openUrl(url) {
         if (process.platform === "darwin") {
             cmd = "open"; args = [url];
         } else if (process.platform === "win32") {
-            // `start` is a cmd builtin; the empty "" is the window-title arg so a quoted URL
-            // isn't mistaken for the title. cmd handles the URL as one arg (no shell:true, so
-            // no PowerShell/zsh interpolation of & in the query string).
-            cmd = "cmd"; args = ["/c", "start", "", url];
+            // `start` is a cmd builtin. We use windowsVerbatimArguments to prevent Node
+            // from re-quoting our command string, allowing cmd /c to handle the nested
+            // quotes for the empty title and the URL.
+            cmd = "cmd";
+            args = ["/c", `start "" "${url}"`];
+            opts.windowsVerbatimArguments = true;
         } else {
             cmd = "xdg-open"; args = [url];
         }
