@@ -37,6 +37,7 @@ test("Pi pal carries only AGENTS.md + .agents skills — no CLAUDE files", async
     await ci.inject(ws, { palName: "Demo", agent: "pi" });
     assert.ok(fs.existsSync(path.join(ws, "AGENTS.md")), "Pi gets AGENTS.md");
     assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-backend/SKILL.md")), "Pi skills at .agents/");
+    assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-websockets/SKILL.md")), "Pi skills at .agents/ (websockets)");
     // The full doc is inlined in AGENTS.md (no fragile @import), with the stamp + contract.
     const md = fs.readFileSync(path.join(ws, "AGENTS.md"), "utf8");
     assert.ok(/<!--\s*palsync-context v/.test(md), "AGENTS.md carries the stamp");
