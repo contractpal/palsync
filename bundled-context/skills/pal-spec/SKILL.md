@@ -170,7 +170,7 @@ Canonical base: <https://...>
      listed is an unverifiable dependency — the reality check will flag it. -->
 
 ## 9. Required skills (which palsync skills this build loads)
-- ALWAYS: palbuilder-frontend, design-build
+- ALWAYS: palbuilder-frontend, design-build, pal-restraint
 - IF server-side logic, validation, or data writes/reads:  palbuilder-backend
   <!-- NOT just "has a workflow" — every pal has a serving workflow. Key off real logic/data. -->
 - IF background jobs / external HTTP / long-running work:   palbuilder-jobs-http

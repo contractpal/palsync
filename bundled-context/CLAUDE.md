@@ -7,7 +7,8 @@ every task. For deep detail, read the injected skill files in `.claude/skills/`
 `palbuilder-backend/SKILL.md` for workflow JS) and the official docs at
 https://secure.cloudpiston.com/cpal/cp-api/index.html. Specialized work has its
 own skills too: `palbuilder-jobs-http` (background jobs / server-side HTTP),
-`palbuilder-websockets` (real-time), `design-build` (visual system), `seo-core` (SEO).
+`palbuilder-websockets` (real-time), `design-build` (visual system), `seo-core` (SEO),
+`pal-restraint` (write the least code that works — applies by default to all pal code).
 
 PalBuilder is proprietary. **You do not know this dialect from training.** When
 unsure about a tag, an attribute, or an API method, look it up in the skill

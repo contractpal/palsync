@@ -13,7 +13,6 @@ Before writing anything:
 
 - Read `DESIGN_SYSTEM.md` and `COMPONENTS.md` if they exist. If they don't, and the task is more than trivial, recommend running `design-system-init` first — building without a system is how projects drift into generic output. If the user wants to proceed anyway, infer a minimal system from any existing code and state your assumptions.
 - Look at `design/refs/` if present. Read the images, not just the tokens — the references encode composition and restraint that the token list can't. Build toward how those look and feel.
-- If an `anti-slop-ui` skill or design-tells blocklist is available, load it now; its rules apply throughout build and are enforced again at the review gate.
 
 ## Vision routing
 
@@ -69,7 +68,7 @@ Do not present UI as finished until it has passed this self-critique. Treat your
 - Does every interactive element define its full state set, including focus-visible, disabled, loading, error, and empty where relevant?
 - Keyboard-operable? Contrast adequate for text and focus indicators?
 
-**Against slop** (use the loaded anti-slop-ui rules as the authority; this is the backstop)
+**Against slop** (the fingerprint list below is the authority; this is the backstop)
 - Any known fingerprints present — generic gradient-blob hero, pill-everything uniform radius, the only layout idea being a three-card row, default "AI editorial" serif-on-cream-with-sage?
 - Does it actually resemble the references in feel, or just in surface palette?
 

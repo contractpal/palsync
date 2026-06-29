@@ -67,8 +67,7 @@ References are the highest-bandwidth input you have. Treat them as durable proje
 
 Before committing to tokens, check the direction against generic-AI-output fingerprints. This is the step that catches choices which "feel safe" precisely because every model defaults to them.
 
-- If an `anti-slop-ui` skill or a design-tells blocklist is available in this environment, load it and treat it as the authority. Cross-reference the proposed fonts, colors, and layout patterns against it.
-- If none is available, apply this minimal safety net (deliberately short — the dedicated skill is the real list): be suspicious of the default "AI editorial" fingerprint (a serif display like Fraunces paired with a cream/off-white background and a muted sage/green accent), of all-purpose gradient-blob heroes, of uniform pill-everything with identical border-radius, and of evenly-spaced three-card feature rows as the only layout idea.
+- Cross-reference the proposed fonts, colors, and layout patterns against this safety net, the authority for this check: be suspicious of the default "AI editorial" fingerprint (a serif display like Fraunces paired with a cream/off-white background and a muted sage/green accent), of all-purpose gradient-blob heroes, of uniform pill-everything with identical border-radius, and of evenly-spaced three-card feature rows as the only layout idea.
 - When the user's stated direction collides with a known fingerprint, say so plainly and propose a specific, deliberate alternative rather than silently steering. The user decides; your job is to make the collision visible.
 
 ## Step 4 — Synthesize
