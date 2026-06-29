@@ -35,5 +35,8 @@
     "prompts": "^2.4.2",
     "zod": "^4.4.3"
   },
+  "optionalDependencies": {
+    "playwright": "^1.49.0"
+  },
   "license": "UNLICENSED"
 }

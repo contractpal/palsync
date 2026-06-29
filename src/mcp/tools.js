@@ -7,6 +7,7 @@ const { pull } = require("../core/pull");
 const { push } = require("../core/push");
 const { runTest } = require("../core/test");
 const { runPreview, fetchPagePath } = require("../core/preview");
+const { runScreenshot } = require("../core/screenshot");
 const { mergeWorkspace, formatMerge } = require("../core/merge");
 const { runSeoAudit, formatSeoAudit } = require("../core/seoAudit");
 const { syncDatasets } = require("../core/datasets");
@@ -235,6 +236,46 @@ const TOOLS = [
                     " title=" + JSON.stringify(res.title) + " size=" + res.bytes + " bytes" +
                     (filePath ? "\n  Full body saved to: " + filePath : "") +
                     "\n\n--- served body" + (truncated ? " (first " + PREVIEW_INLINE_CAP + " bytes — read the file for the rest)" : "") + " ---\n" + shown
+            });
+        }
+    },
+    {
+        name: "pal_screenshot",
+        description: "Render a WEB pal's screen in a headless browser and return a PNG IMAGE so you can judge its UI/UX visually (this is pal-review's visual arm). Acts on the LAST PUSHED version — pal_push first. " +
+            "Options: page (a specific page path under the site root, e.g. \"about.html\"; default the home page), viewport (\"desktop\" = 1280x800 default, or \"mobile\" ~390x844 for responsive checks), fullPage (capture the whole scroll height, not just the viewport). " +
+            "WEB pals only in this phase. For a console pal, or a runtime without Playwright/Chromium, it returns a clean unavailable signal so review falls back to the human eyeball gate — never a blank or fake image.",
+        inputShape: {
+            page: z.string().optional().describe("Page path under the site root, e.g. \"about.html\". Default: home page."),
+            viewport: z.enum(["desktop", "mobile"]).optional(),
+            fullPage: z.boolean().optional()
+        },
+        async run(ctx, { page, viewport, fullPage } = {}) {
+            const res = await runScreenshot(ctx.session, ctx.record.palGuid, { page, viewport, fullPage });
+            if (ctx.lifecycle) ctx.lifecycle.onActivity();
+            if (!res.captured) {
+                return Object.assign(res, {
+                    message: (res.available === false ? "Screenshot unavailable: " : "Could not screenshot: ") + res.reason +
+                        (res.validation ? "\n" + formatValidation(res.validation) : "")
+                });
+            }
+            // Save the PNG to a file the harness can Read, and return MCP image content so a
+            // vision-capable model sees the render inline.
+            let filePath = null;
+            try {
+                filePath = pathMod.join(os.tmpdir(), "palsync-screenshot-" + ctx.record.palGuid.replace(/[^A-Za-z0-9_-]/g, "") + "-" + res.viewportName + ".png");
+                fs.writeFileSync(filePath, Buffer.from(res.pngBase64, "base64"));
+            } catch (e) { /* best-effort */ }
+            const text = "WEB screenshot captured — " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height +
+                (fullPage ? " (full page)" : "") + "\n  url=" + res.url +
+                (filePath ? "\n  PNG saved to: " + filePath : "");
+            const safe = Object.assign({}, res); delete safe.pngBase64; // don't double-include the base64 blob
+            return Object.assign(safe, {
+                pngFile: filePath,
+                message: text,
+                content: [
+                    { type: "text", text },
+                    { type: "image", data: res.pngBase64, mimeType: "image/png" }
+                ]
             });
         }
     },

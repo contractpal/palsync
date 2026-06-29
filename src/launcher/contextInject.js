@@ -35,7 +35,7 @@ const RETIRED_SKILLS = ["design-core", "palbuilder-design", "design"];
 // (design-system-init sets a project's visual system; design-build enforces it) ride along
 // too — a skill costs no context until opened, and any UI session should reach for them.
 const ALWAYS_ON_SKILLS = ["palbuilder-frontend", "palbuilder-backend", "palbuilder-jobs-http", "palbuilder-websockets",
-    "pal-spec", "pal-loop", "design-system-init", "design-build", "pal-restraint"];
+    "pal-spec", "pal-loop", "pal-review", "design-system-init", "design-build", "pal-restraint"];
 
 // SEO skills — OPT-IN (--with-seo; default off). For WEB pals (public, crawled pages); console
 // sessions don't need them. Pairs naturally with the design skills when building a marketing site.

@@ -1,5 +1,5 @@
 "use strict";
-// The palsync MCP server: registers the five tools and serves them over stdio. Tool handlers
+// The palsync MCP server: registers the palsync tools (from TOOLS) and serves them over stdio. Tool handlers
 // resolve their ctx lazily via getCtx() so the server can be constructed (and its tools listed)
 // without yet logging in / acquiring a lock — keeping tool registration side-effect-free.
 //
@@ -35,6 +35,9 @@ function createServer(getCtx) {
                     const ctx = await getCtx();
                     const res = await t.run(ctx, args || {});
                     if (ctx && ctx.lifecycle) ctx.lifecycle.onActivity(); // reset idle timer; re-lock after an idle release
+                    // A tool may return its own MCP content blocks (e.g. pal_screenshot's image);
+                    // honor them. Otherwise fall back to the text message.
+                    if (res && Array.isArray(res.content)) return { content: res.content, isError: res.isError };
                     return { content: [{ type: "text", text: res.message || JSON.stringify(res, null, 2) }] };
                 } catch (err) {
                     logErr("tool '" + t.name + "' failed: " + stackOf(err));

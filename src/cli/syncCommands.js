@@ -36,6 +36,8 @@ const USAGE = [
     "                                                               Server-validate a workflow + open a live preview",
     "  palsync preview [--workflow console|web|transaction] [--keep-lock] [--dir <ws>]",
     "                                                               Render the pal (web: prints the HTML; console: opens a browser)",
+    "  palsync screenshot [<page>] [--viewport desktop|mobile] [--full-page] [--keep-lock] [--dir <ws>]",
+    "                                                               Render a WEB pal to a PNG (saves the file, prints the path)",
     "  palsync seo-audit [--keep-lock] [--dir <ws>]             On-page SEO audit of a WEB pal's rendered page",
     "  palsync scaffold  [--template <name>] [--list] [--dir <ws>]  Apply a starter template (offline; --list shows them)",
     "  palsync sync-datasets [--datasets a,b] [--recreate] [--keep-lock] [--dir <ws>]",
@@ -46,6 +48,8 @@ const USAGE = [
     "  --keep-lock        push/test/sync-datasets: keep holding the pal lock afterwards (default releases it)",
     "  --workflow         test: which engine to test (default: auto-detected from the pal)",
     "  --no-preview       test: validate only, don't open the browser preview",
+    "  --viewport         screenshot: desktop (default 1280x800) | mobile (~390x844)",
+    "  --full-page        screenshot: capture the whole scroll height, not just the viewport",
     "  --datasets         sync-datasets: comma-separated dataset names (default: all defined in pal.json)",
     "  --recreate         sync-datasets: DROP + REBUILD tables (DELETES ALL DATA) — asks for a typed YES",
     "  --dir <ws>         workspace directory (default: current directory)",
@@ -55,7 +59,7 @@ const USAGE = [
 ].join("\n");
 
 function parseFlags(argv) {
-    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, preview: true, skipValidation: false, datasets: undefined, recreate: false, template: undefined, list: false };
+    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, preview: true, skipValidation: false, datasets: undefined, recreate: false, template: undefined, list: false, viewport: undefined, fullPage: false };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--force" || a === "-f") flags.force = true;
@@ -71,6 +75,9 @@ function parseFlags(argv) {
         else if (a.startsWith("--workflow=")) flags.workflow = a.slice("--workflow=".length);
         else if (a === "--datasets") { flags.datasets = argv[++i]; if (!flags.datasets) throw new Error("--datasets requires a value"); }
         else if (a.startsWith("--datasets=")) flags.datasets = a.slice("--datasets=".length);
+        else if (a === "--viewport") { flags.viewport = argv[++i]; if (!flags.viewport) throw new Error("--viewport requires a value"); }
+        else if (a.startsWith("--viewport=")) flags.viewport = a.slice("--viewport=".length);
+        else if (a === "--full-page") flags.fullPage = true;
         else if (a === "--dir") { flags.dir = argv[++i]; if (!flags.dir) throw new Error("--dir requires a value"); }
         else if (a.startsWith("--dir=")) flags.dir = a.slice("--dir=".length);
         else if (a.charAt(0) !== "-" && flags._positional === undefined) flags._positional = a;
@@ -203,6 +210,16 @@ async function run(cmd, argv) {
             try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
         }
         return res.fetched && res.status === 200 ? 0 : 1;
+    }
+
+    if (cmd === "screenshot") {
+        // page is an optional positional (default: home page), like fetch's <page>.
+        const res = await toolByName("pal_screenshot").run(ctx, { page: flags._positional, viewport: flags.viewport, fullPage: flags.fullPage });
+        console.log(res.message); // includes the saved PNG path — CLI can't return the image inline
+        if (!flags.keepLock && ctx.session.lockInfo) {
+            try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
+        }
+        return res.captured ? 0 : 1;
     }
 
     if (cmd === "seo-audit") {
