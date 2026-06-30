@@ -18,10 +18,11 @@ The substrate facts you need (verified live, across two production pals):
   does NOT apply to meta attribute values — which is why og: URLs must be written absolute by
   YOU (rule 2).
 - `<script>` is allowed in a PAGE `<head>`/body (only FRAGMENTS reject `<script>`), so JSON-LD
-  goes in the page head.
+  goes in the page head. Full per-page-type guidance: **`references/structured-data.md`**.
 - Test/stage instances route **every** path through the workflow — without an explicit
   robots.txt/sitemap.xml intercept, those URLs render the homepage HTML instead (Lighthouse:
-  305 parse errors). See the robots/sitemap section below.
+  305 parse errors). Both intercept patterns: **`references/crawler-files.md`** — read it before
+  building robots.txt/sitemap.xml for any new web pal.
 
 ---
 
@@ -122,202 +123,31 @@ Two valid ways to fill the head, pick by how your pal is built:
 ## JSON-LD structured data — match the @type to the page, not one block for the whole site
 
 Put ONE `<script type="application/ld+json">` block in the page `<head>` (or one `schemaText`
-payload var in the templated pattern). The mistake to avoid: dropping the same generic
-`Organization` block onto every page. Pick the type that actually describes that page:
-
-| Page kind | `@type` | Notes |
-|---|---|---|
-| Home | `Organization` + your product, combined via `@graph` | See example below |
-| About | `AboutPage` with a `mainEntity` describing the product | |
-| Features/product | `WebPage` with `about` (the product) + `mainEntity: ItemList` of features | Add `breadcrumb: BreadcrumbList` on any non-home page that sits under a section |
-| FAQ | `FAQPage` with `mainEntity: [Question/acceptedAnswer, ...]` using the REAL on-page Q&A | Don't invent questions not shown to users |
-| Blog index | `Blog` with a `publisher` | |
-| Blog post | `og:type="article"` + per-post meta (`article:author`, `article:published_time`) | JSON-LD `@type: Article` optional but the OG article tags are the minimum |
-| Contact/support | `ContactPage` | |
-| Signup/get-started | `WebPage` with a `potentialAction: RegisterAction` | |
-
-`@graph` example for a home page that is both a company and a product (real pattern, trimmed):
-
-```json
-{
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "Organization",
-      "name": "Brand Parent Co",
-      "url": "https://parent-co.com/",
-      "logo": "https://YOUR-DOMAIN/nx-ref/Images/logo.png"
-    },
-    {
-      "@type": "WebApplication",
-      "name": "Product Name",
-      "url": "https://YOUR-DOMAIN",
-      "applicationCategory": "...",
-      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-      "publisher": { "@type": "Organization", "name": "Brand Parent Co", "url": "https://parent-co.com/" }
-    }
-  ]
-}
-```
-
-Rules that don't change regardless of type:
-- Every URL inside JSON-LD is absolute (trap 1 applies here too).
-- JSON-LD is real JSON — double quotes, no trailing commas, no comments.
-- In the templated pattern, store each page's JSON-LD as raw JSON text in its own
-  `scripts/schema/<page>.js` file and load it with `pal.getScript("schema/<page>")` — keeps the
-  workflow's route switch readable and lets you diff schema changes independently of routing.
+payload var in the templated pattern) — never the same generic `Organization` block on every
+page. Every URL inside JSON-LD is absolute (trap 1 below applies here too); JSON-LD is real JSON
+(double quotes, no trailing commas/comments). The `@type`-per-page-kind table and a worked
+`@graph` example: **`references/structured-data.md`** — read it before writing any page's
+JSON-LD.
 
 ---
 
-## Loading-speed head optimizations (verified live patterns)
+## Loading-speed head optimizations
 
 A correct `<head>` and a *fast* `<head>` are both this skill's job — Lighthouse perf score is
-part of SEO. In order of impact:
-
-1. **LCP hero image: render it as a real `<img>` in the initial HTML, not a CSS
-   `background-image`.** Give it `fetchpriority="high"` and a `srcset`/`sizes` pair so the
-   browser discovers and prioritizes it the instant HTML parses — no separate `<link
-   rel="preload">` needed (a preload for an image already in the initial markup just trips a
-   "preload not used" console warning and wastes a request).
-   ```html
-   <img class="hero-img" src="../Images/hero.jpg"
-        srcset="../Images/hero-m.jpg 900w, ../Images/hero.jpg 1672w" sizes="100vw"
-        fetchpriority="high" alt="Describe the hero image"/>
-   ```
-2. **Below-the-fold images get `loading="lazy"`.** Anything not visible on first paint —
-   secondary art, hub illustrations, footer images.
-3. **Async-load Google Fonts; never add a `<noscript>` fallback.**
-   ```html
-   <link rel="preconnect" href="https://fonts.googleapis.com"/>
-   <link rel="preconnect" crossorigin="crossorigin" href="https://fonts.gstatic.com"/>
-   <link rel="preload" as="style" onload="this.onload=null;this.rel='stylesheet'"
-         href="https://fonts.googleapis.com/css2?family=...&amp;display=swap"/>
-   ```
-   The `onload` swap trick avoids a render-blocking font request. **Do not add the usual
-   `<noscript><link rel="stylesheet" .../></noscript>` fallback** — verified live, the
-   PalBuilder server unwraps `<noscript>` content at render time and reintroduces the blocking
-   `<link>`, defeating the whole async swap. Skip it; the `display=swap` query param already
-   covers the no-JS case well enough.
-4. **Inline critical above-the-fold CSS in a `<style>` block, placed before any external
-   stylesheet `<link>`,** if the page has enough custom CSS that the external sheet round-trip
-   would delay first paint. Put it in its own fragment (e.g. `critical-styles.html`) and pull it
-   in with `<c:head name="critical-styles"/>` so it's reusable across pages.
-5. **Defer everything that isn't needed for first paint:** icon fonts, analytics, non-critical
-   JS all take `defer="true"` (or `defer="defer"` on a plain `<script>`). The page's own
-   stylesheet and the font-swap preload above are the only render-path resources that load
-   un-deferred.
-6. Optional progressive enhancement, no downside: a Speculation Rules block to prerender same-
-   origin links on supporting browsers —
-   `<script type="speculationrules">{"prerender":[{"where":{"href_matches":"/*"},"eagerness":"moderate"}]}</script>`.
+part of SEO. Highest-impact rule: render the LCP hero image as a real `<img fetchpriority="high"
+srcset=... />` in the initial HTML, never a CSS `background-image`. Full ordered list (font
+loading, critical CSS, defer discipline, speculation rules) with code: **`references/loading-speed.md`**.
 
 ---
 
 ## robots.txt, sitemap.xml, and llms.txt — every WEB pal needs all three
 
-Pick ONE of the two patterns below — both are verified live. Pattern A is simpler and has no
-PalBuilder-manifest dependency; use it unless you already have a `pages`/`datalists` structure
-that makes Pattern B's data-driven sitemap worth the setup.
-
-### Pattern A — handle it directly in the workflow (no pal.json page needed)
-
-Intercept these hrefs at the very top of `run()`, **before** any route switch — on test/stage
-instances every path falls through to the workflow, so without this intercept a request for
-`/robots.txt` renders the homepage HTML instead (this exact bug showed up as 305 Lighthouse
-parse errors in production).
-
-```js
-function run(controller) {
-    c = controller;
-    var crawler = serveCrawlerFile();
-    if (crawler != null) { return crawler; }
-    // ...normal route switch...
-}
-
-function serveCrawlerFile() {
-    var href = c.getHref();
-    if (href == null) { return null; }
-    var q = href.indexOf("?");
-    if (q >= 0) { href = href.substring(0, q); }
-
-    if (href.indexOf("robots.txt") >= 0) {
-        var robots = c.createAjaxResponse(
-            "User-agent: *\nAllow: /\nDisallow: /thank-you.html\nSitemap: https://YOUR-DOMAIN/sitemap.xml\n",
-            false);
-        robots.setContentType("text/plain");           // required — see note below
-        return robots;
-    }
-
-    if (href.indexOf("sitemap.xml") >= 0) {
-        var base = "https://YOUR-DOMAIN/";
-        var names = ["index", "page-one", "page-two" /* ...every routable page... */];
-        var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";
-        for (var i = 0; i < names.length; i++) {
-            xml += "<url><loc>" + base + names[i] + ".html</loc></url>\n";
-        }
-        xml += "</urlset>\n";
-        var sitemap = c.createAjaxResponse(xml, false);
-        sitemap.setContentType("application/xml");     // required — see note below
-        return sitemap;
-    }
-    return null;
-}
-```
-
-**`setContentType` is not optional.** Served with the default `text/html`, a browser/crawler
-parses `<url>`/`<loc>` as unknown HTML tags and shows bare text instead of a real sitemap — use
-`text/plain` for robots.txt and `application/xml` for sitemap.xml.
-
-### Pattern B — data-driven via pal.json page entries
-
-Register `robots.txt` (and optionally `llms.txt`) as **Pages** in `pal.json` with
-`"palType": "palTypeRobots"`, `"contentType": "text/plain"`. Route to them with
-`c.getPage("robots")` / `c.getPage("llms")`. For the sitemap, register a **Fragment** with
-`"palType": "palTypeServiceRequest"` (e.g. `sitemap.html`) holding:
-
-```html
-<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-<c:list name="sitemap" id="s">
-<url><loc>${s.page}</loc><lastmod>${lastMod}</lastmod></url>
-</c:list>
-</urlset>
-```
-
-driven by a `datasets`/`datalists` entry named `sitemap` (columns: `page`, `priority`,
-`changeFreq`) — one row per route, including dynamic routes like blog posts. Serve it from the
-workflow:
-
-```js
-function getSitemap() {
-    ajax = c.createAjaxResponse(pal.getServiceFragment("sitemap"), true);
-    ajax.set("site", getBaseUrl());
-    var list = pal.getDataList("sitemap").copy("sitemap");
-    for (var i = 0; i < list.getRecordCount(); i++) {
-        list.getRecord(i).set("page", getBaseUrl() + list.getRecord(i).getDefaultValue("page", "", true));
-    }
-    ajax.addDataList(list);
-    ajax.setContentType("text/xml");
-    return ajax;
-}
-```
-
-Use this pattern when pages/posts are added dynamically (e.g. a blog) — the datalist grows
-without touching workflow code, unlike Pattern A's hardcoded `names` array.
-
-### llms.txt (bonus — modern AI-crawler discovery file)
-
-Not required, but cheap and increasingly checked: a plain-text/markdown file at `/llms.txt`
-summarizing what the product is, its core pages, key features, and what it explicitly is NOT
-(scope-bounding helps LLM answers stay accurate). Serve it the same way as robots.txt in
-whichever pattern you chose above.
-
-### robots.txt content checklist
-
-- `User-agent: *` / `Allow: /` (or scoped `Disallow:` for thank-you/admin/api/temp paths and
-  any `?`-querystring duplicate-content URLs).
-- `Sitemap: https://YOUR-DOMAIN/sitemap.xml` line, absolute URL.
-- `pal_seo_audit` fetches and checks all three files (homepage-HTML fallthrough, content-type,
-  required lines/elements) — fix every ERROR it reports there same as for page heads.
+Test/stage instances route **every** path through the workflow, so without an explicit
+robots.txt/sitemap.xml intercept those URLs render the homepage HTML instead of the file (this
+exact bug caused 305 Lighthouse parse errors in production). Two verified patterns — direct
+workflow intercept (no manifest dependency) or data-driven via `pal.json` Pages/a sitemap
+datalist — plus the content checklist: **`references/crawler-files.md`**. Pick Pattern A unless
+you already have a `pages`/`datalists` structure that makes B's data-driven sitemap worth it.
 
 ---
 
