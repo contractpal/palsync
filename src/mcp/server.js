@@ -12,6 +12,7 @@ const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
 const { TOOLS } = require("./tools");
 const { buildContext } = require("./context");
+const usage = require("../core/usage");
 const pkg = require("../../package.json");
 
 // All server diagnostics go to stderr with a consistent prefix. The agent talks over stdio
@@ -37,8 +38,13 @@ function createServer(getCtx) {
                     if (ctx && ctx.lifecycle) ctx.lifecycle.onActivity(); // reset idle timer; re-lock after an idle release
                     // A tool may return its own MCP content blocks (e.g. pal_screenshot's image);
                     // honor them. Otherwise fall back to the text message.
-                    if (res && Array.isArray(res.content)) return { content: res.content, isError: res.isError };
-                    return { content: [{ type: "text", text: res.message || JSON.stringify(res, null, 2) }] };
+                    const content = (res && Array.isArray(res.content))
+                        ? res.content
+                        : [{ type: "text", text: res.message || JSON.stringify(res, null, 2) }];
+                    // T3: meter palsync's own context contribution (bytes returned to the agent).
+                    if (ctx && ctx.workspaceDir) usage.recordToolCall(ctx.workspaceDir, t.name, usage.contentBytes(content));
+                    if (res && Array.isArray(res.content)) return { content, isError: res.isError };
+                    return { content };
                 } catch (err) {
                     logErr("tool '" + t.name + "' failed: " + stackOf(err));
                     return { isError: true, content: [{ type: "text", text: "palsync tool '" + t.name + "' failed: " + (err && err.message ? err.message : String(err)) }] };
@@ -102,6 +108,8 @@ async function main() {
         if (shuttingDown) return;
         shuttingDown = true;
         logErr(why + " — releasing lock and shutting down");
+        // T3: session-end context-contribution summary (palsync's own footprint, not model spend).
+        try { logErr("session cost summary —\n" + usage.formatCost(workspaceDir, TOOLS)); } catch (e) { /* never block shutdown */ }
         try {
             if (ctxPromise) {
                 const ctx = await ctxPromise.catch(() => null);

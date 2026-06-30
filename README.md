@@ -123,10 +123,26 @@ palsync seo-audit # on-page SEO audit of a WEB pal's rendered page
 palsync preview  # render the pal (web: prints the HTML; console: opens a browser)
 palsync sync-datasets  # provision dataset tables from pal.json (safe by default)
 palsync scaffold --template <name>  # apply a starter template (offline; --list shows them)
+palsync cost     # palsync's own context contribution (offline) — see below
 ```
 
 All take `--dir <workspace>` (default: current directory). Semantics are identical to the MCP
 tools — same drift guards, same preserve-on-pull, same uncreatable-type backstop.
+
+### `palsync cost` — context contribution (observability)
+
+palsync can't see the model's token billing, so `palsync cost` reports the **honest proxy**: its
+own footprint. Two parts:
+
+- **Tool calls this session** — how many MCP tools ran and how many bytes their results returned to
+  the agent's context, per tool. The MCP server records this live in `.palsync.usage.json` (keyed by
+  the server PID, so each session starts a fresh count). It's also printed to stderr at session end.
+- **Injected context block** — the size of what palsync loads up front every session:
+  `CLAUDE.palsync.md` + the always-on skill **descriptions** (the only always-loaded part — skill
+  *bodies* and `references/*.md` load on demand and are **not** counted) + the tool definitions.
+
+These are **measured bytes, not estimated tokens, and not model spend** — they're palsync's own
+contribution to context, the number to watch when trimming skills or tool descriptions.
 
 ## Sync safety (what protects your work)
 

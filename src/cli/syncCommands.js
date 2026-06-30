@@ -40,6 +40,7 @@ const USAGE = [
     "                                                               Render a WEB pal to a PNG (saves the file, prints the path)",
     "  palsync seo-audit [--keep-lock] [--dir <ws>]             On-page SEO audit of a WEB pal's rendered page",
     "  palsync scaffold  [--template <name>] [--list] [--dir <ws>]  Apply a starter template (offline; --list shows them)",
+    "  palsync cost   [--dir <workspace>]                           palsync's own context contribution: tool calls + bytes returned + injected-block size (offline)",
     "  palsync sync-datasets [--datasets a,b] [--recreate] [--keep-lock] [--dir <ws>]",
     "                                                               Provision dataset tables from pal.json (safe by default)",
     "",
@@ -118,6 +119,14 @@ async function run(cmd, argv) {
         console.log("palsync validate — " + dir + "\n");
         console.log(formatLint(lint, { context: "validate" }));
         return lint.errors > 0 ? 1 : 0;
+    }
+
+    // cost is OFFLINE: reads the per-session usage tally (.palsync.usage.json, written live by the
+    // MCP server) and measures the injected context block from the workspace files. No login/lock.
+    if (cmd === "cost") {
+        const usage = require("../core/usage");
+        console.log(usage.formatCost(dir, TOOLS));
+        return 0;
     }
 
     // scaffold is OFFLINE too (writes template files + pal.json entries; push ships them later).
