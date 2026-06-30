@@ -33,18 +33,23 @@ palsync already knows how to construct.
      viewport used.
 - This alone gives autonomous visual review for every marketing/web pal (e.g. the MacroWeek site).
 
-### Phase 2 — CONSOLE pals (after web works)  ✅ IMPLEMENTED (T8) — live-verify PENDING
-- IMPLEMENTED: `runScreenshot` now auto-detects the engine. For CONSOLE/transaction it navigates
+### Phase 2 — CONSOLE pals (after web works)  ✅ IMPLEMENTED + LIVE-VERIFIED (T8)
+- IMPLEMENTED: `runScreenshot` auto-detects the engine. For CONSOLE/transaction it navigates
   Playwright to `runTest`'s `_previewUrl` (the cp-auth'd URL pal_test already opens in the user's
   browser); the browser absorbs the auth redirect chain — no separate cookie loading needed. A
   failed/timed-out auth replay is caught and returned as `{ captured: false, reason }` (eyeball-gate
   fallback). The returned `url` is sanitized to origin+path so no credential is surfaced, and the
   error path strips URL-shaped text. `_previewUrl` is never returned or logged.
-- ⚠ LIVE VERIFICATION PENDING: not yet run against a real console pal + live session (none
-  available at implementation time). Before trusting it, capture a real authenticated console
-  screen and confirm the PNG matches; if the replay turns out to need explicit cookie loading (set
-  the activated session cookies into the Playwright context via `openInstanceSession`), add that
-  here. The `captured:false` fallback makes a failure safe, not silent.
+- ✅ LIVE-VERIFIED (against ISR-SEO-Dashboard, a real authenticated console pal): pal_screenshot
+  returned `captured:true` with a valid PNG (79,828 bytes, 1280×800) that visibly rendered the
+  authenticated AuditHelm "Clients" console dashboard (real client rows). Security scan of the
+  result object found NO leak of the cp-auth token / password / authed URL; the returned `url` was
+  the sanitized `…/RunConsoleApp.do` (no query). A second pal (Allan-Iverson) that didn't validate
+  server-side returned the clean `captured:false` fallback, confirming the safe-degrade path.
+  The navigation-based replay was sufficient — no explicit cookie loading was needed.
+- Regression coverage: `test/screenshot.test.js` mocks the auth-replay path (console navigates the
+  cp-auth'd `_previewUrl` → sanitized url + no cred leak; replay failure → clean `captured:false`,
+  never a throw; web rawToken; no-Chromium unavailable; unvalidated pal).
 
 ## Harness-agnostic + graceful degradation (required)
 - **No Playwright/Chromium in the runtime** (some harnesses won't have it) → the tool reports
