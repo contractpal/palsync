@@ -3,24 +3,33 @@
 // visual arm (with a vision-capable model) can judge UI/UX automatically instead of parking every
 // visual check at the human eyeball gate.
 //
-// Phase 1 — WEB pals only. A WEB pal's rawToken (from runTest) is a directly-fetchable URL on
+// WEB pals: a WEB pal's rawToken (from runTest) is a directly-fetchable URL on
 // webpals.cloudpiston.com that activates a test session through its redirect chain — a real
 // browser absorbs the session cookies on the way in exactly as a human does opening the preview
 // link, so Playwright just navigates to it. No auth, no credentials in the URL.
 //
-// TODO Phase 2 — CONSOLE pals: reuse preview.js openInstanceSession + test.js buildPreviewUrl to
-// get the cp-auth'd URL + activated session cookies, load them into the Playwright context, then
-// navigate (replay the auth/redirect chain). The fiddly part is the auth replay — test against a
-// real console pal. See docs/pal_screenshot-implementation.md.
+// CONSOLE / transaction pals (Phase 2): runTest already builds the cp-auth'd preview URL
+// (_previewUrl) — the same URL pal_test opens in the user's browser. Playwright navigates to it
+// and absorbs the auth redirect chain exactly as that browser does (no separate cookie loading
+// needed — the cp-auth param drives session establishment server-side). If the auth replay fails
+// (timeout, no token, blank), we return { captured:false } so pal-review falls back to the human
+// eyeball gate — never a blank or fake image.
 //
-// SECURITY: only WEB (no-auth) URLs are driven here. Never return or log a cp-auth URL or
-// credentials — the result carries the image + the resolved (sanitized) landing URL only.
+// SECURITY: the console URL is credential-bearing. Never return or log _previewUrl — the result
+// carries the image + a SANITIZED landing URL (origin + path only, query/credentials stripped).
 const { runTest } = require("./test");
 
 const VIEWPORTS = {
     desktop: { width: 1280, height: 800 },
     mobile: { width: 390, height: 844 }
 };
+
+// Strip query + hash from a landed URL before returning it — drops cp-auth / nxProfileId /
+// cp-workflow (and any credential the auth redirect left in the URL). Returns origin + pathname.
+function sanitizeUrl(u) {
+    try { const x = new URL(u); return x.origin + x.pathname; }
+    catch (e) { return ""; }
+}
 
 // Playwright is an OPTIONAL dependency — some runtimes won't have it. require() inside try/catch
 // so a missing module degrades to a clean "unavailable" signal (pal-review falls back to the
@@ -40,21 +49,28 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
                  reason: "Playwright/Chromium is not installed in this runtime — visual review falls back to the human eyeball gate. Enable with: npm i playwright && npx playwright install chromium" };
     }
 
-    const t = await runTest(session, guid, { kind: "web" });
+    // Auto-detect the engine (web preferred — directly fetchable; else console/transaction).
+    const t = await runTest(session, guid, {});
     if (!t.ran) {
         return { captured: false, available: true, blocked: t.blocked,
                  reason: t.blocked === "no-testable-workflow"
-                     ? "This pal has no web workflow to screenshot (phase 1 supports WEB pals only)."
+                     ? "This pal has no testable workflow to screenshot."
                      : "Could not start a test instance (" + (t.blocked || "unknown") + ")." };
     }
-    if (t.kind !== "web") {
-        // Phase 2 (console auth replay) is deferred — see docs/pal_screenshot-implementation.md.
-        return { captured: false, available: true, kind: t.kind,
-                 reason: "Screenshot phase 1 supports WEB pals only; this is a " + t.kind + " pal — its render stays at the human eyeball gate (phase 2 deferred)." };
-    }
     if (!t.validated) {
-        return { captured: false, available: true, kind: "web", validation: t.validation,
+        return { captured: false, available: true, kind: t.kind, validation: t.validation,
                  reason: "The pal did not validate on the server, so it can't be rendered. Fix the validation notes, push, and screenshot again." };
+    }
+
+    // WEB → directly-fetchable rawToken (no auth). CONSOLE/transaction → the cp-auth'd preview URL
+    // (credential-bearing; never returned/logged). Playwright absorbs the auth redirect chain.
+    const isWeb = t.kind === "web";
+    const target = isWeb ? t.rawToken : t._previewUrl;
+    if (!target) {
+        return { captured: false, available: true, kind: t.kind,
+                 reason: isWeb
+                     ? "No web preview URL was returned — can't render; falls back to the human eyeball gate."
+                     : "No authenticated preview URL for this " + t.kind + " pal — can't drive the console screen; falls back to the human eyeball gate." };
     }
 
     const viewportName = VIEWPORTS[viewport] ? viewport : "desktop";
@@ -73,12 +89,14 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
     try {
         const bctx = await browser.newContext({ viewport: vp });
         const pg = await bctx.newPage();
-        // rawToken activates the session and lands on the site index. The browser absorbs cookies
-        // through the redirect chain, same as a human opening the preview link.
-        await pg.goto(t.rawToken, { waitUntil: "networkidle" });
-        if (page) {
-            // Navigate to a specific page under the activated session's site root (same base
-            // derivation preview.js openInstanceSession uses: origin + first path segment).
+        // The target URL activates the session and lands the render. For WEB it's the no-auth
+        // rawToken; for CONSOLE/transaction it's the cp-auth'd URL — the browser absorbs the auth
+        // redirect chain, same as a human opening the preview link. A failed/timed-out auth replay
+        // throws here → caught below as a clean captured:false (eyeball-gate fallback).
+        await pg.goto(target, { waitUntil: "networkidle" });
+        if (page && isWeb) {
+            // Sub-page navigation under the site root (web only; console renders one workflow).
+            // Same base derivation preview.js openInstanceSession uses: origin + first path segment.
             const root = new URL(pg.url());
             const seg = root.pathname.split("/").filter(Boolean)[0] || "";
             const base = root.origin + "/" + (seg ? seg + "/" : "");
@@ -86,11 +104,21 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
         }
         const buf = await pg.screenshot({ fullPage: !!fullPage });
         return {
-            captured: true, available: true, kind: "web",
+            captured: true, available: true, kind: t.kind,
             viewport: vp, viewportName,
-            url: pg.url(),            // resolved landing — webpals host, no credentials
+            // WEB landing is the webpals host (no creds). CONSOLE landing may retain cp-auth in the
+            // URL — sanitize to origin+path so no credential is ever returned.
+            url: isWeb ? pg.url() : sanitizeUrl(pg.url()),
             pngBase64: buf.toString("base64")
         };
+    } catch (e) {
+        // Navigation/auth-replay/screenshot failure — degrade to the eyeball gate, never throw.
+        // Do NOT include the error verbatim if it could echo the credential URL; keep it to the
+        // first line and strip anything URL-shaped.
+        const msg = (e && e.message ? e.message.split("\n")[0] : String(e)).replace(/https?:\/\/\S+/g, "<url>");
+        return { captured: false, available: true, kind: t.kind,
+                 reason: (isWeb ? "Could not render the web page" : "Could not drive the authenticated " + t.kind + " screen") +
+                     " — visual review falls back to the human eyeball gate. (" + msg + ")" };
     } finally {
         await browser.close();
     }

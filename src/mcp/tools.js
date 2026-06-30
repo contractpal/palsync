@@ -241,9 +241,9 @@ const TOOLS = [
     },
     {
         name: "pal_screenshot",
-        description: "Render a WEB pal's screen in a headless browser and return a PNG so you can judge its UI/UX visually (pal-review's visual arm). Acts on the LAST PUSHED version — pal_push first. " +
-            "Options: page (path under the site root, e.g. \"about.html\"; default home), viewport (\"desktop\" 1280x800 default, or \"mobile\" ~390x844), fullPage (whole scroll height). " +
-            "WEB pals only. For a console pal or a runtime without Playwright/Chromium it returns a clean unavailable signal (review falls back to the human eyeball gate) — never a blank or fake image.",
+        description: "Render a pal's screen in a headless browser and return a PNG so you can judge its UI/UX visually (pal-review's visual arm). Acts on the LAST PUSHED version — pal_push first. " +
+            "Options: page (WEB only — path under the site root, e.g. \"about.html\"; default home), viewport (\"desktop\" 1280x800 default, or \"mobile\" ~390x844), fullPage (whole scroll height). " +
+            "WEB pals render directly; CONSOLE/transaction pals render via authenticated replay. If auth fails, or the runtime lacks Playwright/Chromium, it returns a clean unavailable signal (review falls back to the human eyeball gate) — never a blank or fake image.",
         inputShape: {
             page: z.string().optional().describe("Page path under the site root, e.g. \"about.html\". Default: home page."),
             viewport: z.enum(["desktop", "mobile"]).optional(),
@@ -265,7 +265,7 @@ const TOOLS = [
                 filePath = pathMod.join(os.tmpdir(), "palsync-screenshot-" + ctx.record.palGuid.replace(/[^A-Za-z0-9_-]/g, "") + "-" + res.viewportName + ".png");
                 fs.writeFileSync(filePath, Buffer.from(res.pngBase64, "base64"));
             } catch (e) { /* best-effort */ }
-            const text = "WEB screenshot captured — " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height +
+            const text = (res.kind ? res.kind.toUpperCase() : "WEB") + " screenshot captured — " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height +
                 (fullPage ? " (full page)" : "") + "\n  url=" + res.url +
                 (filePath ? "\n  PNG saved to: " + filePath : "");
             const safe = Object.assign({}, res); delete safe.pngBase64; // don't double-include the base64 blob

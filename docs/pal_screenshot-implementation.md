@@ -33,12 +33,18 @@ palsync already knows how to construct.
      viewport used.
 - This alone gives autonomous visual review for every marketing/web pal (e.g. the MacroWeek site).
 
-### Phase 2 — CONSOLE pals (after web works)
-- Reuse `openInstanceSession` + `buildPreviewUrl` to get the cp-auth'd URL and the activated
-  session cookies, then load them into the Playwright context (set cookies / replay the redirect
-  chain) before navigating. This is the fiddly part — test against a real console pal.
-- If the auth replay fails, return `{ captured: false, reason }` so pal-review falls back to the
-  human eyeball gate (never a blank or fake image).
+### Phase 2 — CONSOLE pals (after web works)  ✅ IMPLEMENTED (T8) — live-verify PENDING
+- IMPLEMENTED: `runScreenshot` now auto-detects the engine. For CONSOLE/transaction it navigates
+  Playwright to `runTest`'s `_previewUrl` (the cp-auth'd URL pal_test already opens in the user's
+  browser); the browser absorbs the auth redirect chain — no separate cookie loading needed. A
+  failed/timed-out auth replay is caught and returned as `{ captured: false, reason }` (eyeball-gate
+  fallback). The returned `url` is sanitized to origin+path so no credential is surfaced, and the
+  error path strips URL-shaped text. `_previewUrl` is never returned or logged.
+- ⚠ LIVE VERIFICATION PENDING: not yet run against a real console pal + live session (none
+  available at implementation time). Before trusting it, capture a real authenticated console
+  screen and confirm the PNG matches; if the replay turns out to need explicit cookie loading (set
+  the activated session cookies into the Playwright context via `openInstanceSession`), add that
+  here. The `captured:false` fallback makes a failure safe, not silent.
 
 ## Harness-agnostic + graceful degradation (required)
 - **No Playwright/Chromium in the runtime** (some harnesses won't have it) → the tool reports
