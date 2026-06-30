@@ -107,7 +107,7 @@ const TOOLS = [
     },
     {
         name: "pal_validate",
-        description: "Check the pal's code OFFLINE (no server, no network) for mistakes that silently break in PalBuilder: invalid workflow JavaScript (object literals, let/const, ES6 the restricted engine rejects) and invalid markup (unclosed void tags, undocumented c: attributes, ARIA on c:field, ${} inside inline <script>, DOMContentLoaded in fragments). Returns a list of findings, each with the file, line, an ERROR or WARNING label, and exactly how to fix it. ERROR = will fail to compile or save in PalBuilder; WARNING = likely unsupported, review it. Run this BEFORE pal_push to catch problems early. pal_push also runs this automatically and refuses if there are errors.",
+        description: "Check the pal's code OFFLINE (no server/network) for mistakes that silently break in PalBuilder: invalid workflow JS (object literals, let/const, ES6 the restricted engine rejects) and invalid markup (unclosed void tags, undocumented c: attributes, ${} in inline <script>, DOMContentLoaded in fragments). Returns each finding's file, line, ERROR/WARNING label, and the fix. Run BEFORE pal_push to catch problems early (pal_push runs it too and refuses on errors).",
         inputShape: {},
         async run(ctx) {
             const lint = validateWorkspace(ctx.workspaceDir);
@@ -117,7 +117,7 @@ const TOOLS = [
     },
     {
         name: "pal_test",
-        description: "Validate a workflow ON THE SERVER and open a live preview in the user's browser. Returns the server's validation notes. IMPORTANT: the preview opens in the USER'S local browser; the preview URL contains the user's credentials and is NEVER returned to you, so YOU CANNOT SEE the rendered page — ask the user what it looks like if you need to know. Use after a push to confirm the workflow runs on the server. (For an OFFLINE code check that needs no push, use pal_validate first.)",
+        description: "Validate a workflow ON THE SERVER and open a live preview in the user's browser; returns the server's validation notes. The preview URL carries the user's credentials, is NEVER returned to you, and you CANNOT see the rendered page — ask the user if you need to know. Use after a push to confirm the workflow runs server-side. (Offline code check that needs no push: pal_validate.)",
         inputShape: {
             workflow: z.enum(["console", "web", "transaction"]).optional(),
             workflowName: z.string().optional(),
@@ -167,7 +167,7 @@ const TOOLS = [
     },
     {
         name: "pal_preview",
-        description: "See what the pal actually RENDERS. For a WEB pal this fetches the server-rendered HTML and RETURNS IT TO YOU so you can read your real output (it also saves the full HTML to a file). For a CONSOLE/transaction pal the render needs a browser, so it opens in the user's browser and you will NOT see it (ask the user). The preview shows the LAST PUSHED version — pal_push first to preview your latest edits. (For just a pass/fail validation check, use pal_test; for an offline code check, pal_validate.)",
+        description: "See what the pal actually RENDERS. WEB pal: fetches the server-rendered HTML and returns it to you (also saved to a file). CONSOLE/transaction pal: needs a browser, so it opens in the user's browser and you will NOT see it (ask the user). Shows the LAST PUSHED version — pal_push first to preview your latest edits. (Pass/fail check: pal_test; offline code check: pal_validate.)",
         inputShape: { workflow: z.enum(["console", "web", "transaction"]).optional() },
         async run(ctx, { workflow } = {}) {
             const res = await runPreview(ctx.session, ctx.record.palGuid, ctx.record, ctx.workspaceDir, { workflow });
@@ -212,9 +212,9 @@ const TOOLS = [
     {
         name: "pal_fetch",
         description: "Fetch ONE specific page from a WEB pal's test instance and return its served HTML — the verification primitive. " +
-            "Use it after every push that adds or changes a page: check the H1, check links resolved, check the right fragment rendered. " +
-            "A successful push does NOT prove a page renders (files missing from pal.json are silently skipped; routes can be wrong) — pal_fetch proves it. " +
-            "path is the page path relative to the site root, e.g. \"about.html\" or \"robots.txt\". Shows the LAST PUSHED version.",
+            "Use after every push that adds/changes a page: confirm the H1, links resolved, and the right fragment rendered. " +
+            "A successful push does NOT prove a page renders (files missing from pal.json are silently skipped) — pal_fetch proves it. " +
+            "path is relative to the site root, e.g. \"about.html\" or \"robots.txt\". Shows the LAST PUSHED version.",
         inputShape: { path: z.string().describe("Page path relative to the site root, e.g. \"about.html\"") },
         async run(ctx, { path } = {}) {
             const res = await fetchPagePath(ctx.session, ctx.record.palGuid, path);
@@ -241,9 +241,9 @@ const TOOLS = [
     },
     {
         name: "pal_screenshot",
-        description: "Render a WEB pal's screen in a headless browser and return a PNG IMAGE so you can judge its UI/UX visually (this is pal-review's visual arm). Acts on the LAST PUSHED version — pal_push first. " +
-            "Options: page (a specific page path under the site root, e.g. \"about.html\"; default the home page), viewport (\"desktop\" = 1280x800 default, or \"mobile\" ~390x844 for responsive checks), fullPage (capture the whole scroll height, not just the viewport). " +
-            "WEB pals only in this phase. For a console pal, or a runtime without Playwright/Chromium, it returns a clean unavailable signal so review falls back to the human eyeball gate — never a blank or fake image.",
+        description: "Render a WEB pal's screen in a headless browser and return a PNG so you can judge its UI/UX visually (pal-review's visual arm). Acts on the LAST PUSHED version — pal_push first. " +
+            "Options: page (path under the site root, e.g. \"about.html\"; default home), viewport (\"desktop\" 1280x800 default, or \"mobile\" ~390x844), fullPage (whole scroll height). " +
+            "WEB pals only. For a console pal or a runtime without Playwright/Chromium it returns a clean unavailable signal (review falls back to the human eyeball gate) — never a blank or fake image.",
         inputShape: {
             page: z.string().optional().describe("Page path under the site root, e.g. \"about.html\". Default: home page."),
             viewport: z.enum(["desktop", "mobile"]).optional(),
@@ -281,12 +281,12 @@ const TOOLS = [
     },
     {
         name: "pal_seo_audit",
-        description: "Run an on-page SEO audit of a WEB pal's actual server-rendered page (the version last pushed). " +
-            "Checks: title + meta description (presence/length), canonical, the 5 core og: tags with ABSOLUTE og:image/og:url, twitter:card, " +
-            "exactly one H1, viewport meta, JSON-LD structured data, img alt text, and non-ASCII characters in meta attributes (a PalBuilder server flag). " +
-            "Returns every problem as a full sentence with the exact fix, plus the list of checks that PASSED. " +
-            "Use after pushing a web page, and fix every ERROR it reports. Does not apply to console pals (they're behind login — not crawled). " +
-            "Read the seo-core skill (.claude/skills/seo-core/) BEFORE writing web-page heads; this tool verifies the result.",
+        description: "Run an on-page SEO audit of a WEB pal's actual server-rendered page (last pushed). " +
+            "Checks title + meta description, canonical, the 5 core og: tags with ABSOLUTE og:image/og:url, twitter:card, " +
+            "exactly one H1, viewport, JSON-LD, img alt, and non-ASCII in meta attributes (a PalBuilder server flag). " +
+            "Returns each problem as a sentence with the exact fix, plus the checks that PASSED. " +
+            "Use after pushing a web page; fix every ERROR. Not for console pals (behind login — not crawled). " +
+            "Read the seo-core skill BEFORE writing web-page heads; this tool verifies the result.",
         inputShape: {},
         async run(ctx) {
             const res = await runSeoAudit(ctx.session, ctx.record.palGuid, ctx.record, ctx.workspaceDir);
@@ -304,11 +304,11 @@ const TOOLS = [
     {
         name: "pal_sync_datasets",
         description: "Create or update dataset TABLES on the server from the dataset definitions in pal.json. " +
-            "A dataset has two parts: its DEFINITION (the schema in datasets/<name>.json + a pal.json entry, saved by a normal push) and its TABLE (the real storage). " +
-            "Editing the .json only changes the definition; this tool provisions the actual table. It saves the pal first, then provisions. " +
-            "By default it does a SAFE sync (creates the table if missing, applies additive changes — never deletes data). " +
-            "Set recreate:true ONLY to DROP AND REBUILD a table, which DELETES ALL ITS ROWS — and that requires a separate exact typed confirmation, so it cannot happen by accident. " +
-            "To create a NEW dataset: write datasets/<name>.json with the schema, add a matching datasets.entry to pal.json, then call this tool.",
+            "A dataset has a DEFINITION (schema in datasets/<name>.json + a pal.json entry, saved by a normal push) and a TABLE (real storage); " +
+            "editing the .json only changes the definition — this tool provisions the table (it saves the pal first). " +
+            "Default is a SAFE sync: create if missing, additive changes only, never deletes data. " +
+            "recreate:true DROPS AND REBUILDS a table, DELETING ALL ITS ROWS, and requires a separate exact typed confirmation — it can't happen by accident. " +
+            "New dataset: write datasets/<name>.json, add a matching pal.json entry, then call this tool.",
         inputShape: {
             datasets: z.array(z.string()).optional(),
             recreate: z.boolean().optional(),
@@ -375,7 +375,7 @@ const TOOLS = [
     },
     {
         name: "pal_merge",
-        description: "Reconcile un-pushed LOCAL changes with changes made on the SERVER since your last pull — keeping BOTH wherever they don't collide (a 3-way merge). Use this instead of force-pushing or force-pulling when both you and someone else (or your other session) edited the pal: files only you changed stay yours, files only they changed are taken from the server, and a file BOTH sides changed differently is left as YOURS with their version saved next to it as <file>.server for you to combine by hand. Never overwrites your work silently. After a clean merge (no conflicts) the server's changes are incorporated, so a follow-up pal_push won't be drift-blocked.",
+        description: "Reconcile un-pushed LOCAL changes with SERVER changes since your last pull, keeping BOTH where they don't collide (3-way merge). Files only you changed stay yours; files only the server changed are taken from it; a file BOTH sides changed is kept as YOURS with the server's saved beside it as <file>.server to combine by hand. Never overwrites your work silently. Use instead of force-push/pull when both sides edited the pal; a clean merge clears drift so a follow-up pal_push isn't blocked.",
         inputShape: {},
         async run(ctx) {
             const res = await mergeWorkspace(ctx.session, ctx.record.palGuid, ctx.record, ctx.workspaceDir);
@@ -390,7 +390,7 @@ const TOOLS = [
     },
     {
         name: "pal_push",
-        description: "Push local changes to the server (UPDATE). FIRST runs an offline code check (pal_validate) and REFUSES if there are errors — fix them, or set skipValidation:true to push anyway (not recommended). Also refuses on drift (set force:true) or if the pal is locked by another person (typed confirmOverride). On success, returns the server's save result plus any code WARNINGS.",
+        description: "Push local changes to the server (UPDATE). FIRST runs the offline code check (pal_validate) and REFUSES on errors — fix them, or skipValidation:true to push anyway (not recommended). Also refuses on drift (force:true) or if the pal is locked by another person (typed confirmOverride). On success returns the server's save result plus any code WARNINGS.",
         inputShape: { force: z.boolean().optional(), confirmOverride: z.string().optional(), skipValidation: z.boolean().optional() },
         async run(ctx, { force = false, confirmOverride, skipValidation = false } = {}) {
             const palName = ctx.record.palName;
