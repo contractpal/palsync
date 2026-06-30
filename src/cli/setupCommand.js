@@ -34,7 +34,6 @@ const USAGE = [
     "  --user <username>    account (default: env CP_USER, else the single keychain account)",
     "  --profile <name>     narrow by profile name (disambiguates a duplicate pal name)",
     "  --group <name>       narrow by group name",
-    "  --with-seo           inject the SEO skill (for WEB pals — public, crawled pages)",
     "  --template <name>    apply a starter template after the pull (web-marketing, console-app; `palsync scaffold --list`)",
     "  --agent claude|codex|pi  which agent's context/MCP to write (default: claude; pi uses the CLI, no MCP)",
     "  --overwrite-local    if the workspace has un-pushed local edits, overwrite them (default: refuse)",
@@ -46,13 +45,12 @@ const USAGE = [
 
 function parse(argv) {
     const f = { pal: undefined, guid: undefined, dir: undefined, cloud: undefined, user: undefined,
-                profile: undefined, group: undefined, withSeo: false, template: undefined, agent: "claude",
+                profile: undefined, group: undefined, template: undefined, agent: "claude",
                 overwriteLocal: false, json: false, help: false };
     const need = (i, name) => { const v = argv[i + 1]; if (v === undefined) throw new Error(name + " requires a value"); return v; };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--help" || a === "-h") f.help = true;
-        else if (a === "--with-seo") f.withSeo = true;
         else if (a === "--template") { f.template = need(i, "--template"); i++; }
         else if (a === "--overwrite-local") f.overwriteLocal = true;
         else if (a === "--json") f.json = true;
@@ -126,7 +124,7 @@ async function run(argv) {
     const sel = { profile: { profileId: resolved.profileId }, group: { groupId: resolved.groupId },
                   pal: { guid: resolved.guid, name: resolved.name, lastModifiedDate: resolved.lastModifiedDate } };
 
-    const result = await workspace.setup({ session, cloudUrl, sel, workspaceDir, withSeo: flags.withSeo, agent: flags.agent, onDrift, log });
+    const result = await workspace.setup({ session, cloudUrl, sel, workspaceDir, agent: flags.agent, onDrift, log });
 
     // Optional starter template: applied AFTER the pull so it can see what the pal already has
     // (existing files are never overwritten; workflow content fills only empty/stub slots).

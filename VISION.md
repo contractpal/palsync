@@ -79,7 +79,7 @@ common case where the changes don't actually collide.
 
 Two halves, one cheap and one cheaper:
 
-- **`seo-core` bundled skill** (injected with `--with-seo`):
+- **`seo-core` bundled skill** (injected every session, like every bundled skill):
   PalBuilder-valid recipes for semantic structure, title/meta/OG/Twitter tags, schema.org
   JSON-LD blocks (Organization, Product, FAQ, Article, LocalBusiness), canonical/sitemap
   guidance, and the E-E-A-T/AIO content rules distilled from the existing seo-copywriting

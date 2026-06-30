@@ -103,8 +103,9 @@ Now talk to Claude. Ask for a change, then say *"push it."*
 | Flag | Alias | What it does |
 |------|-------|--------------|
 | `--version` | `-v` | Print the palsync build version and exit. |
-| `--with-seo` | | Inject the **SEO skill** (`seo-core`) for WEB pals — the page-head recipe, the absolute-og-URL and non-ASCII-attribute traps, JSON-LD, and the `pal_seo_audit` verify loop. |
 | `--agent <name>` | | Choose the coding agent: `claude` (default), `codex`, or `pi`. |
+
+Every bundled skill (including **`seo-core`** — the page-head recipe, the absolute-og-URL and non-ASCII-attribute traps, JSON-LD, and the `pal_seo_audit` verify loop) is injected on every setup. Skills cost no context until the agent opens one, so there is no flag to gate them.
 
 ## Headless subcommands (no MCP server, no agent)
 
@@ -185,7 +186,7 @@ Start a new pal from a correct, designed, SEO-sound skeleton instead of a blank 
 
 ```sh
 palsync scaffold --list                              # see the available templates
-palsync setup --pal "My New Pal" --template web-marketing --with-seo
+palsync setup --pal "My New Pal" --template web-marketing
 palsync scaffold --template console-app --dir <ws>   # or apply to an existing workspace
 ```
 

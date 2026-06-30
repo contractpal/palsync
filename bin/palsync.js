@@ -69,9 +69,6 @@ if (argv[0] === "help" || argv.includes("--help") || argv.includes("-h")) {
     process.exit(0);
 }
 
-// --with-seo: opt in to injecting the SEO skill (seo-core) for WEB pal work (public, crawled pages).
-const withSeo = argv.includes("--with-seo");
-
 // --agent <claude|codex|pi>: choose the coding agent. Default Claude Code (and, when the flag is
 // absent, the interactive picker still runs — agentFlag stays undefined). Threaded through
 // preflight (which agent's binary to check) and run() → setup() (injection + MCP destinations).
@@ -97,7 +94,7 @@ const agentFlag = parseAgentFlag(argv);
     await preflight.run({ agent: agentFlag || "claude" }); // Node >= 18 + the chosen agent's CLI
     const clack = await loadClack(); // @clack/prompts is ESM-only; dynamic import works on Node 18+
     clack.intro("palsync — PalBuilder + Claude Code");
-    const result = await run({ withSeo, agent: agentFlag, log: (m) => clack.log.step(m) });
+    const result = await run({ agent: agentFlag, log: (m) => clack.log.step(m) });
     if (!result) { clack.cancel("Cancelled."); process.exit(1); }
     clack.log.info(
         "Creatable here: pages, fragments, scripts, workflows, emails, images, styles, attachments.\n" +

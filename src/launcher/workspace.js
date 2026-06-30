@@ -96,7 +96,7 @@ async function resolveLocalDrift({ session, existing, workspaceDir, palName, dif
 //   agent ("claude" default | "codex") picks the injection destinations and MCP registration path.
 //   onDrift (injectable; launcher/index.js provides the interactive UI) decides what to do with
 //   un-pushed local changes. Headless callers that omit it get a refusal throw, never a wipe.
-async function setup({ session, cloudUrl, sel, workspaceDir, withSeo = false, agent = "claude", onDrift, log = () => {} }) {
+async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", onDrift, log = () => {} }) {
 
     // Collision guard. The default workspace path is ~/PalBuilder/<slug(palName)>/ — stable per
     // pal name. If a different pal already lives in this dir (.palsync.json present with a
@@ -163,9 +163,9 @@ async function setup({ session, cloudUrl, sel, workspaceDir, withSeo = false, ag
     // CLAUDE.md is not wiped by pull (sync only touches files inside the 13 manifest folders
     // + pal.json) — inject() reads the user's existing CLAUDE.md and merges its managed block
     // in place.
-    log("injecting CLAUDE.md + skills" + (withSeo ? " (with SEO)" : "") +
+    log("injecting CLAUDE.md + skills" +
         (agent === "codex" ? " + AGENTS.md/.agents (Codex)" : agent === "pi" ? " + AGENTS.md/.agents (Pi)" : ""));
-    const injected = await contextInject.inject(workspaceDir, { palName: sel.pal.name, withSeo, agent });
+    const injected = await contextInject.inject(workspaceDir, { palName: sel.pal.name, agent });
 
     await palsyncfile.write(workspaceDir, record);
 

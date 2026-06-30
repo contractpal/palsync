@@ -11,6 +11,28 @@ const ci = require("../src/launcher/contextInject");
 
 function tmp() { return fs.mkdtempSync(path.join(os.tmpdir(), "palsync-inject-")); }
 
+test("every bundled skill injects, with its references/* assets (bundle dir = source of truth)", async () => {
+    const ws = tmp();
+    await ci.inject(ws, { palName: "Demo", agent: "claude" });
+    const skillsDir = path.join(ws, ".claude/skills");
+    const bundled = path.join(__dirname, "..", "bundled-context", "skills");
+    // Discover the bundle directly off disk — the test must not duplicate the inject logic; it
+    // asserts the workspace ends up holding EXACTLY what the bundle ships.
+    const names = fs.readdirSync(bundled, { withFileTypes: true })
+        .filter(e => e.isDirectory() && fs.existsSync(path.join(bundled, e.name, "SKILL.md")))
+        .map(e => e.name);
+    assert.ok(names.includes("seo-core"), "seo-core is in the bundle (it must load with no opt-in flag)");
+    for (const name of names) {
+        assert.ok(fs.existsSync(path.join(skillsDir, name, "SKILL.md")), name + " SKILL.md injected");
+        const refsDir = path.join(bundled, name, "references");
+        if (fs.existsSync(refsDir)) {
+            for (const f of fs.readdirSync(refsDir)) {
+                assert.ok(fs.existsSync(path.join(skillsDir, name, "references", f)), name + "/references/" + f + " injected");
+            }
+        }
+    }
+});
+
 test("Claude CLAUDE.md @imports the owned doc (real import, not backticked)", async () => {
     const ws = tmp();
     await ci.inject(ws, { palName: "Demo", agent: "claude" });
@@ -92,7 +114,8 @@ test("pruneSkills removes retired/owned skills, keeps user skills", async () => 
     fs.mkdirSync(path.join(skillsDir, "my-team-skill"), { recursive: true });
     fs.writeFileSync(path.join(skillsDir, "my-team-skill/SKILL.md"), "mine");
 
-    const removed = await ci.pruneSkills(ws, ".claude", ci.ALWAYS_ON_SKILLS);
+    const keep = (await ci.bundledSkills()).map(s => s.name);
+    const removed = await ci.pruneSkills(ws, ".claude", keep);
     assert.ok(removed.includes("design-core"), "retired palsync skill is pruned");
     assert.ok(!fs.existsSync(path.join(skillsDir, "design-core")), "design-core dir removed");
     assert.ok(fs.existsSync(path.join(skillsDir, "my-team-skill")), "user skill is preserved");
