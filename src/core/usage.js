@@ -15,6 +15,12 @@ const path = require("path");
 
 const USAGE_FILE = ".palsync.usage.json";
 
+// Soft threshold for palsync's OWN injected block (CLAUDE.palsync.md + skill descriptions + tool
+// defs). Not a hard limit — palsync can't see the model's actual context window — just a "this
+// has grown, go trim a skill description or a tool description" signal sized off the current
+// real total (~30KB across CLAUDE.palsync.md + 11 skills + 13 tools as of this writing).
+const SOFT_THRESHOLD_BYTES = 40 * 1024;
+
 function usagePath(workspaceDir) { return path.join(workspaceDir, USAGE_FILE); }
 
 function readJson(p) {
@@ -89,6 +95,7 @@ function injectedContext(workspaceDir, tools) {
     }
 
     out.total = out.palsyncDoc + out.skills.total + out.toolDefs;
+    out.overSoftThreshold = out.total > SOFT_THRESHOLD_BYTES;
     return out;
 }
 
@@ -125,7 +132,10 @@ function formatCost(workspaceDir, tools) {
     L.push("  skill descriptions      " + fmtBytes(inj.skills.total).padStart(9) + "   (" + Object.keys(inj.skills.perSkill).length + " skills; BODIES load on demand, not counted)");
     L.push("  tool definitions        " + fmtBytes(inj.toolDefs).padStart(9) + "   (" + (Array.isArray(tools) ? tools.length : 0) + " tools)");
     L.push("  " + "TOTAL injected".padEnd(22) + "  " + fmtBytes(inj.total).padStart(9));
+    L.push(inj.overSoftThreshold
+        ? "  ABOVE SOFT THRESHOLD (" + fmtBytes(SOFT_THRESHOLD_BYTES) + ") — consider trimming a skill description or a tool description."
+        : "  within soft threshold (" + fmtBytes(SOFT_THRESHOLD_BYTES) + ")");
     return L.join("\n");
 }
 
-module.exports = { recordToolCall, contentBytes, injectedContext, formatCost, USAGE_FILE };
+module.exports = { recordToolCall, contentBytes, injectedContext, formatCost, USAGE_FILE, SOFT_THRESHOLD_BYTES };

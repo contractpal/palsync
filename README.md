@@ -145,6 +145,11 @@ own footprint. Two parts:
 These are **measured bytes, not estimated tokens, and not model spend** — they're palsync's own
 contribution to context, the number to watch when trimming skills or tool descriptions.
 
+The injected block also prints a **soft-threshold flag** (40 KB) — `within soft threshold` or
+`ABOVE SOFT THRESHOLD`. It's not a hard limit (palsync still can't see the model's actual context
+window); it's a tripwire sized off the current real total (~30 KB) that says "this has grown,
+go trim a skill or tool description" once it's crossed.
+
 ## Sync safety (what protects your work)
 
 - **Pull is a sync, not a wipe.** New un-pushed files inside the manifest folders are
