@@ -48,9 +48,14 @@ state change, immediately — if the session dies mid-task, the next session mus
    condition is derived from it, not invented.
 2. **Tier check.** If the task tier is `frontier` and you are not a frontier-class model (when
    unsure: does it require NEW structure rather than following the spec? if yes and you're a
-   small model): set `needs-frontier`, log a checkpoint line, move to the next eligible task. Do
-   NOT attempt it badly. (Orchestrators MAY instead dispatch by tier to sized subagents —
-   cheap→Haiku, standard→Sonnet — when the harness supports a model parameter.)
+   small model): **if an advisor capability is available** (e.g. `/advisor` — a stronger reviewer
+   model reachable from this session), call it with the task's full context (spec ref, clone
+   target, hard rules) and have it supply the missing frontier-level judgment/plan; you still
+   execute, verify, and commit per the normal cycle — advisor orchestrates the decision, it does
+   not replace your verification. **If no advisor capability is available:** set `needs-frontier`,
+   log a checkpoint line, move to the next eligible task. Do NOT attempt it badly. (Orchestrators
+   MAY instead dispatch by tier to sized subagents — cheap→Haiku, standard→Sonnet — when the
+   harness supports a model parameter.)
 3. **Human-gate check.** Console workflow *compile* is now verifiable headlessly (`pal_test`
    runs `TestConsole.do` and returns fresh server validation), so it is NOT a human gate.
    `pal_preview` itself still never renders a console screen for you — it opens it in the
