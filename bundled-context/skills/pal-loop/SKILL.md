@@ -137,6 +137,13 @@ state change, immediately — if the session dies mid-task, the next session mus
   platform can't express), follow the **amendment path** below — propose, never self-amend.
 - **Never leave EXECUTION.md stale.** Every status change is written to disk the moment it
   happens. Do not summarize the table — edit it.
+- **Never weaken a task to make it pass.** A task's success condition is derived from its `spec
+  ref` — removing, rewriting, or softening that condition (or the task itself) so a failing
+  verification starts passing is "declare victory by deletion," not progress. `status` may change
+  freely (`todo`→`in_progress`→`done`/`blocked`); the task's name and success condition may not be
+  edited to dodge a failure. A criterion that's genuinely wrong is a spec problem — route it
+  through the amendment path below, which requires human approval; you never self-edit your way
+  past it.
 - **Destructive operations** (dataset recreate, lock override, force push) follow their tools'
   confirmation gates; a loop never auto-confirms them.
 
