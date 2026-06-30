@@ -45,11 +45,11 @@ function syncSection(palName, { cli = false } = {}) {
         ? { pull: "`palsync pull`", push: "`palsync push`", validate: "`palsync validate`",
             test: "`palsync test`", preview: "`palsync preview`", seo: "`palsync seo-audit`",
             merge: "`palsync merge`", status: "`palsync status`", datasets: "`palsync sync-datasets`",
-            skip: "the `--skip-validation` flag" }
+            screenshot: "`palsync screenshot`", skip: "the `--skip-validation` flag" }
         : { pull: "`pal_pull`", push: "`pal_push`", validate: "`pal_validate`",
             test: "`pal_test`", preview: "`pal_preview`", seo: "`pal_seo_audit`",
             merge: "`pal_merge`", status: "`pal_status`", datasets: "`pal_sync_datasets`",
-            skip: "`skipValidation`" };
+            screenshot: "`pal_screenshot`", skip: "`skipValidation`" };
     const conn = cli
         ? "This pal" + (palName ? " (**" + palName + "**)" : "") + " is connected to CloudPiston via the **palsync CLI** — run its subcommands in your shell (e.g. `palsync push`, `palsync pull`). palsync takes the pal lock for each push/pull and releases it; there is no always-on session lock."
         : "This pal" + (palName ? " (**" + palName + "**)" : "") + " is connected to CloudPiston via the **palsync** MCP server and is **locked for your session**.";
@@ -82,8 +82,12 @@ function syncSection(palName, { cli = false } = {}) {
         "   validation and opens a live preview in the user's browser.",
         "5. To SEE the rendered output yourself, use **" + T.preview + "**. For a WEB pal it returns the",
         "   server-rendered HTML to you (you can read your actual output and check it). For a CONSOLE",
-        "   pal the render needs a browser, so it opens for the user and you cannot see it — ask them.",
-        "   Preview shows the LAST PUSHED version, so push before previewing your latest edits.",
+        "   pal " + T.preview + " still just opens the render in the user's browser, for them, not you —",
+        "   but **" + T.screenshot + "** can drive an authenticated console screen too (replays the auth",
+        "   redirect chain in a headless browser) and returns a PNG you can actually look at. Try it;",
+        "   only ask the user to eyeball the screen themselves if it comes back unavailable (no",
+        "   Chromium installed) or the auth replay fails. Preview/screenshot show the LAST PUSHED",
+        "   version, so push before checking your latest edits.",
         "6. For a WEB pal page (public, crawled), also run **" + T.seo + "** after pushing — it",
         "   checks the rendered page's SEO (title/description, ABSOLUTE og: URLs, one H1, JSON-LD,",
         "   img alt text) and tells you exactly what to fix. Do not declare a public web page done",

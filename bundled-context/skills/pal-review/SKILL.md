@@ -67,9 +67,14 @@ Beyond "it compiled":
   fingerprints the design skills flag (gradient-blob hero, pill-everything uniform radius,
   three-card-row-as-only-idea, serif-on-cream-with-sage). Report each issue with the screenshot
   and a specific fix.
-- **If no screenshot tool or no vision model:** do NOT guess from HTML. Emit a `needs-human`
-  eyeball gate naming each screen to look at and what to confirm. (Console *renders* always land
-  here unless the screenshot tool can replay console auth.)
+- **Console screens are capturable too.** `pal_screenshot`'s console path replays the cp-auth
+  redirect chain (Playwright navigates the same authenticated preview URL `pal_test` opens for a
+  human) — live-verified against a real authenticated console pal. Treat a console render exactly
+  like a web one when it returns `captured:true`: screenshot it, judge it.
+- **If no screenshot tool, no vision model, or the console capture returns `captured:false`** (no
+  Chromium installed, or the auth replay failed/timed out): do NOT guess from HTML. Emit a
+  `needs-human` eyeball gate naming each screen to look at and what to confirm. This is the
+  fallback path now, not the default for every console screen.
 
 ## Output — a verdict, not a fix
 Write `REVIEW.md` (or a `## Review` block):
@@ -90,8 +95,8 @@ Rules:
   problem (missing/contradictory requirement) is a blocker for the human, not a self-edit.
 - Judge only against the spec and design system. "I'd have done it differently" is not a finding;
   "violates §12 criterion 4" is.
-- A criterion you can't verify (no screenshot tool for a console render) is `needs-human`, never
-  an assumed pass.
+- A criterion you can't verify (`pal_screenshot` unavailable, or `captured:false` on a console
+  render) is `needs-human`, never an assumed pass.
 
 ## How it fits the loop
 pal-loop runs the **tests** as it builds; at build completion it hands off to pal-review in a

@@ -1,6 +1,6 @@
 ---
 name: pal-loop
-description: "Execute a pal build autonomously from SPEC.md + EXECUTION.md (produced by the pal-spec skill): one task at a time, verify with palsync tools, checkpoint to disk, escalate when blocked. Use this skill when the user says 'run the loop', 'build the spec', 'continue the build', 'resume the build', or when a workspace contains an EXECUTION.md with unfinished tasks. Honors the spec's mode (full|lite), the §13 reality-check gate, and the §9 required-skills manifest. State lives in files, not in your context — any session can resume."
+description: "Execute a pal build autonomously from SPEC.md + EXECUTION.md (produced by the pal-spec skill): one task at a time, verify with palsync tools, checkpoint to disk, escalate when blocked. Use this skill when the user says 'run the loop', 'build the spec', 'continue the build', 'resume the build', or when a workspace contains an EXECUTION.md with unfinished tasks. Honors the spec's mode (full|lite), the §13 reality-check gate, and the §9 required-skills manifest. At build completion it hands off to the pal-review skill in a fresh context for an independent verdict, loops fix tasks back through this same task cycle, and repeats until PASS. State lives in files, not in your context — any session can resume."
 ---
 
 # pal-loop — execute SPEC.md task by task
@@ -52,14 +52,18 @@ state change, immediately — if the session dies mid-task, the next session mus
    NOT attempt it badly. (Orchestrators MAY instead dispatch by tier to sized subagents —
    cheap→Haiku, standard→Sonnet — when the harness supports a model parameter.)
 3. **Human-gate check.** Console workflow *compile* is now verifiable headlessly (`pal_test`
-   runs `TestConsole.do` and returns fresh server validation), so it is NOT a human gate. The
-   only thing you cannot verify yourself is a console screen's *visual render* — it renders in
-   the platform console chrome via a browser, so `pal_preview` opens it for the user, not you. If
-   a task's success condition requires confirming a console render looks right, do the buildable
-   part, verify everything you can (validate, test, data read-back), then set `needs-human` with
-   a Blockers entry prefixed `HUMAN GATE:` naming exactly what to eyeball (open screen X, confirm
-   it renders + the happy path). Continue with independent tasks. Web renders are agent-visible
-   (`pal_preview` returns the HTML), so web tasks have no human gate.
+   runs `TestConsole.do` and returns fresh server validation), so it is NOT a human gate.
+   `pal_preview` itself still never renders a console screen for you — it opens it in the
+   platform console chrome via a browser, for the user, not you. But `pal_screenshot` CAN drive an
+   authenticated console screen (Playwright replays the cp-auth redirect chain) when Chromium is
+   installed and the replay succeeds — try it: a vision-capable model judges the PNG against
+   DESIGN_SYSTEM.md exactly like a web render. Only when `pal_screenshot` returns
+   `captured:false` (no Chromium, or the auth replay failed/timed out) do you fall back to the
+   human gate: do the buildable part, verify everything you can (validate, test, data read-back,
+   the screenshot attempt), then set `needs-human` with a Blockers entry prefixed `HUMAN GATE:`
+   naming exactly what to eyeball (open screen X, confirm it renders + the happy path). Continue
+   with independent tasks. Web renders are agent-visible (`pal_preview` returns the HTML), so web
+   tasks have no human gate.
 4. **Mark** the task `in_progress` in EXECUTION.md. Write the file now, not later.
 5. **Execute** exactly as specced, using v2 SPEC.md sections:
    - Copy: **§4** — verbatim, these exact words ship.
@@ -81,9 +85,12 @@ state change, immediately — if the session dies mid-task, the next session mus
    - **Web pages:** `pal_preview` → CHECK the returned server-rendered HTML actually contains the
      exact strings the success condition names (seeing it is the verification); `pal_seo_audit`
      → 0 errors.
-   - **Console screens:** compile is covered by `pal_test` above (do verify it). The *render* is
-     not agent-visible → do not mark `done` on render; set `needs-human` for the §12 eyeball gate.
-     Verify any data effect indirectly: after a write, run the read-back action the spec names and
+   - **Console screens:** compile is covered by `pal_test` above (do verify it). For the
+     *render*, try `pal_screenshot` — `captured:true` means it's agent-visible after all; judge it
+     against the §12 VISUAL criterion and mark `done` on real evidence. `captured:false` (no
+     Chromium, or auth replay failed) → do not mark `done` on render; set `needs-human` for the
+     §12 eyeball gate instead. Verify any data effect indirectly: after a write, run the read-back
+     action the spec names and
      confirm the row.
    - `pal_sync_datasets` after pushing a **§8a** dataset definition (never for §8b).
    Note: `pal_preview`/`pal_seo_audit`/`pal_test` all act on the LAST PUSHED version — push before
@@ -138,10 +145,36 @@ by editing SPEC.md yourself. Instead:
 
 Invariant: propose → human approve → re-gate → continue. The loop never silently self-amends.
 
+## Build complete → hand off to pal-review
+
+"All tasks `done`" is not the same as "the build is done." pal-loop verifies *that it compiled*;
+only **pal-review** checks *that it's actually correct against the spec*. Before reporting a build
+finished, hand off — never skip this, and never run pal-review in this same context (that defeats
+its entire point: fresh eyes, not the bias of the session that wrote the code).
+
+Trigger: every EXECUTION.md task is `done`, or every remaining task is a `blocked` /
+`needs-frontier` / `needs-human` the human has explicitly accepted as parked for this pass.
+
+1. **Dispatch pal-review** in a fresh session or subagent with its required inputs: `SPEC.md`,
+   `EXECUTION.md`, `DESIGN_SYSTEM.md`/`COMPONENTS.md`, and the pal's identity (guid/name) so it
+   can `pal_fetch` / `pal_screenshot` / `pal_test` the real built artifacts itself.
+2. **PASS** → the build is genuinely done. Report it.
+3. **CHANGES-NEEDED** → take pal-review's `## Fix tasks` list and append each as a new
+   EXECUTION.md task: next id in sequence, `spec ref` carried from the finding it addresses,
+   `depends` per any stated order, status `todo`, and a `tier` (same definitions as any other
+   task — default `standard`; `frontier` only if the fix needs new structure, not just a patch).
+   Resume the normal task cycle (verify, mark `done`, checkpoint, commit) on exactly those tasks —
+   same rules, same on-fail/blocked handling.
+4. **Re-review.** Once the fix tasks are all `done`, hand off to pal-review again. Repeat until
+   PASS. A verdict that comes back `needs-human` (console eyeball gate, or no screenshot
+   capability) is not a failure — route it like any other `needs-human` task, same as the build's
+   own gates.
+
 ## Ending a session
 
-Stop when: all tasks `done`; only `blocked` / `needs-frontier` / `needs-human` remain; the user
-asked you to stop; or you are degrading (context pressure, repeated mistakes — be honest).
+Stop when: all tasks `done` **and pal-review has returned PASS** (or its fix tasks are also done
+and re-reviewed); only `blocked` / `needs-frontier` / `needs-human` remain; the user asked you to
+stop; or you are degrading (context pressure, repeated mistakes — be honest).
 
 Write a session summary at the top of EXECUTION.md's Checkpoints section:
 ```
@@ -217,7 +250,8 @@ A brief with an empty slot is invalid. Do not dispatch it.
 ### 3. After the subagent returns — every time, no exceptions
 1. **Re-verify independently** — never trust the report. Run the task's tools yourself
    (`pal_validate`, `pal_test`; web → `pal_fetch` + grep the served HTML for the expected
-   strings; console → the §12 human-eyeball gate). See "Verify independently" below.
+   strings; console → `pal_screenshot` if it captures, else the §12 human-eyeball gate). See
+   "Verify independently" below.
 2. **Pass** → mark `done`, checkpoint, commit. **Fail or over-claim** → restore the good state:
    `git checkout` the subagent's local changes (clean slate beats half-applied). If the subagent
    had already pushed, re-push the restored local to overwrite the server (`pal_pull`/`pal_merge`
@@ -235,10 +269,11 @@ Never accept a subagent's self-report as truth. After every push:
 
 - `pal_fetch` each touched **web** page and grep the served HTML for the expected H1, heading,
   or CSS class. Not in the fetched HTML = it didn't ship. (Console renders aren't fetchable this
-  way — they go through the §12 human-eyeball gate instead.)
+  way — try `pal_screenshot` instead; only fall back to the §12 human-eyeball gate if it returns
+  `captured:false`.)
 - `pal_validate` before push; read push output for the stray-file warning.
-- Open the preview for the human at every pause — the human eyeball is the design gate. Tooling
-  cannot replace visual sign-off.
+- Open the preview for the human at every pause regardless — `pal_screenshot` gives the agent a
+  real check, but final design taste/sign-off on the live product is still the human's call.
 
 **Why:** subagents have over-claimed in practice — reporting elements absent from the served
 HTML, misreading pages, marking tasks done when verification wasn't run. The orchestrator owns

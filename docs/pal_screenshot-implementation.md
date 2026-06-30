@@ -74,12 +74,15 @@ palsync already knows how to construct.
   `captured:false` fallback.
 - Unavailable runtime: returns a clear "unavailable" signal, and pal-review degrades to eyeball.
 
+## Status
+Both items below are done — pal-spec's §12 now requires a VISUAL criterion (web: required; console:
+required with a human-eyeball fallback) verifiable via `pal_screenshot`/pal-review's visual arm, and
+console auth replay (Phase 2) is implemented and live-verified (see above). pal-loop's task cycle and
+"Build complete → hand off to pal-review" section both route console renders through
+`pal_screenshot` first, falling back to the human-eyeball gate only on `captured:false`.
+
 ## Future / deferred
-- **pal-spec doesn't know pal_screenshot exists.** Its §10 PalBuilder-surface manifest and the
-  reality check don't account for visual review, so a visually-heavy pal won't get a specced
-  visual acceptance criterion (§12) tied to the screenshot capability. pal-review can still judge
-  visuals opportunistically, but the spec never *requires* it. Future: teach pal-spec to (a) list
-  pal_screenshot / `palsync screenshot` in its §10 surface awareness, and (b) emit a visual §12
-  criterion for web pals where layout/brand fidelity matters, so the loop has a gate to verify
-  against rather than a discretionary check.
-- **Phase 2 — console pals.** cp-auth cookie replay in the Playwright context (see Phase 2 above).
+- None outstanding from the original design. Next gap to watch: the global `palsync` install many
+  workspaces run can drift behind this repo's HEAD (check `.installed-sha` / `palsync status`) —
+  pal_screenshot, pal-review, and this capability-gated wiring only exist in workspaces injected by
+  a build that includes them. Run `palsync upgrade` to pick up new skills/tools.

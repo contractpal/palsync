@@ -206,14 +206,20 @@ WEB pals add:
       DESIGN_SYSTEM.md with no anti-slop fingerprints — verify via pal_screenshot (pal-review's
       visual arm). State the exact thing to see (e.g. "hero: real headline + single primary CTA,
       no centered-everything, no emoji bullets").
-CONSOLE pals add (preview is NOT agent-visible, so verification needs a human gate):
-- [ ] HUMAN-EYEBALL GATE: a person opens each §3 screen in the builder/console and confirms it
-      renders and the §5 happy path works. This is a required acceptance line, not a hope.
+CONSOLE pals add (pal_preview only opens the render for the user, never the agent — but
+pal_screenshot CAN drive an authenticated console screen via auth replay when Chromium is
+installed and the replay succeeds; see pal-review's visual arm):
+- [ ] VISUAL (one per visually-significant §3 screen): try pal_screenshot first — `captured:true`
+      → judge it like a web VISUAL criterion (DESIGN_SYSTEM.md, no anti-slop fingerprints).
+- [ ] HUMAN-EYEBALL GATE (fallback — required whenever pal_screenshot returns `captured:false`,
+      e.g. no Chromium or a failed auth replay): a person opens that screen in the builder/console
+      and confirms it renders and the §5 happy path works. Never skip this silently when the
+      screenshot didn't land.
 - [ ] data effects are checked indirectly: after a §5 write, a follow-up read action (or a
       builder dataset inspection) shows the new/changed row. State the exact check per action.
 PER-FEATURE [FULL] (one block per §5 behavior, as checkable conditions):
 - [ ] <action>: When <input>, <observable result> — verify via <tool + exact string/state, or
-      human-eyeball gate for console renders>
+      pal_screenshot / human-eyeball gate (fallback) for console renders>
 - [ ] <action> edge: empty → "<exact msg>" — verify via pal_preview/pal_test/eyeball
 HAPPY-PATH [LITE] (one per primary action):
 - [ ] <action>: When <valid input>, <observable result> — verify via <tool/eyeball + check>
@@ -244,10 +250,12 @@ Dependency order (leaf-first — foundations before things that use them):
 4. Datasets, then the workflows that read them (data before UI).
 5. SEO heads, then final audit.
 Parallel-safe: <tasks with no shared files>.  Sequential: <task → task, why>.
-Risks: <e.g. console preview is not agent-visible — human eyeball gate at T-n>.
+Risks: <e.g. pal_preview never renders console for the agent — pair every console VISUAL task with
+  its human-eyeball fallback at T-n in case pal_screenshot can't capture it (no Chromium / failed
+  auth replay)>.
 [if workflow JS present] verify the workflow compiles via pal_test after push (TestConsole.do
-  returns fresh validation — not a human builder gate). Console VISUAL render is still
-  agent-invisible — keep a human-eyeball gate for it.
+  returns fresh validation — not a human builder gate). Console VISUAL render: try pal_screenshot
+  first, keep the human-eyeball gate only as the fallback when it returns `captured:false`.
 Checkpoints: <natural human review points>.
 
 ## Tasks
@@ -295,13 +303,15 @@ Write the results into **§13 Reality check** as PASS lines and FLAGs.
       unverified consumed field is a HARD FLAG — it's the most common silent build break.
 - [ ] Every component named in §6 exists in COMPONENTS.md (read it; flag any that don't).
 - [ ] [FULL] every §5 behavior has a matching §12 criterion; [LITE] every primary action has a
-      happy-path criterion. Console screens have a human-eyeball acceptance line.
+      happy-path criterion. Console screens have a pal_screenshot VISUAL line plus its
+      human-eyeball fallback (see §12).
 - [ ] Every acceptance criterion names a real tool, a checkable string/state, or an explicit
-      human-eyeball gate (console).
-- [ ] [web / visually-significant] §12 includes at least one VISUAL criterion verifiable via
-      pal_screenshot (pal-review's visual arm) — the hero/key screen renders per DESIGN_SYSTEM.md
-      with no anti-slop fingerprints. (Console visual render stays a human-eyeball gate —
-      pal_screenshot can't drive an authenticated console screen yet.)
+      human-eyeball gate (console fallback only — not the default).
+- [ ] [visually-significant, web or console] §12 includes at least one VISUAL criterion verifiable
+      via pal_screenshot (pal-review's visual arm) — the hero/key screen renders per
+      DESIGN_SYSTEM.md with no anti-slop fingerprints. Console auth replay (`captured:true`) is
+      live-verified, but it's a capability, not a guarantee — Chromium may be absent or the replay
+      may fail, so every console VISUAL line still needs its human-eyeball fallback paired with it.
 
 **Platform realism (is this buildable on PalBuilder?):**
 - [ ] Every §8a field type matches a creatable type in `references/palbuilder-types.md`. A type
