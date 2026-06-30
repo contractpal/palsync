@@ -201,6 +201,10 @@ GLOBAL FLOOR (both modes):
 WEB pals add:
 - [ ] pal_preview: rendered page contains the exact H1s from §4
 - [ ] pal_seo_audit: 0 errors per §3 page
+- [ ] VISUAL (one per visually-significant §3 page): the hero/key screen renders per
+      DESIGN_SYSTEM.md with no anti-slop fingerprints — verify via pal_screenshot (pal-review's
+      visual arm). State the exact thing to see (e.g. "hero: real headline + single primary CTA,
+      no centered-everything, no emoji bullets").
 CONSOLE pals add (preview is NOT agent-visible, so verification needs a human gate):
 - [ ] HUMAN-EYEBALL GATE: a person opens each §3 screen in the builder/console and confirms it
       renders and the §5 happy path works. This is a required acceptance line, not a hope.
@@ -283,6 +287,10 @@ Write the results into **§13 Reality check** as PASS lines and FLAGs.
       happy-path criterion. Console screens have a human-eyeball acceptance line.
 - [ ] Every acceptance criterion names a real tool, a checkable string/state, or an explicit
       human-eyeball gate (console).
+- [ ] [web / visually-significant] §12 includes at least one VISUAL criterion verifiable via
+      pal_screenshot (pal-review's visual arm) — the hero/key screen renders per DESIGN_SYSTEM.md
+      with no anti-slop fingerprints. (Console visual render stays a human-eyeball gate —
+      pal_screenshot can't drive an authenticated console screen yet.)
 
 **Platform realism (is this buildable on PalBuilder?):**
 - [ ] Every §8a field type matches a creatable type in `references/palbuilder-types.md`. A type
