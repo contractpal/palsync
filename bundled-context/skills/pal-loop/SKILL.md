@@ -278,11 +278,14 @@ A brief with an empty slot is invalid. Do not dispatch it.
      decision is genuinely ambiguous, say so in the return report instead of guessing.
 6. **DONE =** — the task's exact success condition (tool output + exact string/state). The
    subagent self-checks against this before returning.
-7. **RETURN CONTRACT** — the subagent returns this and only this:
+7. **RETURN CONTRACT** — the subagent returns this and only this, CONDENSED to roughly 1–2K
+   tokens:
    - files changed (absolute paths)
    - traceability table: spec item | shipped value | match (y/n)
    - deviations line: "Deviations: none" or each deviation + reason
-   - the success-condition self-check it ran, with the tool output
+   - the success-condition self-check it ran, with the key tool-output line(s) — not the raw
+     tool output or a file dump. A verbose return repollutes the orchestrator's context with the
+     subagent's own working detail instead of the result it was asked for.
 
 ### 3. After the subagent returns — every time, no exceptions
 1. **Re-verify independently** — never trust the report. Run the task's tools yourself
