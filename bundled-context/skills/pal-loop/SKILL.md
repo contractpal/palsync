@@ -41,6 +41,11 @@ state change, immediately — if the session dies mid-task, the next session mus
    **pal-restraint is not part of §9** — it's a coding-discipline default, not a domain skill to
    select, and applies to every task in the cycle below whether or not the spec names it.
 5. Run `pal_status`. If the server is newer than the last pull, `pal_pull` first.
+6. **Smoke-test the current state before picking work.** Run `pal_validate`, and `pal_test` for
+   whichever workflow EXECUTION.md's Checkpoints section shows as last touched. A prior session
+   (or a lossy compaction mid-session) can leave the workspace broken or undocumented even though
+   EXECUTION.md says otherwise. If either fails, fix that first — do not start a new task on top
+   of a broken base.
 
 ## The task cycle (repeat until done or blocked)
 
