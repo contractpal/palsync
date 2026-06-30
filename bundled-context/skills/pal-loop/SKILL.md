@@ -1,6 +1,6 @@
 ---
 name: pal-loop
-description: "Execute a pal build autonomously from SPEC.md + EXECUTION.md (produced by the pal-spec skill): one task at a time, verify with palsync tools, checkpoint to disk, escalate when blocked. Use this skill when the user says 'run the loop', 'build the spec', 'continue the build', 'resume the build', or when a workspace contains an EXECUTION.md with unfinished tasks. Honors the spec's mode (full|lite), the §13 reality-check gate, and the §9 required-skills manifest. At build completion it hands off to the pal-review skill in a fresh context for an independent verdict, loops fix tasks back through this same task cycle, and repeats until PASS. State lives in files, not in your context — any session can resume."
+description: "Execute a pal build autonomously from SPEC.md + EXECUTION.md (produced by the pal-spec skill): one task at a time, verify with palsync tools, checkpoint to disk, escalate when blocked. Use this skill when the user says 'run the loop', 'build the spec', 'continue the build', 'resume the build', or when a workspace contains an EXECUTION.md with unfinished tasks. Honors the spec's mode (full|lite), the §13 reality-check gate, the §9 required-skills manifest, and `review cadence` (each-task | every-N | end) for when it pauses for human review mid-build. At build completion it hands off to the pal-review skill in a fresh context for an independent verdict, loops fix tasks back through this same task cycle, and repeats until PASS. State lives in files, not in your context — any session can resume."
 ---
 
 # pal-loop — execute SPEC.md task by task
@@ -19,7 +19,9 @@ state change, immediately — if the session dies mid-task, the next session mus
 ## Before the first task (once per session)
 
 1. Read `SPEC.md` and `EXECUTION.md` in the workspace root, fully. Note `mode:` (full | lite)
-   and `pal: ... (web | console)` — both change how you verify below.
+   and `pal: ... (web | console)` — both change how you verify below. Note `review cadence:`
+   (`each-task` | `every-N` | `end`; absent = `end`, today's default) — it sets when you pause for
+   the human mid-build; see step 7a in the task cycle below.
 2. **Gate — spec must be ready:**
    - `status: draft` → STOP: "The spec isn't approved — review it and set status: approved, or
      run the pal-spec interview to finish it."
@@ -110,6 +112,18 @@ state change, immediately — if the session dies mid-task, the next session mus
    verifying your latest edits.
 7. **On pass:** set `done`; append one checkpoint line (date, task id, tool-output summary);
    `git add -A && git commit -m "<task id>: <task name>"`. Continue.
+7a. **Review-cadence pause.** Check SPEC.md's `review cadence` (absent = `end`):
+   - `end` (default): no pause here — continue straight to the next task. Unchanged behavior.
+   - `each-task`: pause now. Report the task just completed (what shipped, the verify evidence
+     from step 6) and **wait for the human's go-ahead** before picking the next task. Do not
+     self-approve and continue.
+   - `every-N`: track a running counter on the same checkpoint line, e.g. `since last review:
+     2/3`. When the counter hits N, pause exactly as `each-task` does (report every task done
+     since the last pause, not just the latest one) and reset the counter to `0/N`. Below N,
+     continue without pausing.
+   This pause is independent of the push-policy `checkpoint` gate (step 6, per-push) and the
+   build-completion pal-review handoff (below, which always runs regardless of cadence) — it is
+   a human checkpoint mid-build, not a substitute for either.
 8. **On fail:** fix and re-verify, up to TWO attempts. Still failing → `blocked`, with a
    Blockers entry naming: what failed (exact tool output), what you tried, the decision/input
    you need. Continue with the next INDEPENDENT task. Never skip verification to get past a

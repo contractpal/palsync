@@ -88,8 +88,10 @@ Sections below tagged **[FULL]** are full-mode only. Everything else applies to 
 
    **SEO** *(web only)* — Q13 Domain? Target phrase per page? (propose from approved copy)
 
-   **Constraints & ops** — Q14 Push policy: free or checkpoint? Q15 What must the agent NEVER
-   touch? Any non-negotiable decisions to protect, with rationale?
+   **Constraints & ops** — Q14 Push policy: free or checkpoint? Q15 Review cadence: pause for
+   your review after **each task**, after **every N tasks** (pick N), or **end** — full-auto,
+   review only once the build's done (default, today's behavior if you don't ask)? Q16 What must
+   the agent NEVER touch? Any non-negotiable decisions to protect, with rationale?
 
 3. **LOCK ASSUMPTIONS (gate).** Before writing, list every assumption and open question in one
    block; ask the user to correct it now:
@@ -121,6 +123,8 @@ spec version: 1          <!-- bumped on each human-approved amendment; see §14 
 mode: full | lite
 pal: <pal name> (<web | console>) @ <cloud url>
 push policy: free | checkpoint
+review cadence: each-task | every-<N> | end   <!-- default: end (pal-loop pauses for human review
+  only at build completion, today's behavior); each-task/every-N add earlier pauses mid-build -->
 design system: DESIGN_SYSTEM.md @ <path>
 created: <date>   approved: <date or pending>
 
@@ -256,7 +260,7 @@ Risks: <e.g. pal_preview never renders console for the agent — pair every cons
 [if workflow JS present] verify the workflow compiles via pal_test after push (TestConsole.do
   returns fresh validation — not a human builder gate). Console VISUAL render: try pal_screenshot
   first, keep the human-eyeball gate only as the fallback when it returns `captured:false`.
-Checkpoints: <natural human review points>.
+Checkpoints: <natural human review points — pal-loop also pauses per SPEC.md's `review cadence`>.
 
 ## Tasks
 | id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |
