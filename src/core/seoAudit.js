@@ -131,8 +131,103 @@ function auditHtml(html, { url = "" } = {}) {
     return { findings, passed, errors, warnings, url };
 }
 
+// ---- robots.txt / sitemap.xml / llms.txt — every WEB pal needs all three (seo-core skill) ----
+// Both reference builds hit the same live bug: on test/stage instances every path falls through
+// to the workflow, so without an explicit intercept these files render the homepage HTML instead
+// (one pal shipped this as 305 Lighthouse parse errors). That's the #1 thing this check catches.
+const CRAWLER_FILES = [
+    { name: "robots.txt", kind: "robots", label: "robots.txt", required: true },
+    { name: "sitemap.xml", kind: "sitemap", label: "sitemap.xml", required: true },
+    { name: "llms.txt", kind: "llms", label: "llms.txt", required: false },
+];
+
+function looksLikeFallthroughPage(body) {
+    return /<html[\s>]|<!doctype html/i.test(body || "");
+}
+
+function auditRobotsTxt(body, contentType) {
+    const findings = [];
+    if (looksLikeFallthroughPage(body)) {
+        findings.push({ severity: "error", rule: "robotsFallthrough", message: "robots.txt returned the homepage HTML, not plain text. On PalBuilder test/stage instances every path falls through to the workflow unless robots.txt is explicitly intercepted. Fix: handle robots.txt before the route switch in run() (see seo-core skill, Pattern A or B)." });
+        return findings;
+    }
+    if (contentType && !/text\/plain/i.test(contentType)) {
+        findings.push({ severity: "warn", rule: "robotsContentType", message: "robots.txt content-type is \"" + contentType + "\" — should be text/plain. Fix: call setContentType(\"text/plain\") on the response." });
+    }
+    if (!/^User-agent:/im.test(body)) {
+        findings.push({ severity: "error", rule: "robotsMissingUserAgent", message: "robots.txt has no \"User-agent:\" line — crawlers may ignore the whole file. Fix: include at minimum \"User-agent: *\" with an Allow:/Disallow: policy." });
+    }
+    const sm = body.match(/^Sitemap:\s*(\S+)/im);
+    if (!sm) {
+        findings.push({ severity: "warn", rule: "robotsNoSitemapLine", message: "robots.txt has no \"Sitemap:\" line pointing at sitemap.xml. Fix: add \"Sitemap: https://YOUR-DOMAIN/sitemap.xml\" (absolute URL)." });
+    } else if (!ABSOLUTE.test(sm[1])) {
+        findings.push({ severity: "error", rule: "robotsSitemapRelative", message: "robots.txt's Sitemap: line is not an absolute URL (\"" + sm[1] + "\"). Fix: use the full https:// URL." });
+    }
+    return findings;
+}
+
+function auditSitemapXml(body, contentType) {
+    const findings = [];
+    if (looksLikeFallthroughPage(body)) {
+        findings.push({ severity: "error", rule: "sitemapFallthrough", message: "sitemap.xml returned the homepage HTML, not XML. Fix: handle sitemap.xml explicitly before the route switch in run() (see seo-core skill, Pattern A or B)." });
+        return findings;
+    }
+    if (contentType && !/xml/i.test(contentType)) {
+        findings.push({ severity: "error", rule: "sitemapContentType", message: "sitemap.xml content-type is \"" + contentType + "\" — without application/xml (or text/xml) browsers/crawlers can render the <url>/<loc> tags as plain text instead of a sitemap. Fix: call setContentType(\"application/xml\")." });
+    }
+    if (!/<urlset[\s>]/i.test(body)) {
+        findings.push({ severity: "error", rule: "sitemapMissingUrlset", message: "sitemap.xml has no <urlset> root element — it isn't a valid sitemap. Fix: follow the sitemaps.org schema (see the seo-core skill)." });
+    }
+    if (!/<loc>/i.test(body)) {
+        findings.push({ severity: "error", rule: "sitemapEmpty", message: "sitemap.xml has no <url><loc> entries — it's empty. Fix: list every public page's absolute URL." });
+    }
+    return findings;
+}
+
+function auditCrawlerFile(kind, label, r, required) {
+    if (r.status !== 200) {
+        return [{ severity: required ? "error" : "warn", rule: kind + "Missing",
+            message: "/" + label + " returned HTTP " + r.status + (required
+                ? " — every WEB pal needs this file. Fix: see the seo-core skill's robots.txt/sitemap.xml section."
+                : " — optional, but recommended for AI-crawler/LLM discovery. See the seo-core skill.") }];
+    }
+    if (kind === "robots") return auditRobotsTxt(r.html, r.contentType);
+    if (kind === "sitemap") return auditSitemapXml(r.html, r.contentType);
+    return []; // llms.txt: presence is the only check
+}
+
+// Fetch and audit robots.txt/sitemap.xml/llms.txt against an already-opened instance session.
+async function auditCrawlerFiles(inst) {
+    const out = {};
+    for (const f of CRAWLER_FILES) {
+        const r = await inst.fetchPath(f.name);
+        const findings = auditCrawlerFile(f.kind, f.label, r, f.required);
+        out[f.kind] = { label: f.label, status: r.status, findings,
+            errors: findings.filter(x => x.severity === "error").length,
+            warnings: findings.filter(x => x.severity === "warn").length };
+    }
+    return out;
+}
+
+function crawlerTotals(crawlerFiles) {
+    let errors = 0, warnings = 0;
+    for (const k of Object.keys(crawlerFiles || {})) { errors += crawlerFiles[k].errors; warnings += crawlerFiles[k].warnings; }
+    return { errors, warnings };
+}
+
 // Format for an agent: verdict first, then every finding spelled out, then what passed
 // (positive confirmation so a literal-minded agent knows those areas are done).
+function crawlerFileLines(crawlerFiles) {
+    if (!crawlerFiles) return [];
+    const lines = ["Crawler files:"];
+    for (const k of Object.keys(crawlerFiles)) {
+        const c = crawlerFiles[k];
+        if (!c.findings.length) { lines.push("   " + c.label + ": OK"); continue; }
+        for (const f of c.findings) lines.push("   " + c.label + ": " + (f.severity === "error" ? "ERROR" : "WARNING") + " — " + f.message);
+    }
+    return lines;
+}
+
 function formatSeoAudit(result) {
     // Sitewide shape: result.pages = per-page audits
     if (result.pages && Array.isArray(result.pages)) {
@@ -140,6 +235,7 @@ function formatSeoAudit(result) {
             + " — " + result.errors + " error(s), " + result.warnings + " warning(s) across " + result.pageCount + " page(s).";
         const lines = [head];
         if (result.errors > 0) lines.push("ERROR = materially hurts how search engines/social scrapers handle the page; fix every error.");
+        lines.push(...crawlerFileLines(result.crawlerFiles));
         for (const p of result.pages) {
             if (p.fetchFailed) { lines.push(p.page + ": ERROR — page did not render (HTTP " + p.status + "). Check the route in the workflow and the pal.json entry."); continue; }
             if (!p.findings.length) continue;
@@ -155,6 +251,7 @@ function formatSeoAudit(result) {
         + " — " + errors + " error(s), " + warnings + " warning(s)" + (url ? " for " + url : "") + ".";
     const lines = [head];
     if (errors > 0) lines.push("ERROR = materially hurts how search engines/social scrapers handle this page; fix every error.");
+    lines.push(...crawlerFileLines(result.crawlerFiles));
     for (const f of findings) lines.push("   " + (f.severity === "error" ? "ERROR" : "WARNING") + " — " + f.message);
     if (passed.length) lines.push("Passed: " + passed.map(p => p.message).join(" · "));
     return lines.join("\n");
@@ -177,11 +274,16 @@ async function runSeoAudit(session, guid, record, workspaceDir) {
             return { audited: false, reason: "SEO audit works on WEB pals (their render is publicly fetchable). This is a " + p.kind + " pal — console pages aren't crawled by search engines, so an SEO audit doesn't apply." };
         }
         const result = auditHtml(p.html, { url: p.url });
-        return Object.assign({ audited: true, dirty: p.dirty, dirtyFiles: p.dirtyFiles, pages: null }, result);
+        const inst = await openInstanceSession(session, guid);
+        const crawlerFiles = inst.opened ? await auditCrawlerFiles(inst) : null;
+        const ct = crawlerTotals(crawlerFiles);
+        return Object.assign({ audited: true, dirty: p.dirty, dirtyFiles: p.dirtyFiles, pages: null, crawlerFiles }, result,
+            { errors: result.errors + ct.errors, warnings: result.warnings + ct.warnings });
     }
 
     const inst = await openInstanceSession(session, guid);
     if (!inst.opened) return { audited: false, reason: inst.reason, validation: inst.validation };
+    const crawlerFiles = await auditCrawlerFiles(inst);
     const pages = [];
     let errors = 0, warnings = 0;
     for (const name of pageNames) {
@@ -202,6 +304,7 @@ async function runSeoAudit(session, guid, record, workspaceDir) {
         pages.push(Object.assign({ page: name, noindex }, a));
         errors += a.errors; warnings += a.warnings;
     }
-    return { audited: true, pages, errors, warnings, pageCount: pageNames.length };
+    const ct = crawlerTotals(crawlerFiles);
+    return { audited: true, pages, errors: errors + ct.errors, warnings: warnings + ct.warnings, pageCount: pageNames.length, crawlerFiles };
 }
-module.exports = { auditHtml, formatSeoAudit, runSeoAudit, collectMetas };
+module.exports = { auditHtml, formatSeoAudit, runSeoAudit, collectMetas, auditRobotsTxt, auditSitemapXml, auditCrawlerFile, auditCrawlerFiles };

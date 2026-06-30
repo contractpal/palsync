@@ -287,7 +287,8 @@ const TOOLS = [
         name: "pal_seo_audit",
         description: "Run an on-page SEO audit of a WEB pal's actual server-rendered page (last pushed). " +
             "Checks title + meta description, canonical, the 5 core og: tags with ABSOLUTE og:image/og:url, twitter:card, " +
-            "exactly one H1, viewport, JSON-LD, img alt, and non-ASCII in meta attributes (a PalBuilder server flag). " +
+            "exactly one H1, viewport, JSON-LD, img alt, non-ASCII in meta attributes (a PalBuilder server flag), and " +
+            "robots.txt/sitemap.xml/llms.txt (homepage-HTML fallthrough, content-type, required content). " +
             "Returns each problem as a sentence with the exact fix, plus the checks that PASSED. " +
             "Use after pushing a web page; fix every ERROR. Not for console pals (behind login — not crawled). " +
             "Read the seo-core skill BEFORE writing web-page heads; this tool verifies the result.",
