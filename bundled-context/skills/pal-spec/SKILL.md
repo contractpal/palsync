@@ -242,11 +242,13 @@ Risks: <e.g. console preview is not agent-visible — human eyeball gate at T-n>
 Checkpoints: <natural human review points>.
 
 ## Tasks
-| id | task | tier | depends | status | success condition (behavioral + tool-checkable) |
-| T1 | scaffold + shared fragments | cheap | — | todo | pal_validate 0 errors |
-| T2 | first page (composition) | frontier | T1 | todo | validate 0; push OK; preview "<H1>" |
-| T3 | <action with logic> | standard | T1 | todo | When <input>, <result>; pal_test VALIDATED |
+| id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |
+| T1 | scaffold + shared fragments | cheap | §3, §6 | — | todo | pal_validate 0 errors |
+| T2 | first page (composition) | frontier | §4, §6 | T1 | todo | validate 0; push OK; preview "<H1>" |
+| T3 | <action with logic> | standard | §5 | T1 | todo | When <input>, <result>; pal_test VALIDATED |
 status: todo | in_progress | done | blocked | needs-frontier | needs-human
+<!-- spec ref = which SPEC.md section(s) this task implements (e.g. §5, §8a) — lets pal-review and
+     a resuming session trace a task back to its requirement. Every task names at least one. -->>
 
 ## Checkpoints (append-only, one line per completed task)
 ## Blockers (what needs the human — be exact)

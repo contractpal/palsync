@@ -43,7 +43,9 @@ state change, immediately — if the session dies mid-task, the next session mus
 ## The task cycle (repeat until done or blocked)
 
 1. **Pick** the first task in EXECUTION.md whose status is `todo` and whose `depends` are all
-   `done`. If none, go to "Ending a session."
+   `done`. If none, go to "Ending a session." Read its `spec ref` column and **re-read those
+   SPEC.md section(s) before building** — that's the requirement the task implements; the success
+   condition is derived from it, not invented.
 2. **Tier check.** If the task tier is `frontier` and you are not a frontier-class model (when
    unsure: does it require NEW structure rather than following the spec? if yes and you're a
    small model): set `needs-frontier`, log a checkpoint line, move to the next eligible task. Do

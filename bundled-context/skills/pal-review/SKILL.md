@@ -42,8 +42,11 @@ Check the build against the contract, criterion by criterion:
   This is where same-session verification usually cheats: the floor passes, the per-feature
   criteria go unchecked.
 - §11 NEVER list not violated; §8b consumed datasets not altered.
+- Every EXECUTION.md task marked `done` traces to its `spec ref` section(s), and that requirement
+  is actually satisfied — use the column to walk task → SPEC.md §, so a `done` task with an unmet
+  requirement is caught (not just the §12 criteria).
 Output: a per-criterion PASS / FAIL with the evidence (the string found or missing, the tool
-result, the line).
+result, the line) — cite the `spec ref` § for each finding.
 
 ### 2. Quality / behavior (judgment — always runs)
 Beyond "it compiled":
