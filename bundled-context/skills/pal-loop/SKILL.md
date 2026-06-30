@@ -186,6 +186,17 @@ Stop when: all tasks `done` **and pal-review has returned PASS** (or its fix tas
 and re-reviewed); only `blocked` / `needs-frontier` / `needs-human` remain; the user asked you to
 stop; or you are degrading (context pressure, repeated mistakes — be honest).
 
+**Prefer a proactive handoff over grinding to auto-compact.** You cannot see your own
+context-window fill — there is no token count to check — so don't try to time the end of a
+session against one. Instead use a coarse heuristic: once you've completed several tasks this
+session, or the session simply feels large (long tool-call history, many files touched), finish
+the task you're on, reach a clean EXECUTION.md boundary (no task left `in_progress`), and end the
+session there rather than pushing for "just one more task." Reasons: context quality degrades well
+before the hard limit, and compaction is lossy — a fresh session that resumes from disk (state
+lives in EXECUTION.md + git, per "Resuming" below) avoids both and costs nothing, since nothing is
+lost. This is a preference, not a hard stop: don't abandon a task mid-`in_progress` just to hand
+off — finish it, checkpoint, then stop.
+
 Write a session summary at the top of EXECUTION.md's Checkpoints section:
 ```
 == session <n> (<date>), mode <full|lite>: <a> done, <b> blocked, <c> needs-frontier, <d> needs-human.
