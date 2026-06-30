@@ -117,6 +117,7 @@ Sections below tagged **[FULL]** are full-mode only. Everything else applies to 
 # SPEC — <project name>
 status: draft            <!-- pal-loop refuses to run until: approved -->
 reality_check: blocked   <!-- reality-check gate sets: pass when all hard flags clear, else blocked -->
+spec version: 1          <!-- bumped on each human-approved amendment; see §14 amendment log -->
 mode: full | lite
 pal: <pal name> (<web | console>) @ <cloud url>
 push policy: free | checkpoint
@@ -219,6 +220,14 @@ HAPPY-PATH [LITE] (one per primary action):
 
 ## 13. Reality check
 <!-- filled by the self-validation gate below; spec stays draft while hard flags remain -->
+
+## 14. Amendment log (append-only; empty until the first approved amendment)
+<!-- One block per human-approved amendment. pal-loop NEVER edits the spec silently — when reality
+     forces a change mid-build (e.g. an uncreatable type), it STOPS and proposes; the human approves
+     here. Format per entry:
+     - v<n> (<date>, approved by <human>): <which §> — <what changed> — reality forced it because:
+       <the build-time fact, e.g. "type X isn't creatable in PalBuilder">. Re-gate: reality_check
+       re-run for <§> → pass. -->
 ```
 
 ## EXECUTION.md template
@@ -322,6 +331,32 @@ or unverified type, a §5 capability with no primitive/skill, invented primitive
 pal_test compile-verify for workflow JS, or a console screen with no eyeball gate — keeps
 `status: draft` and `reality_check: blocked` until resolved. When all hard flags clear, set
 `reality_check: pass` (and `status: approved`). Soft notes can ship as recorded caveats in §13.
+
+---
+
+## Amendments — controlled spec changes mid-build
+
+An approved spec is the contract, but reality can contradict it after the build starts (a type that
+isn't creatable in PalBuilder, a consumed field that doesn't exist, a behavior the platform can't
+express). The spec must be able to change **without ever being silently self-amended.** The
+controlled path:
+
+1. **Propose (pal-loop).** pal-loop never edits SPEC.md to fix a problem. When reality forces a
+   change, it STOPS the affected task, sets it `blocked`, and writes an **amendment proposal** in
+   EXECUTION.md Blockers: which SPEC.md § is wrong, the exact build-time fact that forces it (tool
+   output / platform limit), and the **minimal** proposed change.
+2. **Human approves.** A person reviews the proposal and approves it (or redirects). No approval →
+   no change; the task stays blocked. This is the guardrail — the agent proposes, the human decides.
+3. **Apply + audit (pal-spec).** On approval, apply the minimal edit to the affected §, **bump
+   `spec version`**, and append a **§14 amendment log** entry (version, date, approver, which §,
+   what changed, the forcing fact). Append-only — never rewrite history.
+4. **Re-gate that section.** Re-run the REALITY CHECK for the amended § only (set `reality_check:
+   blocked`, clear the section's flags, then back to `pass` when they clear). Other sections keep
+   their state. The spec is re-approved at the new version.
+5. **Continue.** pal-loop re-reads the amended § (via the task's `spec ref`) and resumes the task.
+
+The invariant: **the agent never silently self-amends.** Every spec change is an explicit,
+human-approved, versioned, logged amendment that re-passes the gate for what it touched.
 
 ---
 

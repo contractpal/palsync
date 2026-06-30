@@ -110,11 +110,33 @@ state change, immediately — if the session dies mid-task, the next session mus
 - **Never touch anything in SPEC.md §11 (the NEVER / out-of-scope list), and never create or
   alter a §8b consumed dataset.**
 - **Never invent content.** Missing copy/fact/asset = blocker, not improvisation.
-- **Never edit SPEC.md to fix a problem.** Spec wrong/incomplete = blocker for the human.
+- **Never silently edit SPEC.md.** Spec wrong/incomplete = blocker for the human. When reality
+  forces a spec change mid-build (an uncreatable type, a missing consumed field, a behavior the
+  platform can't express), follow the **amendment path** below — propose, never self-amend.
 - **Never leave EXECUTION.md stale.** Every status change is written to disk the moment it
   happens. Do not summarize the table — edit it.
 - **Destructive operations** (dataset recreate, lock override, force push) follow their tools'
   confirmation gates; a loop never auto-confirms them.
+
+## When the spec is wrong (amendment path)
+
+The spec is the contract, but reality can contradict it mid-build (a type that won't create, a
+consumed field that doesn't exist, a behavior the platform can't express). You **never** fix this
+by editing SPEC.md yourself. Instead:
+
+1. **Block + propose.** Set the task `blocked` and write an **amendment proposal** in the Blockers
+   section: which SPEC.md § is wrong, the exact build-time fact forcing it (paste the tool output /
+   name the platform limit), and the **minimal** change you propose. Continue with the next
+   independent task.
+2. **Human approves** the proposal (or redirects). No approval → it stays blocked; you do not touch
+   the spec.
+3. **On approval**, the amendment is applied via pal-spec's amendment protocol: the minimal edit,
+   `spec version` bumped, a §14 amendment-log entry, and the affected § **re-gated** (reality_check
+   re-run for that section). The spec is re-approved at the new version.
+4. **Resume.** Re-read the amended § (via the task's `spec ref`) and continue the task against the
+   updated contract.
+
+Invariant: propose → human approve → re-gate → continue. The loop never silently self-amends.
 
 ## Ending a session
 
