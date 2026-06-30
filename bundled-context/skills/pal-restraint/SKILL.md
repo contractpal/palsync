@@ -1,22 +1,44 @@
 ---
 name: pal-restraint
-description: "Write the least PalBuilder code that fully solves the task — reuse before building, use the platform before reaching for a library, and never over-build. Apply this BY DEFAULT whenever writing or editing pal code (pages, fragments, workflows, styles); the user shouldn't have to ask. Also triggers on 'simplify this', 'this is over-engineered', 'do it the lazy way', 'less code', 'de-slop the logic'. It governs HOW MUCH code exists; it does not relax correctness — PalBuilder's golden rules and the palbuilder-* skills always win a conflict, and it never cuts validation, security, accessibility, or the pal-loop verification gates. Adapted from ponytail (MIT, github.com/DietrichGebert/ponytail), remapped to the PalBuilder dialect."
+description: "Default coding discipline for ALL PalBuilder work — write the least code that fully solves the task, surface assumptions instead of guessing, and touch only what the task needs. Apply this BY DEFAULT whenever writing, editing, or reviewing pal code (pages, fragments, workflows, styles); the user shouldn't have to ask, and pal-loop invokes it on every task in the cycle, not just on request. Also triggers on 'simplify this', 'this is over-engineered', 'do it the lazy way', 'less code', 'de-slop the logic', 'is this the right approach', 'what should I do here'. It governs HOW MUCH code exists, what gets touched, and when to ask instead of guess; it does not relax correctness — PalBuilder's golden rules and the palbuilder-* skills always win a conflict, and it never cuts validation, security, accessibility, or the pal-loop verification gates. Adapted from ponytail (MIT, github.com/DietrichGebert/ponytail) and Andrej Karpathy's LLM-coding-pitfalls guidance, remapped to the PalBuilder dialect."
 ---
 
 # pal-restraint — the least code that works, in PalBuilder's dialect
 
-Think like the laziest senior dev on the team: the best code is the code you never wrote. Most
-AI over-builds — a custom widget where a tag exists, a hand-rolled list where `c:list` does it,
-a new library where one is already loaded. This skill stops that. It governs *how much* code
-exists. It does **not** touch correctness: the PalBuilder golden rules
+Think like the laziest senior dev on the team: the best code is the code you never wrote, the
+best diff is the smallest one that's correct, and the best guess is the one you asked about
+instead of making. Most AI over-builds — a custom widget where a tag exists, a hand-rolled list
+where `c:list` does it, a new library where one is already loaded — and over-edits, touching
+adjacent code nobody asked it to touch. This skill stops both. It governs *how much* code exists
+and *what gets touched*. It does **not** touch correctness: the PalBuilder golden rules
 (`bundled-context/CLAUDE.md`) and the palbuilder-frontend/backend skills are law, and they win
-any conflict with a "shorter" idea.
+any conflict with a "shorter" or "smaller-diff" idea.
 
-The one rule: **write only what the task needs — and never cut validation, security,
-accessibility, or verification to get there.** Code ends up small because it's necessary, not
-because it's golfed.
+The one rule: **write only what the task needs, touch only what the task needs, and never cut
+validation, security, accessibility, or verification to get there.** Code ends up small because
+it's necessary, not because it's golfed. This is the default posture for every task in the
+pal-loop cycle — not a mode you opt into per request.
 
 ---
+
+## Surface assumptions, don't guess
+
+Laziness about code is not laziness about thinking. Before writing anything non-trivial:
+
+- **State assumptions explicitly** rather than silently picking one and building on it. If the
+  spec or request is genuinely ambiguous, say which reading you're using.
+- **If multiple reasonable interpretations exist, name them** — don't silently commit to one and
+  hope. In pal-loop terms this is usually a **blocker**, not a judgment call to make alone (see
+  pal-loop's "When the spec is wrong" amendment path) — but for in-task micro-decisions (which
+  existing fragment to clone, which lib function applies) a one-line stated assumption is enough.
+- **If a simpler approach exists than the one implied by the request, say so before building the
+  complicated one.** Push back when warranted; the spec is WHAT, not necessarily the most direct
+  HOW.
+- **If something is genuinely unclear, stop and name what's confusing** rather than guessing and
+  shipping. A guess that turns out wrong costs more than the question would have.
+
+This is the same discipline as "read first, then climb the ladder" below, aimed one step
+earlier: read and understand *before* assuming, not just before coding.
 
 ## Read first, then climb the ladder
 
@@ -76,6 +98,28 @@ rules to keep it:
 Restraint subordinate to correctness, every time. A shorter build that fails `pal_validate` is
 slower than the longer one that passes.
 
+## Surgical changes — touch only what the task needs
+
+The ladder above governs how much code you write; this governs how much of the diff is yours.
+Both axes matter — a minimal-looking change that also reformats an unrelated fragment is not
+restraint, it's a bigger diff wearing a smaller hat.
+
+- **Don't "improve" adjacent code, comments, or formatting** while you're in a file for an
+  unrelated reason. Resist the urge to fix a typo two lines up from your change.
+- **Don't refactor things that aren't broken** as a side effect of the task you were given.
+- **Match existing style**, even where you'd structure it differently — consistency with the
+  surrounding pal beats your personal preference.
+- **If you notice unrelated dead code, mention it — don't delete it.** (Exception: PalBuilder's
+  own golden rules require removing *your own* debug calls, commented-out code, and unused files
+  before finishing a task — that cleanup is always required, see `bundled-context/CLAUDE.md`
+  "Before you finish a task." The restraint here is about *pre-existing* mess you didn't create.)
+- **Remove only the orphans your own change created** — an import, variable, or fragment that is
+  now unused *because of this edit*. Leave pre-existing dead code alone unless asked to remove it.
+
+The test: every changed line should trace directly to the task at hand — either the spec's `spec
+ref`, or cleanup that your own edit made necessary. If a line doesn't trace to either, it
+shouldn't be in the diff.
+
 ## Composes with anti-slop-code
 
 Different axes, both apply where available. anti-slop-code (if your setup loads it — note it is
@@ -106,14 +150,22 @@ Each is the same move: climb the ladder, land on the platform rung, write almost
 ## What this skill does NOT do
 
 - It is not a delivery mechanism. No modes, commands, or statusline — palsync injects it like any
-  other skill, active by default during pal work. (That's the part of ponytail palsync already
-  solves; rebuilding it would be the exact over-engineering this skill forbids.)
+  other skill, active by default during pal work and on every pal-loop task cycle. (That's the
+  part of ponytail palsync already solves; rebuilding it would be the exact over-engineering this
+  skill forbids.)
 - It is not a correctness reference. HOW to write PalBuilder lives in the golden rules and the
-  palbuilder-* skills; this skill only decides how MUCH to write, and defers to them on conflict.
+  palbuilder-* skills; this skill decides how MUCH to write, what to touch, and when to ask
+  instead of guess — and defers to them on conflict.
 - It does not golf. The goal is necessary code, not the fewest characters — readability and the
   dialect's constraints both outrank brevity.
+- It does not replace pal-loop's verification gates. Stating success criteria and looping to a
+  tool-verified pass is pal-loop's job (`pal_validate` / `pal_test` / `pal_preview`, the task
+  cycle's "Verify" step); pal-restraint only makes sure what reaches that gate isn't bloated, isn't
+  off-task, and isn't a silent guess.
 
 ---
 
 *Ladder and "lazy, not negligent" guardrails adapted from ponytail by Dietrich Gebert (MIT) —
-github.com/DietrichGebert/ponytail — remapped to the PalBuilder dialect.*
+github.com/DietrichGebert/ponytail. "Surface assumptions" and "surgical changes" sections adapted
+from Andrej Karpathy's LLM-coding-pitfalls guidance
+(x.com/karpathy/status/2015883857489522876) — both remapped to the PalBuilder dialect.*

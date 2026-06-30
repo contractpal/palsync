@@ -38,6 +38,8 @@ state change, immediately — if the session dies mid-task, the next session mus
 4. **Load the skills SPEC.md §9 lists — exactly those, before coding, once.** Do not guess the
    set; §9 is the manifest (it may include palbuilder-jobs-http or palbuilder-websockets, which
    are easy to forget). palbuilder-frontend and design-build are always present there.
+   **pal-restraint is not part of §9** — it's a coding-discipline default, not a domain skill to
+   select, and applies to every task in the cycle below whether or not the spec names it.
 5. Run `pal_status`. If the server is newer than the last pull, `pal_pull` first.
 
 ## The task cycle (repeat until done or blocked)
@@ -78,7 +80,10 @@ state change, immediately — if the session dies mid-task, the next session mus
    - Schemas: **§8a** (datasets to CREATE). **§8b** datasets are CONSUMED, read-only — never
      create or alter them; before any task that reads one, confirm the §8b fields it relies on
      exist in the live dataset (`pal_status` / a read action). A missing §8b field is a blocker.
-   Follow the palbuilder / design / seo skills for HOW; the spec is WHAT.
+   Follow the palbuilder / design / seo skills for HOW; the spec is WHAT. Apply **pal-restraint**
+   on every line you write here: reuse before building, the platform before a library, minimum
+   that works, and touch only the files/lines this task names — it runs by default on this step,
+   not on request.
 6. **Verify** with the task's success condition — tool outputs, not your opinion. Verify offline
    FIRST (`pal_validate`) so a bad result is caught before it ever reaches the server:
    - `pal_validate` → 0 errors (instant offline check; read warnings, fix what's real).
@@ -244,6 +249,10 @@ A brief with an empty slot is invalid. Do not dispatch it.
    - `pal.json` entry required for every new file
    - Existing CSS classes only — never invent class names
    - Touch ONLY the files this task names — never the §11 NEVER-list, never a §8b consumed dataset
+   - **pal-restraint, every line:** reuse before building, a `c:`/platform tag before hand-rolled
+     markup or JS, the minimum that works within the dialect's limits. No object literals in
+     workflow JS. Don't touch, reformat, or "improve" anything outside this task's files — if a
+     decision is genuinely ambiguous, say so in the return report instead of guessing.
 6. **DONE =** — the task's exact success condition (tool output + exact string/state). The
    subagent self-checks against this before returning.
 7. **RETURN CONTRACT** — the subagent returns this and only this:
