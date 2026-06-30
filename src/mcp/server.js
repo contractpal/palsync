@@ -22,7 +22,7 @@ const pkg = require("../../package.json");
 function logErr(msg) { try { process.stderr.write("[palsync-mcp] " + msg + "\n"); } catch (e) { /* stderr gone */ } }
 function stackOf(err) { return err && err.stack ? err.stack : String(err); }
 
-function createServer(getCtx) {
+function createServer(getCtx, workspaceDir) {
     const server = new McpServer({ name: "palsync", version: pkg.version });
     for (const t of TOOLS) {
         server.registerTool(
@@ -33,7 +33,12 @@ function createServer(getCtx) {
                 // every tool failure is LOGGED with its tool name + full stack (the SDK swallows the
                 // stack into a terse result), and the agent still gets a clean error result.
                 try {
-                    const ctx = await getCtx();
+                    // needsCtx opt-out: a fully-offline, read-only tool (only an EXPLICIT
+                    // needsCtx:false) skips the whole login+lock+idle lifecycle and runs against a
+                    // bare { workspaceDir }. DEFAULT IS CTX-REQUIRED — absent or any non-false value
+                    // resolves full ctx, so a mis-flagged tool errs toward (safe) login/lock, never
+                    // toward silently skipping it.
+                    const ctx = t.needsCtx === false ? { workspaceDir } : await getCtx();
                     const res = await t.run(ctx, args || {});
                     if (ctx && ctx.lifecycle) ctx.lifecycle.onActivity(); // reset idle timer; re-lock after an idle release
                     // A tool may return its own MCP content blocks (e.g. pal_screenshot's image);
@@ -85,7 +90,7 @@ async function main() {
         }
         return ctxPromise;
     };
-    const server = createServer(getCtx);
+    const server = createServer(getCtx, workspaceDir);
 
     const transport = new StdioServerTransport();
     // EPIPE et al.: if the client end hiccups, a stream 'error' with no listener becomes an

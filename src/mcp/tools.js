@@ -108,6 +108,10 @@ const TOOLS = [
     {
         name: "pal_validate",
         description: "Check the pal's code OFFLINE (no server/network) for mistakes that silently break in PalBuilder: invalid workflow JS (object literals, let/const, ES6 the restricted engine rejects) and invalid markup (unclosed void tags, undocumented c: attributes, ${} in inline <script>, DOMContentLoaded in fragments). Returns each finding's file, line, ERROR/WARNING label, and the fix. Run BEFORE pal_push to catch problems early (pal_push runs it too and refuses on errors).",
+        // Fully offline + read-only: validateWorkspace lints local files (fs/acorn only — no
+        // CloudPiston call, no lock). Opt out of the ctx/login/lock lifecycle. The lifecycle guard
+        // below already no-ops when ctx has no lifecycle, so the bare { workspaceDir } ctx is safe.
+        needsCtx: false,
         inputShape: {},
         async run(ctx) {
             const lint = validateWorkspace(ctx.workspaceDir);
