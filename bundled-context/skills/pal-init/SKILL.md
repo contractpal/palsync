@@ -92,6 +92,8 @@ freshness: regenerate or update if pal_status shows the server moved since `mapp
 | name | type (console 7 / web / job 11) | entry actions | purpose (inferred) |
 ### Datasets (as they exist)
 | name | key + fields (with types) | written by | read by |   <!-- the real schema, not a guess -->
+### DataLists (datalists/ — JSON passthrough, not a table)
+| name | purpose (inferred) | used by |
 ### DataViews / cubes / cache (if any)
 | name | kind | over which datasets | used by |
 ### Loaded libraries (c:resource)
@@ -114,6 +116,9 @@ freshness: regenerate or update if pal_status shows the server moved since `mapp
 - pal_validate: <N errors / warnings> as of <date>
 - pal_test: <workflow> → <VALIDATED / notes>
 - Renders: <page → H1/landmark present>; screenshots saved: <refs>
+- Screenshot caveat: if pal_screenshot times out on a viewport (e.g. desktop, often an autoplay
+  hero <video>), capture the viewport that works and mark the failing one eyeball-only — a
+  capture timeout is a human-eyeball fallback, not a baseline failure.
 - These are what later changes must not regress.
 
 ## Unknowns (can't tell from code — ask the user)
