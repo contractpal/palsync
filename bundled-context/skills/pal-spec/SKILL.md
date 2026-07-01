@@ -180,6 +180,7 @@ Canonical base: <https://...>
   <!-- NOT just "has a workflow" — every pal has a serving workflow. Key off real logic/data. -->
 - IF background jobs / external HTTP / long-running work:   palbuilder-jobs-http
 - IF real-time / server push:                              palbuilder-websockets
+- IF sending email (OTP, notifications, transactional):     palbuilder-email
 - IF web pal:                                              seo-core
 <!-- list only what §5/§7/§8 actually require; this scopes the build's context -->
 
