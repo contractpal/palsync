@@ -59,6 +59,12 @@ Sections below tagged **[FULL]** are full-mode only. Everything else applies to 
 
 ## How to run the interview
 
+**Brownfield (a MAP.md is present — handoff from pal-init):** don't re-interview the whole pal.
+Consume MAP.md as ground truth for what already exists and scope the interview + spec to the
+CHANGE pal-init already scoped. This modifies four places below — §6 layout, §8b consumed
+datasets, §11 NEVER, §12 acceptance (each is marked "Brownfield (MAP.md present):" inline) — plus
+one added REALITY CHECK item. No MAP.md → this branch doesn't apply; proceed greenfield as below.
+
 1. **Mine before you ask.** Turn what already exists into PROPOSED answers — confirming a
    proposal costs seconds, an open question costs minutes. Mine the pulled pal workspace,
    any live site/doc the user points at, the project DESIGN_SYSTEM.md, and the first
@@ -179,6 +185,9 @@ created: <date>   approved: <date or pending>
 ### <page>
 - Sections in order: <hero> → <grid> → <CTA> → <footer>
 - Each names a COMPONENTS.md component: <hero = Hero/centered, grid = CardRow x3>
+<!-- Brownfield (MAP.md present): new UI MUST match the conventions + design reality recorded in
+     MAP.md — reuse before building. No DESIGN_SYSTEM.md yet? Run design-system-init in EXTRACT
+     mode against the map (extract mode doesn't exist yet — reference only, not built here). -->
 
 ## 7. SEO [publicly indexable pages only — mark which §3 rows apply; usually `web`-tagged,
 but a `console` row can qualify too (e.g. logged-out landing/login screen)]
@@ -196,6 +205,11 @@ Canonical base: <https://...>
 | field relied on | type | used by (which §5 action / §6 component) |
 <!-- declare EXACTLY which existing fields you depend on. A consumed dataset whose fields aren't
      listed is an unverifiable dependency — the reality check will flag it. -->
+<!-- Brownfield (MAP.md present): populate this table from MAP.md's Dataset inventory row for
+     each dataset — existing datasets the change reads are §8b, sourced from the map, NEVER §8a.
+     Map-sourced fields count as verified (satisfies the reality check's "verified to exist" rule
+     below) only while `pal_status` shows no server drift since MAP.md's `mapped` date; if it
+     drifted, re-verify against the live dataset before relying on the map's row. -->
 
 ## 9. Required skills (which palsync skills this build loads)
 - ALWAYS: palbuilder-frontend, design-build, pal-restraint
@@ -227,11 +241,16 @@ Canonical base: <https://...>
 - ALWAYS: <validate before every push; copy ships verbatim>
 - ASK FIRST: <dataset schema change; touching shared fragments>
 - NEVER: <out-of-scope pages/datasets the build must not create, edit, or delete>
+<!-- Brownfield (MAP.md present): seed NEVER from the map's Load-bearing/shared/high-blast-radius
+     section, plus the user's "must not change" answers from the pal-init interview. -->
 
 ## 12. Acceptance criteria
 GLOBAL FLOOR (both modes):
 - [ ] pal_validate: 0 errors   - [ ] pal_test: workflow VALIDATED, 0 notes
 - [ ] every §3 nav link routes (no dead links)
+- [ ] [brownfield/MAP.md present — mandatory when a MAP.md exists] REGRESSION: MAP.md's Step-3
+      baseline still passes (pal_validate/pal_test at least as clean as the baseline) and
+      untouched UI didn't visually shift (pal_screenshot before/after the map's saved references).
 WEB pages add (every §3 row tagged `web` — for a hybrid pal this is a subset, not all pages):
 - [ ] pal_preview: rendered page contains the exact H1s from §4
 - [ ] VISUAL (one per visually-significant web-tagged §3 page): the hero/key screen renders per
@@ -341,6 +360,8 @@ Write the results into **§13 Reality check** as PASS lines and FLAGs.
 - [ ] [FULL] every §5 behavior has a matching §12 criterion; [LITE] every primary action has a
       happy-path criterion. Console screens have a pal_screenshot VISUAL line plus its
       human-eyeball fallback (see §12).
+- [ ] [brownfield/MAP.md present] §12 GLOBAL FLOOR includes the REGRESSION criterion (baseline
+      still passes, untouched UI didn't shift). Missing it when a MAP.md exists is a HARD FLAG.
 - [ ] Every acceptance criterion names a real tool, a checkable string/state, or an explicit
       human-eyeball gate (console fallback only — not the default).
 - [ ] [visually-significant, web or console] §12 includes at least one VISUAL criterion verifiable
@@ -377,7 +398,8 @@ Write the results into **§13 Reality check** as PASS lines and FLAGs.
 
 **Gate rule:** any **hard flag** — dead link, undeclared/unverified consumed field, uncreatable
 or unverified type, a §5 capability with no primitive/skill, invented primitive, missing
-pal_test compile-verify for workflow JS, or a console screen with no eyeball gate — keeps
+pal_test compile-verify for workflow JS, a console screen with no eyeball gate, or (brownfield)
+a missing §12 REGRESSION criterion when a MAP.md exists — keeps
 `status: draft` and `reality_check: blocked` until resolved. When all hard flags clear, set
 `reality_check: pass` (and `status: approved`). Soft notes can ship as recorded caveats in §13.
 
