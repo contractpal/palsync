@@ -68,29 +68,48 @@ Sections below tagged **[FULL]** are full-mode only. Everything else applies to 
 2. **Ask in batches of 3–4** (skip what mining answered):
 
    **Product & audience** — Q1 What is this (one sentence)? Q2 Who for (role, industry)?
-   Q3 The ONE primary action? Q4 Web (public) or console (logged-in)?
+   Q3 The ONE primary action? Q4 Web (public), console (logged-in), or both? A pal can mix —
+   e.g. a public marketing site plus a logged-in dashboard in the same pal. If both, get the
+   split now: which pages/screens are web, which are console.
 
-   **Scope & structure** — Q5 Pages/screens? (propose a sitemap) Q6 Explicitly OUT of scope?
+   **Integration surface** *(most pals: none — skip)* — Q5 Does anything OTHER than a browser
+   need to call this pal? Two PalBuilder workflow types cover that, and a pal can add either
+   alongside its web/console pages:
+   - **webservice** (`workflowType: 12`, console webservice) — a REST/SOAP endpoint for an
+     external system to call into this pal.
+   - **tunnel** (`workflowType: 15`) — pal-to-pal, enterprise-to-enterprise, or cross-cloud
+     communication.
+   If either applies: which external caller, which action(s), request/response shape. These
+   are non-page-serving workflows — no sitemap row, no layout — capture them as §5 Behavior
+   entries same as any action, and list the workflow + type in §9/§10.
 
-   **Copy** — Q7 Per page, draft H1/subhead/CTA/section copy YOURSELF from mined material,
-   present, get it corrected — page by page. Q8 Claims/stats/pricing that must be exact?
+   **Scope & structure** — Q6 Pages/screens? (propose a sitemap, tag each row web or console)
+   Q7 Explicitly OUT of scope?
+
+   **Copy** — Q8 Per page, draft H1/subhead/CTA/section copy YOURSELF from mined material,
+   present, get it corrected — page by page. Q9 Claims/stats/pricing that must be exact?
    (ask; never invent; record source)
 
-   **Behavior** *(console/app pals + any page with logic)* — Q9 Per action: trigger, INPUT,
-   VALIDATION, STATE change (which dataset/field), OUTPUT. Q10 **[FULL]** Edge & error cases:
-   empty, invalid, not-found, duplicate, auth-fail. *(LITE: note these as deferred.)*
+   **Behavior** *(console/app pals, any page with logic, and any Q5 webservice/tunnel action)*
+   — Q10 Per action: trigger, INPUT, VALIDATION, STATE change (which dataset/field), OUTPUT.
+   Q11 **[FULL]** Edge & error cases: empty, invalid, not-found, duplicate, auth-fail.
+   *(LITE: note these as deferred.)*
 
-   **Data** — Q11 Entities, fields, exact PalBuilder types? (propose schemas; confirm)
+   **Data** — Q12 Entities, fields, exact PalBuilder types? (propose schemas; confirm)
 
-   **Design handoff** *(not design itself)* — Q12 DESIGN_SYSTEM.md + COMPONENTS.md present?
+   **Design handoff** *(not design itself)* — Q13 DESIGN_SYSTEM.md + COMPONENTS.md present?
    No → run design-system-init, return. Yes → per page, propose a layout skeleton: section
    order + which named component (from COMPONENTS.md) fills each slot. No colors/fonts.
 
-   **SEO** *(web only)* — Q13 Domain? Target phrase per page? (propose from approved copy)
+   **SEO** *(usually web pages; a console page can need it too — e.g. a logged-out
+   landing/login screen that's still publicly indexed; never a webservice/tunnel action —
+   nothing to index)* — Q14 Domain? Per §3 page, is it publicly indexable? Target phrase for
+   each one that is (propose from approved copy). Don't gate purely on the page's web/console
+   tag — ask.
 
-   **Constraints & ops** — Q14 Push policy: free or checkpoint? Q15 Review cadence: pause for
+   **Constraints & ops** — Q15 Push policy: free or checkpoint? Q16 Review cadence: pause for
    your review after **each task**, after **every N tasks** (pick N), or **end** — full-auto,
-   review only once the build's done (default, today's behavior if you don't ask)? Q16 What must
+   review only once the build's done (default, today's behavior if you don't ask)? Q17 What must
    the agent NEVER touch? Any non-negotiable decisions to protect, with rationale?
 
 3. **LOCK ASSUMPTIONS (gate).** Before writing, list every assumption and open question in one
@@ -121,7 +140,8 @@ status: draft            <!-- pal-loop refuses to run until: approved -->
 reality_check: blocked   <!-- reality-check gate sets: pass when all hard flags clear, else blocked -->
 spec version: 1          <!-- bumped on each human-approved amendment; see §14 amendment log -->
 mode: full | lite
-pal: <pal name> (<web | console>) @ <cloud url>
+pal: <pal name> (<web | console | web+console>) @ <cloud url>
+<!-- web+console: pal mixes public and logged-in pages — §3 tags each page's type -->
 push policy: free | checkpoint
 review cadence: each-task | every-<N> | end   <!-- default: end (pal-loop pauses for human review
   only at build completion, today's behavior); each-task/every-N add earlier pauses mid-build -->
@@ -137,8 +157,10 @@ created: <date>   approved: <date or pending>
 <!-- OPEN items are blockers, never silently resolved by the build -->
 
 ## 3. Sitemap & routing
-| page/screen | file | workflow action | nav label | purpose |
-<!-- every nav link MUST have a row; no dead links -->
+| page/screen | type (web/console) | file | workflow action | nav label | purpose |
+<!-- every nav link MUST have a row; no dead links. `type` matters for hybrid (web+console)
+     pals — it decides which §7/§12 rules apply to that specific row; for a pure web or pure
+     console pal every row shares the pal-level type. -->
 
 ## 4. Copy (REAL — these exact words ship)
 ### <page>
@@ -158,7 +180,8 @@ created: <date>   approved: <date or pending>
 - Sections in order: <hero> → <grid> → <CTA> → <footer>
 - Each names a COMPONENTS.md component: <hero = Hero/centered, grid = CardRow x3>
 
-## 7. SEO [web only]
+## 7. SEO [publicly indexable pages only — mark which §3 rows apply; usually `web`-tagged,
+but a `console` row can qualify too (e.g. logged-out landing/login screen)]
 | page | title (<=60ch) | meta desc (50-160ch) | og:image (ABSOLUTE url) | schema |
 Canonical base: <https://...>
 
@@ -181,14 +204,19 @@ Canonical base: <https://...>
 - IF background jobs / external HTTP / long-running work:   palbuilder-jobs-http
 - IF real-time / server push:                              palbuilder-websockets
 - IF sending email (OTP, notifications, transactional):     palbuilder-email
-- IF web pal:                                              seo-core
+- IF any §3 page is publicly indexable (§7 non-empty):      seo-core
+- IF a webservice or tunnel action (Q5): palbuilder-backend (same ES3 workflow rules) — no
+  dedicated skill covers the ConsoleWebServiceController/TunnelController API yet, so look up
+  the exact methods at https://secure.cloudpiston.com/cpal/cp-api/console_webservice/index.html
+  or .../tunnel/index.html before writing the action. Never guess a method name.
 <!-- list only what §5/§7/§8 actually require; this scopes the build's context -->
 
 ## 10. PalBuilder surface (the platform primitives this build touches)
 - Pages (page-shell) / Fragments (c:ignore): <which>
 - c: tags used: <c:a, c:field, c:list, c:fragment, c:if/c:when, c:set, c:resource, c:debug>
 - c:resource libs: <bootstrap 5.3.5, jquery, chartjs, bootstrap-icons — only what's used>
-- Workflows: <names> — workflowType <7 console / 11 job|receiver> — hub: <yes/no>
+- Workflows: <names> — workflowType <7 console / 9 web / 11 job|receiver / 12 webservice /
+  15 tunnel> — hub: <yes/no>
 - Data: DataSet <created: list> / DataSet <consumed read-only: list> / DataView <if joins> / DataList <if used>
 - Jobs: <jobManager.createJob + Monitor — only if long-running>
 - HTTP/parse: <ServiceRequest / JsonParser / Buffer / DownloadResponse — only if used>
@@ -204,16 +232,19 @@ Canonical base: <https://...>
 GLOBAL FLOOR (both modes):
 - [ ] pal_validate: 0 errors   - [ ] pal_test: workflow VALIDATED, 0 notes
 - [ ] every §3 nav link routes (no dead links)
-WEB pals add:
+WEB pages add (every §3 row tagged `web` — for a hybrid pal this is a subset, not all pages):
 - [ ] pal_preview: rendered page contains the exact H1s from §4
-- [ ] pal_seo_audit: 0 errors per §3 page
-- [ ] VISUAL (one per visually-significant §3 page): the hero/key screen renders per
+- [ ] VISUAL (one per visually-significant web-tagged §3 page): the hero/key screen renders per
       DESIGN_SYSTEM.md with no anti-slop fingerprints — verify via pal_screenshot (pal-review's
       visual arm). State the exact thing to see (e.g. "hero: real headline + single primary CTA,
       no centered-everything, no emoji bullets").
-CONSOLE pals add (pal_preview only opens the render for the user, never the agent — but
-pal_screenshot CAN drive an authenticated console screen via auth replay when Chromium is
-installed and the replay succeeds; see pal-review's visual arm):
+INDEXABLE pages add (every §3 row listed in §7 — usually the web-tagged rows, but a
+publicly-indexable console row qualifies too):
+- [ ] pal_seo_audit: 0 errors per §7-listed page
+CONSOLE pages add (every §3 row tagged `console` — for a hybrid pal this is a subset, not all
+pages; pal_preview only opens the render for the user, never the agent — but pal_screenshot CAN
+drive an authenticated console screen via auth replay when Chromium is installed and the replay
+succeeds; see pal-review's visual arm):
 - [ ] VISUAL (one per visually-significant §3 screen): try pal_screenshot first — `captured:true`
       → judge it like a web VISUAL criterion (DESIGN_SYSTEM.md, no anti-slop fingerprints).
 - [ ] HUMAN-EYEBALL GATE (fallback — required whenever pal_screenshot returns `captured:false`,
@@ -330,9 +361,12 @@ Write the results into **§13 Reality check** as PASS lines and FLAGs.
 - [ ] Size is set ONLY on String / Char / Decimal. Size on any other type, or a String with no
       size, is a flag.
 - [ ] Every capability in §5 maps to a real primitive in §10 and the right skill: real-time →
-      websockets; background/long-running or external HTTP → jobs-http; joins → DataView.
+      websockets; background/long-running or external HTTP → jobs-http; joins → DataView;
+      external-caller/REST-SOAP → webservice (workflowType 12); pal-to-pal/cross-cloud → tunnel
+      (workflowType 15).
 - [ ] §10 lists only real primitives (page-shell/fragment, the c: tags above, DataSet/DataView/
-      DataList, workflowType 7/11, jobManager, ServiceRequest, createClientSocket). Flag invented ones.
+      DataList, workflowType 7/9/11/12/15, jobManager, ServiceRequest, createClientSocket). Flag
+      invented ones.
 - [ ] [workflow JS present] confirm EXECUTION.md verifies the workflow compiles via pal_test
       after push (TestConsole.do returns fresh validation — not a human gate). Note the ES3-style
       limits (no object literals, no let/const/arrow) so §5 behavior doesn't assume modern JS.

@@ -18,8 +18,13 @@ in "UNVERIFIED — fill from builder" — never promoted to the verified table o
   bootstrap-icons 1.11.3, chartjs 4.0.0.
 - Workflow entry: single `run(controller)` per file; action `switch`; console-hub delegation
   via `c.switchToWorkflow("console", c.getAction())`.
-- workflowType: 7 = console workflow; 11 = job / message receiver / console-system job.
-  (Declared per file in pal.json.)
+- workflowType: 7 = console workflow; 9 = web (public, unauthenticated); 11 = job / message
+  receiver / console-system job; 12 = console webservice (REST/SOAP endpoint for an external
+  caller — ConsoleWebServiceController); 15 = tunnel (pal-to-pal / enterprise-to-enterprise /
+  cross-cloud — TunnelController). (Declared per file in pal.json.) No dedicated skill covers
+  the webservice/tunnel controller APIs yet — look up exact methods at
+  https://secure.cloudpiston.com/cpal/cp-api/console_webservice/index.html and
+  https://secure.cloudpiston.com/cpal/cp-api/tunnel/index.html before writing that action.
 - Data access APIs: `pal.getDataSet(name)`, `pal.getDataView(name)` (read-model for joins),
   `createRecord()` → `.set(col, val)`, `insertRecord()`; in-memory `c.createData()` (key→value,
   NOT an object literal) and `c.createDataList(name, [cols])` → `row.set(col, val)`.
