@@ -76,6 +76,27 @@ Beyond "it compiled":
   `needs-human` eyeball gate naming each screen to look at and what to confirm. This is the
   fallback path now, not the default for every console screen.
 
+### 4. Regression (brownfield-only — gated on `baseline/` existing)
+Absent `baseline/` (greenfield, or a brownfield pal pal-init never mapped): skip this arm entirely,
+today's behavior. Present: confirm SPEC.md's §12 REGRESSION criterion is actually met, for every
+page/workflow `baseline/baseline.json` covers.
+- **Freshness check first, independently of pal-loop's own T7 check** — this arm re-derives its
+  own verdict rather than trusting pal-loop's self-report, same "fresh eyes" principle as the other
+  three arms. Compare `baseline.json`'s `mapped` marker against a fresh `pal_status` call. Stale
+  (server moved since `mapped`) → `needs-human`: "baseline is stale (server moved since `<mapped>`);
+  re-run pal-init Step 3 to refresh baseline/ before regression can be trusted" — do not proceed to
+  any comparison below against stale state.
+- Re-derive the `pal_validate`/`pal_test`-vs-baseline comparison independently.
+- `pal_screenshot` before/after diff for every page with `captured: true` in the baseline: capture
+  now, compare against `baseline/screenshots/<page>-<viewport>.png` using the same UX-rubric
+  judgment arm 3 already applies — asking "did anything UNTOUCHED shift," not "is it pretty." A
+  page the change didn't touch shifting is itself a finding, same severity as a §12 miss.
+- Pages/viewports that were `eyeball_only` in the baseline get a `needs-human` regression finding
+  (name the screen, what to compare against the saved baseline screenshot) — never an assumed pass,
+  same rule as arm 3's console fallback.
+- Cross-check every regression finding against `known_issues` — an issue already listed there is
+  NOT a new finding (don't re-report a pal's already-known defects as caused by this build).
+
 ## Output — a verdict, not a fix
 Write `REVIEW.md` (or a `## Review` block):
 ```
@@ -87,6 +108,9 @@ verdict: PASS | CHANGES-NEEDED
 - <finding> — <spec ref> — <why it misses>
 ## Visual / UX
 - <finding> — <screenshot ref or "eyeball gate: screen X"> — <fix>
+## Regression [brownfield-only — omit this section entirely when no baseline/ exists]
+| baseline item (page/workflow) | result | evidence (baseline vs current) |
+- known_issues excluded: <list, so exclusions are auditable, not silent>
 ## Fix tasks (for pal-loop)
 - [ ] <task> — addresses <finding> — success condition: <tool + check>
 ```
@@ -96,7 +120,10 @@ Rules:
 - Judge only against the spec and design system. "I'd have done it differently" is not a finding;
   "violates §12 criterion 4" is.
 - A criterion you can't verify (`pal_screenshot` unavailable, or `captured:false` on a console
-  render) is `needs-human`, never an assumed pass.
+  render) is `needs-human`, never an assumed pass. The same applies to a stale-baseline Regression
+  arm and to any `eyeball_only` baseline viewport.
+- A `known_issues`-listed defect is never reported as a Regression finding — list it under "known
+  issues excluded" instead, so the exclusion is visible, not silently dropped.
 
 ## How it fits the loop
 pal-loop runs the **tests** as it builds; at build completion it hands off to pal-review in a
