@@ -124,6 +124,43 @@ state change, immediately — if the session dies mid-task, the next session mus
    This pause is independent of the push-policy `checkpoint` gate (step 6, per-push) and the
    build-completion pal-review handoff (below, which always runs regardless of cadence) — it is
    a human checkpoint mid-build, not a substitute for either.
+7b. **Brownfield regression re-check** — gated on `baseline/` existing next to MAP.md (absent →
+   skip this step entirely, today's behavior). Runs at the SAME points 7a pauses (every `each-task`
+   pause, every `every-N` pause when the counter hits N) **and unconditionally at the
+   build-completion pal-review handoff below**, even under `end` cadence where 7a itself never
+   pauses mid-build — under `end`, this check simply only fires once, at completion. It does NOT
+   run after every single task; step 6's per-task verify already catches immediate breakage, and
+   re-running the whole baseline that often is wasted tool calls.
+   - **Freshness check first, before any comparison.** Compare `baseline/baseline.json`'s `mapped`
+     marker against a fresh `pal_status` call. If the server has moved since `mapped`, the baseline
+     is STALE — do not diff against it. Set `needs-human`: "baseline is stale (server moved since
+     `<mapped>`); re-run pal-init Step 3 to refresh baseline/ before regression can be trusted," and
+     skip the comparisons below entirely for this cycle. Never produce a pass/fail regression
+     verdict against a stale baseline.
+   - `pal_validate` → compare the error/warning count against `baseline.json`'s `validate`.
+   - `pal_test` on each workflow `baseline.json` lists → same comparison against `validate: pass`.
+   - `pal_preview`/`pal_screenshot` on each page with `captured: true` in its baseline entry —
+     confirm the page still renders and the baseline's recorded `h1s` are still present (the same
+     string-check pattern step 6 already uses for web pages). Whether the LOOK shifted is left to
+     pal-review's regression arm at build completion — this step confirms it still renders and the
+     content didn't disappear, nothing more.
+   - **Viewport fallback:** a viewport `eyeball_only: true` in the baseline stays `needs-human` for
+     regression purposes — never a failure, never silently promoted to "passed" without a human. A
+     viewport that WAS `captured: true` before but times out now is a `needs-human` note (something
+     about capturability changed), not an automatic block — the timeout may be transient.
+   - **Inherited vs caused.** Cross-reference every failure found above against `known_issues`
+     before treating it as new. A failure already listed there is noted (still known, still not
+     fixed) but does NOT block anything.
+   - **Cadence-bisect on a caused failure.** Because this check runs at pauses, not per-task, a
+     caused regression can ride through several already-committed tasks before this check catches
+     it. Do NOT just block whichever task happens to be current — bisect: walk the per-task commits
+     (step 7 commits after every completed task) from the last known-clean point forward, re-running
+     the SAME failing check against each commit's file state in turn (`git show <sha>:<path>` or a
+     scratch `git checkout <sha> -- .` followed by restoring `HEAD` — read-only inspection of local
+     history, never a rewrite: git here is a checkpoint, not the source of truth, per this skill's
+     existing rule), until the check first fails. That commit's task is the one to reopen and
+     `block`, with a Blockers entry citing the baseline comparison and which commit introduced it —
+     not the task that was current when the cadence check happened to run.
 8. **On fail:** fix and re-verify, up to TWO attempts. Still failing → `blocked`, with a
    Blockers entry naming: what failed (exact tool output), what you tried, the decision/input
    you need. Continue with the next INDEPENDENT task. Never skip verification to get past a
@@ -189,17 +226,21 @@ its entire point: fresh eyes, not the bias of the session that wrote the code).
 Trigger: every EXECUTION.md task is `done`, or every remaining task is a `blocked` /
 `needs-frontier` / `needs-human` the human has explicitly accepted as parked for this pass.
 
-1. **Dispatch pal-review** in a fresh session or subagent with its required inputs: `SPEC.md`,
-   `EXECUTION.md`, `DESIGN_SYSTEM.md`/`COMPONENTS.md`, and the pal's identity (guid/name) so it
-   can `pal_fetch` / `pal_screenshot` / `pal_test` the real built artifacts itself.
-2. **PASS** → the build is genuinely done. Report it.
-3. **CHANGES-NEEDED** → take pal-review's `## Fix tasks` list and append each as a new
+1. If `baseline/` exists (brownfield), step 7b's regression re-check runs here unconditionally
+   before dispatch — even under `end` cadence, where 7b never fired mid-build. Do not hand off
+   with a stale or never-run regression check.
+2. **Dispatch pal-review** in a fresh session or subagent with its required inputs: `SPEC.md`,
+   `EXECUTION.md`, `DESIGN_SYSTEM.md`/`COMPONENTS.md`, `baseline/` (if it exists), and the pal's
+   identity (guid/name) so it can `pal_fetch` / `pal_screenshot` / `pal_test` the real built
+   artifacts itself.
+3. **PASS** → the build is genuinely done. Report it.
+4. **CHANGES-NEEDED** → take pal-review's `## Fix tasks` list and append each as a new
    EXECUTION.md task: next id in sequence, `spec ref` carried from the finding it addresses,
    `depends` per any stated order, status `todo`, and a `tier` (same definitions as any other
    task — default `standard`; `frontier` only if the fix needs new structure, not just a patch).
    Resume the normal task cycle (verify, mark `done`, checkpoint, commit) on exactly those tasks —
    same rules, same on-fail/blocked handling.
-4. **Re-review.** Once the fix tasks are all `done`, hand off to pal-review again. Repeat until
+5. **Re-review.** Once the fix tasks are all `done`, hand off to pal-review again. Repeat until
    PASS. A verdict that comes back `needs-human` (console eyeball gate, or no screenshot
    capability) is not a failure — route it like any other `needs-human` task, same as the build's
    own gates.
