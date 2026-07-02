@@ -20,4 +20,5 @@ Column key:
 
 | date | scenario | harness | model | palsync SHA | orch skills | palbuilder skills | §12 (pass/total) | tool calls (mcp/read/other) | pushes | tokens in/out | time | violations | notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| | | | | | | | | / / | | / | | | |
+| 2026-07-02 | 01_crud_equipment_checkout | Claude Code | claude-opus-4-8 (frontier) | 454ecfe | main@454ecfe | main@454ecfe | 10/10 | / / | ? | / | ? | 0 | validate 0 err; server test VALIDATED 0 notes; copy verbatim §4; all §3 routes. Scored by source review + validate/test — live click-through is the human step. COST NOT CAPTURED (fill from /cost + transcript). |
+| 2026-07-02 | 01_crud_equipment_checkout | Claude Code | claude-haiku-4-5 (cheap) | 454ecfe | main@454ecfe | main@454ecfe | 1/10 | / / | ? | / | ? | 1 | dataset equipment.json wrong shape (fields:[] not fields.DatasetField) + not in pal.json + not synced → server test FAILED (4 notes); workflow can't run → all runtime criteria fail. VIOLATION: declared done w/o passing pal_test. COST NOT CAPTURED. |
