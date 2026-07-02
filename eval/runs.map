@@ -1,0 +1,20 @@
+# eval/runs.map — one line per benchmark workspace (6 = 3 scenarios x {frontier, cheap}).
+#
+# Columns (whitespace-separated):  <folder>  <server_pal_name>  [cloud_url]
+#   folder          — subdir under eval/runs/ that setup-runs.sh creates. Prefix (01_/02_/03_)
+#                     selects which frozen scenario in eval/specs/ gets staged into it.
+#   server_pal_name — the EMPTY pal you created in PalBuilder for this run. setup-runs.sh passes
+#                     it to `palsync setup --pal`. Names must be unique per run — a workspace is
+#                     dirtied by its build and cannot be reused, so frontier and cheap each need
+#                     their own empty pal.
+#   cloud_url       — optional; blank = CP_URL / the palsync default (secure.cloudpiston.com).
+#
+# Rename freely (e.g. to an A/B or per-model convention). Just create matching empty pals first.
+#
+# folder                  server_pal_name              cloud_url
+01_crud_frontier          test-01-crud-frontier
+01_crud_cheap             test-01-crud-cheap
+02_dirstruct_frontier     test-02-dirstruct-frontier
+02_dirstruct_cheap        test-02-dirstruct-cheap
+03_console_frontier       test-03-console-frontier
+03_console_cheap          test-03-console-cheap
