@@ -22,13 +22,10 @@ Run these in order. Don't skip the interview to get to extraction faster — the
 
 ## Vision routing
 
-Steps 2 and 3 depend on *seeing* the references — studying composition, density, and restraint, and spotting visual slop fingerprints. If the model executing this skill cannot accept image input, do not skip these steps and do not fake them from filenames. Instead, route the visual work to a vision-capable model and pass its findings back as text:
-
-- Hand each image in `design/refs/` to a vision-capable model and ask for a concrete description: spacing rhythm, type scale contrast, where emphasis lands, border/shadow restraint, how empty space is used, and implied motion. Capture that text in `design/refs/extracted.md` under a "visual observations" heading.
-- For the anti-slop cross-check, have the vision model also report whether any known fingerprints appear in the references.
-- The text-only model then synthesizes tokens from those written observations plus the interview. The references still get persisted as images regardless, because the downstream `design-build` agent may have its own vision routing and will want to look at them directly.
-
-If this skill is being run in a vision-capable environment (e.g. a chat interface with image upload), do the visual work inline — no routing needed.
+Steps 2 and 3 depend on *seeing* the references (composition, density, restraint, slop fingerprints).
+If the executing model can't accept image input, route the visual work to a vision-capable model and
+consume its findings as text — don't skip these steps and don't fake them from filenames. Canonical
+protocol: **read `references/vision-routing.md`**.
 
 ## Mode: declare vs extract
 

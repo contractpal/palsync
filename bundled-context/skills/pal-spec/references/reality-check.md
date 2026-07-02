@@ -26,7 +26,7 @@ and FLAGs.
 9. [visually-significant, web or console] §12 includes at least one VISUAL criterion verifiable via
    pal_screenshot — the hero/key screen renders per DESIGN_SYSTEM.md with no anti-slop fingerprints.
    Console auth replay (`captured:true`) is a capability, not a guarantee, so every console VISUAL
-   line still needs its human-eyeball fallback paired with it (see shared/console-render-verification.md).
+   line still needs its human-eyeball fallback paired with it (see ../../pal-review/references/console-render-verification.md).
 
 ## Platform realism (is this buildable on PalBuilder?)
 1. Every §8a field type matches a creatable type in `references/palbuilder-types.md` — a type not in

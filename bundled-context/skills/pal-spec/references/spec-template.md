@@ -67,13 +67,13 @@ high-blast-radius section plus the user's "must not change" answers.
 
 **§12 Acceptance criteria** — see the layered structure in the template. Console render verification
 (pal_screenshot `captured:true` vs human-eyeball fallback on `captured:false`) is defined once in
-shared/console-render-verification.md; §12 references it rather than restating it.
+../../pal-review/references/console-render-verification.md; §12 references it rather than restating it.
 
 **§13 Reality check** — filled by the reality-check gate (references/reality-check.md); the spec
 stays draft while hard flags remain.
 
 **§14 Amendment log** — append-only, empty until the first approved amendment. pal-loop NEVER edits
-the spec silently; the amendment path is in shared/amendment-path.md. One block per approved
+the spec silently; the amendment path is in references/amendment-path.md. One block per approved
 amendment: `- v<n> (<date>, approved by <human>): <which §> — <what changed> — reality forced it
 because: <build-time fact>. Re-gate: reality_check re-run for <§> → pass.`
 
@@ -166,13 +166,13 @@ GLOBAL FLOOR (both modes):
 WEB pages add (every §3 row tagged `web`):
 - [ ] pal_preview: rendered page contains the exact H1s from §4
 - [ ] VISUAL (one per visually-significant web-tagged §3 page): the hero/key screen renders per
-      DESIGN_SYSTEM.md with no anti-slop fingerprints (see shared/console-render-verification.md).
+      DESIGN_SYSTEM.md with no anti-slop fingerprints (see ../../pal-review/references/console-render-verification.md).
       State the exact thing to see.
 INDEXABLE pages add (every §3 row listed in §7):
 - [ ] pal_seo_audit: 0 errors per §7-listed page
 CONSOLE pages add (every §3 row tagged `console`):
 - [ ] VISUAL (one per visually-significant §3 screen) + HUMAN-EYEBALL fallback — per
-      shared/console-render-verification.md.
+      ../../pal-review/references/console-render-verification.md.
 - [ ] data effects checked indirectly: after a §5 write, a follow-up read (or builder dataset
       inspection) shows the new/changed row. State the exact check per action.
 PER-FEATURE [FULL] (one block per §5 behavior, as checkable conditions):

@@ -28,7 +28,7 @@ exact string/state, split the task. LITE allows coarser tasks but still one veri
   structure; spec changes.
 
 **Checkpoints** — append one line per completed task. **Blockers** — what needs the human, stated
-exactly (this is also where pal-loop writes amendment proposals; see shared/amendment-path.md).
+exactly (this is also where pal-loop writes amendment proposals; see references/amendment-path.md).
 
 ## Clean template
 

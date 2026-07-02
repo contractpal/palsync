@@ -92,6 +92,13 @@ Two fields load-bearing for Phase 3 (get them exactly right, don't approximate):
   about INTENT still goes in MAP.md's Unknowns for the interview — `known_issues` is for confirmed,
   observed defects only.
 
+**Baseline-freshness rule (canonical — pal-loop's regression re-check and pal-review's regression
+arm both enforce this):** before diffing anything against the baseline, compare `baseline.json`'s
+`mapped` marker against a fresh `pal_status`. Server moved since `mapped` → the baseline is STALE:
+set `needs-human` ("baseline is stale (server moved since `<mapped>`); re-run pal-init Step 3 to
+refresh baseline/") and do NOT produce any pass/fail regression verdict against it. This skill owns
+the definition; the downstream gates run the check.
+
 MAP.md's Regression baseline section becomes a short pointer to this artifact (template below) —
 the artifact is the source of truth; the prose is a human-skimmable summary of it.
 

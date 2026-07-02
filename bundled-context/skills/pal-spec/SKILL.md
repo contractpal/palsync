@@ -138,7 +138,7 @@ greenfield.
 
 An approved spec is the contract, but reality can contradict it after the build starts. The spec
 must be able to change **without ever being silently self-amended.** Full canonical protocol:
-**read `../shared/amendment-path.md`**. In short: pal-loop STOPS the affected task and writes an
+**read `references/amendment-path.md`**. In short: pal-loop STOPS the affected task and writes an
 amendment proposal in Blockers → the human approves → pal-spec applies the minimal edit, bumps
 `spec version`, appends a §14 log entry, and re-runs the reality check for the amended § only →
 pal-loop resumes. The invariant: **the agent never silently self-amends.**

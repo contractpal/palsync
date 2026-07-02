@@ -16,13 +16,11 @@ Before writing anything:
 
 ## Vision routing
 
-Two phases of this skill require *seeing* pixels: reading `design/refs/` in Step 0, and critiquing rendered output at the review gate in Step 4. If the executing model cannot accept image input, these don't get skipped — they get routed. This is the difference between a build agent that drifts toward generic output and one that self-corrects.
-
-- **Reference reading**: if you can't view the images, have a vision-capable model describe them in concrete design terms and consume that description as text. If `design/refs/extracted.md` already contains visual observations from `design-system-init`, that may be sufficient — read it first before re-routing.
-- **Review gate**: the gate is only meaningful against *rendered* UI, not source code. Produce a screenshot of the built interface (a headless browser render step, or the platform's preview/export), hand it to a vision-capable model with the review checklist below, and feed the structured critique back to the building model as text to act on.
-- **Orchestrator note**: in a multi-model setup, keep code generation on the strongest coding model and route only these two visual phases to a vision-capable model. Don't move the whole build — only the seeing.
-
-If this skill runs in a vision-capable environment, do both inline.
+Two phases require *seeing* pixels: reading `design/refs/` in Step 0, and critiquing rendered output
+at the Step 4 review gate. If the executing model can't accept image input, route those to a
+vision-capable model and act on its text findings — the review gate is only meaningful against a
+*rendered* screenshot, not source code. Canonical protocol: **read
+`../design-system-init/references/vision-routing.md`**.
 
 ## Step 1 — Decompose before you build
 

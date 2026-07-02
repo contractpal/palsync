@@ -58,34 +58,26 @@ Beyond "it compiled":
 - Does the §6 layout match the composition the spec described?
 
 ### 3. Visual / UX (capability-gated)
-- The screenshot capability can come from EITHER the `pal_screenshot` MCP tool (Claude Code) OR
-  the `palsync screenshot` CLI subcommand (Pi / headless harnesses with no MCP) — same core, same
-  args (page, viewport, fullPage); the CLI writes a PNG and prints its path. Don't assume MCP.
-- **If a screenshot tool (e.g. `pal_screenshot`) AND a vision-capable model are available:**
-  capture each screen and judge it against DESIGN_SYSTEM.md and a short UX rubric — visual
-  hierarchy, spacing rhythm, legibility, responsive behavior if testable, and the known AI
-  fingerprints the design skills flag (gradient-blob hero, pill-everything uniform radius,
-  three-card-row-as-only-idea, serif-on-cream-with-sage). Report each issue with the screenshot
-  and a specific fix.
-- **Console screens are capturable too.** `pal_screenshot`'s console path replays the cp-auth
-  redirect chain (Playwright navigates the same authenticated preview URL `pal_test` opens for a
-  human) — live-verified against a real authenticated console pal. Treat a console render exactly
-  like a web one when it returns `captured:true`: screenshot it, judge it.
-- **If no screenshot tool, no vision model, or the console capture returns `captured:false`** (no
-  Chromium installed, or the auth replay failed/timed out): do NOT guess from HTML. Emit a
-  `needs-human` eyeball gate naming each screen to look at and what to confirm. This is the
-  fallback path now, not the default for every console screen.
+Capture and render mechanics — MCP tool vs `palsync screenshot` CLI, console `captured:true/false`,
+the human-eyeball fallback — follow the canonical rule:
+`references/console-render-verification.md`.
+- **When you can capture AND have a vision-capable model:** judge each screen against
+  DESIGN_SYSTEM.md and a short UX rubric — visual hierarchy, spacing rhythm, legibility, responsive
+  behavior if testable, and the known AI fingerprints the design skills flag (gradient-blob hero,
+  pill-everything uniform radius, three-card-row-as-only-idea, serif-on-cream-with-sage). Report each
+  issue with the screenshot and a specific fix.
+- **When you can't** (no screenshot tool, no vision model, or `captured:false`): do NOT guess from
+  HTML — emit the `needs-human` eyeball gate per the canonical rule, naming each screen and what to
+  confirm.
 
 ### 4. Regression (brownfield-only — gated on `baseline/` existing)
 Absent `baseline/` (greenfield, or a brownfield pal pal-init never mapped): skip this arm entirely,
 today's behavior. Present: confirm SPEC.md's §12 REGRESSION criterion is actually met, for every
 page/workflow `baseline/baseline.json` covers.
-- **Freshness check first, independently of pal-loop's own T7 check** — this arm re-derives its
-  own verdict rather than trusting pal-loop's self-report, same "fresh eyes" principle as the other
-  three arms. Compare `baseline.json`'s `mapped` marker against a fresh `pal_status` call. Stale
-  (server moved since `mapped`) → `needs-human`: "baseline is stale (server moved since `<mapped>`);
-  re-run pal-init Step 3 to refresh baseline/ before regression can be trusted" — do not proceed to
-  any comparison below against stale state.
+- **Freshness check first, independently of pal-loop's own check** — this arm re-derives its own
+  verdict rather than trusting pal-loop's self-report, same "fresh eyes" principle as the other three
+  arms. Run the baseline-freshness rule (canonical: `../pal-init/SKILL.md` Step 3). Stale → `needs-human`;
+  do not proceed to any comparison below against stale state.
 - Re-derive the `pal_validate`/`pal_test`-vs-baseline comparison independently.
 - `pal_screenshot` before/after diff for every page with `captured: true` in the baseline: capture
   now, compare against `baseline/screenshots/<page>-<viewport>.png` using the same UX-rubric

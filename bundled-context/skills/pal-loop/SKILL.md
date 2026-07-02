@@ -66,14 +66,11 @@ state change, immediately — if the session dies mid-task, the next session mus
    MAY instead dispatch by tier to sized subagents — cheap→Haiku, standard→Sonnet — when the
    harness supports a model parameter. **Delegating to a subagent? Read `references/delegation.md`
    first — it's the required protocol, not optional background.**)
-3. **Human-gate check.** Console workflow *compile* is now verifiable headlessly (`pal_test`
-   runs `TestConsole.do` and returns fresh server validation), so it is NOT a human gate.
-   `pal_preview` itself still never renders a console screen for you — it opens it in the
-   platform console chrome via a browser, for the user, not you. The *render* may still be
-   agent-verifiable via `pal_screenshot` — see step 6 (Verify) below for the captured:true/false
-   handling and the human-gate fallback. Continue with independent tasks while a gate is open.
-   Web renders are agent-visible (`pal_preview` returns the HTML), so web tasks have no human
-   gate.
+3. **Human-gate check.** Console *compile* is verifiable headlessly (`pal_test`), so it is NOT a
+   gate; the console *render* may or may not be agent-visible — see step 6 for the
+   captured:true/false handling and human-gate fallback (canonical rule:
+   `../pal-review/references/console-render-verification.md`). Continue with independent tasks while
+   a gate is open. Web renders are agent-visible, so web tasks have no human gate.
 4. **Mark** the task `in_progress` in EXECUTION.md. Write the file now, not later.
 5. **Execute** exactly as specced, using v2 SPEC.md sections:
    - Copy: **§4** — verbatim, these exact words ship.
@@ -98,15 +95,12 @@ state change, immediately — if the session dies mid-task, the next session mus
    - **Web pages:** `pal_preview` → CHECK the returned server-rendered HTML actually contains the
      exact strings the success condition names (seeing it is the verification); `pal_seo_audit`
      → 0 errors.
-   - **Console screens:** compile is covered by `pal_test` above (do verify it). For the
-     *render*, try `pal_screenshot` (Playwright replays the cp-auth redirect chain when Chromium
-     is installed) — `captured:true` means it's agent-visible after all; judge it against the §12
-     VISUAL criterion and mark `done` on real evidence. `captured:false` (no Chromium, or the
-     auth replay failed/timed out) → do not mark `done` on render; do the buildable part, verify
-     everything else you can (validate, test, data read-back), then set `needs-human` with a
-     Blockers entry prefixed `HUMAN GATE:` naming exactly what to eyeball (open screen X, confirm
-     it renders + the happy path). Verify any data effect indirectly: after a write, run the
-     read-back action the spec names and confirm the row.
+   - **Console screens:** compile is covered by `pal_test` above (do verify it). Verify the
+     *render* per the canonical rule — `../pal-review/references/console-render-verification.md`:
+     `captured:true` → judge against the §12 VISUAL criterion, mark `done` on real evidence;
+     `captured:false` → `needs-human` with a `HUMAN GATE:` Blockers entry naming exactly what to
+     eyeball. Verify any data effect indirectly: after a write, run the read-back action the spec
+     names and confirm the row.
    - `pal_sync_datasets` after pushing a **§8a** dataset definition (never for §8b).
    Note: `pal_preview`/`pal_seo_audit`/`pal_test` all act on the LAST PUSHED version — push before
    verifying your latest edits.
@@ -131,12 +125,9 @@ state change, immediately — if the session dies mid-task, the next session mus
    pauses mid-build — under `end`, this check simply only fires once, at completion. It does NOT
    run after every single task; step 6's per-task verify already catches immediate breakage, and
    re-running the whole baseline that often is wasted tool calls.
-   - **Freshness check first, before any comparison.** Compare `baseline/baseline.json`'s `mapped`
-     marker against a fresh `pal_status` call. If the server has moved since `mapped`, the baseline
-     is STALE — do not diff against it. Set `needs-human`: "baseline is stale (server moved since
-     `<mapped>`); re-run pal-init Step 3 to refresh baseline/ before regression can be trusted," and
-     skip the comparisons below entirely for this cycle. Never produce a pass/fail regression
-     verdict against a stale baseline.
+   - **Freshness check first, before any comparison** — run the baseline-freshness rule (canonical:
+     `../pal-init/SKILL.md` Step 3). Stale (server moved since `mapped`) → set `needs-human`, skip
+     every comparison below for this cycle; never produce a regression verdict against a stale baseline.
    - `pal_validate` → compare the error/warning count against `baseline.json`'s `validate`.
    - `pal_test` on each workflow `baseline.json` lists → same comparison against `validate: pass`.
    - `pal_preview`/`pal_screenshot` on each page with `captured: true` in its baseline entry —
@@ -198,23 +189,13 @@ state change, immediately — if the session dies mid-task, the next session mus
 
 ## When the spec is wrong (amendment path)
 
-The spec is the contract, but reality can contradict it mid-build (a type that won't create, a
-consumed field that doesn't exist, a behavior the platform can't express). You **never** fix this
-by editing SPEC.md yourself. Instead:
-
-1. **Block + propose.** Set the task `blocked` and write an **amendment proposal** in the Blockers
-   section: which SPEC.md § is wrong, the exact build-time fact forcing it (paste the tool output /
-   name the platform limit), and the **minimal** change you propose. Continue with the next
-   independent task.
-2. **Human approves** the proposal (or redirects). No approval → it stays blocked; you do not touch
-   the spec.
-3. **On approval**, the amendment is applied via pal-spec's amendment protocol: the minimal edit,
-   `spec version` bumped, a §14 amendment-log entry, and the affected § **re-gated** (reality_check
-   re-run for that section). The spec is re-approved at the new version.
-4. **Resume.** Re-read the amended § (via the task's `spec ref`) and continue the task against the
-   updated contract.
-
-Invariant: propose → human approve → re-gate → continue. The loop never silently self-amends.
+Reality can contradict the spec mid-build (a type that won't create, a missing consumed field, a
+behavior the platform can't express). You **never** fix this by editing SPEC.md yourself. Instead:
+set the task `blocked`, write an **amendment proposal** in Blockers (which §, the exact build-time
+fact forcing it with tool output pasted, the minimal change proposed), and continue with the next
+independent task. The human approves → pal-spec applies + re-gates → you re-read the amended § and
+resume. Invariant: propose → human approve → re-gate → continue; the loop never silently self-amends.
+Full protocol: **read `../pal-spec/references/amendment-path.md`**.
 
 ## Build complete → hand off to pal-review
 
