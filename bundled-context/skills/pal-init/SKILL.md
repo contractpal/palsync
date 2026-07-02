@@ -41,13 +41,59 @@ trust, plus the "what's dangerous to touch" picture. Do not deep-analyze workflo
 
 ## Step 3 — Capture the regression baseline
 Record what passes RIGHT NOW, before anything changes — this is the before-picture every later
-change is checked against:
+change is checked against. Run the checks, then write the result as a STRUCTURED artifact (not
+just MAP.md prose) so pal-loop's regression gate and pal-review's regression arm can read it
+mechanically:
 - `pal_validate` → current error/warning count (ideally 0; if not, note it — you inherited it).
 - `pal_test` on the primary workflow(s) → current VALIDATED state.
 - Web: `pal_preview`/`pal_fetch` the key pages render; note the H1s/landmarks present.
-- Visual: `pal_screenshot` the key screens (web, or console if capture succeeds) and save the
-  references — the current UI is the thing new work must not visually regress.
-Write these into MAP.md's Regression baseline section.
+- Visual: `pal_screenshot` the key screens (web, or console if capture succeeds). A viewport that
+  times out (e.g. desktop, often an autoplay hero `<video>`) is NOT a baseline failure — record it
+  `eyeball_only`, capture whichever viewport(s) DO succeed, and move on.
+
+### `baseline/` — the structured artifact (workspace root, next to MAP.md; untouched by `pal_pull`)
+```
+baseline/
+  baseline.json
+  screenshots/<page>-<viewport>.png   # one per successfully captured viewport
+```
+`baseline.json` — this exact shape (both downstream gates parse it; do not rename fields):
+```json
+{
+  "mapped": "2026-06-12 17:29:25.0",
+  "validate": { "errors": 0, "warnings": 0 },
+  "test": { "web": { "status": "VALIDATED", "notes": 0 } },
+  "pages": {
+    "home.html": {
+      "h1s": ["Custom Concrete Coatings in Utah."],
+      "viewports": {
+        "mobile":  { "captured": true, "screenshot": "screenshots/home.html-mobile.png" },
+        "desktop": { "captured": false, "reason": "timeout", "eyeball_only": true }
+      }
+    }
+  },
+  "known_issues": [
+    "schemas/home.js ships literal // comments inside JSON-LD (invalid, served live)",
+    "secondary/color-samples/sample-modal.html is a hardcoded stub, not wired to the clicked sample"
+  ]
+}
+```
+Two fields load-bearing for Phase 3 (get them exactly right, don't approximate):
+- **`mapped`** is the pal's `lastModifiedDate` drift marker at the moment of capture — the SAME
+  sql-timestamp string (`"yyyy-MM-dd HH:mm:ss.S"`) `pal_status` reports as the pull marker / server
+  marker, e.g. `"2026-06-12 17:29:25.0"`. NOT a human-readable date — it must be diffable directly
+  against a live `pal_status` call (server marker newer than this → the baseline is stale; that
+  check belongs to the downstream gates, not to this skill, but the field is useless to them if
+  it's not this exact comparable value).
+- **`known_issues`** is the inherited-vs-caused list, and it is NOT an empty array on day one —
+  seed it from whatever Step 2's mining already found broken: dead fragment references, stub/
+  unfinished UI, invalid served markup, orphaned pages, anything you'd otherwise have written under
+  MAP.md's Load-bearing section as a confirmed (not speculative) defect. A genuinely open question
+  about INTENT still goes in MAP.md's Unknowns for the interview — `known_issues` is for confirmed,
+  observed defects only.
+
+MAP.md's Regression baseline section becomes a short pointer to this artifact (template below) —
+the artifact is the source of truth; the prose is a human-skimmable summary of it.
 
 ## Step 4 — Interview, scoped to the change
 Do NOT re-interview the whole product. Ask only what's needed to scope THIS change, using the map
