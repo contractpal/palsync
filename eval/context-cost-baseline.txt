@@ -1,0 +1,74 @@
+=== palsync context-cost snapshot ===
+repo SHA: 2dfae45
+
+FILE                                                          WORDS     CHARS
+----                                                          -----     -----
+bundled-context/CLAUDE.md                                      1419     10555
+bundled-context/skills/design-build/SKILL.md                   1367      8722
+bundled-context/skills/design-system-init/SKILL.md             2633     17334
+bundled-context/skills/pal-init/SKILL.md                       1680     10794
+bundled-context/skills/pal-loop/SKILL.md                       3325     21780
+bundled-context/skills/pal-restraint/SKILL.md                  1756     11096
+bundled-context/skills/pal-review/SKILL.md                     1397      9015
+bundled-context/skills/pal-spec/SKILL.md                       4248     27991
+bundled-context/skills/palbuilder-backend/SKILL.md             2275     16783
+bundled-context/skills/palbuilder-email/SKILL.md                832      6027
+bundled-context/skills/palbuilder-frontend/SKILL.md            2023     14416
+bundled-context/skills/palbuilder-jobs-http/SKILL.md           1427     10885
+bundled-context/skills/palbuilder-websockets/SKILL.md          2044     15524
+bundled-context/skills/seo-core/SKILL.md                       1356     10096
+bundled-context/skills/pal-loop/references/delegation.md        962      6234
+bundled-context/skills/pal-spec/references/palbuilder-types.md     1159      7544
+bundled-context/skills/palbuilder-backend/references/api-reference.md      622      6182
+bundled-context/skills/palbuilder-frontend/references/js-and-patterns.md      308      2772
+bundled-context/skills/palbuilder-frontend/references/tag-reference.md      934      8360
+bundled-context/skills/palbuilder-jobs-http/references/advanced-patterns.md     1027      7887
+bundled-context/skills/palbuilder-websockets/references/worked-example-chat.md      585      4448
+bundled-context/skills/seo-core/references/crawler-files.md      547      4536
+bundled-context/skills/seo-core/references/loading-speed.md      316      2665
+bundled-context/skills/seo-core/references/structured-data.md      334      2378
+----                                                          -----     -----
+FILE TOTAL                                                    34576    244024
+
+=== always-on metadata: skill frontmatter description chars ===
+SKILL                                    DESC CHARS
+-----                                    ----------
+design-build                                   554
+design-system-init                             563
+pal-init                                       762
+pal-loop                                       806
+pal-restraint                                 1006
+pal-review                                     679
+pal-spec                                       926
+palbuilder-backend                             553
+palbuilder-email                               506
+palbuilder-frontend                            527
+palbuilder-jobs-http                           801
+palbuilder-websockets                          864
+seo-core                                       751
+-----                                    ----------
+SKILL DESC TOTAL                              9298
+
+=== always-on metadata: MCP tool description chars (src/mcp/tools.js) ===
+TOOL                                     DESC CHARS
+----                                     ----------
+pal_status                                      91
+pal_validate                                   463
+pal_test                                       380
+pal_preview                                    378
+pal_fetch                                      446
+pal_screenshot                                 608
+pal_seo_audit                                  657
+pal_sync_datasets                              647
+pal_pull                                       162
+pal_merge                                      492
+pal_push                                       352
+pal_lock                                       112
+pal_unlock                                      99
+----                                     ----------
+MCP DESC TOTAL                                4887
+
+=== GRAND TOTALS ===
+file chars (SKILL.md + references + CLAUDE.md) : 244024
+always-on metadata chars (skill desc + MCP desc): 14185
+combined                                         : 258209
