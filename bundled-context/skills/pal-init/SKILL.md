@@ -159,13 +159,10 @@ freshness: regenerate or update if pal_status shows the server moved since `mapp
 - Fonts / colors / spacing / components actually in use: <...>   <!-- observed, not declared -->
 
 ## Regression baseline (before-picture; Step 3)
-- pal_validate: <N errors / warnings> as of <date>
-- pal_test: <workflow> → <VALIDATED / notes>
-- Renders: <page → H1/landmark present>; screenshots saved: <refs>
-- Screenshot caveat: if pal_screenshot times out on a viewport (e.g. desktop, often an autoplay
-  hero <video>), capture the viewport that works and mark the failing one eyeball-only — a
-  capture timeout is a human-eyeball fallback, not a baseline failure.
-- These are what later changes must not regress.
+- See `baseline/baseline.json` — validate/test/H1/screenshot state + known_issues, structured for
+  pal-loop's regression gate and pal-review's regression arm. Last captured: <date> (marker
+  <baseline.json's `mapped`>).
+- Summary: <N errors/warnings>, <workflow> <VALIDATED/notes>, <M pages> captured (<K eyeball-only>).
 
 ## Unknowns (can't tell from code — ask the user)
 - <intent/behavior that isn't inferable> — <why it matters for the change>
