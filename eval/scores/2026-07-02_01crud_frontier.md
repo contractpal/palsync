@@ -1,6 +1,6 @@
 # Score — 01_crud_equipment_checkout · FRONTIER
 
-Run: 2026-07-02 · harness Claude Code · model claude-opus-4-8 · palsync 454ecfe ·
+Run: 2026-07-02 · harness Claude Code · model claude-sonnet-5 (high) · palsync 454ecfe ·
 orch main@454ecfe · palbuilder main@454ecfe · workspace test-01-crud-frontier
 
 Scoring method: `palsync validate` + `palsync test` (authoritative floor) + source review of
@@ -17,8 +17,8 @@ pal renders behind CloudPiston login) — not performed headless; markup verifie
 **Console**
 | # | Check | Criterion | Evidence |
 |---|---|---|---|
-| C1 | [x] | VISUAL: PageHeader `Equipment`, striped table, status badges, no emoji | equipmentList.html: `<h1>Equipment</h1>`, `table table-striped`, `badge bg-success/bg-secondary`, no emoji chars |
-| C2 | [x] | Data effects: each write returns updated list fragment | every write fn sets `frag="equipmentList"`; run() re-calls listEquipment() then ajax-swaps `#body` |
+| C1 | [x] | VISUAL: PageHeader `Equipment`, striped table, status badges, no emoji | markup (h1 Equipment, table-striped, badge bg-success/bg-secondary, no emoji) + HUMAN browser-preview confirmed working |
+| C2 | [x] | Data effects: each write returns updated list fragment | every write fn sets `frag="equipmentList"`; run() re-calls listEquipment() then ajax-swaps `#body`; HUMAN browser-preview confirmed writes reflect in list |
 
 **Happy-path**
 | # | Check | Criterion | Evidence |
@@ -34,6 +34,9 @@ pal renders behind CloudPiston login) — not performed headless; markup verifie
 Violations: 0. Copy cross-checked against §4 — all verbatim, including checkout validation
 `Enter a name to check this item out.` (spec copy, not invented).
 
-Residual: live data-effect + visual render confirmed by code/markup + server validation, not by
-clicking through the rendered console. If a human eyeball pass is required, do it in the browser
-preview `palsync test` opened.
+Live confirmation: human validated the browser preview — visual render and data effects work
+correctly. Full 10/10 confirmed end-to-end (code + server validation + human eyeball).
+
+---
+Cost (mined from transcript): 131 tool calls (22 mcp / 11 read / 98 other) · 6 pal_push ·
+output 134k tokens · input 25.96M (incl 25.1M cache-read) · 26.7 min.
