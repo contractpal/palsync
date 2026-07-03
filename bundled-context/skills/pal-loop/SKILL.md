@@ -40,7 +40,12 @@ change to the file the moment it happens, so a dead session resumes on the truth
 
 ## The task cycle (repeat until done or blocked)
 
-1. **Pick** the first `todo` task whose `depends` are all `done`; none → "Ending a session." Read its
+0. **Edit EXECUTION.md through the CLI, not by hand** — `palsync task list [--ready]`,
+   `palsync task <id> <status>`, `palsync checkpoint "<line>"`. These rewrite exactly the right table
+   row (or refuse and change nothing on a malformed table); hand-editing the markdown is the fallback
+   only when the CLI isn't available. Status changes and checkpoints below use these commands.
+1. **Pick** the first `todo` task whose `depends` are all `done` (`palsync task list --ready` prints
+   it); none → "Ending a session." Read its
    `spec ref` and **re-read those SPEC.md section(s) before building** — the success condition derives
    from the requirement, not from invention.
 2. **Tier check.** Task tier `frontier` and you're not frontier-class (unsure: does it need NEW
@@ -54,7 +59,7 @@ change to the file the moment it happens, so a dead session resumes on the truth
    the console *render* may or may not be — see step 6 and the canonical rule
    `../pal-review/references/console-render-verification.md`. Continue with independent tasks while a
    gate is open. Web renders are agent-visible, so web tasks have no gate.
-4. **Mark** the task `in_progress` in EXECUTION.md — write the file now, not later.
+4. **Mark** the task `in_progress` (`palsync task <id> in_progress`) — write the state now, not later.
 5. **Execute exactly as specced:**
    - Scaffold task (T1): **apply the matching starter** (`web-marketing`/`console-app`) via
      `palsync scaffold` and adapt it — never hand-generate scaffold files from scratch.
@@ -80,7 +85,8 @@ change to the file the moment it happens, so a dead session resumes on the truth
      with a `HUMAN GATE:` Blockers entry). Verify data effects indirectly — after a write, run the spec's read-back action and confirm the row.
    - `pal_sync_datasets` after pushing a **§8a** definition (never §8b).
    - `pal_preview`/`pal_seo_audit`/`pal_test` all act on the LAST PUSHED version — push before verifying.
-7. **On pass:** set `done`; append one checkpoint line (date, task id, tool-output summary);
+7. **On pass:** set `done` (`palsync task <id> done`); append one checkpoint line
+   (`palsync checkpoint "<date>, <task id>, <tool-output summary>"`);
    `git add -A && git commit -m "<task id>: <task name>"`; continue.
 7a. **Review-cadence pause** (SPEC.md `review cadence`, absent = `end`):
    - `end`: no pause — continue to the next task.

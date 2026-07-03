@@ -43,6 +43,9 @@ const USAGE = [
     "  palsync cost   [--dir <workspace>]                           palsync's own context contribution: tool calls + bytes returned + injected-block size (offline)",
     "  palsync regression [--keep-lock] [--dir <ws>]                Brownfield regression vs baseline/baseline.json (freshness -> validate/test/H1; caused vs inherited)",
     "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Mechanical reality-check of a SPEC.md (offline): placeholders, dead links, §8a types, §12 floor",
+    "  palsync task list [--ready] [--dir <ws>]                     List EXECUTION.md tasks; --ready prints the first todo whose depends are all done",
+    "  palsync task <id> <status> [--dir <ws>]                      Set exactly one task's status (todo|in_progress|done|blocked|needs-frontier|needs-human)",
+    "  palsync checkpoint \"<line>\" [--dir <ws>]                     Append a line to EXECUTION.md's Checkpoints section",
     "  palsync sync-datasets [--datasets a,b] [--recreate] [--keep-lock] [--dir <ws>]",
     "                                                               Provision dataset tables from pal.json (safe by default)",
     "",
@@ -116,8 +119,58 @@ async function buildCliContext(dir) {
     }
 }
 
+// `palsync task` / `palsync checkpoint` — OFFLINE EXECUTION.md edits (no login/lock). Their args
+// aren't the shared --force/--workflow set, so they get their own tolerant parsing.
+async function runTaskCommand(cmd, argv) {
+    const ts = require("../core/taskState");
+    let dir = process.cwd(); const pos = []; let ready = false;
+    for (let i = 0; i < argv.length; i++) {
+        const a = argv[i];
+        if (a === "--dir") dir = argv[++i];
+        else if (a.startsWith("--dir=")) dir = a.slice("--dir=".length);
+        else if (a === "--ready") ready = true;
+        else pos.push(a);
+    }
+    const file = path.join(path.resolve(dir), "EXECUTION.md");
+    let text;
+    try { text = ts.readExecution(file); }
+    catch (e) { console.error("Could not read " + file + " — " + (e && e.message ? e.message : e)); return 1; }
+
+    if (cmd === "checkpoint") {
+        const line = pos.join(" ");
+        const r = ts.appendCheckpoint(text, line);
+        if (!r.ok) { console.error("checkpoint failed: " + r.error + " (nothing changed)"); return 1; }
+        ts.writeExecution(file, r.text);
+        console.log("Checkpoint appended:\n  - " + line.replace(/[\r\n]+/g, " ").trim());
+        return 0;
+    }
+    // cmd === "task"
+    if (pos.length === 0 || pos[0] === "list") {
+        const r = ts.listTasks(text, { ready });
+        if (!r.ok) { console.error("task list failed: " + r.error); return 1; }
+        if (ready) {
+            if (!r.next) { console.log("No ready task — every todo is blocked by an unfinished dependency, or none remain."); return 1; }
+            console.log(r.next.id + "\t" + r.next.status + "\t" + r.next.task);
+            return 0;
+        }
+        for (const t of r.tasks) console.log(t.id + "\t" + t.status + "\t" + (t.depends.length ? "depends:" + t.depends.join(",") : "—") + "\t" + t.task);
+        return 0;
+    }
+    if (pos.length >= 2) {
+        const r = ts.setStatus(text, pos[0], pos[1]);
+        if (!r.ok) { console.error("task update failed: " + r.error + " (nothing changed)"); return 1; }
+        if (r.unchanged) { console.log(r.id + " already " + pos[1] + " — no change."); return 0; }
+        ts.writeExecution(file, r.text);
+        console.log(r.id + ": " + r.from + " -> " + r.to);
+        return 0;
+    }
+    console.error("Usage: palsync task list [--ready] | palsync task <id> <status> | palsync checkpoint \"<line>\"");
+    return 1;
+}
+
 // Returns the process exit code (0 ok, 1 refused/failed).
 async function run(cmd, argv) {
+    if (cmd === "task" || cmd === "checkpoint") return runTaskCommand(cmd, argv);
     const flags = parseFlags(argv);
     if (flags.help) { console.log(USAGE); return 0; }
     const dir = path.resolve(flags.dir || process.cwd());
