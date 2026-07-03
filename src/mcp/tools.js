@@ -38,6 +38,23 @@ function refreshBaseline(record, workspaceDir, serverPaths) {
 
 function nowIso() { return new Date().toISOString(); }
 
+// Render-verification tracking (session-lifetime, lives on ctx so it survives across tool calls).
+// ctx.renderVerified: undefined/false = not verified since the last push, true = a clean
+// pal_screenshot/pal_fetch/pal_preview(expect) confirmed it, "unavailable" = the check tool
+// isn't available in this runtime (accepted fallback: ask the user to eyeball it).
+// Exists because pal_validate/pal_test only prove the code COMPILES — agents (esp. weaker
+// models) declare a build "done" straight off that, without ever calling the one tool that can
+// see the actual render. This reminder rides the tool response text itself (read every call),
+// not just a skill doc read once at the start of a long session.
+function renderNotVerifiedReminder(ctx) {
+    if (ctx.renderVerified === true || ctx.renderVerified === "unavailable") return "";
+    return "\n\n⚠ RENDER NOT VERIFIED — this only proves the code compiles, not that it renders." +
+        " Call pal_screenshot (web or console/transaction) — or for a WEB pal, pal_fetch/pal_preview with" +
+        " expect:[strings] — before declaring this done. Do not report page content, saved data, or a" +
+        " completed user flow (\"clicked Save\", \"item appears in the list\") as fact unless one of those" +
+        " tools actually showed it to you.";
+}
+
 // Print the FULL text of every server validation note (group/object: message), not just a count —
 // a count hides content-affecting warnings (e.g. a page with no body tag that won't save).
 function formatValidation(notes) {
@@ -203,7 +220,8 @@ const TOOLS = [
                 : "";
             const message = "Tested " + ctx.record.palName + " (" + res.kind + ").\n" +
                 verdict + "\n" + msgText + formatValidation(res.validation) + "\n" + previewMsg +
-                (res.availableKinds.length > 1 ? "\n(testable engines on this pal: " + res.availableKinds.join(", ") + ")" : "");
+                (res.availableKinds.length > 1 ? "\n(testable engines on this pal: " + res.availableKinds.join(", ") + ")" : "") +
+                (res.validated ? renderNotVerifiedReminder(ctx) : "");
             // Strip the credential URL before returning — defense in depth.
             const safe = Object.assign({}, res); delete safe._previewUrl;
             return Object.assign(safe, { message });
@@ -231,6 +249,7 @@ const TOOLS = [
                 return Object.assign(res, { message: "Cannot preview: " + res.reason + dirtyNote });
             }
             if (res.kind === "web" && res.agentVisible) {
+                ctx.renderVerified = true; // real HTML observed below, one way or another
                 // Token-efficient default: verify expected strings, never return the page body.
                 if (expect && expect.length) {
                     const chk = checkExpect(res.html, expect);
@@ -265,7 +284,10 @@ const TOOLS = [
             const safe = Object.assign({}, res); delete safe._previewUrl;
             return Object.assign(safe, {
                 message: (opened.opened ? "Opened the preview in the user's browser. " : "Could not open a browser automatically (" + opened.reason + "). ") +
-                    res.reason + dirtyNote
+                    res.reason + dirtyNote +
+                    "\n⚠ You did NOT see this render. Do not report what the page shows, whether a save/click/flow" +
+                    " succeeded, or any specific data as observed fact — you have no evidence of it. Use" +
+                    " pal_screenshot to actually see a console/transaction render, or ask the user."
             });
         }
     },
@@ -284,6 +306,7 @@ const TOOLS = [
             if (!res.fetched) {
                 return Object.assign(res, { message: "Could not fetch \"" + path + "\": " + res.reason + (res.validation ? "\n" + formatValidation(res.validation) : "") });
             }
+            ctx.renderVerified = true; // real HTML observed below, one way or another
             // Token-efficient default: verify expected strings, never return the page body.
             if (expect && expect.length) {
                 const chk = checkExpect(res.html, expect);
@@ -323,11 +346,15 @@ const TOOLS = [
             const res = await runScreenshot(ctx.session, ctx.record.palGuid, { page, viewport, fullPage });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             if (!res.captured) {
+                if (res.available === false) ctx.renderVerified = "unavailable"; // accepted fallback: ask the user to eyeball it
                 return Object.assign(res, {
                     message: (res.available === false ? "Screenshot unavailable: " : "Could not screenshot: ") + res.reason +
                         (res.validation ? "\n" + formatValidation(res.validation) : "")
                 });
             }
+            // A clean capture (no renderError) is the only thing that actually proves the UI renders —
+            // a renderError leaves renderVerified false so the reminder keeps firing until it's fixed.
+            if (!res.renderError) ctx.renderVerified = true;
             // Save the PNG to a file the harness can Read, and return MCP image content so a
             // vision-capable model sees the render inline.
             let filePath = null;
@@ -506,6 +533,7 @@ const TOOLS = [
             if (res.pushed) {
                 refreshBaseline(ctx.record, ctx.workspaceDir, res.serverPaths);
                 await ctx.persist();
+                ctx.renderVerified = false; // a push can change what renders — re-verify before declaring done
                 // Surface any pre-push WARNINGS even on success (errors can't reach here unless
                 // skipValidation forced past them — say so loudly).
                 const warnBlock = res.lint && res.lint.warnings > 0
@@ -529,7 +557,7 @@ const TOOLS = [
                             ? "\n\n🚨 WARNING: " + res.strayCreatable.length + " file(s) on disk were NOT pushed — they have no pal.json entry, so the server never receives them:\n" +
                               res.strayCreatable.map(f => "   - " + f).join("\n") +
                               "\nFix: add a matching entry to pal.json (copy an existing entry of the same type, e.g. a Page entry for pages/, a Fragment entry for fragments/, set string+filename to the file name), then push again. Until you do, these files exist only on disk."
-                            : "") + skippedBlock + warnBlock + webBlock
+                            : "") + skippedBlock + warnBlock + webBlock + renderNotVerifiedReminder(ctx)
                 });
             }
             if (res.refused === "drift") {

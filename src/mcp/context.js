@@ -24,7 +24,11 @@ async function buildContext(workspaceDir, { idleMs, log = () => {}, acquireLock 
         record,
         workspaceDir,
         lifecycle,
-        persist: () => palsyncfile.write(workspaceDir, record)
+        persist: () => palsyncfile.write(workspaceDir, record),
+        // Session-lifetime render-verification flag — see renderNotVerifiedReminder in mcp/tools.js.
+        // false until a pal_screenshot (or pal_fetch/pal_preview+expect for web) actually shows a
+        // clean render since the last push; "unavailable" once the check tool is confirmed absent.
+        renderVerified: false
     };
 
     if (acquireLock) {

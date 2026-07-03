@@ -157,7 +157,19 @@ Applies by default to every change.
   what CloudPiston already does cleanly. If the native API is genuinely lacking,
   say so rather than working around it.
 - **Guessing syntax** — inventing tag attributes or API methods instead of
-  looking them up in the skill references or the docs.
+  looking them up in the skill references or the docs. If a validation error
+  says an attribute is missing or invalid, look up that tag's real attribute
+  set before adding anything — don't pattern-match a plausible-looking fix
+  (e.g. adding a `list` attribute to `c:list` because the error mentioned
+  attributes, when `list` is only for delimited-string mode and the DataList
+  case needs `name`+`id` only). A guessed fix that happens to validate can
+  still be semantically wrong and fail silently at render.
+- **Reporting UI content or a user flow you did not observe** — `pal_test` and
+  `pal_preview` (console/transaction) explicitly cannot show you the rendered
+  page; only `pal_screenshot` (or `pal_fetch`/`pal_preview` with `expect:` for
+  web) can. Never narrate "clicked Save, item appeared in the list" or
+  describe specific page content unless one of those tools actually returned
+  it to you. If you haven't seen it, say so and ask the user to check.
 - **Leaving debug output** — `console.log`, `c.debug`, `c.debugData`,
   `c.debugList` in finished code.
 - **Parking scratch files in manifest folders** — spec notes, references, and
@@ -167,6 +179,11 @@ Applies by default to every change.
 
 ## Before you finish a task
 
+- [ ] `pal_screenshot` called after the last push (web or console/transaction) and shows a
+      clean render — no `renderError` — for any change touching a page, fragment, or workflow.
+      For a WEB pal, `pal_fetch`/`pal_preview` with `expect:[strings]` also satisfy this.
+      `pal_validate`/`pal_test` only prove the code COMPILES; they do not prove it renders or
+      that a write action actually persisted. Never declare a build/task done on those alone.
 - [ ] All void tags self-closed; markup is valid XHTML.
 - [ ] No undocumented `c:` attributes (verified against `palbuilder-frontend`).
 - [ ] No `fetch`/ClientPal for server calls.
