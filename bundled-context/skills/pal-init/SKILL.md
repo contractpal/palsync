@@ -7,10 +7,10 @@ description: "Onboard an EXISTING pal before changing it: map it into MAP.md, ca
 
 An existing pal inverts pal-spec's blank slate: everything present is potentially load-bearing, so
 the dominant risk is **breaking what works**, not building wrong. pal-init makes brownfield work
-safe — map, baseline, scope, in that order — then hands the change to the normal pal-spec → pal-loop
-→ pal-review pipeline.
+safe — map, baseline, scope, in order — then hands the change to the normal pal-spec → pal-loop →
+pal-review pipeline.
 
-**Two hard rules that define this skill:**
+**Two hard rules define this skill:**
 - **Map broad and shallow, not deep.** Inventory everything; deep-read only what a change touches —
   reconstructing existing code's full behavior is expensive, lossy, and invites hallucinated intent.
   The map is a shallow index; depth loads just-in-time.
@@ -28,8 +28,8 @@ safe — map, baseline, scope, in that order — then hands the change to the no
 
 ## Step 2 — Mine into MAP.md (the durable artifact)
 Walk the pulled files and produce `MAP.md` (template below). Stay shallow: one line of purpose per
-item, inferred-and-marked. Goal: an index you and every later session can navigate and trust, plus
-the "what's dangerous to touch" picture. Do not deep-analyze workflows you won't change.
+item, inferred-and-marked. Goal: an index later sessions can navigate and trust, plus the "what's
+dangerous to touch" picture. Do not deep-analyze workflows you won't change.
 
 ## Step 3 — Capture the regression baseline
 Record what passes RIGHT NOW, before any change — the before-picture every later change is checked
@@ -71,14 +71,14 @@ baseline/
 ```
 Two fields are load-bearing for Phase 3 — get them exact, don't approximate:
 - **`mapped`** — the pal's `lastModifiedDate` drift marker at capture: the SAME sql-timestamp string
-  (`"yyyy-MM-dd HH:mm:ss.S"`, e.g. `"2026-06-12 17:29:25.0"`) that `pal_status` reports as its
-  pull/server marker, NOT a human-readable date. It must diff directly against a live `pal_status`
-  (server marker newer → baseline stale). Downstream gates run that check, not this skill — but it's
-  useless to them unless it's this exact comparable value.
+  `pal_status` reports as its pull/server marker (`"yyyy-MM-dd HH:mm:ss.S"`, e.g.
+  `"2026-06-12 17:29:25.0"`), NOT a human-readable date. It must diff directly against a live
+  `pal_status` (server marker newer → baseline stale). Downstream gates run that check, not this
+  skill; it's useless to them unless it's this exact comparable value.
 - **`known_issues`** — the inherited-vs-caused list, NOT empty on day one: seed it from what Step 2
-  found broken (dead fragment references, stub/unfinished UI, invalid served markup, orphaned pages,
-  any confirmed—not speculative—defect). An open question about INTENT goes in MAP.md's Unknowns
-  instead; `known_issues` holds confirmed, observed defects only.
+  found broken (dead fragment references, stub/unfinished UI, invalid served markup, orphaned pages —
+  any confirmed, not speculative, defect). Open INTENT questions go to MAP.md's Unknowns instead;
+  `known_issues` holds confirmed, observed defects only.
 
 **Baseline-freshness rule (canonical — pal-loop's regression re-check and pal-review's regression
 arm both enforce this):** before diffing anything against the baseline, compare `baseline.json`'s
@@ -87,7 +87,7 @@ set `needs-human` ("baseline is stale (server moved since `<mapped>`); re-run pa
 refresh baseline/") and do NOT produce any pass/fail regression verdict against it. This skill owns
 the definition; the downstream gates run the check.
 
-MAP.md's Regression baseline section is just a short pointer to this artifact (template below): the
+MAP.md's Regression baseline section is just a pointer to this artifact (template below); the
 artifact is the source of truth, the prose a human-skimmable summary.
 
 ## Step 4 — Interview, scoped to the change
@@ -168,9 +168,8 @@ freshness: regenerate or update if pal_status shows the server moved since `mapp
 - MAP.md is **durable, updatable context** — a reference the whole pipeline reads, NOT rebuilt every
   session. Regenerate/update only when `pal_status` shows the server moved since `mapped`, or when a
   build changes the inventory (new page/dataset → update the relevant map rows in the same session).
-- Later sessions and pal-loop read MAP.md to know what exists and what's dangerous — same
-  progressive-disclosure discipline as skills: the map is the shallow index, files load deep only
-  when a task touches them.
+- Later sessions and pal-loop read MAP.md to know what exists and what's dangerous — same shallow-
+  index, load-deep-on-touch discipline as skills.
 
 ## What this skill does NOT do
 - Does not reconstruct a full spec of the pal — only maps it and scopes the change. The map is a

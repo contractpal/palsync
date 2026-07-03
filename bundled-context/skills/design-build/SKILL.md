@@ -5,7 +5,7 @@ description: "Enforce an established design system while building or reviewing U
 
 # Design Build
 
-Build UI that conforms to the design system, decomposes cleanly, defines its interaction states, and passes review before shipping. First-pass AI output is mediocre; quality comes from architecture up front and self-critique at the end.
+Build UI that conforms to the design system, decomposes cleanly, defines its interaction states, and passes review before shipping. First-pass AI output is mediocre; quality comes from up-front architecture and end self-critique.
 
 ## Step 0 — Load the system
 
@@ -22,19 +22,19 @@ Plan structure first — one giant file is the top driver of AI-looking, unmaint
 
 - Break the target into atomic units mapped to `COMPONENTS.md`: primitives (Button, Input, Card...) → composites (form row, list item, nav) → layout shells. Units map to functions, classes, partials, or components — any stack.
 - Define each unit's interface before implementing: what it receives, its variants, what it renders. Decide where state lives; keep presentational units free of business logic.
-- Reuse before you create — use an existing primitive, don't fork a near-duplicate (divergent one-offs are a slop tell).
+- Reuse before you create — don't fork a near-duplicate (a slop tell).
 - For non-trivial work, state the component breakdown before generating a wall of code, so a wrong structure is caught cheaply.
 
 ## Step 2 — Build to the tokens
 
-- Consume semantic tokens. Never use arbitrary raw values (hex codes, off-scale spacing, one-off font sizes) when a token exists — they're inconsistency and a maintenance problem.
-- If the design needs a value the system lacks, add it as a named token, don't hardcode inline. The system stays the source of truth.
-- Get hierarchy from the system's stated mechanism — often spacing and size before weight, weight before color. Reaching for a new accent color for emphasis usually means the spacing is wrong.
-- Honor the stated density and layout posture. If the system says airy, generous whitespace is the design; if it says break the grid, do so deliberately — uniform evenly-spaced everything reads as templated.
+- Consume semantic tokens; never use arbitrary raw values (hex codes, off-scale spacing, one-off font sizes) when a token exists.
+- If the design needs a value the system lacks, add it as a named token, don't hardcode inline — the system stays the source of truth.
+- Get hierarchy from the system's stated mechanism — often spacing and size before weight, weight before color. A new accent color for emphasis usually means the spacing is wrong.
+- Honor the stated density and layout posture. If the system says airy, generous whitespace is the design; if it says break the grid, do so deliberately — uniform even spacing reads as templated.
 
 ## Step 3 — Define every interaction state
 
-Unstated states are where polish dies and AI output gives itself away. Implement the full applicable set per element, not just resting:
+Unstated states are where AI output gives itself away — implement the full applicable set per element, not just resting:
 
 - **default, hover, focus-visible, active, disabled** — always, for anything clickable or focusable.
 - **loading, error, empty** — wherever data or async work is involved; empty states are routinely skipped and routinely matter.
@@ -45,7 +45,7 @@ Unstated states are where polish dies and AI output gives itself away. Implement
 
 Treat your first output as a junior draft; review it like a demanding senior designer. Fix what fails, then hand off.
 
-**Render first.** Source review catches token violations but misses how it looks — where slop lives. Produce a rendered screenshot before critiquing (see Vision routing). If rendering is genuinely impossible here, say so, run the code-level checks below, and flag that the visual checks were not performed rather than silently passing them.
+**Render first.** Source review catches token violations but misses how it looks — where slop lives. Produce a rendered screenshot before critiquing (see Vision routing). If rendering is genuinely impossible here, say so, run the code-level checks below, and flag that visual checks were skipped rather than silently passing them.
 
 **Against the design system**
 - Does every color, space, size, and radius come from a token? Flag any arbitrary value.

@@ -6,8 +6,8 @@ description: "Independently review a completed pal build against its SPEC.md in 
 # pal-review — fresh-eyes evaluation against the spec
 
 Run in a **fresh session or subagent — never the context that wrote the code.** That session is
-biased toward its own output; bias separation is the whole point. Open cold: read the spec and
-artifacts, judge whether the build meets the contract.
+biased toward its own output; bias separation is the whole point. Open cold, judge whether the
+build meets the contract.
 
 The **eval** layer, distinct from pal-loop's **tests** layer: tests are deterministic (compile /
 validate / contains-string — pal_validate, pal_test, pal_fetch); evals are judgment (correct and
@@ -25,14 +25,13 @@ deterministic tools is not its job.
 
 ### 1. Conformance (text — always runs)
 Check the build against the contract:
-- Every §4 copy string ships **verbatim** in the fetched HTML — grep the real output, not the
-  source you hope shipped.
+- Every §4 copy string **verbatim** in the fetched HTML — grep real output, not source you hope shipped.
 - Every §3 nav link routes to a real page — no dead links.
-- Every §12 acceptance criterion **actually met** — the full set, not just the global floor;
+- Every §12 acceptance criterion **actually met** — full set, not just the global floor;
   same-session verification cheats here, passing the floor while per-feature criteria go unchecked.
 - §11 NEVER list not violated; §8b consumed datasets not altered.
-- Every EXECUTION.md `done` task traces via its `spec ref` column to its SPEC.md §, and that
-  requirement is actually satisfied — so a `done` task with an unmet requirement is caught, not just §12.
+- Every EXECUTION.md `done` task traces via its `spec ref` column to its SPEC.md § and that
+  requirement is satisfied — catching a `done` task with an unmet requirement, not just §12.
 
 Output: per-criterion PASS / FAIL with evidence (string found/missing, tool result, line), citing
 each finding's `spec ref` §.
@@ -42,11 +41,11 @@ Beyond "it compiled":
 - Does each §5 behavior do the **right** thing? `pal_test` confirms a workflow *compiles*, not that
   its logic is correct — read it against the spec's input → validation → effect → output and judge
   the match (compiling-but-wrong is the gap tests can't see).
-- Is the copy on-brand per BRAND_VOICE / DESIGN_SYSTEM intent, not just present?
-- Does the §6 layout match the composition the spec described?
+- Copy on-brand per BRAND_VOICE / DESIGN_SYSTEM intent, not just present?
+- §6 layout matches the composition the spec described?
 
 ### 3. Visual / UX (capability-gated)
-Capture and render mechanics (MCP tool vs `palsync screenshot` CLI, console `captured:true/false`,
+Capture/render mechanics (MCP tool vs `palsync screenshot` CLI, console `captured:true/false`,
 human-eyeball fallback) follow the canonical rule: `references/console-render-verification.md`.
 - **Can capture AND have a vision-capable model:** judge each screen against DESIGN_SYSTEM.md and a
   short UX rubric — visual hierarchy, spacing rhythm, legibility, responsive behavior if testable,
@@ -59,9 +58,9 @@ human-eyeball fallback) follow the canonical rule: `references/console-render-ve
 No `baseline/` (greenfield, or a brownfield pal pal-init never mapped): skip this arm entirely.
 Present: confirm SPEC.md's §12 REGRESSION criterion is met for every page/workflow
 `baseline/baseline.json` covers.
-- **Freshness check first, independently of pal-loop's own check** — re-derive the verdict rather
-  than trust its self-report (same "fresh eyes" principle) via the baseline-freshness rule (canonical:
-  `../pal-init/SKILL.md` Step 3). Stale → `needs-human`; do not compare against stale state.
+- **Freshness check first, independent of pal-loop's own** — re-derive the verdict, don't trust its
+  self-report; run the baseline-freshness rule (canonical: `../pal-init/SKILL.md` Step 3).
+  Stale → `needs-human`; do not compare against stale state.
 - Re-derive the `pal_validate` / `pal_test`-vs-baseline comparison independently.
 - `pal_screenshot` before/after diff for every `captured: true` baseline page: capture now, compare
   against `baseline/screenshots/<page>-<viewport>.png` using arm 3's UX rubric — asking "did anything
@@ -102,8 +101,7 @@ Rules:
 ## How it fits the loop
 pal-loop runs the **tests** as it builds, then at completion hands off to pal-review in a **fresh
 context** (new session or subagent) with the inputs above. pal-review returns the verdict; pal-loop
-turns CHANGES-NEEDED items into fix tasks and re-reviews until PASS. Writer and reviewer are never
-the same context.
+turns CHANGES-NEEDED items into fix tasks and re-reviews until PASS.
 
 ## What this skill does NOT do
 - Does not compile or validate — that's pal-loop's verify step; this consumes those results.
