@@ -31,8 +31,26 @@ file on disk is a passthrough copy, not the source of truth.
 - **`"freeform": true` is required.** Without it the provisioned table has no per-field columns, so
   `SELECT <fieldName>` throws `Unknown column` at runtime even though the definition saved and the
   workflow compiled. The server defaults it to `false`, so an omitted `freeform` is silently broken.
-  (palsync's dataset-sync step defaults it to true for you, but set it explicitly.)
+  (palsync's dataset-sync step defaults it to true for you, but set it explicitly.) The `"Primary key"`
+  field is the platform row id (internally `CP_ID`); with `freeform:true` you still read/query it by
+  its own `fieldName` (e.g. `equipmentId`).
 - `string` and `Dataset.name` are both the dataset name (camelCase, plural).
+
+### Per-field attributes
+
+Every entry in `DatasetField[]` needs `fieldName` + `fieldType`; the rest are optional:
+
+| attribute | meaning |
+|---|---|
+| `fieldSize` | max length — **String/Char only** (character length); precision/scale for `Decimal`. Other types have a fixed width — omit it. |
+| `notNull` | the value must not be null |
+| `notEmpty` | a string value must not be empty — the closest thing to a minimum. **There is no min-length attribute**; enforce a longer minimum in the workflow. |
+| `indexed` | index the column — set `true` on any column you filter or sort by |
+| `defaultValue` | server default applied when an inserted row omits the column (e.g. `"available"` for a status) |
+| `description` | free-text note; cosmetic |
+
+Numeric range is chosen by the TYPE, not an attribute — pick `Tiny/Small/Medium integer`, `Number`,
+`Big Number` (or the unsigned variants) for the range you need. There is no max-value attribute.
 - Every dataset gets ONE `"Primary key"` field named `<name>Id`. Flag an indexed column `"indexed": true`.
 - `fieldType` uses EXACT strings — the integer type is `"Number"`, NOT `"Integer"`/`"int"`.
   Valid: `"Primary key"`, `"String"` (+`fieldSize`), `"Char"`, `"Text"`, `"Boolean"`, `"Number"`,
