@@ -137,8 +137,14 @@ palsync merge    --dir ~/pals/isr            # 3-way merge local + server change
 palsync push     --dir ~/pals/isr            # validates first; refuses on new errors
 palsync test     --dir ~/pals/isr
 palsync preview  --dir ~/pals/isr
+palsync fetch about.html --expect "About us" --dir ~/pals/isr   # verify a page WITHOUT dumping HTML
 palsync seo-audit --dir ~/pals/isr
 palsync sync-datasets --dir ~/pals/isr
+palsync regression --dir ~/pals/isr          # brownfield: check against baseline/baseline.json
+palsync spec-lint SPEC.md --dir ~/pals/isr   # offline mechanical reality-check of a spec
+palsync task list --ready --dir ~/pals/isr   # next runnable EXECUTION.md task (deps satisfied)
+palsync task T3 done --dir ~/pals/isr        # set exactly one task's status
+palsync checkpoint "T3 done: preview OK" --dir ~/pals/isr
 ```
 
 These exit non-zero on failure/refusal, so an orchestrator can branch on the exit code.
