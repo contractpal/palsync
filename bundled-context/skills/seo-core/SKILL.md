@@ -1,6 +1,6 @@
 ---
 name: palbuilder-seo
-description: "On-page SEO rules for PalBuilder WEB pals — every marketing/public page must follow these from the FIRST push, not as a retrofit. Use this skill ALONGSIDE palbuilder-frontend whenever creating or editing a web pal page (<head>, headings, images, structured data, robots.txt, sitemap.xml). Covers the page-head recipe (title/description/canonical/OG/twitter), loading-speed head optimizations (font swap, LCP hero image, lazy below-fold), page-specific JSON-LD, robots.txt + sitemap.xml + llms.txt setup, the PalBuilder-specific traps (relative og: URLs, non-ASCII attributes, c:a is not crawlable), heading discipline, and the verify loop with pal_seo_audit. Console pals are behind login and are NOT crawled — this skill applies to WEB pals only."
+description: "On-page SEO for PalBuilder WEB pals, from the FIRST push and alongside palbuilder-frontend: page-head recipe, loading-speed, JSON-LD, robots.txt/sitemap.xml/llms.txt, PalBuilder traps (relative og: URLs, non-ASCII attributes, c:a not crawlable), verify with pal_seo_audit. WEB pals only — console pals aren't crawled. Trigger when editing a web page's head, headings, images, or structured data."
 ---
 
 # PalBuilder SEO Skill (web pals)

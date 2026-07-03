@@ -1,6 +1,6 @@
 ---
 name: palbuilder-jobs-http
-description: Use this skill whenever a Palbuilder (CloudPiston) pal needs work that outlives one request — background Jobs, server-side HTTP (crawling, probing URLs, calling external APIs), JSON parsing without object literals, DOM-less HTML scanning, file-download responses, or a browser progress UI that polls a long-running job. Trigger when writing a workflowType 11 console-system job, calling pal.getJobManager().createJob, c.createServiceRequest, c.createJsonParser, c.createBuffer, c.createDownloadResponse, the Monitor time-budget loop, or a self-polling progress fragment. Companion to palbuilder-backend; all its ES3-style workflow rules (no object literals, no let/const, no arrow functions) still apply here. Examples are verbatim from a real production pal (AuditHelm's in-PalBuilder SEO crawler).
+description: "Work that outlives one request in a PalBuilder (CloudPiston) pal — background Jobs, server-side HTTP, JSON parsing without object literals, file-download responses, job-polling progress UI. Companion to palbuilder-backend; its ES3-style rules still apply. Trigger on workflowType 11 jobs, pal.getJobManager().createJob, c.createServiceRequest, c.createJsonParser, c.createBuffer, c.createDownloadResponse, the Monitor loop, or a self-polling progress fragment."
 ---
 
 # Background Jobs, HTTP & Long-Running Work — Palbuilder Skill

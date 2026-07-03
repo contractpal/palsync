@@ -1,6 +1,6 @@
 ---
 name: palbuilder-email
-description: Use this skill whenever a Palbuilder (CloudPiston) pal needs to send email from workflow code — OTP/login codes, notifications, reminders, transactional mail. Covers the Email/TextEmail API (c.createEmail, template variable substitution, sendToAddress), the emails/ file + pal.json entry shape, and a confirmed platform restriction that blocks sending from a Web pal without Enterprise SMTP. Trigger when writing any workflow that calls c.createEmail, sendToAddress, or creates/edits files under emails/.
+description: "Sending email from a PalBuilder (CloudPiston) pal — OTP/login codes, notifications, reminders, transactional mail: the Email/TextEmail API (c.createEmail, template substitution, sendToAddress), the emails/ file + pal.json shape, and the Web-pal SMTP restriction. Trigger when calling c.createEmail or sendToAddress, or creating/editing files under emails/."
 ---
 
 # Email Sending — Palbuilder Skill

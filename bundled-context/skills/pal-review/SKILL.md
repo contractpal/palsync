@@ -1,14 +1,6 @@
 ---
 name: pal-review
-description: >
-  Independently review a completed (or partial) pal build against its SPEC.md — in a FRESH
-  context, not the session that built it. Use this when the user says "review the build",
-  "check it against the spec", "QA this pal", or when pal-loop reaches build completion. Judges
-  spec-conformance and quality (the eval layer), not compilation (that is pal-loop's verify/
-  tests layer, which this skill consumes rather than repeats). If a screenshot capability and a
-  vision-capable model are available, it also reviews the visual render; if not, it routes visual
-  checks to the human eyeball gate. Produces a verdict file and a list of fix tasks — it never
-  edits code or the spec itself.
+description: "Independently review a completed pal build against its SPEC.md in a FRESH context, never the session that built it: conformance, quality, visual render (or a human eyeball gate if no vision), and regression. Produces a verdict + fix tasks; never edits code or spec. Triggers: 'review the build', 'check it against the spec', 'QA this pal', or pal-loop build completion."
 ---
 
 # pal-review — fresh-eyes evaluation against the spec

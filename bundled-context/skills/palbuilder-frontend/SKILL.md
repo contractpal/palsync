@@ -1,6 +1,6 @@
 ---
 name: palbuilder-frontend
-description: "Use this skill whenever writing front-end code for a Palbuilder (CloudPiston) pal. Covers the page-shell vs fragment distinction, c: tag usage and valid attributes (c:a, c:resource, c:field, c:list, c:fragment, c:debug, and more), fragment architecture and folder organization, XHTML rules, modal patterns, and JavaScript conventions. Trigger when writing pages, HTML fragments, modals, navigation, or any Palbuilder-specific markup. Examples are taken from real production pals; visual styling is deferred to the design skill."
+description: "Front-end code for a PalBuilder (CloudPiston) pal: page-shell vs fragment, c: tag usage and valid attributes (c:a, c:resource, c:field, c:list, c:fragment, c:debug, and more), fragment architecture, XHTML rules, modal patterns, JS conventions. Trigger when writing pages, HTML fragments, modals, navigation, or any PalBuilder markup; visual styling defers to the design skill."
 ---
 
 # Front-End Palbuilder Coding Skill

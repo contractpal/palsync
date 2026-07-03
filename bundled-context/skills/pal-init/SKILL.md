@@ -1,14 +1,6 @@
 ---
 name: pal-init
-description: >
-  Onboard palsync into an EXISTING pal before doing any work in it. Mines the pulled codebase into
-  a durable MAP.md (what exists, the conventions, the load-bearing files, the datasets as they are,
-  the current design), captures a regression baseline (what passes right now), then interviews the
-  user SCOPED TO THE CHANGE and hands off to pal-spec to produce a change-scoped SPEC.md +
-  EXECUTION.md. Use this when the user says "work on an existing pal", "add X to <existing pal>",
-  "fix/change something in <pal>", "onboard this pal", or when a pulled workspace has no MAP.md.
-  It does NOT reconstruct a full spec of the whole pal, and it does not build — pal-spec specs the
-  change, pal-loop builds it. For brand-new pals from scratch, use pal-spec directly instead.
+description: "Onboard an EXISTING pal before changing it: map it into MAP.md, capture a regression baseline, interview scoped to the change, then hand off to pal-spec. Does not build or re-spec the whole pal. Triggers: 'work on an existing pal', 'add X to <pal>', 'fix/change something in <pal>', 'onboard this pal', or a pulled workspace with no MAP.md."
 ---
 
 # pal-init — map an existing pal, then scope the change

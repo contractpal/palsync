@@ -1,6 +1,6 @@
 ---
 name: palbuilder-websockets
-description: Use this skill whenever a Palbuilder (CloudPiston) pal needs a live, server-push connection to the browser — real-time updates, chat/notifications, streaming progress, or any case where the server must send data to the page without the page asking. Covers the full round-trip: the browser native WebSocket client (a Script, not a workflow), the page wiring, pal.getClientSocketManager().createClientSocket to mint an endpoint, the receiver workflow that runs per inbound message, and pushing to a live socket from any later background job by its socketId. Trigger when calling getClientSocketManager, createClientSocket, getClientSocket, getSockets, socket.sendMessage/getEndpoint, payload.addJavascript to connect a socket, or writing a workflowType-11 message receiver. Companion to palbuilder-jobs-http. Examples are verbatim from the WebSocket reference pal.
+description: "Live server-push connections in a PalBuilder (CloudPiston) pal — real-time updates, chat/notifications, streaming progress. Companion to palbuilder-jobs-http. Trigger on getClientSocketManager, createClientSocket, getClientSocket, getSockets, socket.sendMessage/getEndpoint, payload.addJavascript to connect a socket, or a workflowType-11 receiver."
 ---
 
 # WebSockets — Palbuilder Skill

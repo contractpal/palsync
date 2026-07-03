@@ -1,6 +1,6 @@
 ---
 name: design-build
-description: Enforce an established design system while building UI, and self-critique the result before calling it done. Use this whenever building, editing, or reviewing any interface — components, pages, screens, layouts — in a project that has a DESIGN_SYSTEM.md (or any agreed visual direction). Trigger it for "build this screen," "make this component," "implement the design," "review this UI," or any frontend construction, even when the user doesn't name the design system. It pairs with design-system-init, which produces the system this skill enforces.
+description: "Enforce an established design system while building or reviewing UI, and self-critique the result before calling it done — for any frontend construction in a project with a DESIGN_SYSTEM.md. Pairs with design-system-init. Triggers: 'build this screen', 'make this component', 'implement the design', 'review this UI', or any interface work."
 ---
 
 # Design Build

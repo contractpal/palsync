@@ -1,6 +1,6 @@
 ---
 name: pal-restraint
-description: "Default coding discipline for ALL PalBuilder work — write the least code that fully solves the task, surface assumptions instead of guessing, and touch only what the task needs. Apply this BY DEFAULT whenever writing, editing, or reviewing pal code (pages, fragments, workflows, styles); the user shouldn't have to ask, and pal-loop invokes it on every task in the cycle, not just on request. Also triggers on 'simplify this', 'this is over-engineered', 'do it the lazy way', 'less code', 'de-slop the logic', 'is this the right approach', 'what should I do here'. It governs HOW MUCH code exists, what gets touched, and when to ask instead of guess; it does not relax correctness — PalBuilder's golden rules and the palbuilder-* skills always win a conflict, and it never cuts validation, security, accessibility, or the pal-loop verification gates. Adapted from ponytail (MIT, github.com/DietrichGebert/ponytail) and Andrej Karpathy's LLM-coding-pitfalls guidance, remapped to the PalBuilder dialect."
+description: "Default coding discipline for ALL PalBuilder work: least code that solves the task, surface assumptions not guesses, touch only what's needed. Never cuts correctness, validation, security, or accessibility; pal-loop runs it every task. Triggers: 'simplify this', 'this is over-engineered', 'do it the lazy way', 'less code', 'de-slop the logic', 'is this the right approach', 'what should I do here'."
 ---
 
 # pal-restraint — the least code that works, in PalBuilder's dialect

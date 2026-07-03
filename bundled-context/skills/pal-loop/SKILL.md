@@ -1,6 +1,6 @@
 ---
 name: pal-loop
-description: "Execute a pal build autonomously from SPEC.md + EXECUTION.md (produced by the pal-spec skill): one task at a time, verify with palsync tools, checkpoint to disk, escalate when blocked. Use this skill when the user says 'run the loop', 'build the spec', 'continue the build', 'resume the build', or when a workspace contains an EXECUTION.md with unfinished tasks. Honors the spec's mode (full|lite), the §13 reality-check gate, the §9 required-skills manifest, and `review cadence` (each-task | every-N | end) for when it pauses for human review mid-build. At build completion it hands off to the pal-review skill in a fresh context for an independent verdict, loops fix tasks back through this same task cycle, and repeats until PASS. State lives in files, not in your context — any session can resume."
+description: "Execute an approved SPEC.md + EXECUTION.md build autonomously — one task at a time, verify with palsync tools, checkpoint to disk, hand off to pal-review, loop fix tasks until PASS. State on disk, so any session resumes. Triggers: 'run the loop', 'build the spec', 'continue the build', 'resume the build', or a workspace with unfinished EXECUTION.md tasks."
 ---
 
 # pal-loop — execute SPEC.md task by task

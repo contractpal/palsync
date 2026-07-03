@@ -1,6 +1,6 @@
 ---
 name: pal-spec
-description: "Interview the user and produce SPEC.md + EXECUTION.md, the two files that drive an autonomous pal build. Trigger phrases: 'spec out', 'plan this pal', 'interview me', 'create a spec', or starting a new pal from a description. Modes: FULL (production) and LITE (prototype/MVP). Not for bug fixes (use pal-fix) or visual design (design-system-init)."
+description: "Interview the user and produce SPEC.md + EXECUTION.md, the two files that drive an autonomous pal build. Modes: FULL (production), LITE (prototype/MVP). Triggers: 'spec out', 'plan this pal', 'interview me', 'create a spec', or starting a new pal from a description. Not for bug fixes (pal-fix) or visual design (design-system-init)."
 ---
 
 # pal-spec — interview → SPEC.md + EXECUTION.md

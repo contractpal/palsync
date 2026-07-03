@@ -1,6 +1,6 @@
 ---
 name: palbuilder-backend
-description: Use this skill whenever writing back-end workflow code for a Palbuilder (CloudPiston) pal. Covers the run() function pattern, reserved global variable names, the three-layer architecture (presentation/service/data), the DataSet/DataView/DataList APIs (reading, shaping, joining, writing), naming conventions, error/validation patterns, and ConsoleController usage. Trigger when writing workflow .js files, action handlers, payload setup, AJAX responses, dataset queries, or any server-side Palbuilder logic. Examples are taken from real production pals.
+description: "Back-end workflow code for a PalBuilder (CloudPiston) pal: the run() pattern, reserved globals, three-layer architecture (presentation/service/data), DataSet/DataView/DataList APIs (read/shape/join/write), naming, error/validation patterns, ConsoleController. Trigger when writing workflow .js files, action handlers, payload setup, AJAX responses, dataset queries, or any server-side logic."
 ---
 
 # Back-End Palbuilder Workflow Coding Skill

@@ -1,6 +1,6 @@
 ---
 name: design-system-init
-description: Establish a project's design system before any UI is built. Use this at the start of a new project, a redesign, or whenever the user wants to define a visual direction, "set up a design system," capture the look of reference sites/apps they like, or produce a DESIGN_SYSTEM.md. Trigger this whenever the user mentions design references, "make it look like X," brand direction, or "what aesthetic should we use" — even if they don't say the words "design system." This is the setup phase; the companion design-build skill enforces the result during construction.
+description: "Establish a project's design system before any UI is built, from a short interview plus 2-3 references the user likes: produces DESIGN_SYSTEM.md + COMPONENTS.md, enforced later by design-build. Triggers: 'set up a design system', design references, 'make it look like X', brand direction, 'what aesthetic should we use', or a redesign."
 ---
 
 # Design System Init
