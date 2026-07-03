@@ -41,6 +41,7 @@ const USAGE = [
     "  palsync seo-audit [--keep-lock] [--dir <ws>]             On-page SEO audit of a WEB pal's rendered page",
     "  palsync scaffold  [--template <name>] [--list] [--dir <ws>]  Apply a starter template (offline; --list shows them)",
     "  palsync cost   [--dir <workspace>]                           palsync's own context contribution: tool calls + bytes returned + injected-block size (offline)",
+    "  palsync regression [--keep-lock] [--dir <ws>]                Brownfield regression vs baseline/baseline.json (freshness -> validate/test/H1; caused vs inherited)",
     "  palsync sync-datasets [--datasets a,b] [--recreate] [--keep-lock] [--dir <ws>]",
     "                                                               Provision dataset tables from pal.json (safe by default)",
     "",
@@ -240,6 +241,17 @@ async function run(cmd, argv) {
             try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
         }
         return res.captured ? 0 : 1;
+    }
+
+    if (cmd === "regression") {
+        const res = await toolByName("pal_regression").run(ctx, {});
+        console.log(res.message);
+        if (!flags.keepLock && ctx.session.lockInfo) {
+            try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
+        }
+        // Exit non-zero on a stale baseline or any CAUSED failure; inherited/needs-human don't fail the run.
+        if (res.stale || (res.ran && res.caused && res.caused.length)) return 1;
+        return 0;
     }
 
     if (cmd === "seo-audit") {

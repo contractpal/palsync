@@ -92,15 +92,12 @@ change to the file the moment it happens, so a dead session resumes on the truth
 7b. **Brownfield regression re-check** — gated on `baseline/` existing (absent → skip). Runs at each
    7a pause **and unconditionally at the build-completion handoff** (under `end`, only there). NOT
    per-task — step 6 already catches immediate breakage, and re-running the whole baseline that often wastes tool calls.
-   - **Freshness first** — run the baseline-freshness rule (canonical: `../pal-init/SKILL.md` Step 3);
-     stale → `needs-human`, skip every comparison this cycle; never verdict against a stale baseline.
-   - `pal_validate` vs `baseline.json`'s `validate`; `pal_test` on each listed workflow vs `validate: pass`.
-   - `pal_preview`/`pal_screenshot` on each `captured: true` page — confirm it still renders and the
-     recorded `h1s` are present (same string check as step 6). Whether the LOOK shifted is pal-review's regression arm; this only confirms it renders and content didn't disappear.
-   - **Viewport fallback:** an `eyeball_only: true` viewport stays `needs-human` (never a silent pass);
-     a was-`captured:true`-now-timing-out viewport is a `needs-human` note, not a block (may be transient).
-   - **Inherited vs caused:** cross-reference every failure against `known_issues` first — a listed one is noted, not blocking.
-   - **Cadence-bisect a caused failure.** This check runs at pauses, not per-task, so a regression can
+   - **Run `pal_regression`** and act on its structured result — it does the whole mechanical check:
+     the freshness gate (stale → returns `{stale}` and refuses to compare; set `needs-human` and re-run
+     pal-init Step 3), validate/`pal_test`/page-`h1s` vs `baseline.json`, `eyeball_only` viewports →
+     `needs_human`, and the inherited (`known_issues`) vs caused split. `caused` empty → pass; a
+     `caused` list → those are new breakage to act on (below); `inherited`/`needs_human` never block.
+   - **Cadence-bisect a `caused` failure.** This check runs at pauses, not per-task, so a regression can
      ride through several committed tasks before it's caught. Don't block the current task — find the culprit:
      1. Start at the last commit where this check passed (last known-clean).
      2. Walk the per-task commits forward, re-running the SAME failing check against each commit's file

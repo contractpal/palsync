@@ -59,10 +59,10 @@ human-eyeball fallback) follow the canonical rule: `references/console-render-ve
 No `baseline/` (greenfield, or a brownfield pal pal-init never mapped): skip this arm entirely.
 Present: confirm SPEC.md's §12 REGRESSION criterion is met for every page/workflow
 `baseline/baseline.json` covers.
-- **Freshness check first, independent of pal-loop's own** — re-derive the verdict, don't trust its
-  self-report; run the baseline-freshness rule (canonical: `../pal-init/SKILL.md` Step 3).
-  Stale → `needs-human`; do not compare against stale state.
-- Re-derive the `pal_validate` / `pal_test`-vs-baseline comparison independently.
+- **Run `pal_regression` yourself — a FRESH run, not pal-loop's self-report** (fresh eyes = fresh
+  run). It does the mechanical half: freshness gate (stale → `needs-human`, no comparison),
+  validate/`pal_test`/page-`h1s` vs baseline, `eyeball_only` → `needs_human`, and the caused-vs-
+  `known_issues` split. Act on its `caused` list; then add the judgment half below, which it can't do.
 - `pal_screenshot` before/after diff for every `captured: true` baseline page: capture now, compare
   against `baseline/screenshots/<page>-<viewport>.png` using arm 3's UX rubric — asking "did anything
   UNTOUCHED shift," not "is it pretty." An untouched page shifting is a finding, same severity as a §12 miss.

@@ -10,6 +10,7 @@ const { runPreview, fetchPagePath, checkExpect, extractSelector } = require("../
 const { runScreenshot } = require("../core/screenshot");
 const { mergeWorkspace, formatMerge } = require("../core/merge");
 const { runSeoAudit, formatSeoAudit } = require("../core/seoAudit");
+const { runRegression } = require("../core/regression");
 const { syncDatasets } = require("../core/datasets");
 const { validateWorkspace, formatValidation: formatLint } = require("../core/validate");
 const { openUrl } = require("../platform/openUrl");
@@ -370,6 +371,16 @@ const TOOLS = [
                 ? "\n⚠ You have un-pushed local changes (" + (res.dirtyFiles || []).join(", ") + "). This audit reflects the LAST PUSHED version — pal_push, then audit again to check your latest edits."
                 : "";
             return Object.assign(res, { message: formatSeoAudit(res) + dirtyNote });
+        }
+    },
+    {
+        name: "pal_regression",
+        description: "Brownfield regression check against baseline/baseline.json (pal-init Step 3). FIRST compares the baseline's mapped marker to the live server — moved => STALE, stops (never verdicts against a stale baseline). Then re-runs validate / pal_test / page-H1 checks vs the baseline, separating CAUSED failures from INHERITED (known_issues) ones; eyeball_only viewports are needs-human, never auto-passed.",
+        inputShape: {},
+        async run(ctx) {
+            const res = await runRegression(ctx.session, ctx.record, ctx.workspaceDir);
+            if (ctx.lifecycle) ctx.lifecycle.onActivity(); // runs pal_test — takes the lock, re-arm idle
+            return Object.assign(res, { message: res.summary });
         }
     },
     {
