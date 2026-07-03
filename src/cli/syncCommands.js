@@ -42,6 +42,7 @@ const USAGE = [
     "  palsync scaffold  [--template <name>] [--list] [--dir <ws>]  Apply a starter template (offline; --list shows them)",
     "  palsync cost   [--dir <workspace>]                           palsync's own context contribution: tool calls + bytes returned + injected-block size (offline)",
     "  palsync regression [--keep-lock] [--dir <ws>]                Brownfield regression vs baseline/baseline.json (freshness -> validate/test/H1; caused vs inherited)",
+    "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Mechanical reality-check of a SPEC.md (offline): placeholders, dead links, §8a types, §12 floor",
     "  palsync sync-datasets [--datasets a,b] [--recreate] [--keep-lock] [--dir <ws>]",
     "                                                               Provision dataset tables from pal.json (safe by default)",
     "",
@@ -152,6 +153,19 @@ async function run(cmd, argv) {
         console.log("palsync scaffold — " + dir + "\n");
         console.log(formatScaffoldReport(report));
         return 0;
+    }
+
+    // spec-lint is OFFLINE: reads a SPEC.md (+ optional sibling MAP.md), no login/lock.
+    if (cmd === "spec-lint") {
+        const { lintSpec, formatSpecLint } = require("../core/specLint");
+        const specPath = path.resolve(flags._positional || path.join(dir, "SPEC.md"));
+        let text;
+        try { text = require("fs").readFileSync(specPath, "utf8"); }
+        catch (e) { console.error("Could not read " + specPath + " — " + (e && e.message ? e.message : e)); return 1; }
+        const res = lintSpec(text, { workspaceDir: path.dirname(specPath) });
+        console.log("palsync spec-lint — " + specPath + "\n");
+        console.log(formatSpecLint(res));
+        return res.counts.HARD_FLAG > 0 ? 1 : 0;
     }
 
     const ctx = await buildCliContext(dir);

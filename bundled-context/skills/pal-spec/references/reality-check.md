@@ -1,7 +1,17 @@
 # REALITY CHECK — validate the spec before approving it
 
+**Run `pal_spec_lint <SPEC.md>` FIRST.** It automates the mechanical + platform-realism checks
+deterministically: placeholders (TBD/decide-later), dead §3 links, §8a primary-key/type/size/
+indexability against `palbuilder-types.md`, §5 dataset references, and the §12 floor (plus the
+REGRESSION criterion when a MAP.md sits beside the spec). It returns HARD_FLAG / FLAG / NOTE
+findings — clear every HARD_FLAG before approving. The items below that the linter CANNOT judge
+remain yours to do by hand: **capability→primitive mapping (Platform realism #5), component
+existence in COMPONENTS.md (Consistency #5), consumed-field verification against the live dataset
+(Consistency #4), and scope honesty (Scope realism).** The rest of this file is the reference the
+linter encodes; use it to understand a finding or to check what the tool doesn't.
+
 Runs once per spec, after both SPEC.md and EXECUTION.md exist. Re-read them **as if you didn't
-write them** — no tool validates a markdown spec, so this is a structured review pass. Parts are
+write them** — no tool validates a markdown spec's judgment, so this is a structured review pass. Parts are
 file-checkable (read COMPONENTS.md / DESIGN_SYSTEM.md); platform checks run against what the
 palbuilder-* skills attest. Strongest form: a **separate session** reviewing with fresh context;
 minimum, a deliberate second pass here. Write the results into **§13 Reality check** as PASS lines

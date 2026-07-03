@@ -11,6 +11,7 @@ const { runScreenshot } = require("../core/screenshot");
 const { mergeWorkspace, formatMerge } = require("../core/merge");
 const { runSeoAudit, formatSeoAudit } = require("../core/seoAudit");
 const { runRegression } = require("../core/regression");
+const { lintSpec, formatSpecLint } = require("../core/specLint");
 const { syncDatasets } = require("../core/datasets");
 const { validateWorkspace, formatValidation: formatLint } = require("../core/validate");
 const { openUrl } = require("../platform/openUrl");
@@ -371,6 +372,21 @@ const TOOLS = [
                 ? "\n⚠ You have un-pushed local changes (" + (res.dirtyFiles || []).join(", ") + "). This audit reflects the LAST PUSHED version — pal_push, then audit again to check your latest edits."
                 : "";
             return Object.assign(res, { message: formatSeoAudit(res) + dirtyNote });
+        }
+    },
+    {
+        name: "pal_spec_lint",
+        description: "Lint a SPEC.md OFFLINE for the MECHANICAL half of pal-spec's reality check: placeholders (TBD/decide-later), dead §3 links, §8a primary-key/type/size/indexability against palbuilder-types.md, §5 dataset references, and the §12 floor (plus the REGRESSION criterion when a MAP.md sits beside it). Returns HARD_FLAG/FLAG/NOTE findings; capability->primitive mapping and component checks stay manual.",
+        needsCtx: false,
+        inputShape: { spec: z.string().optional().describe("Path to the SPEC.md (default: SPEC.md in the workspace).") },
+        async run(ctx, { spec } = {}) {
+            const specPath = spec ? pathMod.resolve(spec) : pathMod.join(ctx.workspaceDir, "SPEC.md");
+            let text;
+            try { text = fs.readFileSync(specPath, "utf8"); }
+            catch (e) { return { ran: false, message: "Could not read " + specPath + ": " + (e && e.message ? e.message : e) }; }
+            const res = lintSpec(text, { workspaceDir: pathMod.dirname(specPath) });
+            if (ctx.lifecycle) ctx.lifecycle.onActivity();
+            return Object.assign({ ran: true }, res, { message: formatSpecLint(res) });
         }
     },
     {
