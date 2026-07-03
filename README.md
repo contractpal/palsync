@@ -173,7 +173,7 @@ ride along every session — reach for them on any UI work.
 
 ## Spec-to-ship workflow (autonomous builds)
 
-Two always-injected skills turn a description into a built pal:
+Always-injected skills turn a description into a built pal:
 
 1. **`pal-spec`** interviews you (10–15 questions, proposes answers from existing material) and
    writes `SPEC.md` — real copy, real tokens, real schemas, tool-checkable acceptance criteria —
@@ -181,9 +181,26 @@ Two always-injected skills turn a description into a built pal:
 2. **`pal-loop`** executes it: one task → verify with the palsync tools (validate → push →
    preview → seo-audit) → checkpoint to disk → git commit → next. Blocked tasks escalate with
    the exact decision needed. Any new session resumes from `EXECUTION.md` — state never lives
-   only in context. The loop never deploys (standing policy) and never invents content.
+   only in context. The loop never deploys (standing policy), never invents content, and treats a
+   build as done only once every touched workflow is `pal_test` VALIDATED and pal-review returns PASS.
+3. **`pal-init`** onboards an *existing* pal first — maps it into `MAP.md`, captures a regression
+   baseline, scopes the change — then hands off to `pal-spec`.
+4. **`pal-review`** checks the finished build against the spec in a **fresh context** (never the
+   session that wrote it) and returns a verdict + fix tasks.
+5. **`pal-fix`** handles bugs and small corrections *without* the full spec ceremony — reproduce
+   with a tool → minimal diff → verify → regression-check — and escalates to pal-init/pal-spec the
+   moment a change adds new pages, datasets, or behavior.
 
-Say "spec out <what you want>" to start, "run the loop" / "resume the build" to execute.
+`pal-restraint` (write the least code that works) applies by default on every pal-coding task.
+Say "spec out <what you want>" to start, "run the loop" / "resume the build" to execute, "fix
+<what's broken>" for a correction.
+
+Each skill's deep detail lives in its own `references/*.md`, loaded on demand. Rules several skills
+share live **once** in the owning skill's `references/` and are pointed at by relative path — e.g.
+console-render verification under `pal-review/references/`, the amendment protocol and the spec /
+execution / reality-check material under `pal-spec/references/`, vision routing under
+`design-system-init/references/` (there is no separate `shared/` skill dir — a skill dir must carry
+a `SKILL.md` to be injected).
 
 ## Template starters
 

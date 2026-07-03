@@ -38,7 +38,10 @@ spec: SPEC.md (status: approved)   mode: full | lite
 
 ## Build plan
 Dependency order (leaf-first — foundations before things that use them):
-1. Scaffold + shared fragments (header/footer) + routing skeleton.
+1. Scaffold + shared fragments (header/footer) + routing skeleton — **apply the matching starter**
+   (`web-marketing` for a web pal, `console-app` for a console pal) via `palsync scaffold`, then
+   adapt its content; never hand-generate scaffold files from scratch. The starter guarantees the
+   structure, design floor, and SEO floor from the first push.
 2. FIRST page/screen — establishes composition (frontier tier).
 3. Remaining pages — CLONE the first's structure (cheap/standard).
 4. Datasets, then the workflows that read them (data before UI).
