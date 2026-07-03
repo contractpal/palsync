@@ -32,7 +32,7 @@ const USAGE = [
     "  palsync merge  [--keep-lock] [--dir <workspace>]            3-way merge local + server changes (keeps both where they don't collide)",
     "  palsync status [--dir <workspace>]                           Server drift, local changes, lock holder",
     "  palsync test   [--workflow console|web|transaction] [--no-preview] [--keep-lock] [--dir <ws>]",
-    "  palsync fetch <page>  Fetch ONE served page from the test instance (verify a route renders)",
+    "  palsync fetch <page> [--expect <str> ...] [--selector <css>] [--max-chars <n>]  Fetch ONE served page (verify a route renders)",
     "                                                               Server-validate a workflow + open a live preview",
     "  palsync preview [--workflow console|web|transaction] [--keep-lock] [--dir <ws>]",
     "                                                               Render the pal (web: prints the HTML; console: opens a browser)",
@@ -51,6 +51,9 @@ const USAGE = [
     "  --no-preview       test: validate only, don't open the browser preview",
     "  --viewport         screenshot: desktop (default 1280x800) | mobile (~390x844)",
     "  --full-page        screenshot: capture the whole scroll height, not just the viewport",
+    "  --expect <str>     fetch/preview: assert the served page contains <str> (repeatable); prints found/missing per string, NOT the HTML",
+    "  --selector <css>   fetch/preview: return only that region's markup (simple tag/.class/#id selector)",
+    "  --max-chars <n>    fetch/preview: cap the returned markup to n characters",
     "  --datasets         sync-datasets: comma-separated dataset names (default: all defined in pal.json)",
     "  --recreate         sync-datasets: DROP + REBUILD tables (DELETES ALL DATA) — asks for a typed YES",
     "  --dir <ws>         workspace directory (default: current directory)",
@@ -60,7 +63,7 @@ const USAGE = [
 ].join("\n");
 
 function parseFlags(argv) {
-    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, preview: true, skipValidation: false, datasets: undefined, recreate: false, template: undefined, list: false, viewport: undefined, fullPage: false };
+    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, preview: true, skipValidation: false, datasets: undefined, recreate: false, template: undefined, list: false, viewport: undefined, fullPage: false, expect: undefined, selector: undefined, maxChars: undefined };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--force" || a === "-f") flags.force = true;
@@ -79,6 +82,12 @@ function parseFlags(argv) {
         else if (a === "--viewport") { flags.viewport = argv[++i]; if (!flags.viewport) throw new Error("--viewport requires a value"); }
         else if (a.startsWith("--viewport=")) flags.viewport = a.slice("--viewport=".length);
         else if (a === "--full-page") flags.fullPage = true;
+        else if (a === "--expect") { const v = argv[++i]; if (!v) throw new Error("--expect requires a value"); (flags.expect = flags.expect || []).push(v); }
+        else if (a.startsWith("--expect=")) (flags.expect = flags.expect || []).push(a.slice("--expect=".length));
+        else if (a === "--selector") { flags.selector = argv[++i]; if (!flags.selector) throw new Error("--selector requires a value"); }
+        else if (a.startsWith("--selector=")) flags.selector = a.slice("--selector=".length);
+        else if (a === "--max-chars") { flags.maxChars = Number(argv[++i]); if (!flags.maxChars) throw new Error("--max-chars requires a number"); }
+        else if (a.startsWith("--max-chars=")) flags.maxChars = Number(a.slice("--max-chars=".length));
         else if (a === "--dir") { flags.dir = argv[++i]; if (!flags.dir) throw new Error("--dir requires a value"); }
         else if (a.startsWith("--dir=")) flags.dir = a.slice("--dir=".length);
         else if (a.charAt(0) !== "-" && flags._positional === undefined) flags._positional = a;
@@ -202,7 +211,7 @@ async function run(cmd, argv) {
     }
 
     if (cmd === "preview") {
-        const res = await toolByName("pal_preview").run(ctx, { workflow: flags.workflow });
+        const res = await toolByName("pal_preview").run(ctx, { workflow: flags.workflow, expect: flags.expect, selector: flags.selector, maxChars: flags.maxChars });
         console.log(res.message);
         if (!flags.keepLock && ctx.session.lockInfo) {
             try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
@@ -213,11 +222,13 @@ async function run(cmd, argv) {
     if (cmd === "fetch") {
         const pagePath = flags._positional || flags.path;
         if (!pagePath) { console.error("Usage: palsync fetch <page-path>   e.g. palsync fetch about.html"); return 1; }
-        const res = await toolByName("pal_fetch").run(ctx, { path: pagePath });
+        const res = await toolByName("pal_fetch").run(ctx, { path: pagePath, expect: flags.expect, selector: flags.selector, maxChars: flags.maxChars });
         console.log(res.message);
         if (!flags.keepLock && ctx.session.lockInfo) {
             try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
         }
+        // With expect, exit reflects the verdict (pass=all found); otherwise a 200 fetch.
+        if (flags.expect) return res.fetched && res.pass ? 0 : 1;
         return res.fetched && res.status === 200 ? 0 : 1;
     }
 

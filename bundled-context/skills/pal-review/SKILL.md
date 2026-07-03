@@ -25,7 +25,8 @@ deterministic tools is not its job.
 
 ### 1. Conformance (text — always runs)
 Check the build against the contract:
-- Every §4 copy string **verbatim** in the fetched HTML — grep real output, not source you hope shipped.
+- Every §4 copy string **verbatim** in the served output — verify with `pal_fetch expect:[strings]`
+  (per-string found/missing verdict, no HTML dump), checking real output, not source you hope shipped.
 - Every §3 nav link routes to a real page — no dead links.
 - Every §12 acceptance criterion **actually met** — full set, not just the global floor;
   same-session verification cheats here, passing the floor while per-feature criteria go unchecked.

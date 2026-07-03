@@ -13,6 +13,7 @@
 //   "warn"  = best-practice gap; review it
 // Every finding is a full sentence with the fix — built for the least capable agent.
 const { runPreview, openInstanceSession } = require("./preview");
+const { capRepeats } = require("./findingCap");
 const fs = require("fs");
 const path = require("path");
 
@@ -240,7 +241,9 @@ function formatSeoAudit(result) {
             if (p.fetchFailed) { lines.push(p.page + ": ERROR — page did not render (HTTP " + p.status + "). Check the route in the workflow and the pal.json entry."); continue; }
             if (!p.findings.length) continue;
             lines.push(p.page + (p.noindex ? " (noindex — warnings suppressed)" : "") + ":");
-            for (const f of p.findings) lines.push("   " + (f.severity === "error" ? "ERROR" : "WARNING") + " — " + f.message);
+            const { shown, more } = capRepeats(p.findings, f => f.rule);
+            for (const f of shown) lines.push("   " + (f.severity === "error" ? "ERROR" : "WARNING") + " — " + f.message);
+            for (const m of more) lines.push("   …and " + m.count + " more of the same (" + m.key + ").");
         }
         const clean = result.pages.filter(p => !p.fetchFailed && !p.findings.length).length;
         lines.push(clean + "/" + result.pageCount + " pages fully clean.");
@@ -252,7 +255,9 @@ function formatSeoAudit(result) {
     const lines = [head];
     if (errors > 0) lines.push("ERROR = materially hurts how search engines/social scrapers handle this page; fix every error.");
     lines.push(...crawlerFileLines(result.crawlerFiles));
-    for (const f of findings) lines.push("   " + (f.severity === "error" ? "ERROR" : "WARNING") + " — " + f.message);
+    const { shown, more } = capRepeats(findings, f => f.rule);
+    for (const f of shown) lines.push("   " + (f.severity === "error" ? "ERROR" : "WARNING") + " — " + f.message);
+    for (const m of more) lines.push("   …and " + m.count + " more of the same (" + m.key + ").");
     if (passed.length) lines.push("Passed: " + passed.map(p => p.message).join(" · "));
     return lines.join("\n");
 }

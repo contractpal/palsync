@@ -44,6 +44,57 @@ async function fetchRendered(url, { maxHops = 8 } = {}) {
 
 function titleOf(html) { const m = html.match(/<title>([^<]*)<\/title>/i); return m ? m[1].trim() : null; }
 
+// Token-efficient verification: check served HTML for expected substrings WITHOUT returning the
+// HTML. Returns { pass, results: [{ string, found, matchedLine }] } — the agent sees only the
+// verdict per string (and the line it matched on), never the 3-8k-token page body. This is the
+// DEFAULT check for "does the page contain X" after a push.
+function checkExpect(html, expect) {
+    const src = String(html || "");
+    const results = (expect || []).map((s) => {
+        const idx = src.indexOf(s);
+        if (idx === -1) return { string: s, found: false, matchedLine: null };
+        const lineStart = src.lastIndexOf("\n", idx) + 1;
+        let lineEnd = src.indexOf("\n", idx); if (lineEnd === -1) lineEnd = src.length;
+        return { string: s, found: true, matchedLine: src.slice(lineStart, lineEnd).trim().slice(0, 200) };
+    });
+    return { pass: results.every((r) => r.found), results };
+}
+
+// Dependency-free extraction of ONE region's markup by a SIMPLE selector — enough to hand the
+// agent just the <head>, a <nav>, or an element by id/class when it genuinely needs markup (NOT a
+// full CSS engine). Supports: "tag", ".class", "#id", "tag.class", "tag#id". Returns the first
+// matched element's outerHTML, or null when nothing matches.
+function extractSelector(html, selector) {
+    const src = String(html || "");
+    const m = String(selector || "").trim().match(/^([a-zA-Z][\w-]*)?(?:([.#])([\w-]+))?$/);
+    if (!m || (!m[1] && !m[2])) return null;
+    const tagPat = m[1] || "[a-zA-Z][\\w-]*"; // any tag when only .class / #id is given
+    const attr = m[2] === "#" ? "id" : m[2] === "." ? "class" : null;
+    const val = m[3];
+    const openRe = new RegExp("<(" + tagPat + ")(\\s[^>]*)?>", "gi");
+    let om;
+    while ((om = openRe.exec(src))) {
+        const attrs = om[2] || "";
+        if (attr) {
+            const av = attrs.match(new RegExp(attr + "\\s*=\\s*[\"']([^\"']*)[\"']", "i"));
+            if (!av) continue;
+            if (attr === "class") { if (av[1].split(/\s+/).indexOf(val) === -1) continue; }
+            else if (av[1] !== val) continue;
+        }
+        const tagLc = om[1].toLowerCase();
+        const walkRe = new RegExp("<(/?)(" + tagLc + ")(\\s[^>]*)?>", "gi");
+        walkRe.lastIndex = om.index;
+        let depth = 0, wm;
+        while ((wm = walkRe.exec(src))) {
+            if (wm[1] !== "/" && /\/\s*$/.test(wm[3] || "")) continue; // self-closing <tag ... />
+            if (wm[1] === "/") { if (--depth === 0) return src.slice(om.index, walkRe.lastIndex); }
+            else depth++;
+        }
+        return src.slice(om.index); // unbalanced markup — return from the open tag to the end
+    }
+    return null;
+}
+
 // Render preview. Returns a structured result; never throws on a normal failure.
 //   record/workspaceDir are used only to WARN when the workspace has un-pushed changes (the
 //   preview always reflects the last SAVED state — TestWeb runs server-side).
@@ -145,4 +196,4 @@ async function fetchPagePath(session, guid, path) {
     return Object.assign({ fetched: true }, r);
 }
 
-module.exports = { runPreview, fetchRendered, fetchPagePath, openInstanceSession, titleOf };
+module.exports = { runPreview, fetchRendered, fetchPagePath, openInstanceSession, titleOf, checkExpect, extractSelector };

@@ -17,6 +17,7 @@ const { lintWorkflowJs } = require("./workflowJs");
 const { lintMarkup } = require("./markup");
 const { lintDatasetDef } = require("./datasetDef");
 const { lintPalJson } = require("./palJson");
+const { capRepeats } = require("../findingCap");
 
 const MARKUP_EXT = new Set([".html", ".htm", ".xhtml"]);
 
@@ -121,16 +122,21 @@ function formatValidation(result, { context = "validate" } = {}) {
         ? "ERROR = this WILL fail to compile or save in PalBuilder; you must fix every error" +
           (context === "pre-push" ? " before pushing (or pass force/skipValidation to push anyway, which is not recommended)." : ".")
         : "WARNING = likely unsupported / risky; review each one. No errors, so a push is allowed.";
-    // Group by file for readability.
+    // Collapse repeats of the same message (a workflow full of the same violation shouldn't flood
+    // context): keep the first few per file+message, count the rest. Group by file for readability.
+    const { shown, more } = capRepeats(findings, f => f.file + "\t" + f.message);
     const byFile = {};
-    for (const f of findings) (byFile[f.file] = byFile[f.file] || []).push(f);
+    for (const f of shown) (byFile[f.file] = byFile[f.file] || []).push(f);
     const blocks = [];
     for (const file of Object.keys(byFile)) {
         const lines = byFile[file].map(f =>
             "   " + (f.severity === "error" ? "ERROR" : "WARNING") + " " + file + ":" + f.line + " — " + f.message);
         blocks.push(lines.join("\n"));
     }
-    return head + "\n" + meaning + "\n\n" + blocks.join("\n\n");
+    const moreBlock = more.length
+        ? "\n\n" + more.map(m => "   …and " + m.count + " more of the same (" + m.key.split("\t")[0] + ": " + m.key.split("\t")[1] + ")").join("\n")
+        : "";
+    return head + "\n" + meaning + "\n\n" + blocks.join("\n\n") + moreBlock;
 }
 
 // Lint a single file's CONTENT (not read from disk), dispatching by its rel path. Used by the

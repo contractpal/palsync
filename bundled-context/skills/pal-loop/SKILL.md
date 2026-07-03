@@ -72,8 +72,9 @@ change to the file the moment it happens, so a dead session resumes on the truth
    - `pal_test` → fresh SERVER validation, workflow VALIDATED, 0 notes — the real compile (console AND
      web) the save API doesn't give. Always run after a workflow change; read `messages` too
      (whole-test failures like "Pal is not a Web Pal" live there).
-   - **Web pages:** `pal_preview` → CHECK the returned HTML actually contains the exact strings the
-     success condition names; `pal_seo_audit` → 0 errors.
+   - **Web pages:** `pal_fetch`/`pal_preview` with `expect:[the exact strings the success condition
+     names]` → all found (the token-efficient default: a per-string found/missing verdict, NOT the
+     page HTML — use `selector`/`maxChars` only when you actually need markup); `pal_seo_audit` → 0 errors.
    - **Console screens:** compile via `pal_test` (do verify it); verify the render per the canonical
      rule (`captured:true` → judge against §12 VISUAL, mark `done`; `captured:false` → `needs-human`
      with a `HUMAN GATE:` Blockers entry). Verify data effects indirectly — after a write, run the spec's read-back action and confirm the row.

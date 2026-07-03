@@ -6,7 +6,7 @@ const { z } = require("zod");
 const { pull } = require("../core/pull");
 const { push } = require("../core/push");
 const { runTest } = require("../core/test");
-const { runPreview, fetchPagePath } = require("../core/preview");
+const { runPreview, fetchPagePath, checkExpect, extractSelector } = require("../core/preview");
 const { runScreenshot } = require("../core/screenshot");
 const { mergeWorkspace, formatMerge } = require("../core/merge");
 const { runSeoAudit, formatSeoAudit } = require("../core/seoAudit");
@@ -42,6 +42,44 @@ function formatValidation(notes) {
     if (!notes || !notes.length) return "No validation notes.";
     return "Server validation notes (" + notes.length + "):\n" +
         notes.map(v => "   - " + (v.group || "?") + "/" + (v.object || "(general)") + ": " + v.message).join("\n");
+}
+
+// Token-efficient verification message: the per-string verdict, never the page body. `meta`
+// carries the response facts (status, bytes) the agent still needs to trust the result.
+function formatExpect(headline, meta, chk) {
+    const misses = chk.results.filter(r => !r.found).length;
+    const lines = [headline + " — status=" + meta.status + " size=" + meta.bytes + " bytes. " +
+        (chk.pass ? "ALL " + chk.results.length + " expected string(s) found." : misses + " of " + chk.results.length + " expected string(s) MISSING.")];
+    for (const r of chk.results) lines.push("   " + (r.found ? "✓ found" : "✗ MISSING") + " " + JSON.stringify(r.string) + (r.found ? "  @ " + r.matchedLine : ""));
+    return lines.join("\n");
+}
+
+// Build a capped-inline + full-file-on-disk HTML result, optionally narrowed to one region by a
+// simple selector. Shared by pal_fetch and pal_preview's selector/maxChars modes.
+function htmlRegionResult(res, { headline, filePrefix, guid, selector, maxChars, extraLine = "", dirtyNote = "" }) {
+    let body = res.html, missSel = false;
+    if (selector) { const region = extractSelector(res.html, selector); if (region == null) { missSel = true; body = ""; } else body = region; }
+    let filePath = null;
+    try {
+        filePath = pathMod.join(os.tmpdir(), filePrefix + guid.replace(/[^A-Za-z0-9_-]/g, "") + ".html");
+        fs.writeFileSync(filePath, body, "utf8");
+    } catch (e) { /* best-effort */ }
+    const cap = maxChars && maxChars > 0 ? maxChars : PREVIEW_INLINE_CAP;
+    const truncated = body.length > cap;
+    const shown = truncated ? body.slice(0, cap) : body;
+    const selNote = selector
+        ? (missSel ? "\n  selector " + JSON.stringify(selector) + " matched nothing — drop it to see the full page."
+                   : "\n  selector " + JSON.stringify(selector) + " -> " + body.length + " bytes extracted")
+        : "";
+    const safe = Object.assign({}, res); delete safe.html;
+    return Object.assign(safe, {
+        htmlFile: missSel ? null : filePath,
+        message: headline + " — status=" + res.status + " content-type=" + res.contentType +
+            " title=" + JSON.stringify(res.title) + " size=" + res.bytes + " bytes" + extraLine + selNote + dirtyNote +
+            (missSel ? "" : (filePath ? "\n  Full " + (selector ? "region" : "body") + " saved to: " + filePath : "") +
+                "\n\n--- " + (selector ? "selected markup" : "served body") +
+                (truncated ? " (first " + cap + " of " + body.length + " bytes — read the file for the rest)" : "") + " ---\n" + shown)
+    });
 }
 
 // High-friction override: the user must type this EXACT phrase, echoing the pal name, so it can't
@@ -171,9 +209,14 @@ const TOOLS = [
     },
     {
         name: "pal_preview",
-        description: "See what the pal actually RENDERS. WEB pal: fetches the server-rendered HTML and returns it to you (also saved to a file). CONSOLE/transaction pal: needs a browser, so it opens in the user's browser and you will NOT see it (ask the user). Shows the LAST PUSHED version — pal_push first to preview your latest edits. (Pass/fail check: pal_test; offline code check: pal_validate.)",
-        inputShape: { workflow: z.enum(["console", "web", "transaction"]).optional() },
-        async run(ctx, { workflow } = {}) {
+        description: "See what the pal RENDERS. WEB pal: pass expect:[strings] for a found/missing verdict (token-efficient default), or selector/maxChars for markup; full HTML otherwise. CONSOLE/transaction pal: opens in the user's browser and you will NOT see it (ask the user). Shows the LAST PUSHED version — pal_push first. (Pass/fail: pal_test; offline check: pal_validate.)",
+        inputShape: {
+            workflow: z.enum(["console", "web", "transaction"]).optional(),
+            expect: z.array(z.string()).optional().describe("Strings the rendered page must contain — returns a per-string found/missing verdict instead of the HTML (the default, token-efficient check)."),
+            selector: z.string().optional().describe("Simple CSS selector (tag/.class/#id) to return only that region's markup."),
+            maxChars: z.number().optional().describe("Cap the returned markup to this many characters.")
+        },
+        async run(ctx, { workflow, expect, selector, maxChars } = {}) {
             const res = await runPreview(ctx.session, ctx.record.palGuid, ctx.record, ctx.workspaceDir, { workflow });
             if (ctx.lifecycle) ctx.lifecycle.onActivity(); // preview takes the lock — re-arm idle
             const dirtyNote = res.dirty
@@ -186,6 +229,17 @@ const TOOLS = [
                 return Object.assign(res, { message: "Cannot preview: " + res.reason + dirtyNote });
             }
             if (res.kind === "web" && res.agentVisible) {
+                // Token-efficient default: verify expected strings, never return the page body.
+                if (expect && expect.length) {
+                    const chk = checkExpect(res.html, expect);
+                    const safe = Object.assign({}, res); delete safe.html;
+                    return Object.assign(safe, { pass: chk.pass, results: chk.results,
+                        message: formatExpect("WEB preview (" + res.url + ")", { status: res.status, bytes: res.bytes }, chk) + dirtyNote });
+                }
+                // Narrowed markup: one region and/or a char cap when the agent genuinely needs HTML.
+                if (selector || maxChars) {
+                    return htmlRegionResult(res, { headline: "WEB preview rendered", filePrefix: "palsync-preview-", guid: ctx.record.palGuid, selector, maxChars, dirtyNote });
+                }
                 // Save the full HTML to a file the agent can Read, and inline a capped slice.
                 let filePath = null;
                 try {
@@ -215,16 +269,28 @@ const TOOLS = [
     },
     {
         name: "pal_fetch",
-        description: "Fetch ONE specific page from a WEB pal's test instance and return its served HTML — the verification primitive. " +
-            "Use after every push that adds/changes a page: confirm the H1, links resolved, and the right fragment rendered. " +
-            "A successful push does NOT prove a page renders (files missing from pal.json are silently skipped) — pal_fetch proves it. " +
-            "path is relative to the site root, e.g. \"about.html\" or \"robots.txt\". Shows the LAST PUSHED version.",
-        inputShape: { path: z.string().describe("Page path relative to the site root, e.g. \"about.html\"") },
-        async run(ctx, { path } = {}) {
+        description: "Verify ONE page of a WEB pal renders. DEFAULT: pass expect:[strings] for a per-string found/missing verdict WITHOUT the body — the token-efficient post-push check. A successful push does NOT prove render (files missing from pal.json are silently skipped); this does. selector/maxChars return markup instead. path is site-root-relative, e.g. \"about.html\". Shows the LAST PUSHED version.",
+        inputShape: {
+            path: z.string().describe("Page path relative to the site root, e.g. \"about.html\""),
+            expect: z.array(z.string()).optional().describe("Strings the served page must contain — returns a per-string found/missing verdict instead of the HTML (the default, token-efficient check)."),
+            selector: z.string().optional().describe("Simple CSS selector (tag/.class/#id) to return only that region's markup."),
+            maxChars: z.number().optional().describe("Cap the returned markup to this many characters.")
+        },
+        async run(ctx, { path, expect, selector, maxChars } = {}) {
             const res = await fetchPagePath(ctx.session, ctx.record.palGuid, path);
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             if (!res.fetched) {
                 return Object.assign(res, { message: "Could not fetch \"" + path + "\": " + res.reason + (res.validation ? "\n" + formatValidation(res.validation) : "") });
+            }
+            // Token-efficient default: verify expected strings, never return the page body.
+            if (expect && expect.length) {
+                const chk = checkExpect(res.html, expect);
+                const safe = Object.assign({}, res); delete safe.html;
+                return Object.assign(safe, { pass: chk.pass, results: chk.results,
+                    message: formatExpect("Fetched " + path, { status: res.status, bytes: res.bytes }, chk) });
+            }
+            if (selector || maxChars) {
+                return htmlRegionResult(res, { headline: "Fetched " + path, filePrefix: "palsync-fetch-", guid: ctx.record.palGuid, selector, maxChars });
             }
             let filePath = null;
             try {
