@@ -5,81 +5,71 @@ description: "Independently review a completed pal build against its SPEC.md in 
 
 # pal-review — fresh-eyes evaluation against the spec
 
-The session that built the pal is biased toward its own output. This skill is the separation:
-**open cold, read the spec and the artifacts, judge whether the build actually meets the
-contract.** Run it in a fresh session or a dedicated subagent — never as the same context that
-wrote the code. That bias separation is the entire point; sharing context defeats it.
+Run in a **fresh session or subagent — never the context that wrote the code.** That session is
+biased toward its own output; bias separation is the whole point. Open cold: read the spec and
+artifacts, judge whether the build meets the contract.
 
-This is the **eval** layer, distinct from pal-loop's **tests** layer. Tests answer "does it
-compile / validate / contain the string" (pal_validate, pal_test, pal_fetch — deterministic).
-Evals answer "is it correct and good against the spec" (judgment, often visual). This skill does
-the second and *consumes* the first; it does not re-run deterministic tools as its job.
+The **eval** layer, distinct from pal-loop's **tests** layer: tests are deterministic (compile /
+validate / contains-string — pal_validate, pal_test, pal_fetch); evals are judgment (correct and
+good against the spec, often visual). This skill evals and *consumes* test results; re-running
+deterministic tools is not its job.
 
 ## Inputs (read all, first)
-- `SPEC.md` (must be `status: approved`) — the contract: §3 sitemap, §4 copy, §5 behavior,
-  §6 layout, §11 constraints, §12 acceptance criteria. This is what "correct" means.
+- `SPEC.md` (must be `status: approved`) — the contract, defining "correct": §3 sitemap, §4 copy,
+  §5 behavior, §6 layout, §11 constraints, §12 acceptance criteria.
 - `EXECUTION.md` — what was built and in what state.
 - `DESIGN_SYSTEM.md` / `COMPONENTS.md` — what "on-brand / good" means visually.
-- The built artifacts: `pal_fetch` each web page (server-rendered HTML); the workflow/fragment
-  files on disk.
+- Built artifacts: `pal_fetch` each web page (server-rendered HTML); workflow/fragment files on disk.
 
-## The three review arms
+## The review arms
 
 ### 1. Conformance (text — always runs)
-Check the build against the contract, criterion by criterion:
-- Every §4 copy string shipped **verbatim** in the fetched HTML (grep the real output, not the
-  source you hope shipped).
+Check the build against the contract:
+- Every §4 copy string ships **verbatim** in the fetched HTML — grep the real output, not the
+  source you hope shipped.
 - Every §3 nav link routes to a real page — no dead links.
-- Every §12 acceptance criterion **actually met** — the full set, not just the global floor.
-  This is where same-session verification usually cheats: the floor passes, the per-feature
-  criteria go unchecked.
+- Every §12 acceptance criterion **actually met** — the full set, not just the global floor;
+  same-session verification cheats here, passing the floor while per-feature criteria go unchecked.
 - §11 NEVER list not violated; §8b consumed datasets not altered.
-- Every EXECUTION.md task marked `done` traces to its `spec ref` section(s), and that requirement
-  is actually satisfied — use the column to walk task → SPEC.md §, so a `done` task with an unmet
-  requirement is caught (not just the §12 criteria).
-Output: a per-criterion PASS / FAIL with the evidence (the string found or missing, the tool
-result, the line) — cite the `spec ref` § for each finding.
+- Every EXECUTION.md `done` task traces via its `spec ref` column to its SPEC.md §, and that
+  requirement is actually satisfied — so a `done` task with an unmet requirement is caught, not just §12.
+
+Output: per-criterion PASS / FAIL with evidence (string found/missing, tool result, line), citing
+each finding's `spec ref` §.
 
 ### 2. Quality / behavior (judgment — always runs)
 Beyond "it compiled":
-- Does each §5 behavior do the **right** thing? `pal_test` confirms a workflow *compiles*, not
-  that its logic is correct — read the workflow against the spec's input → validation → effect →
-  output and judge whether it matches. Logic that compiles and does the wrong thing is the gap
-  tests can't see.
+- Does each §5 behavior do the **right** thing? `pal_test` confirms a workflow *compiles*, not that
+  its logic is correct — read it against the spec's input → validation → effect → output and judge
+  the match (compiling-but-wrong is the gap tests can't see).
 - Is the copy on-brand per BRAND_VOICE / DESIGN_SYSTEM intent, not just present?
 - Does the §6 layout match the composition the spec described?
 
 ### 3. Visual / UX (capability-gated)
-Capture and render mechanics — MCP tool vs `palsync screenshot` CLI, console `captured:true/false`,
-the human-eyeball fallback — follow the canonical rule:
-`references/console-render-verification.md`.
-- **When you can capture AND have a vision-capable model:** judge each screen against
-  DESIGN_SYSTEM.md and a short UX rubric — visual hierarchy, spacing rhythm, legibility, responsive
-  behavior if testable, and the known AI fingerprints the design skills flag (gradient-blob hero,
-  pill-everything uniform radius, three-card-row-as-only-idea, serif-on-cream-with-sage). Report each
-  issue with the screenshot and a specific fix.
-- **When you can't** (no screenshot tool, no vision model, or `captured:false`): do NOT guess from
-  HTML — emit the `needs-human` eyeball gate per the canonical rule, naming each screen and what to
-  confirm.
+Capture and render mechanics (MCP tool vs `palsync screenshot` CLI, console `captured:true/false`,
+human-eyeball fallback) follow the canonical rule: `references/console-render-verification.md`.
+- **Can capture AND have a vision-capable model:** judge each screen against DESIGN_SYSTEM.md and a
+  short UX rubric — visual hierarchy, spacing rhythm, legibility, responsive behavior if testable,
+  plus the AI fingerprints the design skills flag (gradient-blob hero, pill-everything uniform radius,
+  three-card-row-as-only-idea, serif-on-cream-with-sage). Report each issue with screenshot + fix.
+- **Can't** (no screenshot tool, no vision model, or `captured:false`): do NOT guess from HTML —
+  emit the `needs-human` eyeball gate per the canonical rule, naming each screen and what to confirm.
 
 ### 4. Regression (brownfield-only — gated on `baseline/` existing)
-Absent `baseline/` (greenfield, or a brownfield pal pal-init never mapped): skip this arm entirely,
-today's behavior. Present: confirm SPEC.md's §12 REGRESSION criterion is actually met, for every
-page/workflow `baseline/baseline.json` covers.
-- **Freshness check first, independently of pal-loop's own check** — this arm re-derives its own
-  verdict rather than trusting pal-loop's self-report, same "fresh eyes" principle as the other three
-  arms. Run the baseline-freshness rule (canonical: `../pal-init/SKILL.md` Step 3). Stale → `needs-human`;
-  do not proceed to any comparison below against stale state.
-- Re-derive the `pal_validate`/`pal_test`-vs-baseline comparison independently.
-- `pal_screenshot` before/after diff for every page with `captured: true` in the baseline: capture
-  now, compare against `baseline/screenshots/<page>-<viewport>.png` using the same UX-rubric
-  judgment arm 3 already applies — asking "did anything UNTOUCHED shift," not "is it pretty." A
-  page the change didn't touch shifting is itself a finding, same severity as a §12 miss.
-- Pages/viewports that were `eyeball_only` in the baseline get a `needs-human` regression finding
-  (name the screen, what to compare against the saved baseline screenshot) — never an assumed pass,
-  same rule as arm 3's console fallback.
-- Cross-check every regression finding against `known_issues` — an issue already listed there is
-  NOT a new finding (don't re-report a pal's already-known defects as caused by this build).
+No `baseline/` (greenfield, or a brownfield pal pal-init never mapped): skip this arm entirely.
+Present: confirm SPEC.md's §12 REGRESSION criterion is met for every page/workflow
+`baseline/baseline.json` covers.
+- **Freshness check first, independently of pal-loop's own check** — re-derive the verdict rather
+  than trust its self-report (same "fresh eyes" principle) via the baseline-freshness rule (canonical:
+  `../pal-init/SKILL.md` Step 3). Stale → `needs-human`; do not compare against stale state.
+- Re-derive the `pal_validate` / `pal_test`-vs-baseline comparison independently.
+- `pal_screenshot` before/after diff for every `captured: true` baseline page: capture now, compare
+  against `baseline/screenshots/<page>-<viewport>.png` using arm 3's UX rubric — asking "did anything
+  UNTOUCHED shift," not "is it pretty." An untouched page shifting is a finding, same severity as a §12 miss.
+- `eyeball_only` baseline pages/viewports get a `needs-human` regression finding (name the screen,
+  what to compare against the saved baseline screenshot) — never an assumed pass, same as arm 3's fallback.
+- Cross-check every finding against `known_issues` — an already-listed issue is NOT a new finding;
+  don't re-report a pal's known defects as caused by this build.
 
 ## Output — a verdict, not a fix
 Write `REVIEW.md` (or a `## Review` block):
@@ -99,24 +89,24 @@ verdict: PASS | CHANGES-NEEDED
 - [ ] <task> — addresses <finding> — success condition: <tool + check>
 ```
 Rules:
-- **Never edit code or the spec.** Findings become fix tasks routed back to pal-loop; a *spec*
-  problem (missing/contradictory requirement) is a blocker for the human, not a self-edit.
+- **Never edit code or the spec.** Findings become fix tasks routed to pal-loop; a *spec* problem
+  (missing/contradictory requirement) is a blocker for the human, not a self-edit.
 - Judge only against the spec and design system. "I'd have done it differently" is not a finding;
   "violates §12 criterion 4" is.
-- A criterion you can't verify (`pal_screenshot` unavailable, or `captured:false` on a console
-  render) is `needs-human`, never an assumed pass. The same applies to a stale-baseline Regression
-  arm and to any `eyeball_only` baseline viewport.
-- A `known_issues`-listed defect is never reported as a Regression finding — list it under "known
-  issues excluded" instead, so the exclusion is visible, not silently dropped.
+- A criterion you can't verify (`pal_screenshot` unavailable, or `captured:false`) is `needs-human`,
+  never an assumed pass — same for a stale-baseline Regression arm and any `eyeball_only` baseline
+  viewport.
+- A `known_issues`-listed defect is never a Regression finding — list it under "known issues
+  excluded" so the exclusion is visible, not silently dropped.
 
 ## How it fits the loop
-pal-loop runs the **tests** as it builds; at build completion it hands off to pal-review in a
-**fresh context** (new session or subagent) with the inputs above. pal-review returns the verdict;
-pal-loop turns CHANGES-NEEDED items into tasks, fixes, and re-reviews until PASS. The writer and
-the reviewer are never the same context.
+pal-loop runs the **tests** as it builds, then at completion hands off to pal-review in a **fresh
+context** (new session or subagent) with the inputs above. pal-review returns the verdict; pal-loop
+turns CHANGES-NEEDED items into fix tasks and re-reviews until PASS. Writer and reviewer are never
+the same context.
 
 ## What this skill does NOT do
-- It does not compile or validate — that's pal-loop's verify step; this consumes those results.
-- It does not fix anything — it produces a verdict and fix tasks.
-- It does not see, on its own — visual review depends on a screenshot capability; without one it
-  defers to the human eyeball gate rather than judging blind.
+- Does not compile or validate — that's pal-loop's verify step; this consumes those results.
+- Does not fix anything — produces a verdict and fix tasks only.
+- Does not see on its own — visual review needs a screenshot capability; without one it defers to
+  the human eyeball gate rather than judging blind.

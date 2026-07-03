@@ -5,16 +5,16 @@ description: "Establish a project's design system before any UI is built, from a
 
 # Design System Init
 
-Generate a project's source-of-truth design system from a short interview plus 2-3 references the user actually likes. The output is a `DESIGN_SYSTEM.md` (visual language) and a `COMPONENTS.md` (structural inventory) that the `design-build` skill later enforces.
+Generate a project's source-of-truth design system from a short interview plus 2-3 references the user actually likes. Output: a `DESIGN_SYSTEM.md` (visual language) and a `COMPONENTS.md` (structural inventory), enforced later by the `design-build` skill.
 
-The core problem this solves: **taste is not tokens.** Extracting colors and fonts from a reference site is easy and nearly worthless on its own — it hands an agent Linear's palette without Linear's restraint. What makes a reference feel the way it does is composition, hierarchy, density, and motion, none of which survive a style-scrape. So this skill captures *intent* (why the user likes each reference) and *persists the actual reference images* alongside the extracted values, so the build agent can look at them directly.
+**Taste is not tokens.** Scraping colors and fonts from a reference is easy and nearly worthless alone — it hands an agent Linear's palette without Linear's restraint. Composition, hierarchy, density, and motion are what make a reference feel the way it does, and none survive a style-scrape. So capture *intent* (why the user likes each reference) and persist the actual reference images alongside extracted values, so the build agent can look at them directly.
 
 ## Process
 
-Run these in order. Don't skip the interview to get to extraction faster — the interview is where the value is.
+Run in order. Don't skip the interview to reach extraction faster — the interview is where the value is.
 
 1. **Interview** the user for intent and constraints.
-2. **Ingest references**: save the user's 2-3 examples as images into the repo, and pull computed style values if available.
+2. **Ingest references**: save the user's 2-3 examples as images into the repo; pull computed style values if available.
 3. **Cross-check** the emerging direction against known AI-slop fingerprints.
 4. **Synthesize** the tokens and a component inventory.
 5. **Write** `DESIGN_SYSTEM.md` and `COMPONENTS.md`, plus a stack-mapping note.
@@ -22,28 +22,18 @@ Run these in order. Don't skip the interview to get to extraction faster — the
 
 ## Vision routing
 
-Steps 2 and 3 depend on *seeing* the references (composition, density, restraint, slop fingerprints).
-If the executing model can't accept image input, route the visual work to a vision-capable model and
-consume its findings as text — don't skip these steps and don't fake them from filenames. Canonical
-protocol: **read `references/vision-routing.md`**.
+Steps 2 and 3 depend on *seeing* the references (composition, density, restraint, slop fingerprints). If the executing model can't accept image input, route the visual work to a vision-capable model and consume its findings as text — don't skip these steps and don't fake them from filenames. Canonical protocol: **read `references/vision-routing.md`**.
 
 ## Mode: declare vs extract
 
-- **Declare (default)** — a new project, no existing pal. Everything below runs as written: ask
-  for 2-3 external references, interview for intent, synthesize new tokens.
-- **Extract** — triggers when **a MAP.md is present** (brownfield handoff from pal-init) **and**
-  no `DESIGN_SYSTEM.md`/`COMPONENTS.md` exists yet in the workspace. Either condition failing →
-  declare mode. In extract mode the pal itself is the reference: derive tokens and composition
-  from what's actually built (MAP.md's Design reality section, the pulled `styles/*.css`,
-  `pages/*.html`, `fragments/*.html`, and the pal's own rendered screens) instead of asking the
-  user to pick sites they like. Every step below has an **"Extract mode:"** note where its
-  behavior diverges; unmarked steps run as written in both modes.
+- **Declare (default)** — a new project, no existing pal. Everything below runs as written: ask for 2-3 external references, interview for intent, synthesize new tokens.
+- **Extract** — triggers when **a MAP.md is present** (brownfield handoff from pal-init) **and** no `DESIGN_SYSTEM.md`/`COMPONENTS.md` exists yet in the workspace. Either condition failing → declare mode. Here the pal itself is the reference: derive tokens and composition from what's actually built (MAP.md's Design reality section, the pulled `styles/*.css`, `pages/*.html`, `fragments/*.html`, and the pal's own rendered screens) instead of asking the user to pick sites they like. Every step below has an **"Extract mode:"** note where its behavior diverges; unmarked steps run as written in both modes.
 
 ## Step 1 — Interview
 
-Ask in small clusters, one cluster per turn, and adapt to answers. The goal is to get the user to articulate *feeling* and *purpose*, not to fill a form. When a user gives a flat adjective ("clean," "modern," "professional"), push once for what it means to them concretely — those words are where slop comes from because every agent interprets them the same generic way.
+Ask in small clusters, one per turn, and adapt to answers. Goal: get the user to articulate *feeling* and *purpose*, not fill a form. On a flat adjective ("clean," "modern," "professional"), push once for what it means to them concretely — those words breed slop because every agent interprets them the same generic way.
 
-If interactive elicitation buttons are available in this environment, prefer them for the multiple-choice clusters; otherwise ask in prose.
+Prefer interactive elicitation buttons for the multiple-choice clusters if available; otherwise ask in prose.
 
 **Cluster A — Surface and purpose**
 - What is being built? (marketing site, dense data app/dashboard, mobile app, docs, internal tool, ...) Density and information hierarchy follow directly from this.
@@ -63,80 +53,47 @@ If interactive elicitation buttons are available in this environment, prefer the
 
 Stop interviewing once you can describe the intended feel in two or three sentences and the user agrees with that description. Read that summary back before moving on.
 
-**Extract mode:** skip Cluster B's "give me 2-3 sites you like" — there's nothing to ask; the
-existing pal is the only reference, and it isn't optional. Keep Cluster A (surface/purpose) and
-Cluster C (constraints) in full — motion appetite, density preference, and target stack are still
-real questions even when the palette itself is fixed by what's already built.
+**Extract mode:** skip Cluster B's "give me 2-3 sites you like" — there's nothing to ask; the existing pal is the only reference, and it isn't optional. Keep Cluster A (surface/purpose) and Cluster C (constraints) in full — motion appetite, density preference, and target stack are still real questions even when the palette itself is fixed by what's already built.
 
 ## Step 2 — Ingest references
 
-References are the highest-bandwidth input you have. Treat them as durable project assets, not throwaway prompt context.
+References are your highest-bandwidth input; treat them as durable project assets, not throwaway prompt context.
 
-- Create `design/refs/` in the repo. Save each reference image there with a descriptive name (`ref-linear-sidebar.png`, not `image1.png`). If the user pasted screenshots, persist them; if they gave URLs, capture or ask them to attach a screenshot of the specific view they mean.
-- Alongside the images, record the per-reference rationale from Cluster B in `design/refs/NOTES.md` — one short block per reference: what it is, what the user values, and what to deliberately NOT copy from it.
-- If a style-extraction tool is available (e.g. the TypeUI browser extension, or computed-style inspection), pull raw values — fonts, color stops, radius, shadow, spacing rhythm — and drop them in `design/refs/extracted.md` as *raw input*, clearly labelled as not-yet-curated. Extracted values are a starting point you will edit, never the final tokens.
-- If you can view images directly, study them for the things extraction misses: spacing rhythm, how much empty space carries the layout, type scale contrast, where emphasis lands, border/shadow restraint, and motion implied by the design. Note these observations — they matter more than the hex codes.
+- Create `design/refs/` in the repo. Save each reference image with a descriptive name (`ref-linear-sidebar.png`, not `image1.png`). Persist pasted screenshots; for URLs, capture or ask them to attach a screenshot of the specific view they mean.
+- Record the per-reference Cluster B rationale in `design/refs/NOTES.md` — one short block per reference: what it is, what the user values, and what to deliberately NOT copy from it.
+- If a style-extraction tool is available (e.g. the TypeUI browser extension, or computed-style inspection), pull raw values — fonts, color stops, radius, shadow, spacing rhythm — into `design/refs/extracted.md` as *raw input*, clearly labelled as not-yet-curated. Extracted values are a starting point you will edit, never the final tokens.
+- If you can view images directly, study what extraction misses: spacing rhythm, how much empty space carries the layout, type scale contrast, where emphasis lands, border/shadow restraint, and motion implied by the design. Note these observations — they matter more than the hex codes.
 
 **Extract mode:** the references ARE the pal's own rendered screens, not external sites.
-- `design/refs/` gets screenshots of the LIVE pal (`pal_screenshot`/`palsync screenshot`, or reuse
-  MAP.md's baseline screenshots if fresh) instead of pasted external examples. Name them the same
-  way (`ref-home-desktop.png`), not `ref-linear-sidebar.png` — there's no borrowed brand to credit.
-- `design/refs/NOTES.md` records what each screen IS and which section of the pal it's from, not
-  "what the user values about it" — there's no curation choice here, only description.
-- `design/refs/extracted.md` is still raw input, but it's pulled from the pal's OWN source instead
-  of a scrape tool: `:root` CSS custom properties and hex/rgb values in `styles/*.css`, font
-  families/weights from `c:resource`/Google Fonts `<link>` tags in `pages/*.html`, and
-  border-radius/box-shadow/transition values in use — labelled by source file, not "not-yet-curated
-  guesses." **Never invent a token with no corresponding value in use** — that's the difference
-  between extracting and declaring.
-- The direct-viewing step still applies, and matters MORE here than in declare mode: this skill's
-  whole thesis is that composition/density/restraint don't survive a style-scrape (see the intro).
-  Route the pal's own screenshots through the same Vision routing above (inline if vision-capable,
-  otherwise handed to a vision model) to capture spacing rhythm, hierarchy, and restraint — CSS
-  values alone can populate Foundations but cannot populate Density & Layout or Do/Don't below.
+- `design/refs/` gets screenshots of the LIVE pal (`pal_screenshot`/`palsync screenshot`, or reuse MAP.md's baseline screenshots if fresh) instead of pasted external examples. Name them the same way (`ref-home-desktop.png`), not `ref-linear-sidebar.png` — there's no borrowed brand to credit.
+- `design/refs/NOTES.md` records what each screen IS and which section of the pal it's from, not "what the user values about it" — there's no curation choice here, only description.
+- `design/refs/extracted.md` is still raw input, but pulled from the pal's OWN source instead of a scrape tool: `:root` CSS custom properties and hex/rgb values in `styles/*.css`, font families/weights from `c:resource`/Google Fonts `<link>` tags in `pages/*.html`, and border-radius/box-shadow/transition values in use — labelled by source file, not "not-yet-curated guesses." **Never invent a token with no corresponding value in use** — that's the difference between extracting and declaring.
+- The direct-viewing step still applies, and matters MORE here than in declare mode: this skill's whole thesis is that composition/density/restraint don't survive a style-scrape (see the intro). Route the pal's own screenshots through the same Vision routing above (inline if vision-capable, otherwise handed to a vision model) to capture spacing rhythm, hierarchy, and restraint — CSS values alone can populate Foundations but cannot populate Density & Layout or Do/Don't below.
 
 ## Step 3 — Anti-slop cross-check
 
-Before committing to tokens, check the direction against generic-AI-output fingerprints. This is the step that catches choices which "feel safe" precisely because every model defaults to them.
+Before committing to tokens, check the direction against generic-AI-output fingerprints. This catches choices that "feel safe" precisely because every model defaults to them.
 
-- Cross-reference the proposed fonts, colors, and layout patterns against this safety net, the authority for this check: be suspicious of the default "AI editorial" fingerprint (a serif display like Fraunces paired with a cream/off-white background and a muted sage/green accent), of all-purpose gradient-blob heroes, of uniform pill-everything with identical border-radius, and of evenly-spaced three-card feature rows as the only layout idea.
+- Cross-reference the proposed fonts, colors, and layout patterns against this safety net (the authority for this check): be suspicious of the default "AI editorial" fingerprint (a serif display like Fraunces paired with a cream/off-white background and a muted sage/green accent), all-purpose gradient-blob heroes, uniform pill-everything with identical border-radius, and evenly-spaced three-card feature rows as the only layout idea.
 - When the user's stated direction collides with a known fingerprint, say so plainly and propose a specific, deliberate alternative rather than silently steering. The user decides; your job is to make the collision visible.
 
-**Extract mode:** a fingerprint found here is already LIVE, not a direction you're still choosing.
-Do not silently avoid it in the extraction — that would make DESIGN_SYSTEM.md describe something
-that doesn't match the real pal, which breaks the observed-vs-declared honesty this mode depends
-on. Extract it faithfully, then note it in the Do/Don't list as a flagged "known issue, not fixed
-here." Changing it is a scoped, human-approved, regression-checked decision made later (through
-pal-spec/pal-loop, per pal-spec's §12 REGRESSION criterion) — never an automatic side effect of
-running this skill.
+**Extract mode:** a fingerprint found here is already LIVE, not a direction you're still choosing. Do not silently avoid it in the extraction — that would make DESIGN_SYSTEM.md describe something that doesn't match the real pal, breaking the observed-vs-declared honesty this mode depends on. Extract it faithfully, then note it in the Do/Don't list as a flagged "known issue, not fixed here." Changing it is a scoped, human-approved, regression-checked decision made later (through pal-spec/pal-loop, per pal-spec's §12 REGRESSION criterion) — never an automatic side effect of running this skill.
 
 ## Step 4 — Synthesize
 
-Curate, don't transcribe. Resolve the references and the interview into one coherent system with deliberate, defensible choices. Every token should be traceable to either a stated intent or a reference, and you should be able to say why it's there.
+Curate, don't transcribe. Resolve the references and the interview into one coherent system with deliberate, defensible choices. Every token should trace to a stated intent or a reference, and you should be able to say why it's there.
 
 - **Color**: define semantic roles (surface, surface-raised, text, text-muted, border, primary, primary-contrast, accent, success/warn/danger as needed) with concrete values. Avoid more accent colors than the design needs; restraint reads as intentional.
 - **Type**: choose a primary and, if warranted, a display face; set a scale with real values and a *narrow* weight range. Note where weight vs. size vs. spacing should carry hierarchy.
 - **Spacing**: one base unit and a scale built from it. Spacing is what makes whitespace look intentional instead of accidental.
-- **Radius, border, shadow, motion**: define each as a small token set with stated intent (e.g. "shadows are near-flat; elevation is communicated by surface color, not blur").
+- **Radius, border, shadow, motion**: each a small token set with stated intent (e.g. "shadows are near-flat; elevation is communicated by surface color, not blur").
 
-**Extract mode:** "traceable to a stated intent or a reference" becomes "traceable to an actual
-CSS value or loaded resource" — cite the source file (e.g. "from styles/main.css :root") for every
-token instead of a rationale. Per category:
-- **Color**: if `:root` custom properties exist, those ARE the semantic roles — use them directly,
-  don't rename or reorganize into a different role set. No custom properties → cluster the repeated
-  hex/rgb values found in `styles/*.css` into roles.
-- **Type**: the families/weights actually loaded via `c:resource`/Google Fonts `<link>` tags —
-  not a fresh pick, even if a "better" pairing suggests itself.
-- **Spacing / Radius / Shadow / Motion**: the actual values found in `styles/*.css`. If usage is
-  inconsistent (e.g. three different border-radius values with no evident pattern), note the
-  inconsistency as a Do/Don't candidate ("radius is inconsistent: 4px/6px/8px in use, no clear
-  rule — pick one going forward") rather than silently averaging or picking one to report as THE
-  token.
-- **Components**: cross-reference MAP.md's Fragments table for COMPONENTS.md, not a fresh
-  inventory — a fragment used by 3+ pages is a Composite/Primitive candidate; one used once is
-  page-specific, not reusable.
-- **Density & Layout / Do-Don't**: from the Step 2 vision-routing observations of the pal's own
-  screenshots, not from CSS — this is the part a style-scrape cannot produce (see the intro).
+**Extract mode:** "traceable to a stated intent or a reference" becomes "traceable to an actual CSS value or loaded resource" — cite the source file (e.g. "from styles/main.css :root") for every token instead of a rationale. Per category:
+- **Color**: if `:root` custom properties exist, those ARE the semantic roles — use them directly, don't rename or reorganize into a different role set. No custom properties → cluster the repeated hex/rgb values found in `styles/*.css` into roles.
+- **Type**: the families/weights actually loaded via `c:resource`/Google Fonts `<link>` tags — not a fresh pick, even if a "better" pairing suggests itself.
+- **Spacing / Radius / Shadow / Motion**: the actual values found in `styles/*.css`. If usage is inconsistent (e.g. three different border-radius values with no evident pattern), note the inconsistency as a Do/Don't candidate ("radius is inconsistent: 4px/6px/8px in use, no clear rule — pick one going forward") rather than silently averaging or picking one to report as THE token.
+- **Components**: cross-reference MAP.md's Fragments table for COMPONENTS.md, not a fresh inventory — a fragment used by 3+ pages is a Composite/Primitive candidate; one used once is page-specific, not reusable.
+- **Density & Layout / Do-Don't**: from the Step 2 vision-routing observations of the pal's own screenshots, not from CSS — the part a style-scrape cannot produce (see the intro).
 
 ## Step 5 — Write the outputs
 
@@ -208,13 +165,9 @@ Keep both files framework-neutral in the body; concrete framework details live o
 
 ## Step 6 — Confirm
 
-Show the user the Intent paragraph and the Do/Don't list first — those are where misalignment hides. Adjust, then hand off: tell them `design-build` will enforce this system, and that `design/refs/` should stay in the repo because the build agent will look at the images, not just the tokens.
+Show the user the Intent paragraph and the Do/Don't list first — that's where misalignment hides. Adjust, then hand off: tell them `design-build` will enforce this system, and that `design/refs/` should stay in the repo because the build agent will look at the images, not just the tokens.
 
-**Extract mode:** the confirm question changes from taste approval to factual accuracy — this
-isn't a new direction the user is signing off on, it's a description of what's already live. Ask
-"does this match reality, or did I miss/misread something?" instead of "do you like this?" A
-correction here means the extraction was wrong (re-check the source file), not that the user wants
-a different design.
+**Extract mode:** the confirm question changes from taste approval to factual accuracy — this isn't a new direction the user is signing off on, it's a description of what's already live. Ask "does this match reality, or did I miss/misread something?" instead of "do you like this?" A correction here means the extraction was wrong (re-check the source file), not that the user wants a different design.
 
 ## Acceptance checklist
 - [ ] Intent is stated in 2-3 sentences the user endorsed.

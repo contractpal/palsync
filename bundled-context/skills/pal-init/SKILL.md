@@ -5,40 +5,39 @@ description: "Onboard an EXISTING pal before changing it: map it into MAP.md, ca
 
 # pal-init — map an existing pal, then scope the change
 
-pal-spec assumes a blank slate. An existing pal is the opposite problem: everything already there
-is potentially load-bearing, so the dominant risk is **breaking what works**, not building wrong.
-pal-init exists to make brownfield work safe. It does three things, in order — map, baseline,
-scope — then hands the actual change to the normal pal-spec → pal-loop → pal-review pipeline.
+An existing pal inverts pal-spec's blank slate: everything present is potentially load-bearing, so
+the dominant risk is **breaking what works**, not building wrong. pal-init makes brownfield work
+safe — map, baseline, scope, in that order — then hands the change to the normal pal-spec → pal-loop
+→ pal-review pipeline.
 
 **Two hard rules that define this skill:**
-- **Map broad and shallow, not deep.** Inventory everything; deep-read only what a change touches.
-  Reconstructing the full behavior of code someone already wrote is expensive, lossy, and invites
-  hallucinated intent. The map is a shallow index; depth is loaded just-in-time at change time.
+- **Map broad and shallow, not deep.** Inventory everything; deep-read only what a change touches —
+  reconstructing existing code's full behavior is expensive, lossy, and invites hallucinated intent.
+  The map is a shallow index; depth loads just-in-time.
 - **Observed fact vs inferred purpose are different.** "This file exists / this dataset has these
-  fields" is fact. "This looks like the dashboard" is inference — mark it as such. Anything you
+  fields" is fact; "this looks like the dashboard" is inference — mark inference as such. What you
   genuinely can't tell from the code goes in Unknowns for the interview. Never invent intent.
 
 ---
 
 ## Step 1 — Pull & orient
-1. Ensure the pal is pulled to the workspace (`pal_pull` if needed). `pal_status` to confirm the
-   local mirror matches the server; if drift, pull/merge first — you map the real current state.
-2. Read `pal.json` (or the pal's manifest) first — it's the index of files, routes, and workflow
-   types. It tells you what to inventory before you open anything.
+1. Ensure the pal is pulled (`pal_pull` if needed). Run `pal_status` to confirm the local mirror
+   matches the server; on drift, pull/merge first — you map the real current state.
+2. Read `pal.json` (or the manifest) first — it indexes files, routes, and workflow types, telling
+   you what to inventory before opening anything.
 
 ## Step 2 — Mine into MAP.md (the durable artifact)
 Walk the pulled files and produce `MAP.md` (template below). Stay shallow: one line of purpose per
-item, inferred-and-marked. The goal is an index you (and every later session) can navigate and
-trust, plus the "what's dangerous to touch" picture. Do not deep-analyze workflows you won't change.
+item, inferred-and-marked. Goal: an index you and every later session can navigate and trust, plus
+the "what's dangerous to touch" picture. Do not deep-analyze workflows you won't change.
 
 ## Step 3 — Capture the regression baseline
-Record what passes RIGHT NOW, before anything changes — this is the before-picture every later
-change is checked against. Run the checks, then write the result as a STRUCTURED artifact (not
-just MAP.md prose) so pal-loop's regression gate and pal-review's regression arm can read it
-mechanically:
+Record what passes RIGHT NOW, before any change — the before-picture every later change is checked
+against. Run the checks, then write a STRUCTURED artifact (not MAP.md prose) so pal-loop's regression
+gate and pal-review's regression arm read it mechanically:
 - `pal_validate` → current error/warning count (ideally 0; if not, note it — you inherited it).
 - `pal_test` on the primary workflow(s) → current VALIDATED state.
-- Web: `pal_preview`/`pal_fetch` the key pages render; note the H1s/landmarks present.
+- Web: `pal_preview`/`pal_fetch` that key pages render; note H1s/landmarks present.
 - Visual: `pal_screenshot` the key screens (web, or console if capture succeeds). A viewport that
   times out (e.g. desktop, often an autoplay hero `<video>`) is NOT a baseline failure — record it
   `eyeball_only`, capture whichever viewport(s) DO succeed, and move on.
@@ -70,19 +69,16 @@ baseline/
   ]
 }
 ```
-Two fields load-bearing for Phase 3 (get them exactly right, don't approximate):
-- **`mapped`** is the pal's `lastModifiedDate` drift marker at the moment of capture — the SAME
-  sql-timestamp string (`"yyyy-MM-dd HH:mm:ss.S"`) `pal_status` reports as the pull marker / server
-  marker, e.g. `"2026-06-12 17:29:25.0"`. NOT a human-readable date — it must be diffable directly
-  against a live `pal_status` call (server marker newer than this → the baseline is stale; that
-  check belongs to the downstream gates, not to this skill, but the field is useless to them if
-  it's not this exact comparable value).
-- **`known_issues`** is the inherited-vs-caused list, and it is NOT an empty array on day one —
-  seed it from whatever Step 2's mining already found broken: dead fragment references, stub/
-  unfinished UI, invalid served markup, orphaned pages, anything you'd otherwise have written under
-  MAP.md's Load-bearing section as a confirmed (not speculative) defect. A genuinely open question
-  about INTENT still goes in MAP.md's Unknowns for the interview — `known_issues` is for confirmed,
-  observed defects only.
+Two fields are load-bearing for Phase 3 — get them exact, don't approximate:
+- **`mapped`** — the pal's `lastModifiedDate` drift marker at capture: the SAME sql-timestamp string
+  (`"yyyy-MM-dd HH:mm:ss.S"`, e.g. `"2026-06-12 17:29:25.0"`) that `pal_status` reports as its
+  pull/server marker, NOT a human-readable date. It must diff directly against a live `pal_status`
+  (server marker newer → baseline stale). Downstream gates run that check, not this skill — but it's
+  useless to them unless it's this exact comparable value.
+- **`known_issues`** — the inherited-vs-caused list, NOT empty on day one: seed it from what Step 2
+  found broken (dead fragment references, stub/unfinished UI, invalid served markup, orphaned pages,
+  any confirmed—not speculative—defect). An open question about INTENT goes in MAP.md's Unknowns
+  instead; `known_issues` holds confirmed, observed defects only.
 
 **Baseline-freshness rule (canonical — pal-loop's regression re-check and pal-review's regression
 arm both enforce this):** before diffing anything against the baseline, compare `baseline.json`'s
@@ -91,29 +87,28 @@ set `needs-human` ("baseline is stale (server moved since `<mapped>`); re-run pa
 refresh baseline/") and do NOT produce any pass/fail regression verdict against it. This skill owns
 the definition; the downstream gates run the check.
 
-MAP.md's Regression baseline section becomes a short pointer to this artifact (template below) —
-the artifact is the source of truth; the prose is a human-skimmable summary of it.
+MAP.md's Regression baseline section is just a short pointer to this artifact (template below): the
+artifact is the source of truth, the prose a human-skimmable summary.
 
 ## Step 4 — Interview, scoped to the change
-Do NOT re-interview the whole product. Ask only what's needed to scope THIS change, using the map
-and Unknowns to target questions:
+Do NOT re-interview the whole product. Ask only what's needed to scope THIS change, using the map and
+Unknowns to target questions:
 - What is the change (one sentence)? Which surfaces/workflows/datasets does it touch?
 - What must NOT change / must keep working? (name the load-bearing files from the map)
-- For anything in Unknowns that the change depends on, ask the user for the real intent — don't guess.
+- For Unknowns the change depends on, ask the user for the real intent — don't guess.
 - New data or reuse existing datasets? (default: reuse — consumed/read-only per the map)
 
 ## Step 5 — Hand off to pal-spec (change-scoped)
 Invoke pal-spec to produce SPEC.md + EXECUTION.md for the CHANGE, feeding it MAP.md as ground truth:
-- The change is the scope — SPEC covers only what's being changed/added, not the whole pal.
-- Existing datasets the change reads go in §8b (CONSUMED, read-only) sourced from the map — not §8a.
-- §6 layout and any new UI must MATCH the discovered conventions + design reality in the map
-  (reuse before building — run design-system-init in EXTRACT mode against the map if a
-  DESIGN_SYSTEM.md doesn't already exist).
+- Scope = the change only — SPEC covers what's changed/added, not the whole pal.
+- Datasets the change reads go in §8b (CONSUMED, read-only) from the map — not §8a.
+- §6 layout and new UI must MATCH the map's discovered conventions + design reality (reuse before
+  building — run design-system-init in EXTRACT mode against the map if no DESIGN_SYSTEM.md exists).
 - §11 NEVER list is seeded from the map's Load-bearing/shared files + "must not change" answers.
-- §12 acceptance MUST include a REGRESSION criterion: the baseline (Step 3) still passes and the
-  untouched UI didn't shift. This is the brownfield addition to the normal acceptance floor.
-Then the normal pipeline runs: pal-spec gate → pal-loop build (brownfield discipline) → pal-review
-(with its regression arm) → PASS.
+- §12 acceptance MUST add a REGRESSION criterion: the baseline (Step 3) still passes and untouched UI
+  didn't shift — the brownfield addition to the normal acceptance floor.
+Then the normal pipeline: pal-spec gate → pal-loop build (brownfield discipline) → pal-review
+(regression arm) → PASS.
 
 ---
 
@@ -170,18 +165,17 @@ freshness: regenerate or update if pal_status shows the server moved since `mapp
 ---
 
 ## Freshness & reuse
-- MAP.md is **durable, updatable context** — the brownfield equivalent of a reference the whole
-  pipeline reads. It is NOT rebuilt every session. Regenerate/update only when `pal_status` shows
-  the server moved since `mapped`, or when a build changes the inventory (a new page/dataset →
-  update the relevant map rows in the same session that added them).
-- Later sessions and pal-loop read MAP.md to know what exists and what's dangerous — the same
-  progressive-disclosure discipline as skills: the map is the shallow index, files are loaded deep
-  only when a task touches them.
+- MAP.md is **durable, updatable context** — a reference the whole pipeline reads, NOT rebuilt every
+  session. Regenerate/update only when `pal_status` shows the server moved since `mapped`, or when a
+  build changes the inventory (new page/dataset → update the relevant map rows in the same session).
+- Later sessions and pal-loop read MAP.md to know what exists and what's dangerous — same
+  progressive-disclosure discipline as skills: the map is the shallow index, files load deep only
+  when a task touches them.
 
 ## What this skill does NOT do
-- It does not reconstruct a full spec of the existing pal — only maps it and scopes the change.
-  The map is a hypothesis about existing behavior, not approved ground truth; the change-spec is.
-- It does not build anything — pal-spec specs the change, pal-loop builds it, pal-review verifies
+- Does not reconstruct a full spec of the pal — only maps it and scopes the change. The map is a
+  hypothesis about existing behavior, not approved ground truth; the change-spec is.
+- Does not build anything — pal-spec specs the change, pal-loop builds it, pal-review verifies
   (including regression).
-- It does not invent intent — inferences are marked, genuine gaps go to Unknowns for the human.
+- Does not invent intent — inferences are marked, genuine gaps go to Unknowns for the human.
 - For a brand-new pal, it steps aside: use pal-spec directly.
