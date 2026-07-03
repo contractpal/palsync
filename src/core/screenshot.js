@@ -24,6 +24,43 @@ const VIEWPORTS = {
     mobile: { width: 390, height: 844 }
 };
 
+// A pal that compiles + validates can still THROW at runtime — a workflow exception (bad SQL, null
+// deref, missing column) renders CloudPiston's error block into the page instead of the UI. pal_test
+// only proves the workflow COMPILES; nothing proved it RENDERS until now. detectRenderError scans the
+// rendered page text for that error block so a captured screenshot with a runtime fault is reported as
+// a FAIL, not a silent pass. Pure + text-only so it unit-tests without a browser.
+//
+// CloudPiston's block is a set of labeled lines:
+//   Workflow: console.js / Message: <Exception>: <msg> / Function: list /
+//   Method Called: DataSet.getRecords / Approx. Line no: 66
+// "Method Called" and "Approx. Line no" are near-unique to the error block; an exception class name
+// (…Exception) is the fallback marker. A normal rendered UI carries none of these.
+function detectRenderError(text) {
+    if (!text || typeof text !== "string") return null;
+    const has = (re) => re.test(text);
+    const exception = /\b([A-Za-z_][A-Za-z0-9_.]*Exception)\b/;
+    const labeled = /Method Called\s*:/i.test(text) || /Approx\.?\s*Line\s*no\s*:/i.test(text);
+    if (!labeled && !has(exception)) return null; // ordinary page — no error block
+
+    const grab = (label) => {
+        const m = text.match(new RegExp(label + "\\s*:\\s*(.+?)\\s*(?:\\n|$)", "i"));
+        return m ? m[1].trim().replace(/\.$/, "") : null;
+    };
+    const exMatch = text.match(exception);
+    const message = grab("Message") || (exMatch ? exMatch[1] : null);
+    // The single most useful line for a human/agent: the exception message if we have it.
+    const msgLine = grab("Message") || (exMatch ? exMatch[0] : "a runtime error");
+    return {
+        message: msgLine,
+        exception: exMatch ? exMatch[1] : null,
+        workflow: grab("Workflow"),
+        function: grab("Function"),
+        methodCalled: grab("Method Called"),
+        line: grab("Approx\\.?\\s*Line\\s*no"),
+        raw: (message || msgLine || "").slice(0, 300)
+    };
+}
+
 // Strip query + hash from a landed URL before returning it — drops cp-auth / nxProfileId /
 // cp-workflow (and any credential the auth redirect left in the URL). Returns origin + pathname.
 function sanitizeUrl(u) {
@@ -103,12 +140,18 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
             await pg.goto(base + String(page).replace(/^\/+/, ""), { waitUntil: "networkidle" });
         }
         const buf = await pg.screenshot({ fullPage: !!fullPage });
+        // Read the rendered text and check for a CloudPiston runtime-error block — a pal that
+        // validated can still throw at render time. Best-effort: a failure to read text must not
+        // sink the (successful) capture.
+        let renderError = null;
+        try { renderError = detectRenderError(await pg.innerText("body")); } catch (e) { /* ignore */ }
         return {
             captured: true, available: true, kind: t.kind,
             viewport: vp, viewportName,
             // WEB landing is the webpals host (no creds). CONSOLE landing may retain cp-auth in the
             // URL — sanitize to origin+path so no credential is ever returned.
             url: isWeb ? pg.url() : sanitizeUrl(pg.url()),
+            renderError,
             pngBase64: buf.toString("base64")
         };
     } catch (e) {
@@ -124,4 +167,4 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
     }
 }
 
-module.exports = { runScreenshot, VIEWPORTS };
+module.exports = { runScreenshot, detectRenderError, VIEWPORTS };

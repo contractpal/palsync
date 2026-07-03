@@ -16,9 +16,16 @@ to a human. Every skill that touches console verification points here instead of
    Code) OR the `palsync screenshot` CLI subcommand (Pi / headless harnesses, no MCP) — same core,
    same args (page, viewport, fullPage). Playwright replays the cp-auth redirect chain when Chromium
    is installed. Don't assume MCP.
-2. **`captured:true`** → the render is agent-visible after all. Judge it against the §12 VISUAL
-   criterion (renders per DESIGN_SYSTEM.md, no anti-slop fingerprints) exactly like a web render, and
-   mark the task `done` on that real evidence.
+2. **`captured:true`** → the render is agent-visible after all.
+   - **First check `renderError`.** A screenshot can capture a page that THREW at runtime — the
+     workflow compiled and `pal_test` validated, but it errored while rendering (bad SQL, null deref,
+     a column the table doesn't have) so CloudPiston painted its error block instead of the UI.
+     `pal_screenshot` parses that block and returns `renderError` (message, workflow, function, line).
+     **A non-null `renderError` is a hard FAIL — never `done`.** Read the fault, fix it, push, and
+     screenshot again. `pal_test` passing does NOT clear this; only a clean render does.
+   - If `renderError` is null, judge the image against the §12 VISUAL criterion (renders per
+     DESIGN_SYSTEM.md, no anti-slop fingerprints) exactly like a web render, and mark the task `done`
+     on that real evidence.
 3. **`captured:false`** (no Chromium, or the auth replay failed/timed out) → do NOT mark the render
    `done`, and do NOT guess from HTML. Do the buildable part, verify everything else you can
    (validate, test, data read-back), then set `needs-human` with a Blockers entry prefixed

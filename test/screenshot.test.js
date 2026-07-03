@@ -16,6 +16,7 @@ const path = require("path");
 let nextRunTest;          // (session, guid, opts) => result object
 let nextGoto;             // (url) => void | throws   (simulates auth replay)
 let landedUrl;            // what page.url() returns after navigation
+let pageText;             // what page.innerText("body") returns (for render-error detection)
 const gotoCalls = [];     // every URL navigated to this test
 const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]); // fake PNG
 let chromiumPresent = true;
@@ -29,6 +30,7 @@ function stub(id, exportsObj) {
 const fakePage = {
     async goto(url) { gotoCalls.push(url); if (nextGoto) nextGoto(url); },
     url() { return landedUrl; },
+    async innerText() { return pageText; },
     async screenshot() { return pngBytes; }
 };
 const fakeBrowser = {
@@ -43,12 +45,13 @@ const testPath = path.join(__dirname, "..", "src", "core", "test.js");
 require.cache[testPath] = { id: testPath, filename: testPath, loaded: true,
     exports: { runTest: (...a) => nextRunTest(...a) } };
 
-const { runScreenshot } = require("../src/core/screenshot.js");
+const { runScreenshot, detectRenderError } = require("../src/core/screenshot.js");
 
 function reset() {
     gotoCalls.length = 0;
     nextGoto = null;
     chromiumPresent = true;
+    pageText = "Equipment\nAdd equipment"; // a normal, error-free rendered page by default
 }
 
 // --- tests ------------------------------------------------------------------
@@ -129,4 +132,74 @@ test("not-validated pal → captured:false (no browser launched, no creds)", asy
     assert.equal(res.captured, false);
     assert.equal(res.available, true);
     assert.equal(gotoCalls.length, 0, "must not navigate an unvalidated pal");
+});
+
+// The Haiku test-03 failure mode: a workflow that COMPILED + validated but THREW at render time
+// (bad SQL). pal_test said VALIDATED; only reading the rendered page catches it.
+const CLOUDPISTON_ERROR = [
+    "Workflow:    console.js",
+    "Message:    SQLSyntaxErrorException: Unknown column 'equipmentId' in 'field list'",
+    "Function:    list",
+    "Method Called:    DataSet.getRecords",
+    "Approx. Line no:    66."
+].join("\n");
+
+test("captured render with a runtime error block → captured:true + renderError populated", async () => {
+    reset();
+    nextRunTest = async () => ({ ran: true, validated: true, kind: "console",
+        _previewUrl: "https://secure.cloudpiston.com/cpal/RunConsoleApp.do?cp-auth=x" });
+    landedUrl = "https://secure.cloudpiston.com/cpal/RunConsoleApp.do";
+    pageText = "Equipment\n" + CLOUDPISTON_ERROR; // the page rendered the error, not the UI
+
+    const res = await runScreenshot({}, "GUID", {});
+    assert.equal(res.captured, true, "still a capture — the PNG shows the error banner");
+    assert.ok(res.renderError, "the runtime error must be detected");
+    assert.match(res.renderError.message, /Unknown column 'equipmentId'/);
+    assert.equal(res.renderError.exception, "SQLSyntaxErrorException");
+    assert.equal(res.renderError.line, "66");
+});
+
+test("clean render → renderError is null", async () => {
+    reset();
+    nextRunTest = async () => ({ ran: true, validated: true, kind: "web", rawToken: "https://webpals.cloudpiston.com/site/" });
+    landedUrl = "https://webpals.cloudpiston.com/site/";
+    pageText = "Equipment\nAdd equipment\nNo equipment yet. Add your first item to get started.";
+    const res = await runScreenshot({}, "GUID", {});
+    assert.equal(res.captured, true);
+    assert.equal(res.renderError, null, "a normal page must not be flagged");
+});
+
+// --- detectRenderError (pure, text-only) -----------------------------------
+
+test("detectRenderError parses the CloudPiston runtime-error block", () => {
+    const e = detectRenderError("Equipment\n" + CLOUDPISTON_ERROR);
+    assert.ok(e, "should detect the error block");
+    assert.match(e.message, /Unknown column 'equipmentId'/);
+    assert.equal(e.exception, "SQLSyntaxErrorException");
+    assert.equal(e.workflow, "console.js");
+    assert.equal(e.function, "list");
+    assert.equal(e.methodCalled, "DataSet.getRecords");
+    assert.equal(e.line, "66");
+});
+
+test("detectRenderError catches a bare exception with no labeled block", () => {
+    const e = detectRenderError("<div>oops</div> java.lang.NullPointerException at foo");
+    assert.ok(e, "an exception class name alone is enough to flag");
+    assert.equal(e.exception, "java.lang.NullPointerException");
+});
+
+test("detectRenderError returns null for a normal rendered UI", () => {
+    const page = "Equipment\nAdd equipment\nName Category Status Checked out to Actions\n" +
+        "Drill Power tools Available\nNo equipment yet. Add your first item to get started.";
+    assert.equal(detectRenderError(page), null);
+});
+
+test("detectRenderError does not false-positive on the word 'exceptional'", () => {
+    assert.equal(detectRenderError("This tool offers exceptional performance."), null);
+});
+
+test("detectRenderError handles empty / non-string input", () => {
+    assert.equal(detectRenderError(""), null);
+    assert.equal(detectRenderError(null), null);
+    assert.equal(detectRenderError(undefined), null);
 });

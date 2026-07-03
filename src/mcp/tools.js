@@ -313,7 +313,7 @@ const TOOLS = [
     },
     {
         name: "pal_screenshot",
-        description: "Render a pal's screen to a PNG to judge its UI/UX visually (pal-review's visual arm). Acts on the LAST PUSHED version — pal_push first. WEB renders directly; CONSOLE/transaction render via authenticated replay. If auth fails, or the runtime lacks Playwright/Chromium, it returns a clean unavailable signal (review falls back to the human eyeball gate) — never a blank or fake image.",
+        description: "Render a pal's screen to a PNG to judge its UI/UX visually (pal-review's visual arm) AND detect runtime render errors. Acts on the LAST PUSHED version — pal_push first. Scans the rendered page for a CloudPiston runtime-error block (a workflow that compiled but THREW — bad SQL, null deref, missing column) and reports it as a FAIL: pal_test passing only proves the workflow compiles, not that it renders. WEB renders directly; CONSOLE/transaction render via authenticated replay. If auth fails, or the runtime lacks Playwright/Chromium, it returns a clean unavailable signal (review falls back to the human eyeball gate) — never a blank or fake image.",
         inputShape: {
             page: z.string().optional().describe("Page path under the site root, e.g. \"about.html\" (WEB only). Default: home page."),
             viewport: z.enum(["desktop", "mobile"]).optional().describe("desktop (1280x800, default) or mobile (~390x844)."),
@@ -335,9 +335,18 @@ const TOOLS = [
                 filePath = pathMod.join(os.tmpdir(), "palsync-screenshot-" + ctx.record.palGuid.replace(/[^A-Za-z0-9_-]/g, "") + "-" + res.viewportName + ".png");
                 fs.writeFileSync(filePath, Buffer.from(res.pngBase64, "base64"));
             } catch (e) { /* best-effort */ }
+            const errBlock = res.renderError
+                ? "\n\n⚠ RUNTIME RENDER ERROR — the page did NOT render its UI; it threw at runtime:\n"
+                    + "  " + res.renderError.message
+                    + (res.renderError.workflow ? "\n  workflow: " + res.renderError.workflow : "")
+                    + (res.renderError.function ? "  function: " + res.renderError.function : "")
+                    + (res.renderError.methodCalled ? "\n  at: " + res.renderError.methodCalled : "")
+                    + (res.renderError.line ? " (approx. line " + res.renderError.line + ")" : "")
+                    + "\nThis is a FAIL — pal_test passing only means the workflow COMPILES. Fix the fault, push, and screenshot again before declaring the screen done."
+                : "";
             const text = (res.kind ? res.kind.toUpperCase() : "WEB") + " screenshot captured — " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height +
                 (fullPage ? " (full page)" : "") + "\n  url=" + res.url +
-                (filePath ? "\n  PNG saved to: " + filePath : "");
+                (filePath ? "\n  PNG saved to: " + filePath : "") + errBlock;
             const safe = Object.assign({}, res); delete safe.pngBase64; // don't double-include the base64 blob
             return Object.assign(safe, {
                 pngFile: filePath,
