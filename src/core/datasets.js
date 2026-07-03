@@ -35,6 +35,34 @@ function readDatasetDefs(workspaceDir) {
     return m;
 }
 
+// Provisioning-critical default: a Dataset with `freeform` unset (or false) provisions a table with
+// NO per-field columns, so `SELECT <fieldName>` throws "Unknown column" at runtime even though the
+// definition saved and the workflow compiled. (Verified live: freeform:false → "Unknown column
+// 'equipmentId'"; freeform:true → clean render.) The server defaults it to false, so a def that omits
+// it is silently broken. Before saving, default `freeform` to true on every TARGET dataset that hasn't
+// set it explicitly — an omission is the common (broken) case; an explicit false is honored. Rewrites
+// pal.json only when something actually changed, and returns the names it defaulted so the caller can
+// tell the user. `indexed`/`notNull`/`notEmpty`/`enterpriseImageAccess` are server-defaulted safely and
+// need no help — freeform is the one that breaks provisioning.
+function ensureFreeformDefault(workspaceDir, targetNames) {
+    const pjPath = path.join(workspaceDir, "pal.json");
+    let pj;
+    try { pj = JSON.parse(fs.readFileSync(pjPath, "utf8")); }
+    catch (e) { return []; }
+    const entries = (pj.datasets && Array.isArray(pj.datasets.entry)) ? pj.datasets.entry : [];
+    const want = new Set(targetNames);
+    const defaulted = [];
+    for (const e of entries) {
+        if (!e || !e.string || !want.has(e.string) || !e.Dataset) continue;
+        if (e.Dataset.freeform === undefined || e.Dataset.freeform === null || e.Dataset.freeform === "") {
+            e.Dataset.freeform = true;
+            defaulted.push(e.string);
+        }
+    }
+    if (defaulted.length) fs.writeFileSync(pjPath, JSON.stringify(pj, null, 1));
+    return defaulted;
+}
+
 // A human/dumb-model-readable one-line schema summary for a dataset definition. Example:
 //   "players: 3 columns — playerId (Primary key), name (String, max 80), score (Integer)"
 function describeSchema(name, datasetEntry) {
@@ -86,7 +114,13 @@ async function syncDatasets(session, record, workspaceDir, { datasets, recreate 
         targets = [...defs.keys()];
     }
 
-    const schemas = targets.map(n => describeSchema(n, defs.get(n)));
+    // Default freeform:true on any target that omitted it — without it the provisioned table has no
+    // per-field columns and every column query throws "Unknown column" at runtime. Do this BEFORE the
+    // save so the server stores the corrected definition. Re-read defs if anything changed so the
+    // schema summary + the rest of the flow see the patched entries.
+    const freeformDefaulted = ensureFreeformDefault(workspaceDir, targets);
+    const effectiveDefs = freeformDefaulted.length ? readDatasetDefs(workspaceDir) : defs;
+    const schemas = targets.map(n => describeSchema(n, effectiveDefs.get(n)));
 
     // RECREATE GATE — the only path that can send the destructive header.
     if (recreate) {
@@ -134,11 +168,11 @@ async function syncDatasets(session, record, workspaceDir, { datasets, recreate 
     }
 
     return {
-        synced: ok, targets, schemas, recreated: !!recreate,
+        synced: ok, targets, schemas, recreated: !!recreate, freeformDefaulted,
         saveResult,
         serverResponse: ok ? "success" : "failure",
         reason: ok ? null : "The server did not report success for SyncDataSet.do. The definitions were saved, but the table(s) may not have been provisioned — check the pal in PalBuilder."
     };
 }
 
-module.exports = { syncDatasets, recreatePhrase, readDatasetDefs, describeSchema };
+module.exports = { syncDatasets, recreatePhrase, readDatasetDefs, describeSchema, ensureFreeformDefault };

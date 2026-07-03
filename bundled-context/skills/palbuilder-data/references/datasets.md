@@ -20,7 +20,7 @@ array IS the column definition. This is the ONLY place the schema lives; a `data
 file on disk is a passthrough copy, not the source of truth.
 
 ```json
-{ "string": "equipment", "Dataset": { "name": "equipment", "fields": { "DatasetField": [
+{ "string": "equipment", "Dataset": { "name": "equipment", "freeform": true, "fields": { "DatasetField": [
   { "fieldName": "equipmentId", "fieldType": "Primary key" },
   { "fieldName": "name",        "fieldType": "String", "fieldSize": 100, "notNull": true, "notEmpty": true },
   { "fieldName": "status",      "fieldType": "String", "fieldSize": 20, "indexed": true },
@@ -28,6 +28,10 @@ file on disk is a passthrough copy, not the source of truth.
 ] }, "indexes": "" } }
 ```
 
+- **`"freeform": true` is required.** Without it the provisioned table has no per-field columns, so
+  `SELECT <fieldName>` throws `Unknown column` at runtime even though the definition saved and the
+  workflow compiled. The server defaults it to `false`, so an omitted `freeform` is silently broken.
+  (palsync's dataset-sync step defaults it to true for you, but set it explicitly.)
 - `string` and `Dataset.name` are both the dataset name (camelCase, plural).
 - Every dataset gets ONE `"Primary key"` field named `<name>Id`. Flag an indexed column `"indexed": true`.
 - `fieldType` uses EXACT strings — the integer type is `"Number"`, NOT `"Integer"`/`"int"`.

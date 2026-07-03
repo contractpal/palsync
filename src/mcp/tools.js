@@ -419,10 +419,13 @@ const TOOLS = [
                 if (res.saveResult && res.saveResult.serverPaths) refreshBaseline(ctx.record, ctx.workspaceDir, res.saveResult.serverPaths);
                 await ctx.persist();
                 const verb = res.recreated ? "RECREATED (dropped + rebuilt, data deleted)" : "synced (created/updated, data kept)";
+                const freeformNote = (res.freeformDefaulted && res.freeformDefaulted.length)
+                    ? "\nSet freeform:true on " + res.freeformDefaulted.join(", ") + " (required so the table gets real per-field columns; without it column queries throw \"Unknown column\" at runtime). This was written back to pal.json."
+                    : "";
                 return Object.assign(res, {
                     message: "Datasets " + verb + " on the server — " + res.targets.length + " table(s):\n" +
                         res.schemas.map(s => "   - " + s).join("\n") +
-                        "\nThe tables now match these schemas. (A dataset table exists only after this step — editing the .json alone never creates it.)"
+                        "\nThe tables now match these schemas. (A dataset table exists only after this step — editing the .json alone never creates it.)" + freeformNote
                 });
             }
             if (res.refused === "recreate-unconfirmed") {
