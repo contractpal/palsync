@@ -20,23 +20,30 @@ const path = require("path");
 const SKILLS = path.join(__dirname, "..", "bundled-context", "skills");
 const palLoop = fs.readFileSync(path.join(SKILLS, "pal-loop", "SKILL.md"), "utf8");
 const palSpec = fs.readFileSync(path.join(SKILLS, "pal-spec", "SKILL.md"), "utf8");
+// The full amendment protocol + SPEC template were split into pal-spec/references/ for progressive
+// disclosure (both files ship with the skill). The guardrail clauses must still exist SOMEWHERE in
+// the shipped skill set — SKILL.md keeps the summary + invariant + pointer; the mechanics and the
+// template live in these references. Anti-rot still holds: the protocol can't silently regress out.
+const amendmentPath = fs.readFileSync(path.join(SKILLS, "pal-spec", "references", "amendment-path.md"), "utf8");
+const specTemplate = fs.readFileSync(path.join(SKILLS, "pal-spec", "references", "spec-template.md"), "utf8");
 
 // ---- (A) prose-contract: the guardrail clauses must exist ------------------
 
 test("pal-loop forbids silent SPEC edits and defines the amendment path", () => {
     assert.match(palLoop, /Never silently edit SPEC\.md/, "must forbid silent SPEC edits");
     assert.match(palLoop, /amendment path/, "must name the amendment path");
-    assert.match(palLoop, /Block \+ propose/, "must propose, not self-amend");
+    assert.match(palLoop, /amendment proposal/, "must propose, not self-amend");
     assert.match(palLoop, /propose → human approve → re-gate → continue/, "must state the full controlled sequence");
     assert.match(palLoop, /never silently self-amends/, "must keep the invariant");
+    assert.match(amendmentPath, /Propose \(pal-loop\)/, "canonical protocol must define the propose step");
 });
 
 test("pal-spec carries the amendment protocol, version field, and §14 audit log", () => {
-    assert.match(palSpec, /spec version:/, "frontmatter must version the spec");
-    assert.match(palSpec, /## 14\. Amendment log/, "must define the §14 audit log");
+    assert.match(specTemplate, /spec version:/, "template frontmatter must version the spec");
+    assert.match(specTemplate, /## 14\. Amendment log/, "template must define the §14 audit log");
     assert.match(palSpec, /the agent never silently self-amends/, "must keep the invariant");
-    assert.match(palSpec, /Re-gate that section/, "must re-run the reality check for the amended §");
-    assert.match(palSpec, /bump[\s\S]{0,40}spec version/i, "approval must bump the version");
+    assert.match(amendmentPath, /Re-gate that section/, "canonical must re-run the reality check for the amended §");
+    assert.match(amendmentPath, /bump[\s\S]{0,40}spec version/i, "approval must bump the version");
 });
 
 // ---- (B) protocol-state transitions over a fixture ------------------------

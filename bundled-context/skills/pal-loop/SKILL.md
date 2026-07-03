@@ -142,9 +142,9 @@ Reality can contradict the spec mid-build (a type that won't create, a missing c
 inexpressible behavior). You never fix this by editing SPEC.md. Instead: set the task `blocked`, write
 an **amendment proposal** in Blockers (which §, the exact build-time fact with tool output pasted, the
 minimal change proposed), and continue with the next independent task. The human approves → pal-spec
-applies + re-gates → you re-read the amended § and resume. Invariant: propose → human approve →
-re-gate → continue; the loop never silently self-amends. Full protocol: **read
-`../pal-spec/references/amendment-path.md`**.
+applies + re-gates → you re-read the amended § and resume.
+Invariant: propose → human approve → re-gate → continue; the loop never silently self-amends.
+Full protocol: **read `../pal-spec/references/amendment-path.md`**.
 
 ## Build complete → hand off to pal-review
 
