@@ -61,7 +61,7 @@ var jobId = email.sendToAddress(toEmail);      // sends AND sets the recipient; 
   send immediately AND specify who to. There is no `send()` with a previously-set recipient.
 - **Template variables**, not object construction: `set(name, Object)`, `setString`, `setInt`,
   `setDouble`, `setBoolean`, `setDate`, `setData(id, Data)` — one call per variable, matching the
-  workflow engine's ban on object literals (see `palbuilder-backend`).
+  workflow engine's ban on object literals (ES3 subset: see `palbuilder-core`).
 - `setFrom(name, address)`, `setReplyTo(email)`, `addFile(File)`, `enableReply(workflow)`,
   `schedule(Date)` (delay delivery instead of sending now) also exist.
 - `createTextEmail(name)` — same idea, plain-text body instead of XHTML.

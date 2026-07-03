@@ -216,9 +216,9 @@ For the modal fragment pattern and the JavaScript naming/module conventions, see
 
 ## Security
 
-Do **not** use ClientPal or `fetch` to call the server unless there is genuinely no other way.
-`c:` elements are server-rendered and encrypt the action and query string before HTML reaches the
-browser; `fetch`/ClientPal expose everything in devtools.
+The ClientPal/`fetch` ban and the "why `c:` elements are safe" rationale live in
+`palbuilder-core` (Security Baseline). The front-end consequence: reach for a server-rendered
+`c:` element (`c:a`, `c:upload`, `c:download`, …) — never `fetch`/ClientPal — for any server call.
 
 ---
 

@@ -11,10 +11,8 @@ console workflow, a message-receiver workflow, or a background job — without t
 polling for them.
 
 > **Companion to `palbuilder-jobs-http`.** Everything there still holds — the receiver
-> and the delayed pushers are `workflowType: 11` console-system jobs, and **all workflow
-> files obey the ES3 rules from `palbuilder-backend`**: no object literals `{ }`, no
-> `let`/`const`, no arrow functions, double-quoted strings, `var` + `UPPER_SNAKE_CASE`.
-> This skill adds only the socket APIs.
+> and the delayed pushers are `workflowType: 11` console-system jobs. All workflow files
+> obey the ES3 workflow-JS rules from `palbuilder-core`. This skill adds only the socket APIs.
 
 > **One file here is NOT a workflow.** The browser client (`wstest.js`) is a **Script**
 > (`palTypeCommon`), runs in the browser, and uses ordinary modern JS — arrow functions,

@@ -1,19 +1,23 @@
 ---
 name: palbuilder-jobs-http
-description: "Work that outlives one request in a PalBuilder (CloudPiston) pal — background Jobs, server-side HTTP, JSON parsing without object literals, file-download responses, job-polling progress UI. Companion to palbuilder-backend; its ES3-style rules still apply. Trigger on workflowType 11 jobs, pal.getJobManager().createJob, c.createServiceRequest, c.createJsonParser, c.createBuffer, c.createDownloadResponse, the Monitor loop, or a self-polling progress fragment."
+description: "Work that outlives one request in a PalBuilder (CloudPiston) pal — background Jobs, the per-run Monitor time budget, file-download responses, DOM-less HTML scanning, job-polling progress UI. Companion to palbuilder-backend; ES3 rules from palbuilder-core apply. Server-side HTTP / JSON belong to palbuilder-data. Trigger on workflowType 11 jobs, pal.getJobManager().createJob, c.getJob, the Monitor loop, c.createDownloadResponse, or a self-polling progress fragment."
 ---
 
 # Background Jobs, HTTP & Long-Running Work — Palbuilder Skill
 
 This skill covers the subsystem a pal uses when a task is too long for one request's
 time window: a **background Job** that batches work, reschedules itself, and reports
-progress to the browser. It also covers the server-side HTTP client, JSON parsing,
-DOM-less HTML scanning, and file-download responses those jobs lean on.
+progress to the browser. It also covers the per-run **Monitor** time budget, DOM-less
+HTML scanning, and file-download responses those jobs lean on.
 
-> **Companion to `palbuilder-backend`.** Everything in that skill still holds —
-> ES3-style only: no object literals `{ }`, no `let`/`const`, no arrow functions,
-> double-quoted strings, `var` + `UPPER_SNAKE_CASE` for constants. This skill adds
-> the job/HTTP APIs the base skill never needed.
+> **The server-side HTTP client, JSON parsing, and string building live in
+> `palbuilder-data`** (`references/http-client.md`) — `c.createServiceRequest`,
+> `c.createJsonParser`, `c.createBuffer`, `pal.getSettings()`. This skill only notes
+> where those intersect the job time budget (see §3).
+
+> **Companion to `palbuilder-backend`.** ES3 workflow-JS rules (no object literals,
+> no `let`/`const`, no arrow functions, double-quoted strings, `var` +
+> `UPPER_SNAKE_CASE`): see `palbuilder-core`. This skill adds only the job APIs.
 
 > **Verify before trusting.** Workflow JS only truly compiles in the PalBuilder
 > builder (the save/push API returns cached validation). Every snippet below is
@@ -143,81 +147,22 @@ finishCrawl(job);   // sets audit status, job.remove(), job.commit()
 
 ---
 
-## 3. ServiceRequest — the server-side HTTP client
+## 3. Server-side HTTP, JSON & string building — see `palbuilder-data`
 
-`c.createServiceRequest()` is the server-side HTTP client. Use it for crawling, probing
-URLs, calling external APIs.
+The APIs a job uses to fetch and parse external data now live in **`palbuilder-data`**
+(`references/http-client.md`): `c.createServiceRequest()` (GET/POST), `c.createJsonParser(str)`
++ `readValue("a.b.c")`, `c.createBuffer()`, and `pal.getSettings()` for API keys. Read that
+reference before writing HTTP/JSON code — including the rule never to hardcode keys in
+workflow source.
 
-> **Prefer it over ClientPal / `fetch`.** Those run in the browser and expose the URL,
-> headers, and any API key in devtools. ServiceRequest runs server-side.
-
-### GET
-
-```js
-var sr = c.createServiceRequest();
-sr.setMethod("GET");
-sr.setRequestHeader("User-Agent", "AuditHelm/1.0 (+https://www.nimblewire.com/audithelm-bot)");
-sr.setTimeout(4, 6);                       // (connectSeconds, readSeconds) — MUST fit the workflow cap
-var resp = sr.submit(url, false, true);    // submit(url, followRedirectsFlag?, ?)
-var status = resp.getResponseCode();       // HTTP status int (200, 404, 410, ...)
-var body   = resp.readBody();              // full body as String (null-guard it)
-if (body == null) { body = ""; }
-```
-
-### POST with a JSON body
-
-```js
-var sr = c.createServiceRequest();
-sr.setMethod("POST");
-sr.setContentType("application/json");
-sr.setRequestHeader("User-Agent", "...");
-sr.setRequestBody(body);                   // setRequestBody only ships for POST/PUT
-return sr.submit(url, false, true);
-```
-
-Methods: `setMethod`, `setContentType`, `setRequestHeader(name, value)`,
-`setRequestBody(str)`, `setTimeout(connectSecs, readSecs)`, `submit(url, ...)`,
-`resp.getResponseCode()`, `resp.readBody()`.
-
-> `setTimeout(4, 6)` is load-bearing inside a job: one slow page must not eat the ~10s
-> window. Keep the read timeout below the Monitor guard (6 < 7) so a hung fetch still
-> leaves time to write + reschedule.
-
-> ⚠️ **Security anti-pattern — never hardcode API keys in workflow source.** Real pals
-> have shipped a Google PSI/CrUX key inline (`CRAWL_PSI_KEY = "AIza..."`). Keys belong in
-> a settings dataset / config the workflow reads at runtime, **not** in the workflow body —
-> source is readable and pull-tracked.
+**The one job-specific intersection: timeouts must fit the time budget.** `sr.setTimeout(4, 6)`
+(connectSecs, readSecs) is load-bearing inside a `workflowType: 11` job — one slow page must
+not eat the ~10s window (§2). Keep the read timeout **below the Monitor guard** (6 < 7) so a
+hung fetch still leaves time to write + reschedule.
 
 ---
 
-## 4. JsonParser — read JSON without object literals
-
-You can't `JSON.parse` into an object literal (objects are banned). Use
-`c.createJsonParser(str)` and read by **dot-path**:
-
-```js
-var p   = c.createJsonParser(resp.readBody());
-var lcp = numOrNull(p.readValue("record.metrics.largest_contentful_paint.percentiles.p75"));
-var cls = numOrNull(p.readValue("record.metrics.cumulative_layout_shift.percentiles.p75"));
-```
-
-`readValue("a.b.c")` walks the path and returns the leaf (string) or null if any segment is missing.
-
----
-
-## 5. Buffer — efficient string building
-
-`c.createBuffer()` is the workflow's StringBuilder. Use it instead of `+=` in tight loops:
-
-```js
-var sb = c.createBuffer();
-sb.append(x);
-return sb.toString();
-```
-
----
-
-## 6. Advanced patterns — see the reference
+## 4. Advanced patterns — see the reference
 
 Deeper, less-frequent patterns live in **`references/advanced-patterns.md`** — read it when a job needs
 one of these specifically:
@@ -238,9 +183,7 @@ one of these specifically:
 | Job entry / inputs | `c.getJob()`, `job.getPayload().get("k")` |
 | Job lifecycle | `job.reschedule(date)`, `job.commit()`, `job.remove()` |
 | Time budget | `c.getMonitor()`, `monitor.setMaxTimeout()`, `monitor.isTimeRemaining(secs)` |
-| HTTP | `c.createServiceRequest()` → `setMethod/setContentType/setRequestHeader/setRequestBody/setTimeout(c,r)` → `submit(url,..)` → `getResponseCode()`/`readBody()` |
-| Parse JSON | `c.createJsonParser(str).readValue("a.b.c")` |
-| Build strings | `c.createBuffer()` → `append()` → `toString()` |
+| HTTP / JSON / string building | **see `palbuilder-data`** (`references/http-client.md`) — `createServiceRequest`, `createJsonParser`, `createBuffer` |
 | Row by id | `ds.getRecord(id)`, `row.getId()`, `ds.updateRecord(row)`, `ds.deleteRecord(""+id)`, `ds.deleteRecords(col,val)` |
 | Typed fields | `row.getInt/setInt`, `row.getValue` |
 | String/date utils | `formatter.trim/chop`, `dateUtil.addSeconds(date, n)` |

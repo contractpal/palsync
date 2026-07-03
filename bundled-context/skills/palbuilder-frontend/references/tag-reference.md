@@ -45,6 +45,23 @@ set via `c:set` in the workflow) so the current item highlights.
 **`onclick` is NOT valid on `c:a`.** For JS-only actions, use `<button onclick="fn()">` or
 `<a href="#" onclick="fn(); return false;">`.
 
+**Submitting a form — use `action=`, never `href=?action=`.** A `c:a action="saveThing"` submits the
+named inputs / `c:field`s in the current fragment along with the action (no `<form>` wrapper needed);
+add `ajax-target` to swap the returned fragment into a div. A `c:a href="?action=saveThing"` is a plain
+navigation link — it goes to that URL and sends **NOTHING** from the surrounding inputs, so the
+workflow receives empty fields. Use `href` ONLY for pure navigation (a link that carries just its own
+query string). Any Save / Check-out / submit button that must carry typed values uses `action=`:
+
+```html
+<!-- ✓ submits name/category with the action, swaps the response into #body -->
+<input type="text" name="name" value="${name}" />
+<input type="text" name="category" value="${category}" />
+<c:a action="saveEquipment" ajax-target="body" class="btn btn-primary">Save</c:a>
+
+<!-- ✗ WRONG — plain link; name/category are NEVER sent; the workflow sees them null -->
+<c:a href="?action=saveEquipment" class="btn btn-primary">Save</c:a>
+```
+
 **`test`** conditionally renders any element, not just `c:` tags:
 
 ```html
