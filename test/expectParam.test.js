@@ -5,6 +5,7 @@ const { test } = require("node:test");
 const assert = require("node:assert");
 const { checkExpect, extractSelector } = require("../src/core/preview");
 const { capRepeats } = require("../src/core/findingCap");
+const { formatExpect, htmlRegionResult } = require("../src/mcp/tools");
 
 const HTML = [
     "<html>",
@@ -63,4 +64,31 @@ test("capRepeats: nothing collapsed when under the cap", () => {
     const { shown, more } = capRepeats([{ rule: "a" }, { rule: "b" }], f => f.rule, 3);
     assert.equal(shown.length, 2);
     assert.deepEqual(more, []);
+});
+
+test("htmlRegionResult: maxChars truncates the inlined body and flags it, no html field", () => {
+    const res = { html: "x".repeat(5000), status: 200, contentType: "text/html", title: "T", bytes: 5000 };
+    const out = htmlRegionResult(res, { headline: "Fetched a", filePrefix: "t-", guid: "g", maxChars: 100 });
+    assert.ok(!("html" in out), "raw html must not be returned");
+    assert.match(out.message, /first 100 of 5000 bytes/);
+});
+
+test("htmlRegionResult: selector extracts the region; miss reports and inlines nothing", () => {
+    const res = { html: "<body><nav id=\"m\">HI</nav></body>", status: 200, contentType: "text/html", title: "T", bytes: 33 };
+    const hit = htmlRegionResult(res, { headline: "Fetched a", filePrefix: "t-", guid: "g", selector: "#m" });
+    assert.match(hit.message, /selected markup/);
+    assert.match(hit.message, /<nav id="m">HI<\/nav>/);
+    const miss = htmlRegionResult(res, { headline: "Fetched a", filePrefix: "t-", guid: "g", selector: "#absent" });
+    assert.match(miss.message, /matched nothing/);
+    assert.equal(miss.htmlFile, null);
+});
+
+test("formatExpect: verdict line + per-string marks, no page body", () => {
+    const chk = checkExpect("<h1>Hi There</h1>", ["Hi There", "Bye"]);
+    const msg = formatExpect("Fetched x", { status: 200, bytes: 17 }, chk);
+    assert.match(msg, /1 of 2 expected string\(s\) MISSING/);
+    assert.match(msg, /✓ found "Hi There"/);
+    assert.match(msg, /✗ MISSING "Bye"/);
+    // shows the single matched line for context (bounded), not the whole page body.
+    assert.ok(msg.length < 300, "verdict is compact, not the page body");
 });

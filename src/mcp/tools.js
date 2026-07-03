@@ -586,4 +586,4 @@ const TOOLS = [
     }
 ];
 
-module.exports = { TOOLS, overridePhrase, blockedMessage };
+module.exports = { TOOLS, overridePhrase, blockedMessage, formatExpect, htmlRegionResult };
