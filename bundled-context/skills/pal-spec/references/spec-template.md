@@ -73,7 +73,7 @@ high-blast-radius section plus the user's "must not change" answers.
 stays draft while hard flags remain.
 
 **§14 Amendment log** — append-only, empty until the first approved amendment. pal-loop NEVER edits
-the spec silently; the amendment path is in references/amendment-path.md. One block per approved
+the spec silently; the amendment path is in `amendment-path.md` (this directory). One block per approved
 amendment: `- v<n> (<date>, approved by <human>): <which §> — <what changed> — reality forced it
 because: <build-time fact>. Re-gate: reality_check re-run for <§> → pass.`
 
