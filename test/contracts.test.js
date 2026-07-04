@@ -1,0 +1,335 @@
+"use strict";
+// lintContracts: cross-file contract checks (c:list name/id, ajax-target, action routing, EL
+// syntax, href-action anti-pattern, fabricated API methods, dropped params, ajax transport) plus
+// the datasets-manifest addition to lintPalJson. Ground-truthed against real bug corpora in
+// /Users/apple/PalBuilder/test-0{1,2,4,5}-*. Pure fs, no network. Run: npm test.
+const { test } = require("node:test");
+const assert = require("node:assert");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const { lintContracts } = require("../src/core/validate/contracts");
+const { lintPalJson } = require("../src/core/validate/palJson");
+
+function tmpWorkspace(files) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-contracts-"));
+    for (const rel of Object.keys(files)) {
+        const abs = path.join(dir, rel);
+        fs.mkdirSync(path.dirname(abs), { recursive: true });
+        fs.writeFileSync(abs, files[rel]);
+    }
+    return dir;
+}
+
+function basePalJson(extra) {
+    return JSON.stringify(Object.assign({
+        pages: { entry: [] }, fragments: { entry: [] }, styles: { entry: [] },
+        scripts: { entry: [] }, images: { entry: [] }, emails: { entry: [] },
+        attachments: { entry: [] }, datasets: { entry: [] },
+    }, extra));
+}
+
+test("swapped c:list name/id — errors, message names the swap explicitly", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": [
+            "function run(controller) {",
+            "    var equipment = pal.getDataSet('equipment');",
+            "    var filter = equipment.createFilter();",
+            "    var rows = equipment.getRecords(filter, 'items');",
+            "    payload.addDataList(rows);",
+            "}",
+        ].join("\n"),
+        "fragments/list.html": [
+            "<c:ignore xmlns:c=\"contractpal\">",
+            "  <c:list name=\"item\" id=\"items\">",
+            "    <p>${item.name}</p>",
+            "  </c:list>",
+            "</c:ignore>",
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "listNameContract");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /SWAPPED/);
+    assert.match(findings[0].message, /items/);
+});
+
+test("dead ajax-target — no matching id anywhere", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": "function run(controller) {}",
+        "pages/console.html": "<html><body><div id=\"body\"></div></body></html>",
+        "fragments/form.html": "<c:ignore xmlns:c=\"contractpal\"><c:a action=\"save\" ajax-target=\"content\">Save</c:a></c:ignore>",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "ajaxTargetExists");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /no element with id="content"/);
+});
+
+test("unrouted action — no matching case anywhere, no default fallback either", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": [
+            "function run(controller) {",
+            "    switch (controller.getAction()) {",
+            "        case 'list': break;",
+            "    }",
+            "}",
+        ].join("\n"),
+        "fragments/form.html": "<c:ignore xmlns:c=\"contractpal\"><c:a action=\"saveThing\">Save</c:a></c:ignore>",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "actionRouted");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error", "no default: case anywhere — nothing handles it");
+    assert.match(findings[0].message, /saveThing/);
+});
+
+test("EL syntax — '==' inside ${...}", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": "function run(controller) {}",
+        "fragments/row.html": "<c:ignore xmlns:c=\"contractpal\"><c:if test=\"${a == b}\">x</c:if></c:ignore>",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "elSyntax");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /not an EL operator/);
+    assert.match(findings[0].message, /'eq'/);
+});
+
+test("EL syntax — method-call syntax .count() inside ${...}", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": "function run(controller) {}",
+        "fragments/row.html": "<c:ignore xmlns:c=\"contractpal\"><c:if test=\"${items.count() == 0}\">x</c:if></c:ignore>",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "elSyntax");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /method-call syntax/);
+});
+
+test("EL syntax — bare test with no ${ at all", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": "function run(controller) {}",
+        "fragments/row.html": "<c:ignore xmlns:c=\"contractpal\"><c:if test=\"editMode\">x</c:if></c:ignore>",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "elSyntax");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /test must be an EL expression/);
+    assert.match(findings[0].message, /\$\{editMode\}/);
+});
+
+test("href=\"?action=...\" anti-pattern on c:a", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": "function run(controller) {}",
+        "fragments/form.html": "<c:ignore xmlns:c=\"contractpal\"><c:a href=\"?action=save\">Save</c:a></c:ignore>",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "hrefAction");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /sends NO form fields/);
+});
+
+test("fabricated API method setDateValue — suggests setDate", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": [
+            "function run(controller) {",
+            "    var rec = ds.getRecord('1');",
+            "    rec.setDateValue('checkedOutAt', new Date());",
+            "}",
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "unknownApiMethod");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /did you mean \.setDate\(/);
+});
+
+test("fabricated API method with no near match — warns, no suggestion claimed", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": "function run(controller) { ds.deleteEverything(); }",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "unknownApiMethod");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "warn");
+});
+
+test("unwired dataset — datasets/foo.json with no pal.json entry (lintPalJson)", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({}),
+        "datasets/foo.json": JSON.stringify({ name: "foo", fields: { DatasetField: [] } }),
+    });
+    const findings = lintPalJson(dir).filter(f => f.rule === "missingPalJsonEntry" && f.message.includes("datasets/foo.json"));
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /never be provisioned/);
+});
+
+test("wired dataset — datasets/foo.json WITH a matching pal.json entry produces no finding", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({ datasets: { entry: [{ string: "foo", Dataset: { name: "foo" } }] } }),
+        "datasets/foo.json": JSON.stringify({ name: "foo", fields: { DatasetField: [] } }),
+    });
+    const findings = lintPalJson(dir).filter(f => f.message.includes("datasets/foo.json"));
+    assert.strictEqual(findings.length, 0);
+});
+
+test("dropped action parameter — handler never reads the request", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": [
+            "function run(controller) {",
+            "    switch (controller.getAction()) {",
+            "        case 'showForm':",
+            "            getFormData();",
+            "            break;",
+            "    }",
+            "}",
+            "function getFormData() {",
+            "    payload.set('editMode', false);",
+            "}",
+        ].join("\n"),
+        "fragments/list.html": "<c:ignore xmlns:c=\"contractpal\"><c:a action=\"showForm?equipmentId=${r.id}\">Edit</c:a></c:ignore>",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "paramDropped");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "warn");
+    assert.match(findings[0].message, /silently dropped/);
+});
+
+test("action parameter IS read — no paramDropped finding", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": [
+            "function run(controller) {",
+            "    switch (controller.getAction()) {",
+            "        case 'showForm':",
+            "            getFormData();",
+            "            break;",
+            "    }",
+            "}",
+            "function getFormData() {",
+            "    var request = getRequest();",
+            "    var id = request.get('equipmentId');",
+            "}",
+        ].join("\n"),
+        "fragments/list.html": "<c:ignore xmlns:c=\"contractpal\"><c:a action=\"showForm?equipmentId=${r.id}\">Edit</c:a></c:ignore>",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "paramDropped");
+    assert.strictEqual(findings.length, 0);
+});
+
+test("createAjaxResponse without isAjax() — warns once per workflow file", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": [
+            "function run(controller) {",
+            "    var ajax = c.createAjaxResponse(pal.getAjaxFragment('list'), true);",
+            "    return ajax;",
+            "}",
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "ajaxTransport");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "warn");
+});
+
+test("createAjaxResponse WITH isAjax() — no ajaxTransport finding", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": [
+            "function run(controller) {",
+            "    if (request.isAjax()) {",
+            "        var ajax = c.createAjaxResponse(pal.getAjaxFragment('list'), true);",
+            "        return ajax;",
+            "    }",
+            "}",
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "ajaxTransport");
+    assert.strictEqual(findings.length, 0);
+});
+
+// Modeled on test-01-crud-mimo / tag-reference.md's documented ✓ examples — must produce ZERO
+// contract findings of any severity (a fully clean, well-formed pal).
+test("clean fixture (modeled on the passing reference pal) — zero contract findings", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": [
+            "var c, page, payload, pal, request, data, ds;",
+            "function run(controller) {",
+            "    c = controller;",
+            "    page = c.getPage('console');",
+            "    payload = c.createPayload();",
+            "    pal = c.getPal();",
+            "    request = c.getRequest();",
+            "    data = request.getData();",
+            "    ds = pal.getDataSet('equipment');",
+            "    var frag = null;",
+            "    switch (c.getAction()) {",
+            "        case 'showForm':",
+            "            frag = showForm();",
+            "            break;",
+            "        case 'saveEquipment':",
+            "            frag = saveEquipment();",
+            "            break;",
+            "        default:",
+            "            frag = list();",
+            "            break;",
+            "    }",
+            "    if (request.isAjax()) {",
+            "        var ajax = c.createAjaxResponse(pal.getAjaxFragment(frag), true);",
+            "        ajax.addPayload(payload);",
+            "        return ajax;",
+            "    }",
+            "    payload.set('frag', frag);",
+            "    page.addPayload(payload);",
+            "    return page;",
+            "}",
+            "function list() {",
+            "    var filter = ds.createFilter();",
+            "    var rows = ds.getRecords(filter);",
+            "    payload.addDataList(rows);",
+            "    return 'equipmentList';",
+            "}",
+            "function showForm() {",
+            "    var equipmentId = data.get('equipmentId');",
+            "    if (equipmentId != null) {",
+            "        var rec = ds.getRecord(equipmentId);",
+            "        if (rec != null) payload.set('name', rec.get('name'));",
+            "    }",
+            "    return 'equipmentForm';",
+            "}",
+            "function saveEquipment() {",
+            "    var name = data.get('name');",
+            "    var rec = ds.createRecord();",
+            "    rec.set('name', name);",
+            "    ds.insertRecord(rec);",
+            "    return list();",
+            "}",
+        ].join("\n"),
+        "pages/console.html": [
+            "<html xmlns:c=\"contractpal\">",
+            "  <body>",
+            "    <div id=\"body\"><c:fragment name=\"${frag}\" /></div>",
+            "  </body>",
+            "</html>",
+        ].join("\n"),
+        "fragments/equipmentList.html": [
+            "<c:ignore xmlns:c=\"contractpal\">",
+            "  <c:a action=\"showForm\" ajax-target=\"body\">Add</c:a>",
+            "  <c:choose>",
+            "    <c:when test=\"${!empty equipment}\">",
+            "      <c:list name=\"equipment\" id=\"r\">",
+            "        <p>${r.name}</p>",
+            "        <c:a action=\"showForm?equipmentId=${r.equipmentId}\" ajax-target=\"body\">Edit</c:a>",
+            "      </c:list>",
+            "    </c:when>",
+            "    <c:otherwise><p>No equipment yet.</p></c:otherwise>",
+            "  </c:choose>",
+            "</c:ignore>",
+        ].join("\n"),
+        "fragments/equipmentForm.html": [
+            "<c:ignore xmlns:c=\"contractpal\">",
+            "  <input type=\"text\" name=\"name\" value=\"${name}\" />",
+            "  <c:a action=\"saveEquipment\" ajax-target=\"body\">Save</c:a>",
+            "</c:ignore>",
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir);
+    assert.deepStrictEqual(findings, [], "clean fixture must be contract-clean: " + JSON.stringify(findings));
+});

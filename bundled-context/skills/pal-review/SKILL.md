@@ -11,8 +11,10 @@ build meets the contract.
 
 The **eval** layer, distinct from pal-loop's **tests** layer: tests are deterministic (compile /
 validate / contains-string — pal_validate, pal_test, pal_fetch); evals are judgment (correct and
-good against the spec, often visual). This skill evals and *consumes* test results; re-running
-deterministic tools is not its job.
+good against the spec, often visual). This skill evals and *consumes* test results — with one
+exception: `pal_validate` is fast, mechanical, and now checks the contract-checklist wiring below,
+so pal-review re-runs it fresh rather than trusting pal-loop's self-report (same reasoning as the
+fresh `pal_regression` run in arm 4).
 
 ## Inputs (read all, first)
 - `SPEC.md` (must be `status: approved`) — the contract, defining "correct": §3 sitemap, §4 copy,
@@ -31,6 +33,13 @@ Check the build against the contract:
 - Every §12 acceptance criterion **actually met** — full set, not just the global floor;
   same-session verification cheats here, passing the floor while per-feature criteria go unchecked.
 - §11 NEVER list not violated; §8b consumed datasets not altered.
+- **Contract checklist — run `pal_validate` and paste its verdict line; a review with no
+  `pal_validate` run is invalid.** It mechanically checks: (a) each `c:list` `name` matches a
+  DataList name the workflow produces and isn't swapped with the `id` alias; (b) each
+  `ajax-target` matches a real element id in the page shell; (c) each fragment `action=` has a
+  matching workflow case; (d) EL `test=` syntax is real (`${...}` with `eq`/`empty`, no `==`).
+  What it can NOT check — that each `${key}` a fragment reads is set by the workflow payload on
+  the path that renders it — you verify yourself via the §5 action trace in arm 2.
 - Every EXECUTION.md `done` task traces via its `spec ref` column to its SPEC.md § and that
   requirement is satisfied — catching a `done` task with an unmet requirement, not just §12.
 
@@ -40,8 +49,11 @@ each finding's `spec ref` §.
 ### 2. Quality / behavior (judgment — always runs)
 Beyond "it compiled":
 - Does each §5 behavior do the **right** thing? `pal_test` confirms a workflow *compiles*, not that
-  its logic is correct — read it against the spec's input → validation → effect → output and judge
-  the match (compiling-but-wrong is the gap tests can't see).
+  its logic is correct. For **every** §5 action, trace it hop-by-hop with real `file:line` citations:
+  triggering element → action name routed in the workflow → request params read → record operation →
+  payload keys set → fragment `EL`/`c:list` refs that consume those exact keys (one row per action,
+  table format in the output template). Any hop you cannot point at a real line means that action
+  **FAILS** — compiling-but-wrong, and untraceable-but-compiling, are the same verdict.
 - Copy on-brand per BRAND_VOICE / DESIGN_SYSTEM intent, not just present?
 - §6 layout matches the composition the spec described?
 
@@ -76,8 +88,11 @@ Write `REVIEW.md` (or a `## Review` block):
 ```
 # REVIEW — <project> — <date> — reviewer: fresh session
 verdict: PASS | CHANGES-NEEDED
+pal_validate: <quoted verdict line — required; no line means the review is invalid>
 ## Conformance
-| criterion (§) | result | evidence |
+| criterion (§) | result | evidence (must match the required evidence class) |
+## §5 action trace (one row per spec action — an incomplete row means that action FAILS)
+| action (§5) | trigger (file:line) | routed case (file:line) | params read (file:line) | record op (file:line) | payload keys set (file:line) | fragment refs consuming keys (file:line) | result |
 ## Quality / behavior
 - <finding> — <spec ref> — <why it misses>
 ## Visual / UX
@@ -85,6 +100,8 @@ verdict: PASS | CHANGES-NEEDED
 ## Regression [brownfield-only — omit this section entirely when no baseline/ exists]
 | baseline item (page/workflow) | result | evidence (baseline vs current) |
 - known_issues excluded: <list, so exclusions are auditable, not silent>
+## NOT VERIFIED — human gate
+- <criterion or action> — <what a human must confirm> — <why it couldn't be verified here>
 ## Fix tasks (for pal-loop)
 - [ ] <task> — addresses <finding> — success condition: <tool + check>
 ```
@@ -93,11 +110,22 @@ Rules:
   (missing/contradictory requirement) is a blocker for the human, not a self-edit.
 - Judge only against the spec and design system. "I'd have done it differently" is not a finding;
   "violates §12 criterion 4" is.
-- A criterion you can't verify (`pal_screenshot` unavailable, or `captured:false`) is `needs-human`,
-  never an assumed pass — same for a stale-baseline Regression arm and any `eyeball_only` baseline
-  viewport.
+- **Evidence rules — PASS requires the matching evidence class, or it's fabrication:**
+  rendered-output criteria need `pal_screenshot`/`pal_fetch` evidence taken from a state where the
+  criterion is actually observable (a data-effects criterion cannot PASS from an empty-list
+  screenshot); behavior criteria need the complete hop-by-hop trace row from arm 2. Anything you
+  cannot verify with the tools at hand — `pal_screenshot` unavailable, `captured:false`, a trace
+  hop with no real line, a stale-baseline Regression arm, an `eyeball_only` viewport — goes under
+  `## NOT VERIFIED — human gate`, never an assumed pass. **Writing PASS without the required
+  evidence class is a fabricated result, and a fabricated PASS is worse than an honest
+  CHANGES-NEEDED.**
+- **Verdict gating — PASS is allowed only when all three hold:** `pal_validate` reports 0 errors
+  (quote the line), every §5 action has a complete trace row, and no §12 criterion sits in PASS
+  without its evidence class. Any one missing → verdict is CHANGES-NEEDED with fix tasks, never PASS.
 - A `known_issues`-listed defect is never a Regression finding — list it under "known issues
   excluded" so the exclusion is visible, not silently dropped.
+- **Producing `REVIEW.md` is not optional.** A build with no `REVIEW.md` is incomplete — same
+  status as a build with an unmet criterion.
 
 ## How it fits the loop
 pal-loop runs the **tests** as it builds, then at completion hands off to pal-review in a **fresh
@@ -105,7 +133,8 @@ context** (new session or subagent) with the inputs above. pal-review returns th
 turns CHANGES-NEEDED items into fix tasks and re-reviews until PASS.
 
 ## What this skill does NOT do
-- Does not compile or validate — that's pal-loop's verify step; this consumes those results.
+- Does not compile or write tests — that's pal-loop's build step. It does re-run `pal_validate`
+  itself (see the exception above) rather than trust pal-loop's self-report.
 - Does not fix anything — produces a verdict and fix tasks only.
 - Does not see on its own — visual review needs a screenshot capability; without one it defers to
   the human eyeball gate rather than judging blind.

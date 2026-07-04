@@ -21,7 +21,14 @@ The primary tag for all server-triggered actions. Renders as an `<a>` element.
 
 <!-- Load a fragment into a div via AJAX -->
 <c:a action="editLogo" ajax-target="modalContent" class="action-link">Edit</c:a>
+```
 
+**`ajax-target` must equal the `id=` of an element that actually exists in the current page
+shell** — it is not the fragment name and not the action name. Typical shell:
+`<div id="body"><c:fragment name="${frag}" /></div>` with links using `ajax-target="body"`. A
+target with no matching element renders the response nowhere, with no error.
+
+```html
 <!-- Pass a query string parameter -->
 <c:a action="getCampaign?id=${campaign.id}">View</c:a>
 
@@ -133,6 +140,23 @@ syntax `${id.columnName}` — **not** `.getValue('...')`.
     <c:div test="${!f.isInvited}" data-friendid="${f.friendId}">
         <p>${f.firstName} ${f.lastName}</p>
     </c:div>
+</c:list>
+```
+
+**`name` is the DataList name the workflow attached, never the row alias.** If the workflow
+did `payload.addDataList(ds.getRecords(filter).copy("items"))`, the template's `name` must be
+`"items"`; `id` is just the loop variable used as `${id.column}` inside the body:
+
+```html
+<!-- ✓ name="items" matches the workflow's copy("items"); id="item" is only the loop alias -->
+<!-- workflow: payload.addDataList(ds.getRecords(filter).copy("items")); -->
+<c:list name="items" id="item">
+    <p>${item.name}</p>
+</c:list>
+
+<!-- ✗ WRONG — name/id swapped; there is no DataList named "item", so this renders zero rows -->
+<c:list name="item" id="items">
+    <p>${items.name}</p>
 </c:list>
 ```
 

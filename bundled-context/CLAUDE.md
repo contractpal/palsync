@@ -134,6 +134,15 @@ subfolders. Pull refreshes the former; the latter survive forever.
    `const` (use `var`), no arrow functions (use `function`). Strings use double
    quotes. Full ban list and workarounds:
    `palbuilder-core/references/es3-cheatsheet.md`.
+7. **`c:list` name/id, `ajax-target`, and `test=` EL must match their real targets —
+   never guess these.** `<c:list name="X" id="row">`: `name` is the DataList name the
+   workflow attached via `payload.addDataList(...)` (its `copy(name)` name) — never the
+   loop alias; `id` is only the per-row alias, used as `${row.column}` inside the loop.
+   Swap them and the table renders zero rows. `ajax-target="Y"` must equal the `id=` of an
+   element that actually exists in the current page shell — a target with no matching
+   element renders nowhere, silently. `test=` takes only `${...}` EL with
+   `eq ne gt lt ge le empty ! and or` — no `==`, `>`, and no method calls like
+   `.count()`; those are not real syntax and fail or silently no-op.
 
 ---
 
@@ -194,5 +203,7 @@ Applies by default to every change.
       `palbuilder-core`).
 - [ ] Any new dataset is registered inline in `pal.json` `datasets.entry` AND its
       table provisioned via the dataset-sync step (see `CLAUDE.palsync.md`).
+- [ ] Every fragment's `c:list` name / `${...}` keys / `ajax-target` were checked against
+      the workflow payload names and page element ids (`pal_validate` now checks these too).
 - [ ] Debug calls, dead code, and unused files removed.
 - [ ] No new files or abstractions beyond what the task actually required.

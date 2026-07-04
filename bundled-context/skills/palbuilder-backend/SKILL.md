@@ -107,6 +107,9 @@ function run(controller) {
 }
 ```
 
+Full end-to-end CRUD (list / add / edit / save, with the edit-id round-trip and the
+save-falls-through-to-list re-render) worked out line by line: **`references/worked-example-crud.md`**.
+
 **Key rules (as real pals actually do it):**
 - `switch (c.getAction())` is the common form. Storing `action = c.getAction()` and using
   `switch (action)` is equally valid — both appear in real code. Don't force one.

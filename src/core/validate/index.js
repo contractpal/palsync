@@ -17,6 +17,7 @@ const { lintWorkflowJs } = require("./workflowJs");
 const { lintMarkup } = require("./markup");
 const { lintDatasetDef } = require("./datasetDef");
 const { lintPalJson } = require("./palJson");
+const { lintContracts } = require("./contracts");
 const { capRepeats } = require("../findingCap");
 
 const MARKUP_EXT = new Set([".html", ".htm", ".xhtml"]);
@@ -100,6 +101,14 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
     // Not scoped by `only` — a missing pal.json entry is a workspace-level problem regardless
     // of which files changed, and the check is cheap (no file parsing).
     findings.push(...lintPalJson(workspaceDir));
+
+    // Cross-file contract checks (c:list name/id, ajax-target, action routing, EL syntax,
+    // href-action anti-pattern, fabricated API methods, dropped params, ajax transport).
+    // Not scoped by `only` — these check a fragment/page against a workflow that may live in
+    // a DIFFERENT file than the one this push changed, so limiting to changed files would miss
+    // exactly the mismatches this exists to catch (e.g. a fragment edit that now names a
+    // DataList the workflow never produces).
+    findings.push(...lintContracts(workspaceDir));
 
     findings.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
     const errors = findings.filter(f => f.severity === "error").length;

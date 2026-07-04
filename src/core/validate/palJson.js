@@ -83,6 +83,49 @@ function lintPalJson(workspaceDir) {
         }
     }
 
+    // datasets/*.json — same silent-skip failure as CREATABLE_FOLDERS above, but the entry
+    // shape differs: pal.json's datasets.entry[].string is the dataset NAME (basename without
+    // ".json"), wrapped in a "Dataset" object, not a "filename" pointing at the file on disk
+    // (see palbuilder-data/references/datasets.md, "Registering a dataset"). Handled separately
+    // from CREATABLE_FOLDERS for that reason.
+    {
+        const folderPath = path.join(workspaceDir, "datasets");
+        let diskFiles;
+        try { diskFiles = fs.readdirSync(folderPath, { withFileTypes: true }); }
+        catch (e) { if (e.code !== "ENOENT") throw e; diskFiles = null; }
+
+        if (diskFiles) {
+            const section = manifest.datasets;
+            const registered = new Set();
+            if (section && Array.isArray(section.entry)) {
+                for (const entry of section.entry) {
+                    if (typeof entry.string === "string") registered.add(entry.string);
+                }
+            }
+
+            for (const de of diskFiles) {
+                if (!de.isFile()) continue;
+                if (de.name.startsWith(".") || !de.name.endsWith(".json")) continue;
+                const baseName = de.name.slice(0, -".json".length);
+
+                if (!registered.has(baseName)) {
+                    findings.push({
+                        file: "pal.json",
+                        line: 1,
+                        column: 0,
+                        severity: "error",
+                        rule: "missingPalJsonEntry",
+                        message: "datasets/" + de.name + " exists on disk but has NO pal.json entry — " +
+                            "the table will never be provisioned server-side. " +
+                            "Fix: add an entry to pal.json's \"datasets\".entry array with \"string\": \"" + baseName +
+                            "\" and a \"Dataset\" object (name, fields.DatasetField[], freeform:true) matching " +
+                            "datasets/" + de.name + ".",
+                    });
+                }
+            }
+        }
+    }
+
     return findings;
 }
 
