@@ -15,6 +15,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { walkTree } = require("./fsWalk");
 
 const IN_SCOPE = [
     "data", "datalists", "datasets", "dataviews",
@@ -28,7 +29,7 @@ function sha256(buf) { return crypto.createHash("sha256").update(buf).digest("he
 // One walk used by both granularities. Returns [{ rel (posix), abs }] sorted by rel.
 function listScopedFiles(dir) {
     const files = [];
-    for (const folder of IN_SCOPE) walk(path.join(dir, folder), folder, files);
+    for (const folder of IN_SCOPE) walkTree(path.join(dir, folder), folder, files);
     const manifestAbs = path.join(dir, MANIFEST_FILE);
     if (fs.existsSync(manifestAbs)) files.push({ rel: MANIFEST_FILE, abs: manifestAbs });
     files.sort((a, b) => a.rel.localeCompare(b.rel));
@@ -70,17 +71,6 @@ function hashPaths(dir, relPaths) {
         catch (e) { if (e.code !== "ENOENT") throw e; /* not on disk — skip */ }
     }
     return out;
-}
-
-function walk(dir, relBase, out) {
-    let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
-    for (const e of entries) {
-        const abs = path.join(dir, e.name);
-        const rel = relBase + "/" + e.name; // POSIX form on every OS
-        if (e.isDirectory()) walk(abs, rel, out);
-        else out.push({ rel, abs });
-    }
 }
 
 module.exports = { hashWorkspace, hashWorkspaceFiles, hashPaths, IN_SCOPE, MANIFEST_FILE };

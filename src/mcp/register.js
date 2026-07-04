@@ -20,15 +20,23 @@ function buildMcpConfig(workspaceDir, { nodePath = process.execPath } = {}) {
     };
 }
 
+// Read <filePath> as JSON (missing/unparsable -> {}), merge `cfg` over it with the servers
+// object under `serversKey` merged one level deep (preserves other servers the user already
+// configured), write it back. Shared by the Claude (.mcp.json) and OpenCode (opencode.json)
+// registrations — the config schemas differ, only the file-merge mechanics are shared.
+async function mergeJsonConfig(filePath, cfg, serversKey) {
+    let existing = {};
+    try { existing = JSON.parse(await fs.readFile(filePath, "utf8")); } catch (e) { /* none */ }
+    const merged = Object.assign({}, existing, cfg, { [serversKey]: Object.assign({}, existing[serversKey], cfg[serversKey]) });
+    await fs.writeFile(filePath, JSON.stringify(merged, null, 2), "utf8");
+    return merged;
+}
+
 // Write/merge .mcp.json. Preserves any other mcpServers the user already configured.
 async function register(workspaceDir, opts = {}) {
     const filePath = path.join(workspaceDir, ".mcp.json");
-    let existing = {};
-    try { existing = JSON.parse(await fs.readFile(filePath, "utf8")); } catch (e) { /* none */ }
-    const cfg = buildMcpConfig(workspaceDir, opts);
-    const merged = Object.assign({}, existing, { mcpServers: Object.assign({}, existing.mcpServers, cfg.mcpServers) });
-    await fs.writeFile(filePath, JSON.stringify(merged, null, 2), "utf8");
+    const merged = await mergeJsonConfig(filePath, buildMcpConfig(workspaceDir, opts), "mcpServers");
     return { filePath, config: merged };
 }
 
-module.exports = { register, buildMcpConfig, MCP_BIN };
+module.exports = { register, buildMcpConfig, mergeJsonConfig, MCP_BIN };

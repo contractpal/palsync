@@ -8,19 +8,13 @@
 // Cross-platform: which/where for PATH, shell:true for npm on Windows, no OS-specific assumptions.
 const { spawnSync } = require("child_process");
 const readline = require("readline");
+const { commandOnPath } = require("./platform/commandOnPath");
 
 const MIN_NODE_MAJOR = 18;
 const REC_NODE = "20"; // recommended LTS major to upgrade to
 
 function nodeMajor() {
     return parseInt(process.versions.node.split(".")[0], 10);
-}
-
-// Cross-platform "is this command on PATH?": `where` on Windows, `which` elsewhere.
-function commandOnPath(name) {
-    const probe = process.platform === "win32" ? "where" : "which";
-    try { return spawnSync(probe, [name], { stdio: "ignore" }).status === 0; }
-    catch (e) { return false; }
 }
 
 // ---- Node (guide only) ---------------------------------------------------------------------

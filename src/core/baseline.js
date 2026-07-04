@@ -16,6 +16,7 @@
 // and the workspace hash never touch.
 const fs = require("fs");
 const path = require("path");
+const { walkTree } = require("./fsWalk");
 
 const BASELINE_DIR = path.join(".palsync", "baseline");
 
@@ -59,19 +60,7 @@ function snapshot(workspaceDir, serverPaths) {
 
 // Every rel path currently in the baseline store (POSIX). Used by merge to know the ancestor set.
 function list(workspaceDir) {
-    const out = [];
-    const baseAbs = path.join(workspaceDir, BASELINE_DIR);
-    (function walk(dirAbs, relBase) {
-        let entries;
-        try { entries = fs.readdirSync(dirAbs, { withFileTypes: true }); }
-        catch (e) { return; }
-        for (const e of entries) {
-            const childRel = relBase ? relBase + "/" + e.name : e.name;
-            if (e.isDirectory()) walk(path.join(dirAbs, e.name), childRel);
-            else out.push(childRel);
-        }
-    })(baseAbs, "");
-    return out;
+    return walkTree(path.join(workspaceDir, BASELINE_DIR), "").map(f => f.rel);
 }
 
 // Baseline content for one file (POSIX rel), or null if not snapshotted.

@@ -13,16 +13,10 @@
 // flag today), so there is one shared `palsync` entry whose PALSYNC_WORKSPACE is the most recently
 // registered workspace. The remove+add refresh keeps it correct for the active session.
 const { spawnSync } = require("child_process");
-const path = require("path");
+const { commandOnPath } = require("../platform/commandOnPath");
+const { MCP_BIN } = require("./register");
 
-const MCP_BIN = path.resolve(__dirname, "..", "..", "bin", "palsync-mcp.js");
 const SERVER_NAME = "palsync";
-
-function commandOnPath(name) {
-    const probe = process.platform === "win32" ? "where" : "which";
-    try { return spawnSync(probe, [name], { stdio: "ignore" }).status === 0; }
-    catch (e) { return false; }
-}
 
 function codex(args, cwd) {
     const useShell = process.platform === "win32"; // resolve codex.cmd on Windows

@@ -3,7 +3,8 @@
 // (command found on PATH); whichever one you pick is launched in the workspace with the right
 // context injected. Launch spawns the agent CLI inheriting the terminal (portable handoff); on
 // Windows we go through the shell so `claude.cmd` resolves.
-const { spawn, spawnSync } = require("child_process");
+const { spawn } = require("child_process");
+const { commandOnPath } = require("../platform/commandOnPath");
 
 // `mcp` = how palsync registers its sync server for this agent: "claude" (.mcp.json),
 // "codex" (`codex mcp add`), "opencode" (opencode.json), or false (no MCP — the agent drives
@@ -15,15 +16,6 @@ const AGENTS = [
     { id: "opencode", key: "opencode", label: "OpenCode", command: "opencode", args: [], mcp: "opencode" }
     // future: { id: "cline", ... }, { id: "cursor", ... }
 ];
-
-// Is a command resolvable on PATH? (`which` on POSIX, `where` on Windows.)
-function commandOnPath(cmd) {
-    const probe = process.platform === "win32" ? "where" : "which";
-    try {
-        const r = spawnSync(probe, [cmd], { stdio: "ignore" });
-        return r.status === 0;
-    } catch (e) { return false; }
-}
 
 // Agents installed on this machine. If none are detected (unexpected — palsync was launched
 // somehow), fall back to the full registry so the picker is never empty; launch() then surfaces

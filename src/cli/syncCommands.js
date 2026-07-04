@@ -103,6 +103,12 @@ function parseFlags(argv) {
 
 function toolByName(name) { return TOOLS.find(t => t.name === name); }
 
+// Best-effort lock release after a one-shot command (no live session remains to hold it).
+// Failure is swallowed: your own next session auto-reclaims the lock.
+async function releaseLock(ctx) {
+    try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
+}
+
 async function buildCliContext(dir) {
     try {
         // acquireLock:false — no session lifecycle here. push takes (and we then release) the
@@ -239,9 +245,7 @@ async function run(cmd, argv) {
     if (cmd === "merge") {
         const res = await toolByName("pal_merge").run(ctx, {});
         console.log(res.message);
-        if (!flags.keepLock && ctx.session.lockInfo) {
-            try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
-        }
+        if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
         return res.merged && (!res.conflicts || res.conflicts.length === 0) ? 0 : 1;
     }
 
@@ -272,18 +276,14 @@ async function run(cmd, argv) {
         }
         const res = await toolByName("pal_sync_datasets").run(ctx, { datasets: names, recreate: flags.recreate, confirmRecreate, force: flags.force });
         console.log(res.message);
-        if (!flags.keepLock && ctx.session.lockInfo) {
-            try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
-        }
+        if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
         return res.synced ? 0 : 1;
     }
 
     if (cmd === "preview") {
         const res = await toolByName("pal_preview").run(ctx, { workflow: flags.workflow, expect: flags.expect, selector: flags.selector, maxChars: flags.maxChars });
         console.log(res.message);
-        if (!flags.keepLock && ctx.session.lockInfo) {
-            try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
-        }
+        if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
         return res.previewed ? 0 : 1;
     }
 
@@ -292,9 +292,7 @@ async function run(cmd, argv) {
         if (!pagePath) { console.error("Usage: palsync fetch <page-path>   e.g. palsync fetch about.html"); return 1; }
         const res = await toolByName("pal_fetch").run(ctx, { path: pagePath, expect: flags.expect, selector: flags.selector, maxChars: flags.maxChars });
         console.log(res.message);
-        if (!flags.keepLock && ctx.session.lockInfo) {
-            try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
-        }
+        if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
         // With expect, exit reflects the verdict (pass=all found); otherwise a 200 fetch.
         if (flags.expect) return res.fetched && res.pass ? 0 : 1;
         return res.fetched && res.status === 200 ? 0 : 1;
@@ -304,18 +302,14 @@ async function run(cmd, argv) {
         // page is an optional positional (default: home page), like fetch's <page>.
         const res = await toolByName("pal_screenshot").run(ctx, { page: flags._positional, viewport: flags.viewport, fullPage: flags.fullPage });
         console.log(res.message); // includes the saved PNG path — CLI can't return the image inline
-        if (!flags.keepLock && ctx.session.lockInfo) {
-            try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
-        }
+        if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
         return res.captured ? 0 : 1;
     }
 
     if (cmd === "regression") {
         const res = await toolByName("pal_regression").run(ctx, {});
         console.log(res.message);
-        if (!flags.keepLock && ctx.session.lockInfo) {
-            try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
-        }
+        if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
         // Exit non-zero on a stale baseline or any CAUSED failure; inherited/needs-human don't fail the run.
         if (res.stale || (res.ran && res.caused && res.caused.length)) return 1;
         return 0;
@@ -324,9 +318,7 @@ async function run(cmd, argv) {
     if (cmd === "seo-audit") {
         const res = await toolByName("pal_seo_audit").run(ctx, {});
         console.log(res.message);
-        if (!flags.keepLock && ctx.session.lockInfo) {
-            try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
-        }
+        if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
         return res.audited && res.errors === 0 ? 0 : 1;
     }
 
@@ -334,9 +326,7 @@ async function run(cmd, argv) {
         const res = await toolByName("pal_test").run(ctx, { workflow: flags.workflow, preview: flags.preview });
         console.log(res.message);
         // pal_test acquires the lock; release it unless asked to hold (no live session here).
-        if (!flags.keepLock && ctx.session.lockInfo) {
-            try { await lock.releaseByGuid(ctx.session, ctx.record.palGuid); } catch (e) { /* own next session reclaims */ }
-        }
+        if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
         return res.ran && res.validated ? 0 : 1;
     }
 
