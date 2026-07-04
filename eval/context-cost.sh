@@ -9,8 +9,8 @@
 #     (a skill's description is loaded EVERY session, whether or not the skill fires)
 #   - total MCP tool `description` chars in src/mcp/tools.js (same — always in the tool list)
 #
-# Prints tables + grand totals. Sessions 2-3 diff their snapshot against the committed baseline
-# (eval/context-cost-baseline.txt) to prove context shrank. Per-skill rows also give the teammate
+# Prints tables + grand totals. Save a snapshot before a context-trimming session and diff it
+# against a fresh run to prove context shrank. Per-skill rows also give the teammate
 # a cost readout as new palbuilder skills land.
 #
 # Char count is the portable proxy for tokens (~4 chars/token for English prose). No tokenizer

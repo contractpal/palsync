@@ -24,8 +24,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test",
-    "ping": "node scripts/ping-test.js"
+    "test": "node --test"
   },
   "dependencies": {
     "@clack/prompts": "^0.10.1",
