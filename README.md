@@ -103,7 +103,7 @@ Now talk to Claude. Ask for a change, then say *"push it."*
 | Flag | Alias | What it does |
 |------|-------|--------------|
 | `--version` | `-v` | Print the palsync build version and exit. |
-| `--agent <name>` | | Choose the coding agent: `claude` (default), `codex`, or `pi`. |
+| `--agent <name>` | | Choose the coding agent: `claude` (default), `codex`, `pi`, or `opencode`. |
 
 Every bundled skill (including **`seo-core`** — the page-head recipe, the absolute-og-URL and non-ASCII-attribute traps, JSON-LD, and the `pal_seo_audit` verify loop) is injected on every setup. Skills cost no context until the agent opens one, so there is no flag to gate them.
 
@@ -224,26 +224,33 @@ push provisions it.
 
 ### Choosing an agent
 
-palsync defaults to **Claude Code**. Pass `--agent codex` or `--agent pi` to use **Codex** or **Pi** instead:
+palsync defaults to **Claude Code**. Pass `--agent codex`, `--agent pi`, or `--agent opencode` to use
+**Codex**, **Pi**, or **OpenCode** instead:
 
 ```sh
-palsync                 # Claude Code (default): skills → .claude/skills/, instructions → CLAUDE.md
-palsync --agent codex   # Codex: skills → .agents/skills/ + AGENTS.md, MCP via `codex mcp add`, launches codex
-palsync --agent pi      # Pi: skills → .agents/skills/ + AGENTS.md (CLI flavor — no MCP), launches pi
+palsync                    # Claude Code (default): skills → .claude/skills/, instructions → CLAUDE.md
+palsync --agent codex      # Codex: skills → .agents/skills/ + AGENTS.md, MCP via `codex mcp add`, launches codex
+palsync --agent pi         # Pi: skills → .agents/skills/ + AGENTS.md (CLI flavor — no MCP), launches pi
+palsync --agent opencode   # OpenCode: skills → .agents/skills/ + AGENTS.md, MCP via opencode.json, launches opencode
 ```
 
-With `--agent codex`, palsync writes the same skills to the cross-agent **Agent Skills** open
-standard (`.agents/skills/<name>/SKILL.md` + companion assets) and an `AGENTS.md` instruction file,
-registers the palsync MCP server with Codex via `codex mcp add` (Codex owns its `~/.codex/config.toml`),
-and launches `codex` in the workspace. The Claude Code paths (`.claude/skills/`, `CLAUDE.md`) are
-**always** written too and are unchanged, so nothing about the default flow regresses. Because it's
-built on the open Agent Skills standard, this generalizes to other agents as they adopt it. If the
-`codex` CLI isn't installed, palsync still prepares the workspace and prints the exact manual
-registration + launch commands rather than failing.
+A workspace carries files for exactly ONE agent at a time — the one it was last launched with.
+Switching `--agent` on an existing workspace prunes the previous agent's palsync-owned files
+(`.claude/skills/` + `CLAUDE.palsync.md` vs `.agents/skills/` + `AGENTS.md`) and writes the new
+agent's, so nothing stale lingers; any of your own notes in `CLAUDE.md`/`AGENTS.md` outside the
+managed block always survive.
 
-With `--agent pi`, palsync writes the same `.agents/skills/` + `AGENTS.md` as Codex, but the
-`AGENTS.md` carries the **CLI flavor** (it tells Pi to drive sync through `palsync push|pull|validate|…`)
-because Pi has **no MCP server** — there's nothing to register, and `pi` is launched in the workspace.
+With `--agent codex` or `--agent opencode`, palsync writes the skills to the cross-agent **Agent
+Skills** open standard (`.agents/skills/<name>/SKILL.md` + companion assets) and an `AGENTS.md`
+instruction file in the **MCP flavor** (both agents get a real MCP server registered). Codex is
+registered via `codex mcp add` (Codex owns its `~/.codex/config.toml`); OpenCode is registered by
+writing a project-scoped `opencode.json` (which OpenCode auto-discovers, the same way Claude Code
+auto-discovers `.mcp.json`). If the agent's CLI isn't installed, palsync still prepares the
+workspace and prints the exact manual registration + launch commands rather than failing.
+
+With `--agent pi`, palsync writes the same `.agents/skills/` + `AGENTS.md`, but in the **CLI
+flavor** (it tells Pi to drive sync through `palsync push|pull|validate|…`) because Pi has **no
+MCP server** — there's nothing to register, and `pi` is launched in the workspace.
 
 ## MCP tools (Claude calls these for you)
 

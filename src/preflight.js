@@ -95,10 +95,11 @@ function pathFixGuidance() {
     ].join("\n");
 }
 
-// ---- Codex (detect + instruct; non-fatal) --------------------------------------------------
+// ---- Codex / Pi / OpenCode (detect + instruct; non-fatal) ----------------------------------
 // Asymmetric with Claude on purpose: we auto-install Claude Code because we've verified that npm
-// package. We do NOT auto-run a Codex install — instead we warn + instruct, and let the workspace
-// still get prepared (the MCP registration and launch steps degrade gracefully if codex is absent).
+// package. We do NOT auto-run an install for any other agent — instead we warn + instruct, and let
+// the workspace still get prepared (the MCP registration and launch steps degrade gracefully if the
+// agent's binary is absent).
 
 function manualCodexInstructions() {
     return [
@@ -108,16 +109,33 @@ function manualCodexInstructions() {
     ].join("\n");
 }
 
-// Non-fatal: returns { ok, reason } and prints guidance if codex is missing. Never exits.
-function ensureCodex({ onPath = commandOnPath } = {}) {
-    if (onPath("codex")) return { ok: true, reason: "present" };
+function manualOpencodeInstructions() {
+    return [
+        "Install OpenCode, then re-run palsync (or register the MCP server + launch OpenCode manually):",
+        "  npm install -g opencode-ai   (or: brew install anomalyco/tap/opencode)",
+        "  Docs: https://opencode.ai/docs/"
+    ].join("\n");
+}
+
+function manualPiInstructions() {
+    return "Install Pi, then re-run palsync (or launch `pi` manually in the prepared workspace).";
+}
+
+// Non-fatal PATH check shared by every non-Claude agent: warn + print install guidance if the
+// agent's binary is missing, but never block workspace prep. Returns { ok, reason }.
+function ensureAgentOnPath(binName, label, instructions, { onPath = commandOnPath } = {}) {
+    if (onPath(binName)) return { ok: true, reason: "present" };
     process.stderr.write(
-        "\n⚠ Codex CLI ('codex') was not found on PATH. palsync will still pull, lock, and inject the\n" +
-        "workspace, but it can't auto-register the MCP server or launch Codex for you.\n" +
-        manualCodexInstructions() + "\n"
+        "\n⚠ " + label + " CLI ('" + binName + "') was not found on PATH. palsync will still pull, lock, and\n" +
+        "inject the workspace, but it can't auto-register the MCP server or launch " + label + " for you.\n" +
+        instructions + "\n"
     );
     return { ok: false, reason: "not-found" };
 }
+
+function ensureCodex(opts) { return ensureAgentOnPath("codex", "Codex", manualCodexInstructions(), opts); }
+function ensureOpencode(opts) { return ensureAgentOnPath("opencode", "OpenCode", manualOpencodeInstructions(), opts); }
+function ensurePi(opts) { return ensureAgentOnPath("pi", "Pi", manualPiInstructions(), opts); }
 
 // Ensure `claude` is available; auto-install on consent. Injectable bits make it testable.
 // Returns { ok, reason }.
@@ -151,17 +169,18 @@ async function run({ agent = "claude" } = {}) {
         process.exit(1);
     }
     // 2) Agent check.
-    //    - codex: non-fatal — warn + instruct, then continue (workspace prep + manual fallback work).
+    //    - codex/pi/opencode: non-fatal — warn + instruct, then continue (workspace prep + manual
+    //      fallback work). None of these need Claude Code installed.
     //    - claude (default): auto-install on consent; fatal if it can't be made available.
-    if (agent === "codex") {
-        ensureCodex();
-        return;
-    }
+    if (agent === "codex") { ensureCodex(); return; }
+    if (agent === "pi") { ensurePi(); return; }
+    if (agent === "opencode") { ensureOpencode(); return; }
     const claude = await ensureClaudeCode();
     if (!claude.ok) process.exit(1);
 }
 
 module.exports = {
-    run, ensureClaudeCode, ensureCodex, manualCodexInstructions, detectNodeInstallMethod,
+    run, ensureClaudeCode, ensureCodex, ensureOpencode, ensurePi, manualCodexInstructions,
+    manualOpencodeInstructions, manualPiInstructions, detectNodeInstallMethod,
     nodeUpgradeCommand, nodeMessage, manualClaudeInstructions, pathFixGuidance, commandOnPath, MIN_NODE_MAJOR
 };

@@ -86,7 +86,8 @@ It exposes: `pal_status`, `pal_validate`, `pal_test`, `pal_preview`, `pal_seo_au
 `pal_sync_datasets`, `pal_pull`, `pal_merge`, `pal_push`, `pal_lock`, `pal_unlock` (11 tools — a modest context cost; keep other
 heavy MCP servers off the same session if context is tight).
 
-**OpenCode** — `~/.config/opencode/opencode.json` (or project `opencode.json`):
+**OpenCode** — palsync registers itself when you run `palsync setup --agent opencode`, or add it
+manually to a project `opencode.json` (or the global `~/.config/opencode/opencode.json`):
 
 ```json
 {
@@ -94,7 +95,7 @@ heavy MCP servers off the same session if context is tight).
   "mcp": {
     "palsync": {
       "type": "local",
-      "command": ["palsync-mcp"],
+      "command": ["node", "/abs/path/to/palsync/bin/palsync-mcp.js"],
       "enabled": true,
       "environment": {
         "PALSYNC_WORKSPACE": "/home/you/pals/isr",
@@ -105,6 +106,9 @@ heavy MCP servers off the same session if context is tight).
   }
 }
 ```
+
+(`command: ["palsync-mcp"]` also works if the `palsync-mcp` bin is on PATH; palsync's own
+auto-registration uses the full node + script-path form so it never depends on PATH.)
 
 **Codex** — palsync registers itself when you run `palsync setup --agent codex`, or add it manually:
 

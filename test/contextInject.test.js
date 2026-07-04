@@ -123,6 +123,20 @@ test("pruneSkills removes retired/owned skills, keeps user skills", async () => 
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
+test("OpenCode pal carries only AGENTS.md + .agents skills, MCP flavor", async () => {
+    const ws = tmp();
+    await ci.inject(ws, { palName: "Demo", agent: "opencode" });
+    assert.ok(fs.existsSync(path.join(ws, "AGENTS.md")), "OpenCode gets AGENTS.md");
+    assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-backend/SKILL.md")), "OpenCode skills at .agents/");
+    const md = fs.readFileSync(path.join(ws, "AGENTS.md"), "utf8");
+    assert.ok(md.includes("`pal_push`"), "OpenCode AGENTS.md uses the MCP tool pal_push");
+    assert.ok(!md.includes("`palsync push`"), "OpenCode flavor must not use CLI subcommands");
+    assert.ok(md.includes("locked for your session"), "OpenCode locks for the session like Codex, not per-command");
+    assert.ok(!fs.existsSync(path.join(ws, "CLAUDE.palsync.md")), "OpenCode pal has no CLAUDE.palsync.md");
+    assert.ok(!fs.existsSync(path.join(ws, ".claude/skills/palbuilder-backend")), "OpenCode pal has no .claude skills");
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
 test("Pi AGENTS.md uses the palsync CLI, not MCP", async () => {
     const ws = tmp();
     await ci.inject(ws, { palName: "Demo", agent: "pi" });

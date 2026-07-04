@@ -394,15 +394,16 @@ async function contextStatus(workspaceDir) {
 // palsync-owned artifacts so a workspace carries exactly the files its agent reads.
 //   claude → .claude/skills + CLAUDE.palsync.md (the owned doc) + a tiny CLAUDE.md block that
 //            `@CLAUDE.palsync.md`-imports it. Claude Code reads CLAUDE.md and resolves the import.
-//   codex/pi → .agents/skills + AGENTS.md carrying the full doc inline (their @import support is
-//            unreliable; Claude Code does not read .agents/ or AGENTS.md — verified). Pi uses the CLI
-//            flavor (palsync subcommands, no session lock); Codex uses the MCP flavor.
+//   codex/pi/opencode → .agents/skills + AGENTS.md carrying the full doc inline (their @import
+//            support is unreliable; Claude Code does not read .agents/ or AGENTS.md — verified).
+//            Pi uses the CLI flavor (palsync subcommands, no session lock); Codex and OpenCode use
+//            the MCP flavor (both get a registered MCP server — see workspace.js).
 async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
     const skills = await bundledSkills();
     const keep = skills.map(s => s.name);
     const skillNames = keep.slice();
 
-    if (agent === "codex" || agent === "pi") {
+    if (agent === "codex" || agent === "pi" || agent === "opencode") {
         await copySkillSet(workspaceDir, ".agents", skills);
         const prunedAgents = await pruneSkills(workspaceDir, ".agents", keep);
         const agentsDoc = await buildPalsyncDoc(palName, { cli: agent === "pi" });

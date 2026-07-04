@@ -6,7 +6,7 @@
 // its own harness (OpenCode / Codex / Claude Code / Hermes) to the palsync MCP server.
 //
 //   palsync setup --pal "<name>"   [--guid <guid>] [--dir <dir>] [--cloud <url>] [--user <name>]
-//                 [--profile <p>] [--group <g>] [--agent claude|codex|pi]
+//                 [--profile <p>] [--group <g>] [--agent claude|codex|pi|opencode]
 //                 [--overwrite-local] [--json]
 //
 // Auth is headless via credentialStore (CP_PASS / PALSYNC_PASSWORD_<…> / keychain). The pal is
@@ -35,7 +35,7 @@ const USAGE = [
     "  --profile <name>     narrow by profile name (disambiguates a duplicate pal name)",
     "  --group <name>       narrow by group name",
     "  --template <name>    apply a starter template after the pull (web-marketing, console-app; `palsync scaffold --list`)",
-    "  --agent claude|codex|pi  which agent's context/MCP to write (default: claude; pi uses the CLI, no MCP)",
+    "  --agent claude|codex|pi|opencode  which agent's context/MCP to write (default: claude; pi uses the CLI, no MCP)",
     "  --overwrite-local    if the workspace has un-pushed local edits, overwrite them (default: refuse)",
     "  --json               machine-readable result",
     "",
@@ -151,7 +151,7 @@ async function run(argv) {
         console.log("\nWorkspace ready: " + workspaceDir);
         console.log("  pulled " + result.pulledFiles + " code files + " + result.dataFiles + " data/schema files; skills injected.");
         console.log("  Connect your agent's MCP client to the palsync server with env PALSYNC_WORKSPACE=" + workspaceDir);
-        console.log("  (Claude Code: a .mcp.json was written here. OpenCode/Codex/Hermes: see the headless docs.)");
+        console.log("  (Claude Code: .mcp.json written. OpenCode: opencode.json written. Codex: registered via `codex mcp add`. Hermes: see the headless docs.)");
         console.log("  Auth: set CP_PASS in the agent's environment so the MCP server can authenticate headless.");
     }
     return 0;

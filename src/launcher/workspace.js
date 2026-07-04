@@ -19,6 +19,7 @@ const contextInject = require("./contextInject");
 const palsyncfile = require("../core/palsyncfile");
 const { register } = require("../mcp/register");
 const { registerCodex } = require("../mcp/registerCodex");
+const { registerOpencode } = require("../mcp/registerOpencode");
 const { hashWorkspace, hashPaths } = require("../core/workspaceHash");
 const { diffWorkspace, describeDiff } = require("../core/localDrift");
 const { mergeWorkspace } = require("../core/merge");
@@ -164,7 +165,8 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
     // + pal.json) — inject() reads the user's existing CLAUDE.md and merges its managed block
     // in place.
     log("injecting CLAUDE.md + skills" +
-        (agent === "codex" ? " + AGENTS.md/.agents (Codex)" : agent === "pi" ? " + AGENTS.md/.agents (Pi)" : ""));
+        (agent === "codex" ? " + AGENTS.md/.agents (Codex)" : agent === "pi" ? " + AGENTS.md/.agents (Pi)" :
+         agent === "opencode" ? " + AGENTS.md/.agents (OpenCode)" : ""));
     const injected = await contextInject.inject(workspaceDir, { palName: sel.pal.name, agent });
 
     await palsyncfile.write(workspaceDir, record);
@@ -188,6 +190,9 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
         // Pi has no MCP — it drives palsync through the headless CLI (palsync push|pull|status|…),
         // which AGENTS.md tells it to use. Nothing to register.
         log("Pi uses the palsync CLI (no MCP server) — AGENTS.md carries the sync instructions");
+    } else if (agent === "opencode") {
+        log("registering palsync MCP server with OpenCode (opencode.json)");
+        reg = await registerOpencode(workspaceDir);
     } else {
         log("registering palsync MCP server (.mcp.json)");
         reg = await register(workspaceDir);
