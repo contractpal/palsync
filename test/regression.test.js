@@ -4,16 +4,11 @@
 // so readBaseline + JSON parsing are exercised for real.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
 const { runRegression } = require("../src/core/regression");
+const { tmpWorkspace } = require("./helpers");
 
 function fixture(baseline) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "regfix-"));
-    fs.mkdirSync(path.join(dir, "baseline"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "baseline", "baseline.json"), JSON.stringify(baseline, null, 2));
-    return dir;
+    return tmpWorkspace({ "baseline/baseline.json": JSON.stringify(baseline, null, 2) });
 }
 
 const REC = { palGuid: "guid-1", palName: "Demo" };
@@ -103,7 +98,7 @@ test("caused failure: workflow no longer VALIDATED", async () => {
 });
 
 test("no baseline/ -> does not apply, ran:false", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "regfix-none-"));
+    const dir = tmpWorkspace();
     const r = await runRegression({}, REC, dir, healthyDeps());
     assert.equal(r.ran, false);
     assert.equal(r.noBaseline, true);

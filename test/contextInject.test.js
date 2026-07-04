@@ -5,14 +5,12 @@
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const ci = require("../src/launcher/contextInject");
-
-function tmp() { return fs.mkdtempSync(path.join(os.tmpdir(), "palsync-inject-")); }
+const { tmpWorkspace } = require("./helpers");
 
 test("every bundled skill injects, with its references/* assets (bundle dir = source of truth)", async () => {
-    const ws = tmp();
+    const ws = tmpWorkspace();
     await ci.inject(ws, { palName: "Demo", agent: "claude" });
     const skillsDir = path.join(ws, ".claude/skills");
     const bundled = path.join(__dirname, "..", "bundled-context", "skills");
@@ -34,7 +32,7 @@ test("every bundled skill injects, with its references/* assets (bundle dir = so
 });
 
 test("Claude CLAUDE.md @imports the owned doc (real import, not backticked)", async () => {
-    const ws = tmp();
+    const ws = tmpWorkspace();
     await ci.inject(ws, { palName: "Demo", agent: "claude" });
     const md = fs.readFileSync(path.join(ws, "CLAUDE.md"), "utf8");
     // Import must be on its own line and NOT inside backticks, or Claude Code skips it.
@@ -55,7 +53,7 @@ test("Claude CLAUDE.md @imports the owned doc (real import, not backticked)", as
 });
 
 test("Pi pal carries only AGENTS.md + .agents skills — no CLAUDE files", async () => {
-    const ws = tmp();
+    const ws = tmpWorkspace();
     await ci.inject(ws, { palName: "Demo", agent: "pi" });
     assert.ok(fs.existsSync(path.join(ws, "AGENTS.md")), "Pi gets AGENTS.md");
     assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-backend/SKILL.md")), "Pi skills at .agents/");
@@ -72,7 +70,7 @@ test("Pi pal carries only AGENTS.md + .agents skills — no CLAUDE files", async
 });
 
 test("switching a workspace's agent cleans the other agent's palsync files, keeps user notes", async () => {
-    const ws = tmp();
+    const ws = tmpWorkspace();
     fs.writeFileSync(path.join(ws, "CLAUDE.md"), "# My own notes\n", "utf8");
     await ci.inject(ws, { palName: "Demo", agent: "claude" });           // Claude first
     assert.ok(fs.existsSync(path.join(ws, "CLAUDE.palsync.md")), "claude doc written");
@@ -90,7 +88,7 @@ test("switching a workspace's agent cleans the other agent's palsync files, keep
 });
 
 test("contextStatus flags a stale/missing stamp", async () => {
-    const ws = tmp();
+    const ws = tmpWorkspace();
     await ci.inject(ws, { palName: "Demo", agent: "claude" });
     const fresh = await ci.contextStatus(ws);
     assert.equal(fresh.stale, false, "freshly injected workspace is current");
@@ -105,7 +103,7 @@ test("contextStatus flags a stale/missing stamp", async () => {
 });
 
 test("pruneSkills removes retired/owned skills, keeps user skills", async () => {
-    const ws = tmp();
+    const ws = tmpWorkspace();
     await ci.inject(ws, { palName: "Demo", agent: "claude" });
     const skillsDir = path.join(ws, ".claude/skills");
     // simulate a retired skill from an older inject + a user-authored skill
@@ -124,7 +122,7 @@ test("pruneSkills removes retired/owned skills, keeps user skills", async () => 
 });
 
 test("OpenCode pal carries only AGENTS.md + .agents skills, MCP flavor", async () => {
-    const ws = tmp();
+    const ws = tmpWorkspace();
     await ci.inject(ws, { palName: "Demo", agent: "opencode" });
     assert.ok(fs.existsSync(path.join(ws, "AGENTS.md")), "OpenCode gets AGENTS.md");
     assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-backend/SKILL.md")), "OpenCode skills at .agents/");
@@ -138,7 +136,7 @@ test("OpenCode pal carries only AGENTS.md + .agents skills, MCP flavor", async (
 });
 
 test("Pi AGENTS.md uses the palsync CLI, not MCP", async () => {
-    const ws = tmp();
+    const ws = tmpWorkspace();
     await ci.inject(ws, { palName: "Demo", agent: "pi" });
     const md = fs.readFileSync(path.join(ws, "AGENTS.md"), "utf8");
     for (const cmd of ["`palsync push`", "`palsync pull`", "`palsync validate`", "`palsync sync-datasets`"]) {

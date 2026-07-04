@@ -6,20 +6,9 @@
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("fs");
-const os = require("os");
-const path = require("path");
 const { lintContracts } = require("../src/core/validate/contracts");
 const { lintPalJson } = require("../src/core/validate/palJson");
-
-function tmpWorkspace(files) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-contracts-"));
-    for (const rel of Object.keys(files)) {
-        const abs = path.join(dir, rel);
-        fs.mkdirSync(path.dirname(abs), { recursive: true });
-        fs.writeFileSync(abs, files[rel]);
-    }
-    return dir;
-}
+const { tmpWorkspace } = require("./helpers");
 
 function basePalJson(extra) {
     return JSON.stringify(Object.assign({
@@ -52,6 +41,7 @@ test("swapped c:list name/id — errors, message names the swap explicitly", () 
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /SWAPPED/);
     assert.match(findings[0].message, /items/);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("dead ajax-target — no matching id anywhere", () => {
@@ -64,6 +54,7 @@ test("dead ajax-target — no matching id anywhere", () => {
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /no element with id="content"/);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("unrouted action — no matching case anywhere, no default fallback either", () => {
@@ -81,6 +72,7 @@ test("unrouted action — no matching case anywhere, no default fallback either"
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "error", "no default: case anywhere — nothing handles it");
     assert.match(findings[0].message, /saveThing/);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("EL syntax — '==' inside ${...}", () => {
@@ -93,6 +85,7 @@ test("EL syntax — '==' inside ${...}", () => {
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /not an EL operator/);
     assert.match(findings[0].message, /'eq'/);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("EL syntax — method-call syntax .count() inside ${...}", () => {
@@ -104,6 +97,7 @@ test("EL syntax — method-call syntax .count() inside ${...}", () => {
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /method-call syntax/);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("EL syntax — bare test with no ${ at all", () => {
@@ -116,6 +110,7 @@ test("EL syntax — bare test with no ${ at all", () => {
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /test must be an EL expression/);
     assert.match(findings[0].message, /\$\{editMode\}/);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("href=\"?action=...\" anti-pattern on c:a", () => {
@@ -128,6 +123,7 @@ test("href=\"?action=...\" anti-pattern on c:a", () => {
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /sends NO form fields/);
     assert.match(findings[0].message, /Do NOT wrap the c:a in a <form>/);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("<form> tag in a fragment — server rejects the save", () => {
@@ -139,6 +135,7 @@ test("<form> tag in a fragment — server rejects the save", () => {
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /Tag form is not allowed/);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("<form> tag in a page — allowed (server only rejects it in fragments)", () => {
@@ -148,6 +145,7 @@ test("<form> tag in a page — allowed (server only rejects it in fragments)", (
     });
     const findings = lintContracts(dir).filter(f => f.rule === "formTag");
     assert.strictEqual(findings.length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("fabricated API method setDateValue — suggests setDate", () => {
@@ -163,6 +161,7 @@ test("fabricated API method setDateValue — suggests setDate", () => {
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /did you mean \.setDate\(/);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("fabricated API method with no near match — warns, no suggestion claimed", () => {
@@ -172,6 +171,7 @@ test("fabricated API method with no near match — warns, no suggestion claimed"
     const findings = lintContracts(dir).filter(f => f.rule === "unknownApiMethod");
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "warn");
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("unwired dataset — datasets/foo.json with no pal.json entry (lintPalJson)", () => {
@@ -183,6 +183,7 @@ test("unwired dataset — datasets/foo.json with no pal.json entry (lintPalJson)
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /never be provisioned/);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("wired dataset — datasets/foo.json WITH a matching pal.json entry produces no finding", () => {
@@ -192,6 +193,7 @@ test("wired dataset — datasets/foo.json WITH a matching pal.json entry produce
     });
     const findings = lintPalJson(dir).filter(f => f.message.includes("datasets/foo.json"));
     assert.strictEqual(findings.length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("dropped action parameter — handler never reads the request", () => {
@@ -214,6 +216,7 @@ test("dropped action parameter — handler never reads the request", () => {
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "warn");
     assert.match(findings[0].message, /silently dropped/);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("action parameter IS read — no paramDropped finding", () => {
@@ -235,6 +238,7 @@ test("action parameter IS read — no paramDropped finding", () => {
     });
     const findings = lintContracts(dir).filter(f => f.rule === "paramDropped");
     assert.strictEqual(findings.length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("createAjaxResponse without isAjax() — warns once per workflow file", () => {
@@ -249,6 +253,7 @@ test("createAjaxResponse without isAjax() — warns once per workflow file", () 
     const findings = lintContracts(dir).filter(f => f.rule === "ajaxTransport");
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "warn");
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("createAjaxResponse WITH isAjax() — no ajaxTransport finding", () => {
@@ -264,6 +269,7 @@ test("createAjaxResponse WITH isAjax() — no ajaxTransport finding", () => {
     });
     const findings = lintContracts(dir).filter(f => f.rule === "ajaxTransport");
     assert.strictEqual(findings.length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 // Modeled on test-01-crud-mimo / tag-reference.md's documented ✓ examples — must produce ZERO
@@ -353,6 +359,7 @@ test("clean fixture (modeled on the passing reference pal) — zero contract fin
     });
     const findings = lintContracts(dir);
     assert.deepStrictEqual(findings, [], "clean fixture must be contract-clean: " + JSON.stringify(findings));
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("fragment binding — page reads ${frag} but workflow sets payload.set('main', frag) (test-02 mimo bug)", () => {
@@ -371,6 +378,7 @@ test("fragment binding — page reads ${frag} but workflow sets payload.set('mai
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /payload\.set\("main", frag\)/);
     assert.match(findings[0].message, /payload\.set\("frag", frag\)/);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("fragment binding — no workflow sets the key at all, no rename candidate", () => {
@@ -381,6 +389,7 @@ test("fragment binding — no workflow sets the key at all, no rename candidate"
     const findings = lintContracts(dir).filter(f => f.rule === "fragmentBinding");
     assert.strictEqual(findings.length, 1);
     assert.match(findings[0].message, /keys that are set: title/);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("fragment binding — matching payload.set key produces no finding", () => {
@@ -389,6 +398,7 @@ test("fragment binding — matching payload.set key produces no finding", () => 
         "workflows/console.js": "function run(controller) { var payload = controller.createPayload(); payload.set('frag', 'list'); }",
     });
     assert.strictEqual(lintContracts(dir).filter(f => f.rule === "fragmentBinding").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("fragment binding — static c:fragment name is not this check's contract", () => {
@@ -397,4 +407,5 @@ test("fragment binding — static c:fragment name is not this check's contract",
         "workflows/console.js": "function run(controller) {}",
     });
     assert.strictEqual(lintContracts(dir).filter(f => f.rule === "fragmentBinding").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
 });

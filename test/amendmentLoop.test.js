@@ -14,8 +14,8 @@
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
+const helpers = require("./helpers");
 
 const SKILLS = path.join(__dirname, "..", "bundled-context", "skills");
 const palLoop = fs.readFileSync(path.join(SKILLS, "pal-loop", "SKILL.md"), "utf8");
@@ -76,10 +76,7 @@ const FIXTURE_EXEC = [
 ].join("\n");
 
 function tmpWorkspace() {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-amend-"));
-    fs.writeFileSync(path.join(dir, "SPEC.md"), FIXTURE_SPEC);
-    fs.writeFileSync(path.join(dir, "EXECUTION.md"), FIXTURE_EXEC);
-    return dir;
+    return helpers.tmpWorkspace({ "SPEC.md": FIXTURE_SPEC, "EXECUTION.md": FIXTURE_EXEC });
 }
 
 // PROPOSE (pal-loop): writes ONLY to EXECUTION.md Blockers — never SPEC.md.

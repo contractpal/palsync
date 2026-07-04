@@ -7,17 +7,12 @@
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("fs");
-const os = require("os");
-const path = require("path");
 const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
 const { InMemoryTransport } = require("@modelcontextprotocol/sdk/inMemory.js");
 const { createServer } = require("../src/mcp/server");
-
 // A fresh empty workspace — pal_validate lints it offline (missing pal.json / files degrade to a
 // clean result), so the call succeeds without ever needing a session.
-function tmpWorkspace() {
-    return fs.mkdtempSync(path.join(os.tmpdir(), "palsync-needsctx-"));
-}
+const { tmpWorkspace } = require("./helpers");
 
 // Wire a client to a server built around a getCtx spy. The spy records every call and, if it ever
 // runs, hands back a deliberately inert ctx (no real session) — so a ctx-requiring tool gets past
@@ -42,6 +37,7 @@ test("offline tool (pal_validate) runs WITHOUT resolving ctx — no login/lock",
     assert.strictEqual(calls.getCtx, 0, "pal_validate must NOT trigger getCtx (no login/lock/session)");
     assert.strictEqual(res.isError, undefined, "pal_validate should succeed against a bare workspace");
     await client.close();
+    fs.rmSync(ws, { recursive: true, force: true });
 });
 
 test("ctx-requiring tool (pal_status) still resolves ctx exactly as before", async () => {
@@ -52,4 +48,5 @@ test("ctx-requiring tool (pal_status) still resolves ctx exactly as before", asy
     await client.callTool({ name: "pal_status", arguments: {} });
     assert.strictEqual(calls.getCtx, 1, "pal_status must resolve ctx via getCtx (login + lock path)");
     await client.close();
+    fs.rmSync(ws, { recursive: true, force: true });
 });

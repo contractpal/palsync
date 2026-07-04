@@ -24,7 +24,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@clack/prompts": "^0.10.1",

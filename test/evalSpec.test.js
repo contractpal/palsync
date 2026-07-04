@@ -2,13 +2,9 @@
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const { listSpecs, resolveSpec, injectSpec } = require("../src/core/evalSpec");
-
-function tempWorkspace() {
-    return fs.mkdtempSync(path.join(os.tmpdir(), "palsync-evalspec-"));
-}
+const { tmpWorkspace } = require("./helpers");
 
 test("listSpecs returns the 3 frozen benchmark specs", () => {
     const specs = listSpecs();
@@ -29,7 +25,7 @@ test("resolveSpec accepts a numeric prefix", () => {
 });
 
 test("injectSpec writes all 4 files flat, fills the placeholder, and rewrites relative paths", () => {
-    const ws = tempWorkspace();
+    const ws = tmpWorkspace();
     const spec = resolveSpec("01_crud_equipment_checkout");
     const r = injectSpec(ws, spec, { fillValue: "https://x.test (pal: foo)" });
     assert.deepEqual(r.written.sort(), ["COMPONENTS.md", "DESIGN_SYSTEM.md", "EXECUTION.md", "SPEC.md"]);
@@ -45,7 +41,7 @@ test("injectSpec writes all 4 files flat, fills the placeholder, and rewrites re
 });
 
 test("injectSpec never overwrites an existing file", () => {
-    const ws = tempWorkspace();
+    const ws = tmpWorkspace();
     const spec = resolveSpec("01_crud_equipment_checkout");
     injectSpec(ws, spec, { fillValue: "x" });
     fs.writeFileSync(path.join(ws, "SPEC.md"), "MODIFIED BY AGENT");

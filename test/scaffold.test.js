@@ -5,17 +5,17 @@
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const { applyTemplate } = require("../src/core/scaffold");
+const { tmpWorkspace } = require("./helpers");
 
 function tempWorkspace() {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-scaffold-"));
-    fs.writeFileSync(path.join(dir, "pal.json"), JSON.stringify({
-        layout: { name: "T" },
-        pages: { entry: [] }, fragments: { entry: [] }, styles: { entry: [] }, workflows: { entry: [] }
-    }));
-    return dir;
+    return tmpWorkspace({
+        "pal.json": JSON.stringify({
+            layout: { name: "T" },
+            pages: { entry: [] }, fragments: { entry: [] }, styles: { entry: [] }, workflows: { entry: [] }
+        })
+    });
 }
 
 test("console-app starter creates a workflow entry with the console workflowType (7)", () => {
