@@ -50,7 +50,7 @@ if (argv[0] === "setup") {
         });
     return;
 }
-// `palsync upgrade` — self-update to the latest GitHub release tag. No workspace/agent needed.
+// `palsync upgrade` — self-update to the latest commit on the default branch. No workspace/agent needed.
 if (argv[0] === "upgrade") {
     require("../src/cli/upgradeCommand").run(argv.slice(1))
         .then(code => process.exit(code))
@@ -66,7 +66,7 @@ if (argv[0] === "help" || argv.includes("--help") || argv.includes("-h")) {
         "  palsync                 launch: login → pick pal → pull+lock → inject skills → open agent\n" +
         "  palsync setup --pal \"<name>\"   headless workspace creation (no prompts; for autonomous/agent boxes)\n" +
         "  palsync push|pull|status|test|preview|validate|sync-datasets   headless ops for a workspace (no MCP/agent needed)\n" +
-        "  palsync upgrade [--check]   self-update to the latest release (installs the newest git tag)\n" +
+        "  palsync upgrade [--check]   self-update to the latest commit on the default branch\n" +
         "  palsync --agent codex|pi|opencode   use Codex, Pi, or OpenCode instead of Claude Code (default: claude)\n" +
         "  palsync --eval [spec]   benchmark-harness mode: pick a spec, force create-pal, inject SPEC.md\n" +
         "  palsync --version       print the build\n\n" +
