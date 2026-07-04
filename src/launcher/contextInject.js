@@ -121,6 +121,13 @@ function syncSection(palName, { cli = false } = {}) {
         "- Datasets: you can create/update their TABLES with " + T.datasets + " (define in pal.json → sync). A normal",
         "  sync never deletes data; `recreate` does and needs a typed confirmation. Dataviews/data/datalists stay",
         "  PalBuilder-provisioned (preserved, never created).",
+        ...(cli ? [] : [
+        "- **Never run the `palsync` CLI from your shell in this session** — the tools above ARE the",
+        "  interface here; the bare `palsync` command opens an interactive human launcher that will hang",
+        "  your shell on a prompt. And **NEVER `pkill`/`kill` anything matching `palsync`** — that kills",
+        "  this session's own MCP server and every pal_* tool with it. If a tool seems missing, ask the",
+        "  user; do not fall back to the CLI.",
+        ]),
         "- Specialized checks (the owning skill explains each): " + T.fetch + " verifies ONE web page renders",
         "  (pass `expect:[strings]`; " + T.preview + " does the same inline), " + T.specLint + " lints a SPEC.md offline",
         "  (pal-spec), " + T.regression + " runs a brownfield baseline regression check (pal-init/pal-loop). Lock",

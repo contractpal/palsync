@@ -23,8 +23,13 @@ if (argv.includes("--version") || argv.includes("-v")) {
 // (the recovery path when a session ends before a push, and a plain terminal workflow). They
 // skip the launcher preflight entirely: no Claude/Codex required, just .palsync.json + keychain.
 const SUBCOMMANDS = ["push", "pull", "merge", "status", "test", "preview", "fetch", "screenshot", "validate", "sync-datasets", "seo-audit", "scaffold", "cost", "regression", "spec-lint", "task", "checkpoint"];
-if (SUBCOMMANDS.includes(argv[0])) {
-    require("../src/cli/syncCommands").run(argv[0], argv.slice(1))
+// Normalize underscores so `palsync sync_datasets` runs sync-datasets instead of falling through.
+// In the test-07 run that fall-through opened the interactive launcher inside an agent's shell,
+// which hung on a prompt — and the agent's `pkill -f palsync` to unstick it killed the session's
+// own MCP server.
+const subcmd = argv[0] && !argv[0].startsWith("-") ? argv[0].replace(/_/g, "-") : undefined;
+if (SUBCOMMANDS.includes(subcmd)) {
+    require("../src/cli/syncCommands").run(subcmd, argv.slice(1))
         .then(code => process.exit(code))
         .catch(err => {
             process.stderr.write("palsync " + argv[0] + " failed: " + (err && err.message ? err.message : err) + "\n");
@@ -68,6 +73,24 @@ if (argv[0] === "help" || argv.includes("--help") || argv.includes("-h")) {
         require("../src/cli/syncCommands").USAGE + "\n"
     );
     process.exit(0);
+}
+
+// Any other positional word is an unknown subcommand — refuse it. The launcher takes flags only,
+// so falling through here used to open the interactive UI on a typo (`palsync sync_datasets`),
+// which hangs a non-interactive caller on a prompt.
+if (subcmd && subcmd !== "setup" && subcmd !== "upgrade") {
+    process.stderr.write("palsync: unknown subcommand '" + argv[0] + "'. Valid: " +
+        SUBCOMMANDS.join(", ") + ", setup, upgrade, help.\n");
+    process.exit(1);
+}
+
+// The interactive launcher needs a real terminal — refuse cleanly when run from a pipe or an
+// agent's shell tool instead of hanging forever on an invisible prompt.
+if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    process.stderr.write("palsync: the interactive launcher needs a terminal (stdin/stdout is not a TTY).\n" +
+        "Headless use: `palsync setup --pal \"<name>\"` to create a workspace, or the subcommands (" +
+        SUBCOMMANDS.slice(0, 6).join(", ") + ", ...). If you are an agent inside a palsync session, use the pal_* MCP tools instead.\n");
+    process.exit(1);
 }
 
 // --agent <claude|codex|pi>: choose the coding agent. Default Claude Code (and, when the flag is
