@@ -18,10 +18,9 @@ function sameUser(email, username) {
     return !!(email && username && String(email).toLowerCase() === String(username).toLowerCase());
 }
 
-// Read the real lock owner WITHOUT acquiring anything. getPal is read-only; teamInfo is present
-// only when a team/PalBuilder lock is held. Returns { lockType, since, ownerEmail, ownerName } or null.
-async function readTeamLock(session, palId) {
-    const gp = await CloudPistonAPIManager.getPal(session, palId);
+// Parse the team/PalBuilder lock out of a getPal response. teamInfo is present only when a
+// team lock is held. Returns { lockType, since, ownerEmail, ownerName } or null.
+function teamLockFrom(gp) {
     const ti = gp && gp.teamInfo && gp.teamInfo["com.contractpal.pal.TeamInfo"];
     if (!ti) return null;
     const p = ti.profile || {};
@@ -33,18 +32,26 @@ async function readTeamLock(session, palId) {
     };
 }
 
+// Read the real lock owner WITHOUT acquiring anything. getPal is read-only.
+async function readTeamLock(session, palId) {
+    return teamLockFrom(await CloudPistonAPIManager.getPal(session, palId));
+}
+
 function holderLabel(team) {
     return (team.ownerName ? team.ownerName : "(unknown)") + (team.ownerEmail ? " (" + team.ownerEmail + ")" : "");
 }
 
 // Acquire the Webstart lock for a pal by GUID. Detects a blocking team/PalBuilder lock first (read-only)
 // and reports the real owner. force only ever attempts Lock-Force when OVERRIDE_ENABLED is true.
-async function acquireByGuid(session, guid, { force = false } = {}) {
-    const resolved = await resolveServerPalByGuid(session, guid);
+// opts.resolved skips the account walk when the caller already resolved the guid. The result
+// carries `resolved` and the raw `getPalResp` so callers reuse them instead of re-fetching.
+async function acquireByGuid(session, guid, { force = false, resolved: pre = null } = {}) {
+    const resolved = pre || await resolveServerPalByGuid(session, guid);
     if (!resolved) throw new Error("GUID " + guid + " not found on " + session.environment.url);
 
     // 1) Team/PalBuilder lock? (read-only) — that blocks LockPal; we can name the real owner.
-    const team = await readTeamLock(session, resolved.id);
+    const getPalResp = await CloudPistonAPIManager.getPal(session, resolved.id);
+    const team = teamLockFrom(getPalResp);
     if (team) {
         const mine = sameUser(team.ownerEmail, session.username);
         if (!force) {
@@ -65,7 +72,7 @@ async function acquireByGuid(session, guid, { force = false } = {}) {
     const granted = !!(session.lockInfo && session.lockInfo.lockGranted === true);
     if (granted) {
         try { await CloudPistonAPIManager.getPlatformInfo(session, resolved.id); } catch (e) { /* best-effort */ }
-        return { acquired: true, reclaimed: force, resolved };
+        return { acquired: true, reclaimed: force, resolved, getPalResp };
     }
     // Denied with no team lock + null owner → genuinely unknown holder.
     session.lockInfo = undefined;
@@ -83,9 +90,10 @@ async function releaseByGuid(session, guid) {
 }
 
 // Read-only status: who holds it, from teamInfo (no lock attempt). Falls back to our own
-// in-session Webstart lock if we hold one.
-async function statusByGuid(session, guid) {
-    const resolved = await resolveServerPalByGuid(session, guid);
+// in-session Webstart lock if we hold one. opts.resolved skips the account walk when the
+// caller already resolved the guid.
+async function statusByGuid(session, guid, { resolved: pre = null } = {}) {
+    const resolved = pre || await resolveServerPalByGuid(session, guid);
     if (!resolved) throw new Error("GUID " + guid + " not found on " + session.environment.url);
     const team = await readTeamLock(session, resolved.id);
     if (team) {
@@ -98,4 +106,4 @@ async function statusByGuid(session, guid) {
     return { locked: false };
 }
 
-module.exports = { acquireByGuid, releaseByGuid, statusByGuid, readTeamLock, sameUser, OVERRIDE_ENABLED };
+module.exports = { acquireByGuid, releaseByGuid, statusByGuid, readTeamLock, teamLockFrom, sameUser, OVERRIDE_ENABLED };

@@ -55,6 +55,22 @@ async function resolveServerPalByGuid(session, guid) {
     return all.find(p => p.guid === guid) || null;
 }
 
+// Cheap re-resolve from a previously-resolved pal: ONE getPalList scoped to its profile/group
+// instead of the full account walk. Returns the freshly-shaped pal (new transient id + current
+// lastModifiedDate) or null — e.g. if the pal moved groups — and the caller falls back to the
+// full resolveServerPalByGuid.
+async function refreshResolvedPal(session, resolved) {
+    if (!resolved || resolved.profileId == null || resolved.groupId == null) return null;
+    try {
+        const palResp = await CloudPistonAPIManager.getPalList(session, resolved.profileId, resolved.groupId, { includeTest: true, includeInstalled: true });
+        const pals = (palResp && palResp.palInfoList && palResp.palInfoList.PalInfoEx) || [];
+        const p = pals.find(x => x.guid === resolved.guid);
+        if (!p) return null;
+        return shapePal(p, { profileId: resolved.profileId, profileName: resolved.profileName },
+                           { groupId: resolved.groupId, name: resolved.groupName });
+    } catch (e) { return null; }
+}
+
 // Resolve a pal BY NAME (the "don't hardcode GUIDs" path). Returns { resolved, candidates }:
 //   - exactly one match  → resolved is it, candidates: [it]
 //   - none               → resolved null, candidates [] (caller errors with suggestions)
@@ -68,4 +84,4 @@ async function resolveServerPalByName(session, name, { profile, group } = {}) {
     return { resolved: matches.length === 1 ? matches[0] : null, candidates: matches, all };
 }
 
-module.exports = { resolveServerPalByGuid, resolveServerPalByName, enumerateServerPals, timestampText, shapePal };
+module.exports = { resolveServerPalByGuid, resolveServerPalByName, refreshResolvedPal, enumerateServerPals, timestampText, shapePal };

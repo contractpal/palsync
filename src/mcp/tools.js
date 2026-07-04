@@ -141,7 +141,8 @@ const TOOLS = [
         async run(ctx) {
             const live = await resolveServerPalByGuid(ctx.session, ctx.record.palGuid);
             const serverNewer = live ? drift.serverAdvanced(ctx.record.lastModifiedDate, live.lastModifiedDate) : false;
-            const st = await lock.statusByGuid(ctx.session, ctx.record.palGuid); // read-only — no lock attempt
+            // read-only — no lock attempt; reuse the resolve above instead of a second account walk
+            const st = await lock.statusByGuid(ctx.session, ctx.record.palGuid, { resolved: live });
             let lockMsg;
             if (!st.locked) lockMsg = "not locked";
             else if (st.kind === "gui") lockMsg = (st.byUs ? "checked out by you in PalBuilder" : "locked by " + st.holder) + " since " + st.since;

@@ -8,7 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const { Pal } = require("../../lib/pal");
 const { CloudPistonAPIManager } = require("../../lib/apiManager");
-const { resolveServerPalByGuid } = require("./resolve");
+const { resolveServerPalByGuid, refreshResolvedPal } = require("./resolve");
 const { manifestPaths } = require("./pull");
 const { validateWorkspace, lintContent } = require("./validate");
 const { diffWorkspace } = require("./localDrift");
@@ -115,12 +115,12 @@ function gateLint(record, workspaceDir) {
     return { errors, warnings, findings, filesChecked: changed.length, scope: haveBaselineContent ? "new-errors" : "changed" };
 }
 
-// Best-effort: the set of entry-strings the server already has, per uncreatable type. Used to tell
-// a NEW (uncreatable) entry from an existing one we may legitimately edit. Returns null on failure
-// (caller then skips stripping rather than risk dropping a valid existing entry).
-async function fetchServerKnown(session, palId) {
+// Best-effort: the set of entry-strings the server already has, per uncreatable type, parsed
+// from a getPal response. Used to tell a NEW (uncreatable) entry from an existing one we may
+// legitimately edit. Returns null on a missing/odd response (caller then skips stripping rather
+// than risk dropping a valid existing entry).
+function serverKnownFrom(resp) {
     try {
-        const resp = await CloudPistonAPIManager.getPal(session, palId);
         const sp = resp && resp.pal;
         if (!sp) return null;
         const setOf = (k) => new Set((((sp[k] && sp[k].entry)) ? (Array.isArray(sp[k].entry) ? sp[k].entry : [sp[k].entry]) : []).map(e => e.string));
@@ -265,8 +265,9 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
     pal.id = id;
     // Backstop: strip NEW entries of uncreatable types (documents/fonts) so they can't sink the
     // whole push; report stray files. Plus strip only MALFORMED new workflows (no workflowType) —
-    // well-formed new workflows now push. Creatable types are never touched.
-    const serverKnown = await fetchServerKnown(session, id);
+    // well-formed new workflows now push. Creatable types are never touched. Parsed from the
+    // getPal response the lock acquisition already fetched — no second GetPal round-trip.
+    const serverKnown = serverKnownFrom(lk.getPalResp);
     const skipped = guardUncreatableTypes(pal, workspaceDir, serverKnown)
         .concat(guardWorkflows(pal, serverKnown));
     const strayCreatable = findStrayCreatable(pal, workspaceDir);
@@ -282,10 +283,12 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
     const validation = normalizeValidation(saveResp);
     const success = !!(saveResp && saveResp.success);
 
-    // 4) refresh the stored marker (the save advanced it) by re-resolving the guid.
+    // 4) refresh the stored marker (the save advanced it). Scoped single getPalList first;
+    //    full account walk only as fallback (e.g. pal moved groups mid-session).
     let pushedPaths = null;
     if (success) {
-        const after = await resolveServerPalByGuid(session, record.palGuid);
+        const after = (await refreshResolvedPal(session, lk.resolved))
+            || (await resolveServerPalByGuid(session, record.palGuid));
         record.lastModifiedDate = after ? after.lastModifiedDate : liveMarker;
         // The pushed files now == server — refresh the baseline CONTENT snapshot so the NEXT
         // push's new-errors gate diffs against this state (incl. any legacy errors the agent
