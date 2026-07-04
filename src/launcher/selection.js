@@ -43,7 +43,9 @@ function normalizePal(p) {
 //   create: profile -> groups (1+) -> details -> key -> { mode:"create", profile, groups, details, activationKey }
 // Returns null if the user cancels out. No mutations here — the orchestrator performs the
 // create (CreatePalFromBuilder) so this stays pure prompts + GET-list calls.
-async function runSelection(session, prompts) {
+// forceCreate skips the open/create mode prompt (eval-harness runs always create a fresh pal);
+// defaultName prefills the new-pal name prompt (from the eval spec's `pal:` line).
+async function runSelection(session, prompts, { forceCreate = false, defaultName } = {}) {
     let step = "profile";
     let profile, group, groups, details;
     while (true) {
@@ -52,7 +54,7 @@ async function runSelection(session, prompts) {
             const choice = await prompts.pickProfile(profiles);
             if (!choice) return null;
             profile = choice;
-            step = "mode";
+            step = forceCreate ? "groups" : "mode";
         } else if (step === "mode") {
             const choice = await prompts.pickMode();
             if (choice === BACK) { step = "profile"; continue; }
@@ -74,12 +76,12 @@ async function runSelection(session, prompts) {
         } else if (step === "groups") {          // create new — one or more groups
             const all = await listGroups(session, profile.profileId);
             const choice = await prompts.pickGroups(all);
-            if (choice === BACK) { step = "mode"; continue; }
+            if (choice === BACK) { step = forceCreate ? "profile" : "mode"; continue; }
             if (!choice || !choice.length) return null;
             groups = choice;
             step = "details";
         } else if (step === "details") { // name, description, category (desc/category default to name)
-            const choice = await prompts.pickNewPalDetails();
+            const choice = await prompts.pickNewPalDetails(defaultName);
             if (choice === BACK) { step = "groups"; continue; }
             if (!choice) return null;
             details = choice;

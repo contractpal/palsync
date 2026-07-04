@@ -66,11 +66,13 @@ const selectionPrompts = {
         });
         return clack.isCancel(v) ? BACK : v;
     },
-    // Create flow: name (required) + description/category (blank defaults to the name).
-    async pickNewPalDetails() {
+    // Create flow: name (required) + description/category (blank defaults to the name). An
+    // eval-harness run passes defaultName so the pal name matches the spec's `pal:` line.
+    async pickNewPalDetails(defaultName) {
         const clack = await loadClack();
         const name = await clack.text({
             message: "New pal name",
+            initialValue: defaultName || undefined,
             validate: (x) => (x && x.trim() ? undefined : "Name is required")
         });
         if (clack.isCancel(name)) return BACK;
@@ -165,4 +167,16 @@ async function driftPrompt(info) {
     return clack.isCancel(v) ? "abort" : v;
 }
 
-module.exports = { selectionPrompts, suggest, autocompletePick, driftPrompt };
+// Eval-harness flow: choose which benchmark spec to run (see eval/specs/README.md). No
+// "recommended" concept — just list them in folder order. No BACK — this is the very first
+// step of the whole launcher, so cancel means quit.
+async function pickEvalSpec(specs) {
+    const clack = await loadClack();
+    const v = await clack.select({
+        message: "Pick a benchmark spec to run",
+        options: specs.map(s => ({ value: s.key, label: s.key + " — " + s.description }))
+    });
+    return clack.isCancel(v) ? null : v;
+}
+
+module.exports = { selectionPrompts, suggest, autocompletePick, driftPrompt, pickEvalSpec };

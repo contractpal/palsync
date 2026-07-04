@@ -18,6 +18,7 @@
     "src/",
     "lib/",
     "bundled-context/",
+    "eval/specs/",
     "palpush.js",
     "README.md",
     "LICENSE"

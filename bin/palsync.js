@@ -63,6 +63,7 @@ if (argv[0] === "help" || argv.includes("--help") || argv.includes("-h")) {
         "  palsync push|pull|status|test|preview|validate|sync-datasets   headless ops for a workspace (no MCP/agent needed)\n" +
         "  palsync upgrade [--check]   self-update to the latest release (installs the newest git tag)\n" +
         "  palsync --agent codex|pi   use Codex or Pi instead of Claude Code (default: claude)\n" +
+        "  palsync --eval [spec]   benchmark-harness mode: pick a spec, force create-pal, inject SPEC.md\n" +
         "  palsync --version       print the build\n\n" +
         require("../src/cli/syncCommands").USAGE + "\n"
     );
@@ -90,11 +91,25 @@ function parseAgentFlag(args) {
 }
 const agentFlag = parseAgentFlag(argv);
 
+// --eval [name]: benchmark-harness mode. Adds a "pick a spec" step before login, forces
+// create-mode, prefills the new-pal name from the spec, and injects SPEC.md/EXECUTION.md/
+// DESIGN_SYSTEM.md/COMPONENTS.md into the workspace after setup. Boolean form (`--eval`)
+// shows the interactive spec picker; `--eval <key>` / `--eval=<key>` resolves it directly.
+function parseEvalFlag(args) {
+    if (!args.includes("--eval") && !args.some(a => a.startsWith("--eval="))) return undefined;
+    let val;
+    const i = args.indexOf("--eval");
+    if (i !== -1) val = args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : true;
+    else { const eq = args.find(a => a.startsWith("--eval=")); if (eq) val = eq.slice("--eval=".length); }
+    return val; // true (interactive picker) | string key
+}
+const evalFlag = parseEvalFlag(argv);
+
 (async () => {
     await preflight.run({ agent: agentFlag || "claude" }); // Node >= 18 + the chosen agent's CLI
     const clack = await loadClack(); // @clack/prompts is ESM-only; dynamic import works on Node 18+
     clack.intro("palsync — PalBuilder + Claude Code");
-    const result = await run({ agent: agentFlag, log: (m) => clack.log.step(m) });
+    const result = await run({ agent: agentFlag, evalSpec: evalFlag, log: (m) => clack.log.step(m) });
     if (!result) { clack.cancel("Cancelled."); process.exit(1); }
     clack.log.info(
         "Creatable here: pages, fragments, scripts, workflows, emails, images, styles, attachments.\n" +

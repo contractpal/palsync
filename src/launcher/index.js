@@ -6,9 +6,10 @@ const { loadClack } = require("../platform/uiPrompts");
 const { login } = require("../auth/credentials");
 const { runSelection } = require("./selection");
 const { createNewPal } = require("../core/createPal");
-const { selectionPrompts, driftPrompt } = require("./prompts");
+const { selectionPrompts, driftPrompt, pickEvalSpec } = require("./prompts");
 const agents = require("./agents");
 const workspace = require("./workspace");
+const evalSpec = require("../core/evalSpec");
 
 async function defaultChooseDir(defaultDir) {
     const clack = await loadClack();
@@ -26,14 +27,31 @@ async function run({
     onDrift = driftPrompt,
     autoLaunch = true,
     agent: agentKey,
+    evalSpec: evalSpecKey,
+    pickEvalSpecPrompt = pickEvalSpec,
     log = () => {}
 } = {}) {
+    // 0. eval-harness spec pick (no session needed — pure local files). Resolves eagerly if a
+    //    key string was given (--eval=01_crud_equipment_checkout); prompts interactively for
+    //    bare --eval; skipped entirely when evalSpecKey is undefined (normal flow).
+    let spec = null;
+    if (evalSpecKey) {
+        if (evalSpecKey === true) {
+            const chosen = await pickEvalSpecPrompt(evalSpec.listSpecs());
+            if (!chosen) { log("cancelled at eval spec pick"); return null; }
+            spec = evalSpec.resolveSpec(chosen);
+        } else {
+            spec = evalSpec.resolveSpec(evalSpecKey);
+        }
+        log("eval spec: " + spec.key + " (suggested pal name: " + spec.suggestedName + ")");
+    }
+
     // 1–2. cloud + login (cached creds skip the prompt)
     const { session, cloudUrl } = await login({ prompts: loginPrompts });
     log("logged in: " + session.username + " @ " + cloudUrl + " (userId=" + session.userId + ")");
 
     // 3. profile → [open existing | create new]
-    let sel = await runSelection(session, selPrompts);
+    let sel = await runSelection(session, selPrompts, spec ? { forceCreate: true, defaultName: spec.suggestedName } : undefined);
     if (!sel) { log("cancelled at selection"); return null; }
 
     // Create mode: mint the pal now (server returns its guid), then fall through to the same
@@ -69,6 +87,15 @@ async function run({
     if (!dir) { log("cancelled at workspace dir"); return null; }
     const setupResult = await workspace.setup({ session, cloudUrl, sel, workspaceDir: dir, agent: agent.key, onDrift, log });
 
+    // 5b. eval-harness: inject the chosen spec's docs + auto-fill the placeholder header now
+    //     that we know the real cloud URL and pal name — workspace is then 100% ready to run.
+    if (spec) {
+        const fillValue = cloudUrl + " (pal: " + sel.pal.name + ")";
+        const injectResult = evalSpec.injectSpec(dir, spec, { fillValue });
+        log("eval spec injected: " + injectResult.written.join(", ") +
+            (injectResult.skipped.length ? " (skipped existing: " + injectResult.skipped.join(", ") + ")" : ""));
+    }
+
     // 6. open the agent in the workspace (handoff). Lock stays held; MCP server owns release.
     let child = null;
     if (autoLaunch) {
@@ -76,7 +103,7 @@ async function run({
         child = agents.launch(agent, { cwd: dir });
     }
 
-    return { workspaceDir: dir, setupResult, agent, child };
+    return { workspaceDir: dir, setupResult, agent, child, evalSpec: spec };
 }
 
 module.exports = { run };
