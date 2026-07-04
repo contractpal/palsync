@@ -101,7 +101,7 @@ function run(controller) {
         ajax.addPayload(payload);
         return ajax;
     }
-    if (frag) { payload.set("main", frag); }
+    if (frag) { payload.set("frag", frag); }   // key must match the page's <c:fragment name="${frag}"/>
     page.addPayload(payload);
     return page;
 }

@@ -354,3 +354,47 @@ test("clean fixture (modeled on the passing reference pal) — zero contract fin
     const findings = lintContracts(dir);
     assert.deepStrictEqual(findings, [], "clean fixture must be contract-clean: " + JSON.stringify(findings));
 });
+
+test("fragment binding — page reads ${frag} but workflow sets payload.set('main', frag) (test-02 mimo bug)", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": '<html xmlns:c="contractpal"><body><div id="body"><c:fragment name="${frag}"/></div></body></html>',
+        "workflows/console.js": [
+            "function run(controller) {",
+            "    var payload = controller.createPayload();",
+            "    var frag = 'equipmentList';",
+            "    if (frag) { payload.set('main', frag); }",
+            "}",
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "fragmentBinding");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /payload\.set\("main", frag\)/);
+    assert.match(findings[0].message, /payload\.set\("frag", frag\)/);
+});
+
+test("fragment binding — no workflow sets the key at all, no rename candidate", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="${frag}"/></body></html>',
+        "workflows/console.js": "function run(controller) { var payload = controller.createPayload(); payload.set('title', 'x'); }",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "fragmentBinding");
+    assert.strictEqual(findings.length, 1);
+    assert.match(findings[0].message, /keys that are set: title/);
+});
+
+test("fragment binding — matching payload.set key produces no finding", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="${frag}"/></body></html>',
+        "workflows/console.js": "function run(controller) { var payload = controller.createPayload(); payload.set('frag', 'list'); }",
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "fragmentBinding").length, 0);
+});
+
+test("fragment binding — static c:fragment name is not this check's contract", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="header"/></body></html>',
+        "workflows/console.js": "function run(controller) {}",
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "fragmentBinding").length, 0);
+});

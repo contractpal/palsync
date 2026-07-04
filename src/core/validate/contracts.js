@@ -625,6 +625,63 @@ function checkAjaxTransport(rel, src, findings) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Check 10 — <c:fragment name="${var}"> placeholder must be bound by a payload.set("var", ...).
+// Real bug (test-02-crud-mimo): page read ${frag} but the workflow ran payload.set("main", frag)
+// — the EL variable resolves empty, <c:fragment name=""> renders nothing, and the whole UI is
+// blank on full page load even though every file compiles and saves cleanly.
+// ---------------------------------------------------------------------------------------------
+
+function checkFragmentBinding(markupFiles, workflowFiles, findings) {
+    // Every payload key any workflow sets, plus key -> identifier for .set("key", someVar) calls
+    // (used for the rename suggestion when the page var matches the VALUE variable, not the key).
+    const keys = new Set();
+    const keyToIdent = new Map();
+    for (const { src } of workflowFiles) {
+        const re = /\.set\(\s*["']([^"']+)["']\s*(?:,\s*([A-Za-z_$][\w$]*)\s*\))?/g;
+        let m;
+        while ((m = re.exec(src))) {
+            keys.add(m[1]);
+            if (m[2]) keyToIdent.set(m[1], m[2]);
+        }
+    }
+
+    const keysList = keys.size ? [...keys].sort().join(", ") : "(no workflow sets any payload key)";
+    for (const { rel, src } of markupFiles) {
+        scanTags(src, (tag, pos) => {
+            if (tag.name.toLowerCase() !== "c:fragment") return;
+            const name = attr(tag, "name");
+            if (name == null) return;
+            const el = /^\$\{\s*([\w]+)\s*\}$/.exec(name);
+            if (!el) return; // static fragment name — different contract, not this check
+            const v = el[1];
+            if (keys.has(v)) return;
+
+            // Strong case: some payload.set("otherKey", v) passes the SAME variable the page
+            // reads — the key and the EL variable were meant to match but drifted apart.
+            let renamed = null;
+            for (const [key, ident] of keyToIdent) {
+                if (ident === v) { renamed = key; break; }
+            }
+
+            const message = renamed
+                ? "<c:fragment name=\"${" + v + "}\"> — the page reads payload key \"" + v + "\", but the workflow " +
+                  "sets payload.set(\"" + renamed + "\", " + v + ") — the key is \"" + renamed + "\", not \"" + v + "\". " +
+                  "The EL variable resolves empty, so the fragment placeholder renders NOTHING and the page is blank " +
+                  "on full page load. Fix: change the workflow to payload.set(\"" + v + "\", " + v + ") (or change the " +
+                  "page to ${" + renamed + "}) — the payload KEY and the page's ${...} variable must be identical. " +
+                  "See the palbuilder-frontend skill tag reference, \"c:fragment\"."
+                : "<c:fragment name=\"${" + v + "}\"> — no workflow ever sets payload key \"" + v + "\" " +
+                  "(keys that are set: " + keysList + "). The EL variable resolves empty, so the fragment placeholder " +
+                  "renders NOTHING and the page is blank on full page load. Fix: in the workflow's non-AJAX path, " +
+                  "payload.set(\"" + v + "\", <fragmentName>) before page.addPayload(payload). " +
+                  "See the palbuilder-frontend skill tag reference, \"c:fragment\".";
+
+            findings.push({ file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "fragmentBinding", message });
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Entry point.
 // ---------------------------------------------------------------------------------------------
 
@@ -655,6 +712,8 @@ function lintContracts(workspaceDir) {
     }
 
     checkParamDropped(markupFiles, workflowFiles, findings);
+
+    checkFragmentBinding(markupFiles, workflowFiles, findings);
 
     findings.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
     return findings;

@@ -252,6 +252,18 @@ files. Names are folder paths (e.g. `console/navbar`).
 <c:fragment name="cloudpiston/ui/modalShell" />
 ```
 
+When `name` is an EL variable, the payload **key** the workflow sets must be the same word the
+page reads — a mismatched key resolves empty and the placeholder renders nothing (blank page on
+full load):
+
+```js
+// ✓ page reads ${frag}
+payload.set("frag", frag);
+
+// ✗ WRONG: page reads ${frag} but the key is "main" — ${frag} is empty, nothing renders
+payload.set("main", frag);
+```
+
 **Valid attributes:** `name` *(required)*, `test`
 
 ---

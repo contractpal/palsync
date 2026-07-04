@@ -143,6 +143,11 @@ subfolders. Pull refreshes the former; the latter survive forever.
    element renders nowhere, silently. `test=` takes only `${...}` EL with
    `eq ne gt lt ge le empty ! and or` — no `==`, `>`, and no method calls like
    `.count()`; those are not real syntax and fail or silently no-op.
+   Same discipline for the page shell's fragment placeholder: if the page has
+   `<c:fragment name="${frag}" />`, the workflow's non-AJAX path must set that
+   **exact key** — `payload.set("frag", frag)`. Set a different key
+   (`payload.set("main", frag)`) and `${frag}` resolves empty, the placeholder
+   renders nothing, and the whole page is blank on full load.
 8. **Submitting fields: `c:a action="..."` with NO `<form>` wrapper — ever.**
    `<c:a action="saveThing">` submits every named input / `c:field` in the fragment
    by itself; `<form>` is **rejected by the server inside fragments** ("Tag form is

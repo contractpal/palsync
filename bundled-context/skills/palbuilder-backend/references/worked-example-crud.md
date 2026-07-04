@@ -48,7 +48,9 @@ function run(controller) {
         ajax.addPayload(payload);
         return ajax;
     }
-    if (frag) { payload.set("main", frag); }
+    // key MUST match the page's ${frag} placeholder — a different key (e.g. "main")
+    // resolves empty and the page renders blank on full load
+    if (frag) { payload.set("frag", frag); }
     page.addPayload(payload);
     return page;
 }
