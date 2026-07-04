@@ -419,7 +419,27 @@ function checkHrefAction(tag, rel, src, pos, findings) {
         file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "hrefAction",
         message: "href=\"" + href + "\" on <c:a> — a plain navigation link sends NO form fields; the workflow sees " +
             "every input as null. Fix: use action=\"...\" instead of href=\"?action=...\" so submitted fields travel " +
-            "with the request. See the palbuilder-frontend skill tag reference, \"c:a\" (the documented ✗ example)."
+            "with the request. Do NOT wrap the c:a in a <form> — the server rejects <form> in fragments, and none " +
+            "is needed: c:a action=\"...\" submits every named input/c:field in the fragment by itself. " +
+            "See the palbuilder-frontend skill tag reference, \"c:a\" (the documented ✗ example)."
+    });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Check 5b — <form> tag in a fragment. The server refuses the save outright ("Tag form is not
+// allowed"), but the offline validator used to pass it — seen in the test-06 haiku run, where a
+// <form>-wrapped c:a action passed pal_validate and then died at pal_push, sending the agent back
+// to the broken href pattern. Fragments never need <form>: c:a action= submits the fields itself.
+// ---------------------------------------------------------------------------------------------
+
+function checkFormTag(tag, rel, src, pos, findings) {
+    if (tag.name.toLowerCase() !== "form") return;
+    if (!rel.startsWith("fragments/")) return;
+    findings.push({
+        file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "formTag",
+        message: "<form> is not allowed in a fragment — the server refuses the save (\"Tag form is not allowed\"). " +
+            "You do not need it: <c:a action=\"...\"> submits every named input/c:field in the fragment by itself, " +
+            "with no wrapper. Delete the <form>/</form> tags and keep the fields + <c:a action=\"...\">."
     });
 }
 
@@ -625,6 +645,7 @@ function lintContracts(workspaceDir) {
         scanTags(src, (tag, pos) => {
             checkElSyntax(tag, rel, src, pos, findings);
             checkHrefAction(tag, rel, src, pos, findings);
+            checkFormTag(tag, rel, src, pos, findings);
         });
     }
 

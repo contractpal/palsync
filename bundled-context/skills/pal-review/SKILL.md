@@ -122,6 +122,17 @@ Rules:
 - **Verdict gating — PASS is allowed only when all three hold:** `pal_validate` reports 0 errors
   (quote the line), every §5 action has a complete trace row, and no §12 criterion sits in PASS
   without its evidence class. Any one missing → verdict is CHANGES-NEEDED with fix tasks, never PASS.
+- **`pal_test` never outranks `pal_validate`.** pal_test proves the workflow COMPILES, nothing more;
+  validate errors describe code that mis-renders or dies at runtime after a clean compile. "pal_test
+  showed successful validation" is not a rebuttal to a validate error — the error stands until the
+  code changes and validate reports 0.
+- **Platform-constraint claims must cite a source.** Any statement of the form "the platform
+  can't / requires / rejects X" in a finding or fix task must quote its origin verbatim: a skill or
+  reference file line, or an actual tool/server message from THIS session. If the constraint is
+  written nowhere, it is your invention — grep `.claude/skills/palbuilder-*` first, and write the
+  fix task around what the docs DO prescribe instead. (Real case: a review asserted "c:a action
+  requires a form wrapper" — documented nowhere, contradicted by the tag reference — and steered
+  the fix loop toward a rewrite instead of a one-line attribute change.)
 - A `known_issues`-listed defect is never a Regression finding — list it under "known issues
   excluded" so the exclusion is visible, not silently dropped.
 - **Producing `REVIEW.md` is not optional.** A build with no `REVIEW.md` is incomplete — same

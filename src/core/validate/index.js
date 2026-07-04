@@ -129,7 +129,7 @@ function formatValidation(result, { context = "validate" } = {}) {
         " — " + errors + " error(s) and " + warnings + " warning(s) in " + filesChecked + " file(s).";
     const meaning = errors > 0
         ? "ERROR = this WILL fail to compile or save in PalBuilder; you must fix every error" +
-          (context === "pre-push" ? " before pushing (or pass force/skipValidation to push anyway, which is not recommended)." : ".")
+          (context === "pre-push" ? " before pushing. Each finding says exactly how to fix it; a passing pal_test does not clear these." : ".")
         : "WARNING = likely unsupported / risky; review each one. No errors, so a push is allowed.";
     // Collapse repeats of the same message (a workflow full of the same violation shouldn't flood
     // context): keep the first few per file+message, count the rest. Group by file for readability.

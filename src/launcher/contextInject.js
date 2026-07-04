@@ -51,7 +51,7 @@ function syncSection(palName, { cli = false } = {}) {
             test: "`pal_test`", preview: "`pal_preview`", seo: "`pal_seo_audit`",
             merge: "`pal_merge`", status: "`pal_status`", datasets: "`pal_sync_datasets`",
             screenshot: "`pal_screenshot`", fetch: "`pal_fetch`", specLint: "`pal_spec_lint`",
-            regression: "`pal_regression`", skip: "`skipValidation`" };
+            regression: "`pal_regression`" };
     const conn = cli
         ? "This pal" + (palName ? " (**" + palName + "**)" : "") + " is connected to CloudPiston via the **palsync CLI** — run its subcommands in your shell (e.g. `palsync push`, `palsync pull`). palsync takes the pal lock for each push/pull and releases it; there is no always-on session lock."
         : "This pal" + (palName ? " (**" + palName + "**)" : "") + " is connected to CloudPiston via the **palsync** MCP server and is **locked for your session**.";
@@ -79,8 +79,8 @@ function syncSection(palName, { cli = false } = {}) {
         "   ERROR it reports; each finding tells you exactly how.",
         "3. **Offer to " + T.push + "** when a meaningful change is done (palsync does not auto-push).",
         "   Push runs " + T.validate + " automatically and refuses on errors YOUR change introduced — fix",
-        "   them rather than reaching for " + T.skip + ". (Pre-existing errors in a file you edit",
-        "   don't block you; only new ones do.)",
+        "   every one; each finding says exactly how. There is no bypass" + (cli ? " you should use (" + T.skip + " exists for humans only)" : "") + ". (Pre-existing errors",
+        "   in a file you edit don't block you; only new ones do.)",
         "4. After pushing workflow or UI changes, **offer to " + T.test + "** — it runs the SERVER's own",
         "   validation and opens a live preview in the user's browser.",
         "5. **" + T.validate + " and " + T.test + " only prove the code COMPILES — not that it RENDERS.** A",

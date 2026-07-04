@@ -143,6 +143,26 @@ subfolders. Pull refreshes the former; the latter survive forever.
    element renders nowhere, silently. `test=` takes only `${...}` EL with
    `eq ne gt lt ge le empty ! and or` — no `==`, `>`, and no method calls like
    `.count()`; those are not real syntax and fail or silently no-op.
+8. **Submitting fields: `c:a action="..."` with NO `<form>` wrapper — ever.**
+   `<c:a action="saveThing">` submits every named input / `c:field` in the fragment
+   by itself; `<form>` is **rejected by the server inside fragments** ("Tag form is
+   not allowed"), and `href="?action=..."` is a plain link that sends **no** field
+   values (the workflow reads every input as null). So: any Save / submit / check-out
+   link uses `action=` (plus `ajax-target` to swap the response in); `href` is only
+   for links that carry nothing beyond their own query string — and even then prefer
+   `action="doThing?id=${row.id}"`.
+
+   ```html
+   <!-- ✓ name/category travel with the request -->
+   <input type="text" name="name" value="${name}" />
+   <c:a action="saveEquipment" ajax-target="body">Save</c:a>
+
+   <!-- ✗ WRONG: plain link — name is never sent -->
+   <c:a href="?action=saveEquipment">Save</c:a>
+
+   <!-- ✗ WRONG: server refuses the save — fragments cannot contain <form> -->
+   <form><c:a action="saveEquipment">Save</c:a></form>
+   ```
 
 ---
 

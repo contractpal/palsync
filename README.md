@@ -256,8 +256,8 @@ MCP server** — there's nothing to register, and `pi` is launched in the worksp
 
 | Tool | What it does |
 |------|--------------|
-| `pal_validate` | **Offline code check** — flags the PalBuilder breakers (object literals/`let`/`const` in workflows, unclosed void tags, undocumented `c:` attributes, `${}` in inline scripts, …) plus cross-file contract mismatches (`c:list` name/id vs workflow DataLists, `ajax-target` vs page element ids, `action=` vs workflow cases, EL `test=` syntax, `href="?action="` anti-pattern, fabricated API methods, unwired `datasets/*.json`) with file:line and the exact fix. Runs automatically inside `pal_push`. |
-| `pal_push` | **Validates first** (refuses on errors unless `skipValidation`), then pushes. Refuses if the server advanced since your last pull (drift) unless forced. |
+| `pal_validate` | **Offline code check** — flags the PalBuilder breakers (object literals/`let`/`const` in workflows, unclosed void tags, undocumented `c:` attributes, `${}` in inline scripts, …) plus cross-file contract mismatches (`c:list` name/id vs workflow DataLists, `ajax-target` vs page element ids, `action=` vs workflow cases, EL `test=` syntax, `href="?action="` anti-pattern, `<form>` tags in fragments, fabricated API methods, unwired `datasets/*.json`) with file:line and the exact fix. Runs automatically inside `pal_push`. |
+| `pal_push` | **Validates first** (refuses on errors — no agent-facing bypass; humans can use the CLI's `--skip-validation`), then pushes. Refuses if the server advanced since your last pull (drift) unless forced. |
 | `pal_pull` | Sync the pal from the server. Preserves new un-pushed local files; refuses (naming files) if it would overwrite un-pushed edits. |
 | `pal_merge` | **3-way merge** of your un-pushed local changes with the server's changes. Keeps both wherever they don't collide; a file changed on both sides stays yours with theirs saved as `<file>.server`. Never overwrites your work silently. |
 | `pal_test` | Run the server's own workflow validation and open a **live preview** in your browser (the agent never sees the credential-bearing URL). |

@@ -189,6 +189,30 @@ a Palbuilder validation error. The full per-tag reference (attribute lists + exa
 `c:otherwise`, `c:fragment`, `c:download`, `c:div`/`c:get`/`c:image`/`c:button`/`c:select`, `c:ignore`)
 lives in **`references/tag-reference.md`** — read it when you need a specific tag's attributes.
 
+### Submitting form fields — the one pattern (memorize this)
+
+`<c:a action="saveThing">` submits **every named input / `c:field` in the fragment** along with the
+action — no wrapper of any kind. The two ways to get this wrong both look plausible and both break:
+
+```html
+<!-- ✓ CORRECT — name/category travel with the request; response swaps into #body -->
+<input type="text" name="name" value="${name}" />
+<input type="text" name="category" value="${category}" />
+<c:a action="saveEquipment" ajax-target="body" class="btn btn-primary">Save</c:a>
+
+<!-- ✗ WRONG — href is a plain navigation link; NO field values are sent, the
+     workflow reads every input as null. ${name} in the href is evaluated
+     SERVER-SIDE at render time, so it carries the OLD value, never the typed one. -->
+<c:a href="?action=saveEquipment&amp;name=${name}">Save</c:a>
+
+<!-- ✗ WRONG — the server REFUSES the save: "Tag form is not allowed" in fragments.
+     c:a action= needs no <form>; delete the wrapper, keep the fields. -->
+<form><c:a action="saveEquipment">Save</c:a></form>
+```
+
+Use `href` only for links that carry nothing beyond their own query string — and even then
+`action="doThing?id=${row.id}"` is preferred (it's encrypted; `href` is not).
+
 ---
 
 ## Fragment Architecture
@@ -272,6 +296,8 @@ The ClientPal/`fetch` ban and the "why `c:` elements are safe" rationale live in
 | `<img src="x.png">` | `<img src="x.png" />` |
 | `DOMContentLoaded` in an AJAX-loaded fragment | Run JS directly, no wrapper |
 | Inline `<script>` inside a fragment (server: "Tag script is not allowed") | Put the JS in an external `scripts/*.js`, loaded from the page |
+| `<form>` inside a fragment (server: "Tag form is not allowed") | No wrapper at all — `<c:a action="...">` submits the fragment's named fields by itself |
+| `<c:a href="?action=save&amp;name=${name}">` to submit typed values | `<c:a action="save" ajax-target="body">` — `href` sends no fields; EL in an `href` carries stale server-side values |
 | Hardcoding a CDN `<script>` for Bootstrap/jQuery/Chart.js | `c:resource source=... version=... name=...` |
 | CDATA-wrapping `<script>`/`<style>` (`<![CDATA[ … ]]>`) | Write raw — CDATA gets mangled and corrupts the content |
 | Entity-escaping `<` `>` `&` inside `<script>`/`<style>` | Write raw — escapes are stored literally and break JS |

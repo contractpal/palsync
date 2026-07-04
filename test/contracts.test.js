@@ -127,6 +127,27 @@ test("href=\"?action=...\" anti-pattern on c:a", () => {
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /sends NO form fields/);
+    assert.match(findings[0].message, /Do NOT wrap the c:a in a <form>/);
+});
+
+test("<form> tag in a fragment — server rejects the save", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": "function run(controller) {}",
+        "fragments/form.html": "<c:ignore xmlns:c=\"contractpal\"><form><c:a action=\"save\">Save</c:a></form></c:ignore>",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "formTag");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /Tag form is not allowed/);
+});
+
+test("<form> tag in a page — allowed (server only rejects it in fragments)", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": "function run(controller) {}",
+        "pages/console.html": "<html><body><form><input type=\"text\" name=\"q\" /></form></body></html>",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "formTag");
+    assert.strictEqual(findings.length, 0);
 });
 
 test("fabricated API method setDateValue — suggests setDate", () => {

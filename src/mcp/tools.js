@@ -210,7 +210,8 @@ const TOOLS = [
                 previewMsg = "No live preview — the workflow did not validate (fix the notes above, push, and test again).";
             }
             const verdict = res.validated
-                ? "✅ " + res.kind + " workflow VALIDATED on the server."
+                ? "✅ " + res.kind + " workflow VALIDATED on the server. (Compile-only: this does NOT clear " +
+                  "pal_validate errors — those describe code that mis-renders or dies at runtime after a clean compile.)"
                 : "❌ " + res.kind + " workflow did NOT validate.";
             // Server-level messages (e.g. "Pal is not a Web Pal") explain a whole-test failure that
             // never shows up in per-rule validation notes — surface them or the real cause is lost.
@@ -516,8 +517,14 @@ const TOOLS = [
     },
     {
         name: "pal_push",
-        description: "Push local changes to the server (UPDATE). FIRST runs the offline code check (pal_validate) and REFUSES on errors — fix them, or skipValidation:true to push anyway (not recommended). Also refuses on drift (force:true) or if the pal is locked by another person (typed confirmOverride). On success returns the server's save result plus any code WARNINGS.",
-        inputShape: { force: z.boolean().optional(), confirmOverride: z.string().optional(), skipValidation: z.boolean().optional() },
+        description: "Push local changes to the server (UPDATE). FIRST runs the offline code check (pal_validate) and REFUSES on errors — every error must be fixed before the push can proceed; each finding says exactly how. Also refuses on drift (force:true) or if the pal is locked by another person (typed confirmOverride). On success returns the server's save result plus any code WARNINGS.",
+        // skipValidation is deliberately NOT in inputShape (the MCP layer strips unknown keys, so
+        // agents cannot pass it). In the test-06 haiku run the agent read the "call pal_push with
+        // skipValidation:true" hint in this tool's refusal message, decided the validator was
+        // "overly cautious", and pushed past 9 real errors six times in a row. Agents fix errors.
+        // run() still accepts it because the CLI's --skip-validation flag (human escape hatch)
+        // calls run() directly, bypassing the MCP schema.
+        inputShape: { force: z.boolean().optional(), confirmOverride: z.string().optional() },
         async run(ctx, { force = false, confirmOverride, skipValidation = false } = {}) {
             const palName = ctx.record.palName;
             const overrideLock = confirmOverride === overridePhrase(palName);
@@ -527,7 +534,9 @@ const TOOLS = [
                 return Object.assign(res, {
                     message: "REFUSED: the offline code check found errors that would break in PalBuilder, so nothing was pushed.\n\n" +
                         formatLint(res.lint, { context: "pre-push" }) +
-                        "\n\nFix the ERROR items above and push again. To push anyway without fixing them, call pal_push with skipValidation:true (not recommended)."
+                        "\n\nFix the ERROR items above and push again — each finding tells you exactly how. There is no " +
+                        "bypass: these errors describe code the server will reject or mis-render, and a passing pal_test " +
+                        "does not clear them."
                 });
             }
             if (res.pushed) {
