@@ -14,6 +14,8 @@ const zlib = require("zlib");
 const { Pal } = require("./lib/pal");
 const { CloudPistonXMLBuilder } = require("./lib/xmlParser");
 const { CloudPistonAPIManager } = require("./lib/apiManager");
+const { buildSaveTask, normalizeValidation } = require("./src/core/push");
+const { resolveServerPalByGuid, enumerateServerPals } = require("./src/core/resolve");
 
 function parseArgs(argv) {
     const args = { palDir: undefined, dryRun: false, verbose: false, push: false, list: false, guid: undefined };
@@ -42,18 +44,6 @@ function fmtBytes(n) {
     return (n / (1024 * 1024)).toFixed(2) + " MB";
 }
 
-// Build the exact task object savePal() would send to ProcessPalBuilder.do.
-function buildSaveTask(pal) {
-    return {
-        "com.contractpal.palbuilder.PalBuilderRequest": {
-            pal: pal,
-            operation: "UPDATE",
-            includeDependencies: false,
-            platformMetaData: { palFirst: false }
-        }
-    };
-}
-
 // Build a session from env vars alone, with no pal on disk (for --list discovery).
 function buildSessionFromEnv() {
     const username = process.env.CP_USER;
@@ -67,72 +57,13 @@ function buildSessionFromEnv() {
     return { username, password, userId: undefined, environment: { url }, lockInfo: undefined };
 }
 
-// Discovery: authenticate, then loop profiles -> groups -> pals, returning a flat list of
-// { name, guid, id, profileId, profileName, groupId, groupName }. Ported from the
-// commented-out reference loop in commands/createProject.js, run live.
+// Discovery: authenticate, then enumerate every server pal (shared walk from src/core/resolve).
 async function discoverPals(session, log) {
     const ping = await CloudPistonAPIManager.authenticate(session);
     if (!ping || !ping.success) throw new Error("Ping.do failed: invalid username or password");
     session.userId = ping.userPath;
     log("ping ok — userId=" + session.userId);
-
-    const profileResp = await CloudPistonAPIManager.getProfileList(session);
-    const profiles = (profileResp && profileResp.profileList && profileResp.profileList["com.contractpal.pal.ProfileInfo"]) || [];
-    log("profiles: " + profiles.length);
-
-    const found = [];
-    for (const profile of profiles) {
-        const groupResp = await CloudPistonAPIManager.getGroupList(session, profile.profileId);
-        const groups = (groupResp && groupResp.groupList && groupResp.groupList["com.contractpal.pal.GroupInfo"]) || [];
-        log("  profile " + profile.profileName + " — groups: " + groups.length);
-        for (const group of groups) {
-            const palResp = await CloudPistonAPIManager.getPalList(session, profile.profileId, group.groupId, undefined);
-            const pals = (palResp && palResp.palInfoList && palResp.palInfoList.PalInfoEx) || [];
-            for (const p of pals) {
-                found.push({
-                    name: p.name,
-                    guid: p.guid,
-                    id: p.id,
-                    profileId: profile.profileId,
-                    profileName: profile.profileName,
-                    groupId: group.groupId,
-                    groupName: group.name
-                });
-            }
-        }
-    }
-    return found;
-}
-
-// Resolve a pal's CURRENT server-side lock id by its stable guid. The guid is stable
-// across enumerations; the 64-hex id rotates per getPalList response, so it MUST be
-// fetched fresh every push and never cached. Returns { id, guid, profileId, profileName,
-// groupId, groupName } or null if the guid isn't found in the live listing.
-async function resolveServerPalByGuid(session, guid, log) {
-    const profileResp = await CloudPistonAPIManager.getProfileList(session);
-    const profiles = (profileResp && profileResp.profileList && profileResp.profileList["com.contractpal.pal.ProfileInfo"]) || [];
-    for (const profile of profiles) {
-        const groupResp = await CloudPistonAPIManager.getGroupList(session, profile.profileId);
-        const groups = (groupResp && groupResp.groupList && groupResp.groupList["com.contractpal.pal.GroupInfo"]) || [];
-        for (const group of groups) {
-            const palResp = await CloudPistonAPIManager.getPalList(session, profile.profileId, group.groupId, { includeTest: true, includeInstalled: true });
-            const pals = (palResp && palResp.palInfoList && palResp.palInfoList.PalInfoEx) || [];
-            const match = pals.find(p => p.guid === guid);
-            if (match) {
-                log("resolved guid " + guid + " -> fresh id " + match.id + " (profile " + profile.profileName + " / group " + group.name + ")");
-                return {
-                    id: match.id,
-                    guid: match.guid,
-                    name: match.name,
-                    profileId: profile.profileId,
-                    profileName: profile.profileName,
-                    groupId: group.groupId,
-                    groupName: group.name
-                };
-            }
-        }
-    }
-    return null;
+    return enumerateServerPals(session);
 }
 
 // Read credentials + environment strictly from env vars. Never hardcoded, never written
@@ -155,15 +86,6 @@ function buildSession(pal) {
         environment: { url, platformVersion: pal.environment && pal.environment.platformVersion },
         lockInfo: undefined
     };
-}
-
-// Normalize the server's validationResults into a flat array regardless of count.
-function normalizeValidationResults(resp) {
-    const vr = resp && resp.validationResults;
-    if (!vr || vr === "") return [];
-    const list = vr["com.contractpal.ValidationResult"];
-    if (!list) return [];
-    return Array.isArray(list) ? list : [list];
 }
 
 // Print validation results legibly: group/file:line:col — message.
@@ -241,7 +163,7 @@ async function main() {
 
         // 1b) Resolve the live server lock id by guid (never cached — fetched fresh each run).
         if (args.guid) {
-            const resolved = await resolveServerPalByGuid(session, args.guid, log);
+            const resolved = await resolveServerPalByGuid(session, args.guid);
             if (!resolved) {
                 throw new Error("Guid " + args.guid + " not found on " + session.environment.url + " — wrong cloud, or the pal does not exist there");
             }
@@ -301,7 +223,7 @@ async function main() {
             // 5) ProcessPalBuilder.do — the actual save (UPDATE).
             log("saving (" + fmtBytes(xmlBytes) + " xml, " + fmtBytes(gzBytes) + " gz) ...");
             const saveResp = await CloudPistonAPIManager.savePal(session, pal, palIdForServer);
-            const results = normalizeValidationResults(saveResp);
+            const results = normalizeValidation(saveResp);
             saveSucceeded = !!(saveResp && saveResp.success);
             console.log(saveSucceeded ? "SAVE OK" : "SAVE FAILED");
             printValidationResults(results);

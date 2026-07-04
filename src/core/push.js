@@ -3,7 +3,8 @@
 // ensure we hold the lock (own-reclaim; never break another's) -> drift guard on
 // lastModifiedDate -> inject from disk -> ProcessPalBuilder UPDATE -> update the stored marker.
 // Unlike the standalone palpush CLI it does NOT unlock — the MCP session holds the lock until
-// exit/idle. The save task is byte-identical to palpush's.
+// exit/idle. palpush imports buildSaveTask/normalizeValidation from here, so the save task and
+// validation parsing are shared, not parallel copies.
 const fs = require("fs");
 const path = require("path");
 const { Pal } = require("../../lib/pal");

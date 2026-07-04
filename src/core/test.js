@@ -13,6 +13,7 @@
 // logged — buildPreviewUrl() is consumed only by an in-process browser-open. The agent gets the
 // validation results and a "preview opened in your browser" signal, never the credential URL.
 const { CloudPistonAPIManager } = require("../../lib/apiManager");
+const { normalizeValidation } = require("./push");
 const lock = require("./lock");
 
 // workflowType number → the engine name the Test endpoint + EL use. From the extension's
@@ -29,14 +30,6 @@ const TYPE_NUM = {
 };
 // caller-facing kind → Test endpoint name.
 const KIND_ENDPOINT = { console: "Console", web: "Web", transaction: "Pal" };
-
-function normalizeValidation(resp) {
-    const vr = resp && resp.validationResults;
-    if (!vr || vr === "") return [];
-    const list = vr["com.contractpal.ValidationResult"];
-    if (!list) return [];
-    return Array.isArray(list) ? list : [list];
-}
 
 // Server-level messages (resp.messages) are SEPARATE from per-rule validationResults: they carry
 // whole-test failures like "Pal is not a Web Pal". The CLI used to ignore them and print "No
