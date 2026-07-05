@@ -7,6 +7,7 @@ const { pull } = require("../core/pull");
 const { push } = require("../core/push");
 const { runTest } = require("../core/test");
 const { runTunnelAction, listTunnelWorkflows, matchTunnelWorkflow } = require("../core/tunnel");
+const { retrieveServerDebug } = require("../core/debug");
 const { runPreview, fetchPagePath, checkExpect, extractSelector } = require("../core/preview");
 const { runScreenshot } = require("../core/screenshot");
 const { mergeWorkspace, formatMerge } = require("../core/merge");
@@ -100,6 +101,30 @@ function htmlRegionResult(res, { headline, filePrefix, guid, selector, maxChars,
                 "\n\n--- " + (selector ? "selected markup" : "served body") +
                 (truncated ? " (first " + cap + " of " + body.length + " bytes — read the file for the rest)" : "") + " ---\n" + shown)
     });
+}
+
+// How much c.debug text to inline before truncating to the TAIL (the most recent lines matter
+// most when diagnosing the run that just happened).
+const DEBUG_INLINE_CAP = 8000;
+
+// Auto-attach the server-side c.debug buffer to a tool result whose call actually EXECUTED a
+// workflow (tunnel call, server-rendered fetch/preview, screenshot) — the agent gets its debugs
+// with the response it is diagnosing instead of asking the user to copy/paste from PalBuilder.
+// Best-effort by design: never throws, and an empty buffer adds nothing. The retrieve CONSUMES
+// the shared buffer (see core/debug), which is exactly what we want here: the debugs belong to
+// the run this result describes. ctx.debugPalId caches the transient id across calls.
+async function withServerDebug(ctx, out) {
+    try {
+        const dbg = await retrieveServerDebug(ctx.session, ctx.record.palGuid, { palId: ctx.debugPalId });
+        if (dbg.palId) ctx.debugPalId = dbg.palId;
+        if (!dbg.retrieved || dbg.empty) return out;
+        out.serverDebug = dbg.text;
+        const truncated = dbg.text.length > DEBUG_INLINE_CAP;
+        const shown = truncated ? dbg.text.slice(-DEBUG_INLINE_CAP) : dbg.text;
+        out.message = (out.message || "") +
+            "\n\n--- server debug (c.debug output" + (truncated ? "; LAST " + DEBUG_INLINE_CAP + " of " + dbg.text.length + " chars" : "") + ") ---\n" + shown;
+    } catch (e) { /* the primary result matters more than the debug garnish */ }
+    return out;
 }
 
 // High-friction override: the user must type this EXACT phrase, echoing the pal name, so it can't
@@ -300,19 +325,39 @@ const TOOLS = [
                 " action=" + (action ? JSON.stringify(action) : "(none)") + " status=" + res.status +
                 (res.refreshedCredentials ? " (fresh tunnel credentials minted)" : "");
             if (res.emptyBody) {
-                return Object.assign(safe, {
+                // The c.debug trail is the best evidence for WHERE the workflow died — attach it.
+                return withServerDebug(ctx, Object.assign(safe, {
                     message: headline + "\n\n⚠ EMPTY response body. For a tunnel workflow this almost always means the workflow " +
                         "THREW at runtime (the server swallows the error and returns nothing) — or it returned an empty payload. " +
                         "Check the workflow for a bad method call / null deref on this action, push, and test again."
-                });
+                }));
             }
             const shown = res.raw.length > PREVIEW_INLINE_CAP ? res.raw.slice(0, PREVIEW_INLINE_CAP) : res.raw;
-            return Object.assign(safe, {
+            return withServerDebug(ctx, Object.assign(safe, {
                 message: headline +
                     (res.parseError ? "\n⚠ Response was not valid JSON (" + res.parseError + ") — raw body below." : "") +
                     "\n\n--- response " + (res.parseError ? "body" : "JSON") +
                     (res.raw.length > shown.length ? " (first " + PREVIEW_INLINE_CAP + " of " + res.raw.length + " chars)" : "") +
                     " ---\n" + shown
+            }));
+        }
+    },
+    {
+        name: "pal_debug",
+        description: "Retrieve the pal's server-side c.debug(...) output — the PalBuilder IDE debug feed; any workflow engine on a test pal writes to it when it executes. CONSUME-ONCE and SHARED: reading clears the buffer for every viewer, including a developer watching PalBuilder's debug view. pal_tunnel_test / pal_fetch / pal_preview (web) / pal_screenshot attach this automatically — call this directly after pal_test's browser preview or a manual run in the user's browser.",
+        inputShape: {},
+        async run(ctx) {
+            const dbg = await retrieveServerDebug(ctx.session, ctx.record.palGuid, { palId: ctx.debugPalId });
+            if (ctx.lifecycle) ctx.lifecycle.onActivity();
+            if (dbg.palId) ctx.debugPalId = dbg.palId;
+            if (!dbg.retrieved) return Object.assign(dbg, { message: "Could not retrieve server debug: " + dbg.reason });
+            if (dbg.empty) {
+                return Object.assign(dbg, { message: "Server debug buffer is EMPTY. It is consume-once — a prior palsync tool result may already carry it (look for a \"server debug\" block), or the workflow hasn't executed since the last read, or it doesn't call c.debug()." });
+            }
+            const truncated = dbg.text.length > DEBUG_INLINE_CAP;
+            const shown = truncated ? dbg.text.slice(-DEBUG_INLINE_CAP) : dbg.text;
+            return Object.assign(dbg, {
+                message: "Server debug output (buffer now cleared for all viewers" + (truncated ? "; LAST " + DEBUG_INLINE_CAP + " of " + dbg.text.length + " chars" : "") + "):\n" + shown
             });
         }
     },
@@ -343,12 +388,12 @@ const TOOLS = [
                 if (expect && expect.length) {
                     const chk = checkExpect(res.html, expect);
                     const safe = Object.assign({}, res); delete safe.html;
-                    return Object.assign(safe, { pass: chk.pass, results: chk.results,
-                        message: formatExpect("WEB preview (" + res.url + ")", { status: res.status, bytes: res.bytes }, chk) + dirtyNote });
+                    return withServerDebug(ctx, Object.assign(safe, { pass: chk.pass, results: chk.results,
+                        message: formatExpect("WEB preview (" + res.url + ")", { status: res.status, bytes: res.bytes }, chk) + dirtyNote }));
                 }
                 // Narrowed markup: one region and/or a char cap when the agent genuinely needs HTML.
                 if (selector || maxChars) {
-                    return htmlRegionResult(res, { headline: "WEB preview rendered", filePrefix: "palsync-preview-", guid: ctx.record.palGuid, selector, maxChars, dirtyNote });
+                    return withServerDebug(ctx, htmlRegionResult(res, { headline: "WEB preview rendered", filePrefix: "palsync-preview-", guid: ctx.record.palGuid, selector, maxChars, dirtyNote }));
                 }
                 // Save the full HTML to a file the agent can Read, and inline a capped slice.
                 let filePath = null;
@@ -359,13 +404,13 @@ const TOOLS = [
                 const truncated = res.html.length > PREVIEW_INLINE_CAP;
                 const shown = truncated ? res.html.slice(0, PREVIEW_INLINE_CAP) : res.html;
                 const safe = Object.assign({}, res); delete safe.html; // don't double-include in structured result
-                return Object.assign(safe, {
+                return withServerDebug(ctx, Object.assign(safe, {
                     htmlFile: filePath,
                     message: "WEB preview rendered — this is your pal's actual server-rendered HTML output.\n" +
                         "  url=" + res.url + "  content-type=" + res.contentType + "  title=" + JSON.stringify(res.title) + "  size=" + res.bytes + " bytes" + dirtyNote +
                         (filePath ? "\n  Full HTML saved to: " + filePath + " (Read it to inspect the whole page)." : "") +
                         "\n\n--- rendered HTML" + (truncated ? " (first " + PREVIEW_INLINE_CAP + " of " + res.bytes + " bytes — read the file for the rest)" : "") + " ---\n" + shown
-                });
+                }));
             }
             // console/transaction — open in the user's browser; the agent cannot see it.
             let opened = { opened: false };
@@ -400,11 +445,11 @@ const TOOLS = [
             if (expect && expect.length) {
                 const chk = checkExpect(res.html, expect);
                 const safe = Object.assign({}, res); delete safe.html;
-                return Object.assign(safe, { pass: chk.pass, results: chk.results,
-                    message: formatExpect("Fetched " + path, { status: res.status, bytes: res.bytes }, chk) });
+                return withServerDebug(ctx, Object.assign(safe, { pass: chk.pass, results: chk.results,
+                    message: formatExpect("Fetched " + path, { status: res.status, bytes: res.bytes }, chk) }));
             }
             if (selector || maxChars) {
-                return htmlRegionResult(res, { headline: "Fetched " + path, filePrefix: "palsync-fetch-", guid: ctx.record.palGuid, selector, maxChars });
+                return withServerDebug(ctx, htmlRegionResult(res, { headline: "Fetched " + path, filePrefix: "palsync-fetch-", guid: ctx.record.palGuid, selector, maxChars }));
             }
             let filePath = null;
             try {
@@ -414,13 +459,13 @@ const TOOLS = [
             const truncated = res.html.length > PREVIEW_INLINE_CAP;
             const shown = truncated ? res.html.slice(0, PREVIEW_INLINE_CAP) : res.html;
             const safe = Object.assign({}, res); delete safe.html;
-            return Object.assign(safe, {
+            return withServerDebug(ctx, Object.assign(safe, {
                 htmlFile: filePath,
                 message: "Fetched " + path + " — status=" + res.status + " content-type=" + res.contentType +
                     " title=" + JSON.stringify(res.title) + " size=" + res.bytes + " bytes" +
                     (filePath ? "\n  Full body saved to: " + filePath : "") +
                     "\n\n--- served body" + (truncated ? " (first " + PREVIEW_INLINE_CAP + " bytes — read the file for the rest)" : "") + " ---\n" + shown
-            });
+            }));
         }
     },
     {
@@ -464,14 +509,14 @@ const TOOLS = [
                 (fullPage ? " (full page)" : "") + "\n  url=" + res.url +
                 (filePath ? "\n  PNG saved to: " + filePath : "") + errBlock;
             const safe = Object.assign({}, res); delete safe.pngBase64; // don't double-include the base64 blob
-            return Object.assign(safe, {
-                pngFile: filePath,
-                message: text,
-                content: [
-                    { type: "text", text },
-                    { type: "image", data: res.pngBase64, mimeType: "image/png" }
-                ]
-            });
+            // Attach the c.debug trail (prime evidence beside a renderError) BEFORE assembling the
+            // content blocks, so the debug text rides the visible text block too.
+            const out = await withServerDebug(ctx, Object.assign(safe, { pngFile: filePath, message: text }));
+            out.content = [
+                { type: "text", text: out.message },
+                { type: "image", data: res.pngBase64, mimeType: "image/png" }
+            ];
+            return out;
         }
     },
     {
