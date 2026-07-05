@@ -509,30 +509,21 @@ const TOOLS = [
             const text = (res.kind ? res.kind.toUpperCase() : "WEB") + " screenshot captured — " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height +
                 (fullPage ? " (full page)" : "") + "\n  url=" + res.url +
                 (filePath ? "\n  PNG saved to: " + filePath : "") + errBlock;
-            const safe = Object.assign({}, res); delete safe.pngBase64; // don't double-include the base64 blob
+            const safe = Object.assign({}, res); delete safe.pngBase64; delete safe.jpegSmallBase64; // don't double-include the base64 blobs
             // Attach the c.debug trail (prime evidence beside a renderError) BEFORE assembling the
             // content blocks, so the debug text rides the visible text block too.
             const out = await withServerDebug(ctx, Object.assign(safe, { pngFile: filePath, message: text }));
-            out.content = [
-                { type: "text", text: out.message },
-                { type: "image", data: res.pngBase64, mimeType: "image/png" }
-            ];
-            return out;
-            const safe = Object.assign({}, res); delete safe.pngBase64; delete safe.jpegSmallBase64; // don't double-include the base64 blobs
             // Inline a downscaled JPEG so the render doesn't ride at full resolution in every
             // subsequent turn's context; the full-res PNG is still on disk at pngFile. Falls back
             // to the full PNG if the in-page re-encode failed.
             const inlineImage = res.jpegSmallBase64
                 ? { type: "image", data: res.jpegSmallBase64, mimeType: "image/jpeg" }
                 : { type: "image", data: res.pngBase64, mimeType: "image/png" };
-            return Object.assign(safe, {
-                pngFile: filePath,
-                message: text,
-                content: [
-                    { type: "text", text },
-                    inlineImage
-                ]
-            });
+            out.content = [
+                { type: "text", text: out.message },
+                inlineImage
+            ];
+            return out;
         }
     },
     {
