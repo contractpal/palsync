@@ -6,6 +6,7 @@ const { z } = require("zod");
 const { pull } = require("../core/pull");
 const { push } = require("../core/push");
 const { runTest } = require("../core/test");
+const { runTunnelAction, listTunnelWorkflows, matchTunnelWorkflow } = require("../core/tunnel");
 const { runPreview, fetchPagePath, checkExpect, extractSelector } = require("../core/preview");
 const { runScreenshot } = require("../core/screenshot");
 const { mergeWorkspace, formatMerge } = require("../core/merge");
@@ -227,6 +228,92 @@ const TOOLS = [
             // Strip the credential URL before returning — defense in depth.
             const safe = Object.assign({}, res); delete safe._previewUrl;
             return Object.assign(safe, { message });
+        }
+    },
+    {
+        name: "pal_tunnel_test",
+        description: "Test a TUNNEL workflow (workflowType 15) by ACTUALLY CALLING it as a web service and returning its JSON response — the one tool where you get real DATA back from the server, not just a validation verdict. REQUIRES askedUser:true, which attests the action/workflow/payload values came from the USER (their message specified them, or they answered your questions) — a call without it returns the questions to relay to the user instead of running. NEVER invent an action or payload. Credentials are minted and refreshed automatically (~5 min expiry). Acts on the LAST PUSHED version — pal_push first. An empty response means the workflow THREW at runtime.",
+        inputShape: {
+            action: z.string().optional().describe("Action string the workflow dispatches on via request.getAction(). Optional — omitted means the workflow sees null."),
+            payload: z.record(z.string(), z.any()).optional().describe("JSON payload object — TOP-LEVEL keys are readable in the workflow via request.getPayload().get(key); nested objects do not survive the wire. Default: {}."),
+            payloadFile: z.string().optional().describe("Path to a .json file to send as the payload (workspace-relative or absolute). Alternative to payload."),
+            workflow: z.string().optional().describe("Tunnel workflow name, with or without .js (default: the pal's registered tunnelServiceWorkflow)."),
+            askedUser: z.boolean().optional().describe("REQUIRED attestation: true means the action/workflow/payload values came from the USER in this conversation — their message specified them, or they answered your questions. NEVER set it alongside values you chose yourself.")
+        },
+        async run(ctx, { action, payload, payloadFile, workflow, askedUser } = {}) {
+            // Local enumeration (last-pulled pal.json) — for name matching and for listing options.
+            const { tunnels, defaultTunnel } = listTunnelWorkflows(ctx.workspaceDir);
+            if (ctx.lifecycle) ctx.lifecycle.onActivity();
+            const listLine = tunnels.length
+                ? "Tunnel workflows on this pal: " + tunnels.map(t => t + (t === defaultTunnel ? " (default)" : "")).join(", ")
+                : "No tunnel workflows (workflowType 15) found in the local pal.json — pal_pull to refresh, or create one.";
+            // Interview gate: the developer chooses the action/workflow/payload — the agent must not.
+            // UNCONDITIONAL on askedUser (an attestation the values came from the user): the first
+            // version exempted calls that carried an explicit action, and agents simply invented one
+            // ("test") and sailed through without ever asking. Enforced here, in the response the
+            // agent reads every call, because description-only guidance gets skipped.
+            if (!askedUser) {
+                const supplied = [];
+                if (action !== undefined) supplied.push("action:" + JSON.stringify(action));
+                if (workflow) supplied.push("workflow:" + JSON.stringify(workflow));
+                if (payload !== undefined || payloadFile) supplied.push(payloadFile ? "payloadFile:" + JSON.stringify(payloadFile) : "a payload");
+                const inventedNote = supplied.length
+                    ? "\nYou passed " + supplied.join(", ") + " — if the user did not give you these values, they are INVENTED; discard them and ask.\n"
+                    : "\n";
+                return { ran: false, refused: "interview-needed", tunnelWorkflows: tunnels, defaultTunnel,
+                    message: "NOT RUN — this call must carry askedUser:true, attesting the values came from the user." + inventedNote +
+                        "Ask the user (do not answer for them):\n" +
+                        "  1. ACTION — which action string should the workflow receive? (optional — may be none)\n" +
+                        "  2. WORKFLOW — " + listLine + "\n" +
+                        "  3. PAYLOAD — one of: (a) no payload, (b) they type/paste JSON, (c) a path to a .json file (payloadFile).\n" +
+                        "Then call again with their answers plus askedUser:true. If the user's original message already answered a question (e.g. \"test tunnel xyz with action getOrders\"), you may skip asking that one." };
+            }
+            let resolvedWorkflow = undefined; // undefined => server runs the registered default
+            if (workflow) {
+                const matched = matchTunnelWorkflow(workflow, tunnels);
+                if (!matched && tunnels.length) {
+                    return { ran: false, refused: "unknown-workflow", tunnelWorkflows: tunnels, defaultTunnel,
+                        message: "REFUSED: " + JSON.stringify(workflow) + " does not match a tunnel workflow in pal.json.\n" + listLine };
+                }
+                resolvedWorkflow = matched || workflow; // pass through unmatched — the local list may be stale/empty
+            }
+            if (payloadFile && payload) {
+                return { ran: false, refused: "payload-conflict", message: "REFUSED: pass payload OR payloadFile, not both." };
+            }
+            if (payloadFile) {
+                const p = pathMod.isAbsolute(payloadFile) ? payloadFile : pathMod.join(ctx.workspaceDir, payloadFile);
+                let text;
+                try { text = fs.readFileSync(p, "utf8"); }
+                catch (e) { return { ran: false, refused: "payload-file", message: "REFUSED: could not read payload file " + p + ": " + e.message }; }
+                try { JSON.parse(text); }
+                catch (e) { return { ran: false, refused: "payload-file", message: "REFUSED: " + p + " is not valid JSON: " + e.message }; }
+                payload = text; // pre-validated string rides the wire as-is
+            }
+            const res = await runTunnelAction(ctx.session, ctx.record.palGuid, { action, payload, workflow: resolvedWorkflow, creds: ctx.tunnelCreds });
+            // Cache the session's tunnel credentials (short-lived — runTunnelAction re-mints on 401).
+            if (res.creds) { ctx.tunnelCreds = res.creds; }
+            const safe = Object.assign({}, res, { tunnelWorkflows: tunnels, defaultTunnel }); delete safe.creds; // never hand credentials to the agent
+            if (!res.ran) {
+                return Object.assign(safe, { message: "Tunnel call did not run (" + (res.refused || "unknown") + "): " + res.reason });
+            }
+            const headline = "Tunnel workflow responded — workflow=" + (resolvedWorkflow || (defaultTunnel ? defaultTunnel + " (default)" : "(server default)")) +
+                " action=" + (action ? JSON.stringify(action) : "(none)") + " status=" + res.status +
+                (res.refreshedCredentials ? " (fresh tunnel credentials minted)" : "");
+            if (res.emptyBody) {
+                return Object.assign(safe, {
+                    message: headline + "\n\n⚠ EMPTY response body. For a tunnel workflow this almost always means the workflow " +
+                        "THREW at runtime (the server swallows the error and returns nothing) — or it returned an empty payload. " +
+                        "Check the workflow for a bad method call / null deref on this action, push, and test again."
+                });
+            }
+            const shown = res.raw.length > PREVIEW_INLINE_CAP ? res.raw.slice(0, PREVIEW_INLINE_CAP) : res.raw;
+            return Object.assign(safe, {
+                message: headline +
+                    (res.parseError ? "\n⚠ Response was not valid JSON (" + res.parseError + ") — raw body below." : "") +
+                    "\n\n--- response " + (res.parseError ? "body" : "JSON") +
+                    (res.raw.length > shown.length ? " (first " + PREVIEW_INLINE_CAP + " of " + res.raw.length + " chars)" : "") +
+                    " ---\n" + shown
+            });
         }
     },
     {

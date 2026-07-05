@@ -82,8 +82,9 @@ env:     PALSYNC_WORKSPACE=/home/you/pals/isr
          CP_PASS=your-password
 ```
 
-It exposes: `pal_status`, `pal_validate`, `pal_test`, `pal_preview`, `pal_seo_audit`,
-`pal_sync_datasets`, `pal_pull`, `pal_merge`, `pal_push`, `pal_lock`, `pal_unlock` (11 tools — a modest context cost; keep other
+It exposes: `pal_status`, `pal_validate`, `pal_test`, `pal_tunnel_test`, `pal_preview`, `pal_fetch`,
+`pal_screenshot`, `pal_seo_audit`, `pal_spec_lint`, `pal_regression`, `pal_sync_datasets`, `pal_pull`,
+`pal_merge`, `pal_push`, `pal_lock`, `pal_unlock` (16 tools — a modest context cost; keep other
 heavy MCP servers off the same session if context is tight).
 
 **OpenCode** — palsync registers itself when you run `palsync setup --agent opencode`, or add it
