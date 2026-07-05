@@ -128,6 +128,9 @@ Skills live in `.claude/skills/<name>/SKILL.md`, depth in `references/*.md`.
    <!-- ✗ WRONG: server refuses the save — fragments cannot contain <form> -->
    <form><c:a action="saveEquipment">Save</c:a></form>
    ```
+9. **Any `c:a` that deletes/destroys data carries `confirm="..."`.** The platform renders the
+   browser's native confirm before the request fires — there is no undo. A delete link with no
+   `confirm=` is a hard build error, not a style choice.
 
 ---
 
@@ -164,6 +167,7 @@ Default discipline on every change (full version: **pal-restraint** skill):
       only — never declare done on those alone.
 - [ ] All void tags self-closed; markup is valid XHTML.
 - [ ] No undocumented `c:` attributes.
+- [ ] Every destructive `c:a` (delete/destroy) carries `confirm="..."`.
 - [ ] No `fetch`/ClientPal server calls.
 - [ ] AJAX-loaded JS not wrapped in `DOMContentLoaded`.
 - [ ] Workflow JS inside the ES3 subset (no `{}`, no `let`/`const`, no arrows).

@@ -38,7 +38,7 @@ It is JSON, not workflow JS — normal object/array literals are fine here.
   "attachments":    [ ...binary attachments... ],
   "automatedScripts":     [ ... ],
   "mobileConfigurations": [ ... ],
-  "desktopBindings":      [ ... ],
+  "desktopBindings":      [ ...console home-screen tile entries, see below... ],
   "folders":        [ ...folder registrations... ],
   "trashCan":       [ ... ],
   "releaseNotes":   [ ... ],
@@ -83,6 +83,29 @@ identifier (typically the filename) and `<Type>` matches the section (`Workflow`
 | `workflowVersion` | Workflow schema version |
 | `consoleControlled` | Whether the pal is controlled from a console |
 | `mobileAccessType`, `groupAccessOnly` | Access-control flags |
+| `loginPage`, `mobileLoginPage` | Path to the login page (default / mobile-specific) |
+
+**There is no `layout` field for a console pal's home-screen tile label or icon.** A pal works
+in the console with none of these set — `consoleWorkflow` alone makes it reachable. Don't invent
+one (`consoleTemplate`, `consoleDesktopLabel`, etc. are not real fields); if a spec asks for a
+tile, see `desktopBindings` below.
+
+---
+
+## `desktopBindings` — console home-screen tile (rarely needed)
+
+Registers an optional tile a pal shows on the console home screen. **Most pals don't have one and
+don't need one** — omit this section unless the spec explicitly asks for a tile.
+
+```json
+"desktopBindings": [
+  { "string": "<name>", "DesktopBinding": { "name": "Equipment", "icon": "bi-box-seam" } }
+]
+```
+
+Same `{ "string", "<Type>" }` wrapper as every other section. `DesktopBinding` has exactly two
+fields worth setting: `name` (tile label) and `icon`. There is no `DesktopLabel`/`DesktopImage`/
+`consoleLabel`/`consoleImage` — those are guesses, not real fields.
 
 **Every entry in `layout` that names a workflow file is a *default* registration** — the
 platform's fallback for that workflow type. Other workflow files of the same type can exist and
