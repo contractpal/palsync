@@ -76,6 +76,31 @@ function loadChromium() {
     catch (e) { return null; }
 }
 
+// Re-encode the full-res PNG down to a small JPEG, entirely in the browser page's own JS context
+// (canvas from a data: URL we constructed — never a cross-origin resource, so it never taints).
+// Anthropic's image-token cost scales with pixel area, not just bytes, so this cuts the inline
+// copy that rides in the agent's context on every subsequent turn (the on-disk PNG stays full-res
+// for anyone who needs to zoom in). Zero new dependencies — no sharp, no canvas package.
+async function downscaleToJpeg(pg, pngBase64, scale = 0.625, quality = 0.6) {
+    try {
+        return await pg.evaluate(({ pngBase64, scale, quality }) => new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const w = Math.max(1, Math.round(img.naturalWidth * scale));
+                const h = Math.max(1, Math.round(img.naturalHeight * scale));
+                const canvas = document.createElement("canvas");
+                canvas.width = w; canvas.height = h;
+                canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+                resolve({ dataUrl: canvas.toDataURL("image/jpeg", quality), width: w, height: h });
+            };
+            img.onerror = () => reject(new Error("downscale image load failed"));
+            img.src = "data:image/png;base64," + pngBase64;
+        }), { pngBase64, scale, quality });
+    } catch (e) {
+        return null; // best-effort — caller falls back to the full-res PNG
+    }
+}
+
 // Render a WEB pal screen and return its PNG (base64) + the resolved landing URL + viewport used.
 // Returns { captured, available, ... }. Never throws on a normal failure; `available:false` means
 // the capability itself is missing (Playwright/Chromium), distinct from a per-pal failure.
@@ -140,11 +165,13 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
             await pg.goto(base + String(page).replace(/^\/+/, ""), { waitUntil: "networkidle" });
         }
         const buf = await pg.screenshot({ fullPage: !!fullPage });
+        const pngBase64 = buf.toString("base64");
         // Read the rendered text and check for a CloudPiston runtime-error block — a pal that
         // validated can still throw at render time. Best-effort: a failure to read text must not
         // sink the (successful) capture.
         let renderError = null;
         try { renderError = detectRenderError(await pg.innerText("body")); } catch (e) { /* ignore */ }
+        const small = await downscaleToJpeg(pg, pngBase64);
         return {
             captured: true, available: true, kind: t.kind,
             viewport: vp, viewportName,
@@ -152,7 +179,9 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
             // URL — sanitize to origin+path so no credential is ever returned.
             url: isWeb ? pg.url() : sanitizeUrl(pg.url()),
             renderError,
-            pngBase64: buf.toString("base64")
+            pngBase64,
+            jpegSmallBase64: small ? small.dataUrl.replace(/^data:image\/jpeg;base64,/, "") : null,
+            smallDims: small ? { width: small.width, height: small.height } : null
         };
     } catch (e) {
         // Navigation/auth-replay/screenshot failure — degrade to the eyeball gate, never throw.
@@ -167,4 +196,4 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
     }
 }
 
-module.exports = { runScreenshot, detectRenderError, sanitizeUrl, loadChromium, VIEWPORTS };
+module.exports = { runScreenshot, detectRenderError, sanitizeUrl, loadChromium, downscaleToJpeg, VIEWPORTS };

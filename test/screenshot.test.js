@@ -20,6 +20,7 @@ let pageText;             // what page.innerText("body") returns (for render-err
 const gotoCalls = [];     // every URL navigated to this test
 const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]); // fake PNG
 let chromiumPresent = true;
+let nextEvaluate;         // (fn, args) => any | throws — simulates page.evaluate for the JPEG downscale
 
 // --- inject fakes into the require cache ------------------------------------
 function stub(id, exportsObj) {
@@ -31,7 +32,8 @@ const fakePage = {
     async goto(url) { gotoCalls.push(url); if (nextGoto) nextGoto(url); },
     url() { return landedUrl; },
     async innerText() { return pageText; },
-    async screenshot() { return pngBytes; }
+    async screenshot() { return pngBytes; },
+    async evaluate(fn, args) { return nextEvaluate(fn, args); }
 };
 const fakeBrowser = {
     async newContext() { return { async newPage() { return fakePage; } }; },
@@ -52,6 +54,8 @@ function reset() {
     nextGoto = null;
     chromiumPresent = true;
     pageText = "Equipment\nAdd equipment"; // a normal, error-free rendered page by default
+    // Default: the in-page canvas re-encode succeeds, mirroring a real browser's behavior.
+    nextEvaluate = (fn, args) => ({ dataUrl: "data:image/jpeg;base64,FAKESMALL", width: 800, height: 500 });
 }
 
 // --- tests ------------------------------------------------------------------
@@ -111,6 +115,31 @@ test("web pal: navigates the no-auth rawToken and returns captured:true", async 
     assert.equal(res.kind, "web");
     assert.equal(gotoCalls[0], "https://webpals.cloudpiston.com/site/", "web navigates the rawToken");
     assert.ok(res.pngBase64);
+});
+
+test("a successful capture also returns a downscaled JPEG alongside the full-res PNG", async () => {
+    reset();
+    nextRunTest = async () => ({ ran: true, validated: true, kind: "web", rawToken: "https://webpals.cloudpiston.com/site/", _previewUrl: null });
+    landedUrl = "https://webpals.cloudpiston.com/site/";
+
+    const res = await runScreenshot({}, "GUID", {});
+    assert.equal(res.captured, true);
+    assert.ok(res.pngBase64, "full-res PNG still returned (goes to the on-disk file)");
+    assert.equal(res.jpegSmallBase64, "FAKESMALL", "small JPEG extracted from the data: URL");
+    assert.deepEqual(res.smallDims, { width: 800, height: 500 });
+});
+
+test("if the in-page downscale fails, the capture still succeeds with jpegSmallBase64:null (PNG fallback)", async () => {
+    reset();
+    nextEvaluate = () => { throw new Error("evaluate not supported in this context"); };
+    nextRunTest = async () => ({ ran: true, validated: true, kind: "web", rawToken: "https://webpals.cloudpiston.com/site/", _previewUrl: null });
+    landedUrl = "https://webpals.cloudpiston.com/site/";
+
+    const res = await runScreenshot({}, "GUID", {});
+    assert.equal(res.captured, true, "downscale failure must not sink a successful capture");
+    assert.ok(res.pngBase64, "full-res PNG is still returned");
+    assert.equal(res.jpegSmallBase64, null);
+    assert.equal(res.smallDims, null);
 });
 
 test("no Playwright/Chromium runtime → captured:false, available:false (eyeball-gate fallback)", async () => {
