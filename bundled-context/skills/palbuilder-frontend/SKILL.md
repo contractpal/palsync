@@ -213,6 +213,17 @@ action — no wrapper of any kind. The two ways to get this wrong both look plau
 Use `href` only for links that carry nothing beyond their own query string — and even then
 `action="doThing?id=${row.id}"` is preferred (it's encrypted; `href` is not).
 
+**Any `c:a` whose action deletes/destroys data carries `confirm="..."`** — the platform renders
+a native browser confirm before the request fires. No undo exists on this platform.
+
+```html
+<!-- ✓ CORRECT — a stray click can't destroy data -->
+<c:a action="deleteEquipment?equipmentId=${row.equipmentId}" ajax-target="body" confirm="Delete this item? This cannot be undone.">Delete</c:a>
+
+<!-- ✗ WRONG — one click, no undo -->
+<c:a action="deleteEquipment?equipmentId=${row.equipmentId}" ajax-target="body">Delete</c:a>
+```
+
 ---
 
 ## Fragment Architecture
@@ -303,6 +314,7 @@ The ClientPal/`fetch` ban and the "why `c:` elements are safe" rationale live in
 | Entity-escaping `<` `>` `&` inside `<script>`/`<style>` | Write raw — escapes are stored literally and break JS |
 | `` `…${x}…` `` template literal in inline page `<script>` | String concat, or move JS to an external `.js` file (`${}` collides with server EL) |
 | Using any undocumented tag attribute | Check the docs first |
+| `<c:a action="delete...">` with no `confirm=` | Add `confirm="Delete this item? This cannot be undone."` — no undo exists |
 
 ---
 

@@ -409,3 +409,111 @@ test("fragment binding — static c:fragment name is not this check's contract",
     assert.strictEqual(lintContracts(dir).filter(f => f.rule === "fragmentBinding").length, 0);
     fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("destructiveConfirm — delete action with no confirm= is an error naming the fix", () => {
+    const dir = tmpWorkspace({
+        "fragments/list.html": '<c:ignore xmlns:c="contractpal"><c:a action="deleteEquipment?equipmentId=${row.equipmentId}" ajax-target="body">Delete</c:a></c:ignore>',
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "destructiveConfirm");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /confirm=/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("destructiveConfirm — delete action WITH confirm= produces no finding", () => {
+    const dir = tmpWorkspace({
+        "fragments/list.html": '<c:ignore xmlns:c="contractpal"><c:a action="deleteEquipment?equipmentId=${row.equipmentId}" ajax-target="body" confirm="Delete this item? This cannot be undone.">Delete</c:a></c:ignore>',
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "destructiveConfirm").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("destructiveConfirm — ambiguous remove* action warns, does not block", () => {
+    const dir = tmpWorkspace({
+        "fragments/list.html": '<c:ignore xmlns:c="contractpal"><c:a action="removeFilter" ajax-target="body">Clear</c:a></c:ignore>',
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "destructiveConfirm");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "warn");
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("destructiveConfirm — unrelated action produces no finding", () => {
+    const dir = tmpWorkspace({
+        "fragments/form.html": '<c:ignore xmlns:c="contractpal"><c:a action="saveEquipment" ajax-target="body">Save</c:a></c:ignore>',
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "destructiveConfirm").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("unknownPalJsonKey — top-level typo suggests the real key", () => {
+    const dir = tmpWorkspace({ "pal.json": basePalJson({ worfklows: { entry: [] } }) });
+    const findings = lintPalJson(dir).filter(f => f.rule === "unknownPalJsonKey");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /Did you mean "workflows"/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("unknownPalJsonKey — layout typo suggests the real field", () => {
+    const dir = tmpWorkspace({ "pal.json": basePalJson({ layout: { consoleWorkflw: "console.js" } }) });
+    const findings = lintPalJson(dir).filter(f => f.rule === "unknownPalJsonKey");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /Did you mean "consoleWorkflow"/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("unknownPalJsonKey — desktopBindings as an object (invented shape) is an error", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({ desktopBindings: { DesktopBinding: [{ DesktopLabel: "Equipment" }] } }),
+    });
+    const findings = lintPalJson(dir).filter(f => f.rule === "unknownPalJsonKey");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /must be an ARRAY/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("unknownPalJsonKey — desktopBindings entry with invented field names suggests the real ones", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({
+            desktopBindings: [{ string: "equipment", DesktopBinding: { DesktopLabel: "Equipment", DesktopImage: "bi-box-seam" } }],
+        }),
+    });
+    const findings = lintPalJson(dir).filter(f => f.rule === "unknownPalJsonKey");
+    assert.strictEqual(findings.length, 2);
+    assert.ok(findings.every(f => f.severity === "error"));
+    assert.ok(findings.some(f => /Did you mean "name"/.test(f.message)));
+    assert.ok(findings.some(f => /Did you mean "icon"/.test(f.message)));
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("unknownPalJsonKey — desktopBindings entry with the real fields produces no finding", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({
+            desktopBindings: [{ string: "equipment", DesktopBinding: { name: "Equipment", icon: "bi-box-seam" } }],
+        }),
+    });
+    assert.strictEqual(lintPalJson(dir).filter(f => f.rule === "unknownPalJsonKey").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("unknownPalJsonKey — no near match warns, never claims a false suggestion", () => {
+    const dir = tmpWorkspace({ "pal.json": basePalJson({ zzzznotarealkey: [] }) });
+    const findings = lintPalJson(dir).filter(f => f.rule === "unknownPalJsonKey");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "warn");
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("unknownPalJsonKey — a clean real-shaped manifest produces no finding", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({
+            layout: { name: "Test", consoleWorkflow: "console.js", inheritanceEnabled: false },
+        }),
+    });
+    assert.strictEqual(lintPalJson(dir).filter(f => f.rule === "unknownPalJsonKey").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});

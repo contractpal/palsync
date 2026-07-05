@@ -25,8 +25,10 @@ When in doubt it's not a fix — escalate.
 
 1. **Reproduce with a tool** — never from the description alone: `pal_validate` (offline
    errors), `pal_test` (server compile), `pal_fetch`/`pal_preview` with `expect:` (web
-   render), `pal_screenshot` (any render). State the failure in one line with the tool output
-   that shows it. **Can't reproduce → ask the user for repro steps; do not guess.**
+   render), `pal_screenshot` (any render), `pal_exercise` (a behavior bug — trigger the
+   action, assert the wrong result with `expect`/`absent`). State the failure in one line
+   with the tool output that shows it. **Can't reproduce → ask the user for repro steps; do
+   not guess.**
 2. **Isolate.** Read only the failure path — the failing fragment/workflow, the files it
    calls, the dataset it reads. Don't survey the whole pal.
 3. **Minimal diff, under pal-restraint.** Reuse before building, platform before library,

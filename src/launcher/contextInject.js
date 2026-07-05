@@ -40,18 +40,18 @@ const END = "<!-- <<< palsync managed block <<< -->";
 // The sync-etiquette section that teaches the agent the palsync workflow (decision: conversational).
 // cli=true renders the Pi flavor: palsync CLI subcommands instead of MCP tools, and lock-per-command
 // instead of an always-on session lock (Pi has no MCP — it drives palsync through its shell CLI).
-function syncSection(palName, { cli = false } = {}) {
+function syncSection(palName, { cli = false, skillsDir = ".claude/skills" } = {}) {
     const T = cli
         ? { pull: "`palsync pull`", push: "`palsync push`", validate: "`palsync validate`",
             test: "`palsync test`", preview: "`palsync preview`", seo: "`palsync seo-audit`",
             merge: "`palsync merge`", status: "`palsync status`", datasets: "`palsync sync-datasets`",
             screenshot: "`palsync screenshot`", fetch: "`palsync fetch`", specLint: "`palsync spec-lint`",
-            regression: "`palsync regression`", skip: "the `--skip-validation` flag" }
+            regression: "`palsync regression`", exercise: "`palsync exercise`", skip: "the `--skip-validation` flag" }
         : { pull: "`pal_pull`", push: "`pal_push`", validate: "`pal_validate`",
             test: "`pal_test`", preview: "`pal_preview`", seo: "`pal_seo_audit`",
             merge: "`pal_merge`", status: "`pal_status`", datasets: "`pal_sync_datasets`",
             screenshot: "`pal_screenshot`", fetch: "`pal_fetch`", specLint: "`pal_spec_lint`",
-            regression: "`pal_regression`" };
+            regression: "`pal_regression`", exercise: "`pal_exercise`" };
     const conn = cli
         ? "This pal" + (palName ? " (**" + palName + "**)" : "") + " is connected to CloudPiston via the **palsync CLI** — run its subcommands in your shell (e.g. `palsync push`, `palsync pull`). palsync takes the pal lock for each push/pull and releases it; there is no always-on session lock."
         : "This pal" + (palName ? " (**" + palName + "**)" : "") + " is connected to CloudPiston via the **palsync** MCP server and is **locked for your session**.";
@@ -60,13 +60,15 @@ function syncSection(palName, { cli = false } = {}) {
         "",
         conn,
         "",
-        "**BEFORE writing any pal code, read the skill files** in `.claude/skills/` (`palbuilder-core`",
-        "for platform foundations + ES3 rules + `pal.json`, `palbuilder-data` for datasets/payloads/HTTP,",
-        "`palbuilder-frontend` for pages/fragments/c: tags, `palbuilder-backend` for workflow .js,",
-        "`palbuilder-jobs-http` for background jobs / long-running work). PalBuilder is a proprietary",
-        "dialect you do NOT know from training — your defaults (object literals, `let`/`const`, normal",
-        "HTML habits) produce code that saves but then FAILS to compile or render. The skills are the",
-        "rules; follow them literally.",
+        "**Load every skill the task touches before writing any pal code** — see the Platform",
+        "skills list above. PalBuilder is a proprietary dialect you do NOT know from training —",
+        "your defaults (object literals, `let`/`const`, normal HTML habits) produce code that",
+        "saves but then FAILS to compile or render. The skills are the rules; follow them literally.",
+        ...(skillsDir === ".claude/skills" ? [] : [
+        "**Load skills through your skill tool, by name/description — never additionally Read/cat a",
+        "file under `" + skillsDir + "/`.** The skill tool already loads a skill's full body; reading",
+        "the file too puts the same text in context twice.",
+        ]),
         "",
         "The working loop:",
         "",
@@ -96,10 +98,8 @@ function syncSection(palName, { cli = false } = {}) {
         "   or the auth replay failed) — never as a substitute for calling it. Preview/screenshot/fetch show",
         "   the LAST PUSHED version, so push before checking your latest edits.",
         "   - **Never report page content, saved data, or a completed click/type/submit flow as fact unless",
-        "     one of these tools actually showed it to you.** \"I clicked Save and the item appeared\" is a",
-        "     lie if the only tool you called was " + T.preview + " on a console pal — that tool cannot see the",
-        "     page. If you have not observed something, say so and ask the user to check, instead of",
-        "     narrating a plausible-sounding result.",
+        "     one of these tools actually showed it to you** (see PalBuilder Agent Rules → Anti-patterns,",
+        "     \"Narrating UI you did not observe\", above).",
         "6. For a WEB pal page (public, crawled), also run **" + T.seo + "** after pushing — it",
         "   checks the rendered page's SEO (title/description, ABSOLUTE og: URLs, one H1, JSON-LD,",
         "   img alt text) and tells you exactly what to fix. Do not declare a public web page done",
@@ -147,7 +147,11 @@ function syncSection(palName, { cli = false } = {}) {
         "  view: reading it clears it for everyone, so mention that if the user is also watching PalBuilder.",
         ]),
         "- Specialized checks (the owning skill explains each): " + T.fetch + " verifies ONE web page renders",
-        "  (pass `expect:[strings]`; " + T.preview + " does the same inline), " + T.specLint + " lints a SPEC.md offline",
+        "  (pass `expect:[strings]`; " + T.preview + " does the same inline), " + T.exercise + " EXERCISES a workflow",
+        "  action end-to-end and asserts `expect`/`absent` strings in the result (the check for \"did the write",
+        "  actually work\" — after building any create/edit/delete action, run it; after an edit put the OLD value",
+        "  in `absent` to catch a duplicate insert; after a delete put the deleted name in `absent`, never",
+        "  empty-state text), " + T.specLint + " lints a SPEC.md offline",
         "  (pal-spec), " + T.regression + " runs a brownfield baseline regression check (pal-init/pal-loop). Lock",
         "  handling is automatic; use `pal_lock`/`pal_unlock` (`palsync lock`/`unlock` on the CLI) only to take or",
         "  release the pal lock by hand.",
@@ -236,9 +240,7 @@ function syncSection(palName, { cli = false } = {}) {
         "- `recreate` DROPS and rebuilds a table, DELETING ALL ITS ROWS. It requires an exact typed confirmation",
         "  and must never be used to make an additive change. Only suggest recreate when a column type must change",
         "  or a column is removed, and always warn the user it deletes all data first.",
-        "- `dataviews`, `data`, `datalists` are still PalBuilder-provisioned — push/pull preserve them, don't create them.",
-        "",
-        "PalBuilder coding rules are in the **PalBuilder Agent Rules** section above; deeper reference lives in the skills in `.claude/skills/` — read them before writing pal code: `palbuilder-core` (platform foundations, ES3 rules, `pal.json`), `palbuilder-data` (datasets, payloads, HTTP), `palbuilder-frontend` (pages/fragments/`c:` tags), `palbuilder-backend` (workflow `run()` code), `palbuilder-jobs-http` (background jobs)."
+        "- `dataviews`, `data`, `datalists` are still PalBuilder-provisioned — push/pull preserve them, don't create them."
     ].join("\n");
 }
 
@@ -246,8 +248,10 @@ function syncSection(palName, { cli = false } = {}) {
 // templated sync-etiquette/creation/dataset rules, under one version stamp. Written byte-for-byte to
 // CLAUDE.palsync.md (and inlined into AGENTS.md for codex/pi) — regenerated wholesale every setup, so
 // the rules live in ONE place and cannot drift between two files.
-async function buildPalsyncDoc(palName, opts) {
-    const contract = (await fs.readFile(path.join(BUNDLE_DIR, "CLAUDE.md"), "utf8")).trim();
+async function buildPalsyncDoc(palName, opts = {}) {
+    const skillsDir = opts.skillsDir || ".claude/skills";
+    let contract = (await fs.readFile(path.join(BUNDLE_DIR, "CLAUDE.md"), "utf8")).trim();
+    if (skillsDir !== ".claude/skills") contract = contract.split(".claude/skills").join(skillsDir);
     return [stampComment(), "", contract, "", "---", "", syncSection(palName, opts)].join("\n") + "\n";
 }
 
@@ -431,7 +435,7 @@ async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
     if (agent === "codex" || agent === "pi" || agent === "opencode") {
         await copySkillSet(workspaceDir, ".agents", skills);
         const prunedAgents = await pruneSkills(workspaceDir, ".agents", keep);
-        const agentsDoc = await buildPalsyncDoc(palName, { cli: agent === "pi" });
+        const agentsDoc = await buildPalsyncDoc(palName, { cli: agent === "pi", skillsDir: ".agents/skills" });
         const agentsPath = path.join(workspaceDir, "AGENTS.md");
         const existingAgents = await readIfExists(agentsPath);
         const mergedAgents = mergeManaged(existingAgents, agentsBlock(agentsDoc));

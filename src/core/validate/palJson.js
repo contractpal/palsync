@@ -11,6 +11,7 @@
 // on non-workspace directories (temp dirs, partial trees, etc.) and we must not noise on those.
 const fs = require("fs");
 const path = require("path");
+const { findSuggestion } = require("./suggest");
 
 // Folders whose files are pushed via pal.json entries. Matches the keys used in real pal.json
 // files (verified against V2-OE-Website).
@@ -26,6 +27,124 @@ const FOLDER_TYPE = {
     emails:      "Email",
     attachments: "Attachment",
 };
+
+// Manually extracted from the vendored server source (Pal.java / Layout.java field
+// declarations) — update this list if those classes gain/lose a serialized field. Excludes
+// `transient` Layout fields (logoImage, javaPluginRequired, acrobatPluginRequired,
+// acrobatVersionRequired, dashboardWorkflow) — those never reach pal.json.
+const TOP_LEVEL_KEYS = [
+    "layout", "documents", "emails", "images", "pages", "fragments", "styles", "wizards",
+    "workflows", "scripts", "fonts", "datasets", "dataviews", "data", "datalists",
+    "attachments", "automatedScripts", "mobileConfigurations", "desktopBindings", "folders",
+    "trashCan", "readme", "storeSettings", "consoleSettings", "releaseNotes", "secureFields",
+    // palsync-managed bookkeeping (not server fields, but legitimately on disk)
+    "id", "path", "environment",
+];
+
+const LAYOUT_KEYS = [
+    "name", "category", "description", "exportDate", "userWorkflow", "transactionWorkflow",
+    "systemWorkflow", "webServiceWorkflow", "consoleWorkflow", "webWorkflow",
+    "consoleSystemWorkflow", "consoleWebServiceWorkflow", "userWebServiceWorkflow",
+    "tunnelServiceWorkflow", "inheritanceEnabled", "inheritConsole", "inheritWeb",
+    "inheritTransaction", "inheritUser", "errorPage", "webErrorPage", "consoleErrorPage",
+    "loginPage", "robotsPage", "properties", "roles", "auditDocumentView", "workflowVersion",
+    "consoleControlled", "mobileLoginPage", "mobileAccessType", "defaultMobileConfiguration",
+    "groupAccessOnly",
+];
+
+// A DesktopBinding entry (console home-screen tile) — verified from the vendored server source
+// (DesktopBinding extends AbstractConfiguration<DesktopFeature>: name, icon, features,
+// resources). No local pal uses this section; it is NOT required for a console pal to work —
+// the console workflow registered in layout.consoleWorkflow is what makes a pal usable.
+const DESKTOP_BINDING_KEYS = ["name", "icon", "features", "resources"];
+
+// Field names an agent guesses when it needs a tile label/icon and hasn't found the real ones
+// (observed: an eval run invented exactly these). Checked before falling back to edit distance
+// since they're not textually close to "name"/"icon" but ARE the exact recurring wrong guess.
+const DESKTOP_BINDING_ALIASES = {
+    desktoplabel: "name", consolelabel: "name", label: "name",
+    desktopimage: "icon", consoleimage: "icon", image: "icon",
+};
+
+// Unknown top-level or layout key with a close real match → error (near-certain invention,
+// e.g. a case slip or a plausible-sounding guess). No close match → warn, never error — the
+// server's real field set is bigger than this manually-extracted list (wizards/fonts/etc. have
+// no local example to verify their shape further, and future platform fields are unknown to us).
+function checkUnknownKeys(manifest) {
+    const findings = [];
+    for (const key of Object.keys(manifest)) {
+        if (TOP_LEVEL_KEYS.includes(key)) continue;
+        const suggestion = findSuggestion(key, TOP_LEVEL_KEYS);
+        findings.push({
+            file: "pal.json", line: 1, column: 0,
+            severity: suggestion ? "error" : "warn",
+            rule: "unknownPalJsonKey",
+            message: suggestion
+                ? "pal.json top-level key \"" + key + "\" is not a PalBuilder manifest field — the " +
+                  "server ignores it silently and your intended change never happens. Did you mean \"" +
+                  suggestion + "\"?"
+                : "pal.json top-level key \"" + key + "\" is not in palsync's known field list — verify " +
+                  "it against a real pal export before relying on it; it may silently no-op.",
+        });
+    }
+
+    const layout = manifest.layout;
+    if (layout && typeof layout === "object" && !Array.isArray(layout)) {
+        for (const key of Object.keys(layout)) {
+            if (LAYOUT_KEYS.includes(key)) continue;
+            const suggestion = findSuggestion(key, LAYOUT_KEYS);
+            findings.push({
+                file: "pal.json", line: 1, column: 0,
+                severity: suggestion ? "error" : "warn",
+                rule: "unknownPalJsonKey",
+                message: suggestion
+                    ? "pal.json layout.\"" + key + "\" is not a PalBuilder manifest field — the server " +
+                      "ignores it silently and your intended change never happens. Did you mean \"" +
+                      suggestion + "\"? Note: there is no layout field for a console pal's desktop " +
+                      "tile label/icon — that's the separate, rarely-needed `desktopBindings` section " +
+                      "(name/icon per binding), not a `layout` key."
+                    : "pal.json layout.\"" + key + "\" is not in palsync's known field list — verify it " +
+                      "against a real pal export before relying on it; it may silently no-op.",
+            });
+        }
+    }
+
+    const bindings = manifest.desktopBindings;
+    if (bindings != null && bindings !== "" && !Array.isArray(bindings)) {
+        findings.push({
+            file: "pal.json", line: 1, column: 0, severity: "error", rule: "unknownPalJsonKey",
+            message: "pal.json \"desktopBindings\" must be an ARRAY of entries shaped like every " +
+                "other section — [{ \"string\": \"<name>\", \"DesktopBinding\": { \"name\": \"...\", " +
+                "\"icon\": \"...\" } }] — not an object. (This section registers a console pal's " +
+                "home-screen tile and is rarely needed — a console pal works without one via " +
+                "layout.consoleWorkflow; don't add it unless the spec asks for a tile.)",
+        });
+    } else if (Array.isArray(bindings)) {
+        for (const entry of bindings) {
+            const binding = entry && entry.DesktopBinding;
+            if (!binding || typeof binding !== "object") continue;
+            for (const key of Object.keys(binding)) {
+                if (DESKTOP_BINDING_KEYS.includes(key)) continue;
+                const alias = DESKTOP_BINDING_ALIASES[key.toLowerCase()];
+                const suggestion = alias || findSuggestion(key, DESKTOP_BINDING_KEYS);
+                findings.push({
+                    file: "pal.json", line: 1, column: 0,
+                    severity: suggestion ? "error" : "warn",
+                    rule: "unknownPalJsonKey",
+                    message: suggestion
+                        ? "pal.json desktopBindings[].DesktopBinding.\"" + key + "\" is not a real field " +
+                          "— the server ignores it silently. Did you mean \"" + suggestion + "\"? A " +
+                          "DesktopBinding has only name/icon/features/resources — there is no separate " +
+                          "label/image field name."
+                        : "pal.json desktopBindings[].DesktopBinding.\"" + key + "\" is not in palsync's " +
+                          "known field list (name/icon/features/resources) — verify it against a real " +
+                          "pal export before relying on it.",
+                });
+            }
+        }
+    }
+    return findings;
+}
 
 function lintPalJson(workspaceDir) {
     // Locate pal.json.
@@ -126,7 +245,9 @@ function lintPalJson(workspaceDir) {
         }
     }
 
+    findings.push(...checkUnknownKeys(manifest));
+
     return findings;
 }
 
-module.exports = { lintPalJson };
+module.exports = { lintPalJson, checkUnknownKeys };

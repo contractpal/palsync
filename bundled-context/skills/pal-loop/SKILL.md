@@ -68,8 +68,10 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
    - Apply **pal-restraint** on every line: reuse before building, platform before library,
      minimum that works, touch only the files this task names.
 5. **Verify** against the success condition with tool outputs, not opinion. Offline first, so
-   a bad result never reaches the server:
-   1. `pal_validate` → 0 errors. Fix real warnings.
+   a bad result never reaches the server. **Batch every edit for the task first, then verify
+   once — target ONE `pal_push` per task, never push per-file:**
+   1. `pal_validate` → 0 errors. Fix real warnings. Never run it twice without an edit in
+      between — same input, same output; `pal_push` re-runs this validation itself as its gate.
    2. `pal_push` (push policy `checkpoint` → ask the user first).
    3. `pal_test` → workflow VALIDATED, 0 notes — the real server compile (console AND web).
       Always run after a workflow change. Read `messages` too (whole-test failures like
@@ -85,11 +87,17 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       - `captured:false` → do NOT guess from HTML: set `needs-human` with a Blockers entry
         prefixed `HUMAN GATE:` naming exactly what to eyeball. Continue with independent
         tasks. (Full rule: `../pal-review/references/console-render-verification.md`.)
-      Verify data effects indirectly — after a write, run the spec's read-back action and
-      confirm the row.
-   6. `pal_sync_datasets` after pushing a **§8a** definition (never §8b).
-   - `pal_preview`/`pal_fetch`/`pal_seo_audit`/`pal_test` all act on the LAST PUSHED version —
-     push before verifying.
+   6. ANY write action (create/edit/delete): `pal_exercise` — trigger the action and assert the
+      result in the rendered output. Web: `steps:[{action, params, expect}]`. Console:
+      `steps:[{fill:{name:value}, click:"<exact link text>", expect:[...]}]`. After an EDIT, put
+      the new value in `expect` AND the old value in `absent` — a surviving old value means the
+      edit inserted a duplicate. After a DELETE, put the deleted record's name/value in `absent`
+      — never assert empty-state copy or list ordering (other rows may exist; lists sort
+      alphabetically, so a shorter list is not proof of the right row leaving). This is the
+      read-back check; a failing step is a task failure.
+   7. `pal_sync_datasets` after pushing a **§8a** definition (never §8b).
+   - `pal_preview`/`pal_fetch`/`pal_exercise`/`pal_seo_audit`/`pal_test` all act on the LAST
+     PUSHED version — push before verifying.
 6. **On pass:** `palsync task <id> done`; `palsync checkpoint "<date>, <task id>,
    <tool-output summary>"`; `git add -A && git commit -m "<task id>: <task name>"`; continue.
 7. **On fail:** fix and re-verify, up to TWO attempts. Still failing → `palsync task <id>
@@ -147,6 +155,9 @@ Runs at each review-cadence pause and always at the build-completion handoff —
   pass. A genuinely wrong criterion is a spec problem → amendment path, never a self-edit.
 - **Destructive operations** (dataset recreate, lock override, force push) follow their tools'
   confirmation gates; the loop never auto-confirms them.
+- **Never end your turn with unchecked EXECUTION.md tasks** unless every remaining task is
+  `blocked`/`needs-frontier`/`needs-human` — and say so explicitly, naming each blocker. Going
+  quiet mid-task-list is a violation, not a pause.
 
 ## When the spec is wrong (amendment path)
 

@@ -4,7 +4,8 @@ Every §6 layout line in a test SPEC names one of these. Nothing else may be inv
 
 - **PageHeader** — `h1` screen title + optional right-aligned primary action button.
 - **DataTable** — bootstrap `table table-striped`; header row; one row per record; per-row
-  action links (c:a). Wrapped in a fragment so it can be an ajax-target.
+  action links (c:a). Wrapped in a fragment so it can be an ajax-target. Destructive row
+  actions (Delete) carry `confirm=`.
 - **FormCard** — bootstrap `card` containing a vertical form; labels above inputs; one
   `btn-primary` submit + `btn-link` cancel.
 - **StatusBadge** — bootstrap `badge`; mapping: available/open = `bg-success`,

@@ -57,6 +57,8 @@ PalBuilder pattern — a console workflow doing full CRUD against a single DataS
   status=`available`; present → update that row's name/category/notes. Output: list view.
 ### deleteEquipment
 - Trigger: Delete row action. Input: equipmentId. Effect: delete that row. Output: list view.
+  The Delete link carries a `confirm=` prompt (DataTable convention, COMPONENTS.md) — clicking
+  through it deletes with no undo.
 ### checkoutEquipment
 - Trigger: Check out submit. Input: equipmentId, checkedOutTo (string). Validation: when
   checkedOutTo is empty, re-show checkout form with `Enter a name to check this item out.`
@@ -121,7 +123,7 @@ HAPPY-PATH (one per primary action):
 - [ ] saveEquipment: valid name → list contains the new row.
 - [ ] checkoutEquipment: valid name → row shows `checkedOut` badge + person.
 - [ ] checkinEquipment: → row returns to `available`, person cleared.
-- [ ] deleteEquipment: → row absent from list.
+- [ ] deleteEquipment: confirm prompt present on the link (`confirm=`), then → row absent from list.
 - [ ] saveEquipment edge: empty name → form re-renders with `Name is required.`
 
 ## 13. Reality check

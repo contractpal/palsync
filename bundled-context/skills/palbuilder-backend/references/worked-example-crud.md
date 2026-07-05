@@ -37,6 +37,11 @@ function run(controller) {
             frag = "console/equipment/list";   // ← rule f: fall through to the list fragment,
             loadList();                        //   not the form, so the save is actually visible
             break;
+        case "deleteEquipment":
+            deleteEquipment();
+            frag = "console/equipment/list";
+            loadList();
+            break;
         default:
             break;
     }
@@ -93,6 +98,11 @@ function saveEquipment() {
     if (isNew) { ds.insertRecord(record); }         // createRecord → set → insertRecord(rec)
     else       { ds.updateRecord(record); }         // never ds.commit() — that's the packet API
 }
+
+function deleteEquipment() {
+    var equipmentId = request.get("equipmentId");
+    pal.getDataSet("equipment").deleteRecord(equipmentId.toString());   // String id, NOT a record object
+}
 ```
 
 List fragment (`fragments/console/equipment/list.html`):
@@ -105,6 +115,8 @@ List fragment (`fragments/console/equipment/list.html`):
             ${item.name} — ${item.status}
             <!-- ajax-target="body" matches the id="body" div in the page shell above -->
             <c:a action="showForm?equipmentId=${item.equipmentId}" ajax-target="body">Edit</c:a>
+            <!-- confirm= is required on any action that deletes/destroys data — no undo on this platform -->
+            <c:a action="deleteEquipment?equipmentId=${item.equipmentId}" ajax-target="body" confirm="Delete this item? This cannot be undone.">Delete</c:a>
         </div>
     </c:list>
     <c:a action="showForm" ajax-target="body">Add New</c:a>
@@ -133,3 +145,5 @@ RULE 7 and the anti-patterns list:
   data instead of a blank form, and makes Save update instead of duplicate-insert.
 - `saveEquipment` falls through to `loadList()` and re-renders the list fragment — a write that
   persists but returns the form (or nothing) never shows the change in the UI.
+- `deleteEquipment` calls `ds.deleteRecord(equipmentId.toString())` — a String id, never the record
+  object — and its `c:a` carries `confirm="..."` so a stray click can't destroy data with no undo.

@@ -117,9 +117,20 @@ save-falls-through-to-list re-render) worked out line by line: **`references/wor
   and seed its payload (`showModal(...)` + `payload.set(...)`), or `return someDownload()`. Keep it thin;
   push real logic into a handler function.
 - The unknown-action fallback is `c.createAjaxResponse("ignore", false)`, never an error message.
-- Read submitted values with **either** `request.get("field")` **or** the `data` global
-  (`data = request.getData(); data.get("field")`). Both are valid and both appear in real pals — pick one
-  and be consistent within a file.
+
+---
+
+## Signatures you will otherwise guess wrong
+
+```js
+ds.deleteRecord(id.toString())        // takes a String id, NOT a record object
+ds.deleteRecords("column", value)     // delete every row matching a column value
+ds.insertRecord(rec) / ds.updateRecord(rec)   // both take a record object, never .commit()
+request.get("field")                  // or: data = request.getData(); data.get("field") — pick one, be consistent
+request.getData().getDefaultValue("field", null, true)   // required-input read, true = required
+payload.set("key", value) / payload.addDataList(list)
+rec.set("col", v) / rec.setInt("col", n) / rec.getInt("col")
+```
 
 ---
 
