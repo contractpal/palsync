@@ -465,6 +465,17 @@ test("unknownPalJsonKey — layout typo suggests the real field", () => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("unknownPalJsonKey — layout.consoleDesktopImage/Label points to desktopBindings, not a suggestion", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({ layout: { consoleWorkflow: "console.js", consoleDesktopImage: "bi-box-seam", consoleDesktopLabel: "Equipment" } }),
+    });
+    const findings = lintPalJson(dir).filter(f => f.rule === "unknownPalJsonKey");
+    assert.strictEqual(findings.length, 2);
+    assert.ok(findings.every(f => f.severity === "error"));
+    assert.ok(findings.every(f => /desktopBindings/.test(f.message)));
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("unknownPalJsonKey — desktopBindings as an object (invented shape) is an error", () => {
     const dir = tmpWorkspace({
         "pal.json": basePalJson({ desktopBindings: { DesktopBinding: [{ DesktopLabel: "Equipment" }] } }),

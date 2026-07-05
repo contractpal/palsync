@@ -36,8 +36,10 @@ below; there is no way to compile-check workflow JS from outside CloudPiston.
 
 For the `pal.json` manifest structure and workflowType values, see `references/pal-json.md`.
 A console pal's home-screen tile label/icon is NOT a `layout` field — there is no
-`consoleDesktopLabel`/`consoleTemplate`; a console pal works without a tile at all via
-`layout.consoleWorkflow` alone, so don't add one unless the spec asks for it.
+`consoleDesktopLabel`/`consoleDesktopImage`/`consoleTemplate`; a console pal works without a
+tile at all via `layout.consoleWorkflow` alone. It's nonblocking — don't add one unless the
+spec asks for it, and never guess the field name if it does (see `desktopBindings` in
+`references/pal-json.md`).
 
 ---
 

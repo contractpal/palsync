@@ -66,6 +66,15 @@ const DESKTOP_BINDING_ALIASES = {
     desktopimage: "icon", consoleimage: "icon", image: "icon",
 };
 
+// Same guessed tile-field names, but seen directly under `layout` (an agent that hasn't found
+// desktopBindings yet reaches for a plausible-looking layout key instead). No real name/icon
+// value exists at this level to alias TO — the whole desktopBindings entry is the correct
+// pointer — so this maps to null and the message below tells the agent to go there instead.
+const LAYOUT_ALIASES = {
+    consoledesktopimage: null, consoledesktoplabel: null,
+    desktopimage: null, desktoplabel: null, consoleimage: null, consolelabel: null,
+};
+
 // Unknown top-level or layout key with a close real match → error (near-certain invention,
 // e.g. a case slip or a plausible-sounding guess). No close match → warn, never error — the
 // server's real field set is bigger than this manually-extracted list (wizards/fonts/etc. have
@@ -92,12 +101,19 @@ function checkUnknownKeys(manifest) {
     if (layout && typeof layout === "object" && !Array.isArray(layout)) {
         for (const key of Object.keys(layout)) {
             if (LAYOUT_KEYS.includes(key)) continue;
+            const isTileGuess = Object.prototype.hasOwnProperty.call(LAYOUT_ALIASES, key.toLowerCase());
             const suggestion = findSuggestion(key, LAYOUT_KEYS);
             findings.push({
                 file: "pal.json", line: 1, column: 0,
-                severity: suggestion ? "error" : "warn",
+                severity: (suggestion || isTileGuess) ? "error" : "warn",
                 rule: "unknownPalJsonKey",
-                message: suggestion
+                message: isTileGuess
+                    ? "pal.json layout.\"" + key + "\" is not a field — there is no layout field for a " +
+                      "console pal's home-screen tile label/icon. That lives in the top-level " +
+                      "desktopBindings section instead: [{ \"string\": \"<name>\", \"DesktopBinding\": " +
+                      "{ \"name\": \"...\", \"icon\": \"...\" } }]. The tile is optional — a console pal " +
+                      "works via layout.consoleWorkflow alone; skip it if the spec doesn't ask for one."
+                    : suggestion
                     ? "pal.json layout.\"" + key + "\" is not a PalBuilder manifest field — the server " +
                       "ignores it silently and your intended change never happens. Did you mean \"" +
                       suggestion + "\"? Note: there is no layout field for a console pal's desktop " +

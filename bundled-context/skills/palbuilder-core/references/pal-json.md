@@ -87,8 +87,10 @@ identifier (typically the filename) and `<Type>` matches the section (`Workflow`
 
 **There is no `layout` field for a console pal's home-screen tile label or icon.** A pal works
 in the console with none of these set — `consoleWorkflow` alone makes it reachable. Don't invent
-one (`consoleTemplate`, `consoleDesktopLabel`, etc. are not real fields); if a spec asks for a
-tile, see `desktopBindings` below.
+one (`consoleTemplate`, `consoleDesktopLabel`, `consoleDesktopImage`, etc. are not real fields);
+if a spec asks for a tile, see `desktopBindings` below. The tile is nonblocking — if the spec
+doesn't explicitly ask for one, skip it and move on rather than searching for a field name that
+doesn't exist; `pal_validate` names the real section if you do need it.
 
 ---
 
