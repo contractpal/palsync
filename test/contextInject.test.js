@@ -147,3 +147,38 @@ test("Pi AGENTS.md uses the palsync CLI, not MCP", async () => {
     assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-backend/SKILL.md")), "Pi gets skills at .agents/");
     fs.rmSync(ws, { recursive: true, force: true });
 });
+
+test("Claude doc references .claude/skills, never .agents/skills", async () => {
+    const doc = await ci.buildPalsyncDoc("Demo", { cli: false });
+    assert.ok(doc.includes(".claude/skills"), "Claude doc should reference .claude/skills");
+    assert.ok(!doc.includes(".agents/skills"), "Claude doc must not reference .agents/skills");
+    assert.ok(!doc.includes("never additionally Read/cat"), "the skill-tool-only line is non-Claude only");
+});
+
+test("Codex/OpenCode/Pi docs reference .agents/skills, never .claude/skills, and warn against raw-reading skill files", async () => {
+    for (const opts of [{ cli: false }, { cli: true }]) {
+        const doc = await ci.buildPalsyncDoc("Demo", Object.assign({ skillsDir: ".agents/skills" }, opts));
+        assert.ok(doc.includes(".agents/skills"), "doc should reference .agents/skills");
+        assert.ok(!doc.includes(".claude/skills"), "doc must not reference .claude/skills");
+        assert.ok(doc.includes("never additionally Read/cat"), "non-Claude doc warns against raw-reading skill files");
+    }
+});
+
+test("exercise guidance covers the delete-absent rule in both MCP and CLI flavors", async () => {
+    const mcpDoc = await ci.buildPalsyncDoc("Demo", { cli: false });
+    const cliDoc = await ci.buildPalsyncDoc("Demo", { cli: true });
+    for (const doc of [mcpDoc, cliDoc]) {
+        assert.match(doc, /after a delete put the deleted name in `absent`/);
+    }
+});
+
+test("inject() threads .agents/skills into the actual OpenCode/Codex/Pi AGENTS.md on disk", async () => {
+    for (const agent of ["codex", "opencode", "pi"]) {
+        const ws = tmpWorkspace();
+        await ci.inject(ws, { palName: "Demo", agent });
+        const md = fs.readFileSync(path.join(ws, "AGENTS.md"), "utf8");
+        assert.ok(md.includes(".agents/skills"), agent + " AGENTS.md should reference .agents/skills");
+        assert.ok(!md.includes(".claude/skills"), agent + " AGENTS.md must not reference .claude/skills");
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
