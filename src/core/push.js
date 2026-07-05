@@ -79,7 +79,7 @@ function errorsByRule(findings) {
 function gateLint(record, workspaceDir) {
     if (!record || !record.fileHashes) return validateWorkspace(workspaceDir); // no diff possible
     const d = diffWorkspace(record, workspaceDir);
-    const changed = [...d.added, ...d.changed].filter(rel => rel !== "pal.json");
+    const changed = [...d.added, ...d.changed];
     if (!changed.length) return { errors: 0, warnings: 0, findings: [], filesChecked: 0, scope: "new-errors" };
     const addedSet = new Set(d.added);
     const haveBaselineContent = baseline.exists(workspaceDir);

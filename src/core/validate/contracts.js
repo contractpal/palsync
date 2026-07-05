@@ -444,6 +444,43 @@ function checkFormTag(tag, rel, src, pos, findings) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Check 5c — destructive c:a action with no confirm= guard. The platform renders a native
+// browser confirm for any c:a carrying confirm="..." — a one-click delete with no undo is a
+// UX defect the offline validator can catch deterministically (a weak model won't add this
+// unprompted; it lives only in an on-demand skill reference, never in loaded text otherwise).
+// remove*/clear* are demoted to warn — real actions use that prefix for non-destructive things
+// (e.g. "removeFilter").
+// ---------------------------------------------------------------------------------------------
+
+const DESTRUCTIVE_ACTION_RE = /^(delete|destroy|purge)/i;
+const AMBIGUOUS_ACTION_RE = /^(remove|clear)/i;
+
+function checkDestructiveConfirm(tag, rel, src, pos, findings) {
+    if (tag.name.toLowerCase() !== "c:a") return;
+    const action = attr(tag, "action");
+    if (action == null) return;
+    if (hasAttr(tag, "confirm")) return;
+    const name = action.split("?")[0];
+    const destructive = DESTRUCTIVE_ACTION_RE.test(name);
+    const ambiguous = !destructive && AMBIGUOUS_ACTION_RE.test(name);
+    if (!destructive && !ambiguous) return;
+    const msg = destructive
+        ? "<c:a action=\"" + action + "\"> deletes data with NO confirmation — one stray click destroys a " +
+          "record with no undo (the platform has no cascade or restore). Fix: add confirm= — " +
+          "<c:a action=\"" + action + "\" ajax-target=\"body\" confirm=\"Delete this item? This cannot be undone.\">" +
+          "Delete</c:a>. See the palbuilder-frontend skill tag reference, \"c:a\"."
+        : "<c:a action=\"" + action + "\"> has no confirm= — harmless if this only clears a filter/selection, " +
+          "but if it deletes or discards data, add confirm=\"...\" (the platform renders a native confirm " +
+          "prompt for you). See the palbuilder-frontend skill tag reference, \"c:a\".";
+    findings.push({
+        file: rel, line: lineAt(src, pos), column: 0,
+        severity: destructive ? "error" : "warn",
+        rule: "destructiveConfirm",
+        message: msg,
+    });
+}
+
+// ---------------------------------------------------------------------------------------------
 // Check 6 — fabricated API methods in workflow JS.
 // ---------------------------------------------------------------------------------------------
 
@@ -703,6 +740,7 @@ function lintContracts(workspaceDir) {
             checkElSyntax(tag, rel, src, pos, findings);
             checkHrefAction(tag, rel, src, pos, findings);
             checkFormTag(tag, rel, src, pos, findings);
+            checkDestructiveConfirm(tag, rel, src, pos, findings);
         });
     }
 

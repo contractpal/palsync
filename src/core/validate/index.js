@@ -16,7 +16,7 @@ const path = require("path");
 const { lintWorkflowJs } = require("./workflowJs");
 const { lintMarkup } = require("./markup");
 const { lintDatasetDef } = require("./datasetDef");
-const { lintPalJson } = require("./palJson");
+const { lintPalJson, checkUnknownKeys } = require("./palJson");
 const { lintContracts } = require("./contracts");
 const { capRepeats } = require("../findingCap");
 
@@ -155,6 +155,9 @@ function lintContent(rel, content) {
     if (rel.startsWith("workflows/") && rel.endsWith(".js")) return lintWorkflowJs(rel, content);
     if ((rel.startsWith("pages/") || rel.startsWith("fragments/")) && MARKUP_EXT.has(path.extname(rel).toLowerCase())) return lintMarkup(rel, content);
     if (rel.startsWith("datasets/") && rel.endsWith(".json")) return lintDatasetDef(rel, content);
+    if (rel === "pal.json") {
+        try { return checkUnknownKeys(JSON.parse(content)); } catch (e) { return []; }
+    }
     return [];
 }
 
