@@ -42,7 +42,7 @@ Run: date __________ · model __________ · orch __________ · palbuilder ______
 | H1 | [ ] | saveEquipment: valid name → list contains the new row | |
 | H2 | [ ] | checkoutEquipment: valid name → row shows `checkedOut` badge + person | |
 | H3 | [ ] | checkinEquipment → row returns to `available`, person cleared | |
-| H4 | [ ] | deleteEquipment → row absent from list | |
+| H4 | [ ] | deleteEquipment: confirm prompt present on the link (`confirm=`), then → row absent from list | |
 | H5 | [ ] | saveEquipment edge: empty name → form re-renders with `Name is required.` | |
 
 **Total: ____ / 10**
