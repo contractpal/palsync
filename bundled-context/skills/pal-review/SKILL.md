@@ -45,6 +45,10 @@ Output: per-criterion PASS / FAIL with evidence, citing each finding's `spec ref
   fragment EL/`c:list` refs consuming those exact keys. One row per action (table in the
   output template). **Any hop you cannot point at a real line → that action FAILS** —
   compiling-but-wrong and untraceable-but-compiling are the same verdict.
+- Where runnable, ALSO exercise each §5 write action live: `pal_exercise` with the action's
+  inputs, `expect` the persisted value, `absent` the pre-edit value (catches duplicate
+  insert). A passing exercise is the strongest evidence class for a data-effects criterion;
+  a failing one is a finding with the step output as evidence.
 - Copy on-brand per BRAND_VOICE / DESIGN_SYSTEM intent, not just present?
 - §6 layout matches the composition the spec described?
 

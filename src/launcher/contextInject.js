@@ -46,12 +46,12 @@ function syncSection(palName, { cli = false } = {}) {
             test: "`palsync test`", preview: "`palsync preview`", seo: "`palsync seo-audit`",
             merge: "`palsync merge`", status: "`palsync status`", datasets: "`palsync sync-datasets`",
             screenshot: "`palsync screenshot`", fetch: "`palsync fetch`", specLint: "`palsync spec-lint`",
-            regression: "`palsync regression`", skip: "the `--skip-validation` flag" }
+            regression: "`palsync regression`", exercise: "`palsync exercise`", skip: "the `--skip-validation` flag" }
         : { pull: "`pal_pull`", push: "`pal_push`", validate: "`pal_validate`",
             test: "`pal_test`", preview: "`pal_preview`", seo: "`pal_seo_audit`",
             merge: "`pal_merge`", status: "`pal_status`", datasets: "`pal_sync_datasets`",
             screenshot: "`pal_screenshot`", fetch: "`pal_fetch`", specLint: "`pal_spec_lint`",
-            regression: "`pal_regression`" };
+            regression: "`pal_regression`", exercise: "`pal_exercise`" };
     const conn = cli
         ? "This pal" + (palName ? " (**" + palName + "**)" : "") + " is connected to CloudPiston via the **palsync CLI** — run its subcommands in your shell (e.g. `palsync push`, `palsync pull`). palsync takes the pal lock for each push/pull and releases it; there is no always-on session lock."
         : "This pal" + (palName ? " (**" + palName + "**)" : "") + " is connected to CloudPiston via the **palsync** MCP server and is **locked for your session**.";
@@ -131,7 +131,10 @@ function syncSection(palName, { cli = false } = {}) {
         "  tool seems missing, ask the user; do not fall back to the CLI.",
         ]),
         "- Specialized checks (the owning skill explains each): " + T.fetch + " verifies ONE web page renders",
-        "  (pass `expect:[strings]`; " + T.preview + " does the same inline), " + T.specLint + " lints a SPEC.md offline",
+        "  (pass `expect:[strings]`; " + T.preview + " does the same inline), " + T.exercise + " EXERCISES a workflow",
+        "  action end-to-end and asserts `expect`/`absent` strings in the result (the check for \"did the write",
+        "  actually work\" — after building any create/edit/delete action, run it; after an edit put the OLD value",
+        "  in `absent` to catch a duplicate insert), " + T.specLint + " lints a SPEC.md offline",
         "  (pal-spec), " + T.regression + " runs a brownfield baseline regression check (pal-init/pal-loop). Lock",
         "  handling is automatic; use `pal_lock`/`pal_unlock` (`palsync lock`/`unlock` on the CLI) only to take or",
         "  release the pal lock by hand.",

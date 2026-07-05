@@ -39,6 +39,8 @@ const USAGE = [
     "  palsync screenshot [<page>] [--viewport desktop|mobile] [--full-page] [--keep-lock] [--dir <ws>]",
     "                                                               Render a WEB pal to a PNG (saves the file, prints the path)",
     "  palsync seo-audit [--keep-lock] [--dir <ws>]             On-page SEO audit of a WEB pal's rendered page",
+    "  palsync exercise --steps '<json>' | --steps-file <path> [--workflow console|web|transaction] [--viewport desktop|mobile] [--keep-lock] [--dir <ws>]",
+    "                                                               Exercise workflow actions end-to-end; assert expect/absent strings in the rendered result",
     "  palsync scaffold  [--template <name>] [--list] [--dir <ws>]  Apply a starter template (offline; --list shows them)",
     "  palsync cost   [--dir <workspace>]                           palsync's own context contribution: tool calls + bytes returned + injected-block size (offline)",
     "  palsync regression [--keep-lock] [--dir <ws>]                Brownfield regression vs baseline/baseline.json (freshness -> validate/test/H1; caused vs inherited)",
@@ -93,6 +95,10 @@ function parseFlags(argv) {
         else if (a.startsWith("--selector=")) flags.selector = a.slice("--selector=".length);
         else if (a === "--max-chars") { flags.maxChars = Number(argv[++i]); if (!flags.maxChars) throw new Error("--max-chars requires a number"); }
         else if (a.startsWith("--max-chars=")) flags.maxChars = Number(a.slice("--max-chars=".length));
+        else if (a === "--steps") { flags.steps = argv[++i]; if (!flags.steps) throw new Error("--steps requires a JSON array value"); }
+        else if (a.startsWith("--steps=")) flags.steps = a.slice("--steps=".length);
+        else if (a === "--steps-file") { flags.stepsFile = argv[++i]; if (!flags.stepsFile) throw new Error("--steps-file requires a path"); }
+        else if (a.startsWith("--steps-file=")) flags.stepsFile = a.slice("--steps-file=".length);
         else if (a === "--dir") { flags.dir = argv[++i]; if (!flags.dir) throw new Error("--dir requires a value"); }
         else if (a.startsWith("--dir=")) flags.dir = a.slice("--dir=".length);
         else if (a.charAt(0) !== "-" && flags._positional === undefined) flags._positional = a;
@@ -304,6 +310,26 @@ async function run(cmd, argv) {
         console.log(res.message); // includes the saved PNG path — CLI can't return the image inline
         if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
         return res.captured ? 0 : 1;
+    }
+
+    if (cmd === "exercise") {
+        let raw = flags.steps;
+        if (!raw && flags.stepsFile) {
+            try { raw = require("fs").readFileSync(path.resolve(flags.stepsFile), "utf8"); }
+            catch (e) { console.error("Could not read --steps-file: " + (e && e.message ? e.message : e)); return 1; }
+        }
+        if (!raw) {
+            console.error("Usage: palsync exercise --steps '<json array>' | --steps-file <path>\n" +
+                "  e.g. --steps '[{\"fill\":{\"name\":\"Camera\"},\"click\":\"Save\",\"expect\":[\"Camera\"]}]'");
+            return 1;
+        }
+        let steps;
+        try { steps = JSON.parse(raw); }
+        catch (e) { console.error("--steps is not valid JSON: " + (e && e.message ? e.message : e)); return 1; }
+        const res = await toolByName("pal_exercise").run(ctx, { steps, workflow: flags.workflow, viewport: flags.viewport });
+        console.log(res.message);
+        if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
+        return res.ran && res.pass ? 0 : 1;
     }
 
     if (cmd === "regression") {

@@ -85,11 +85,14 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       - `captured:false` → do NOT guess from HTML: set `needs-human` with a Blockers entry
         prefixed `HUMAN GATE:` naming exactly what to eyeball. Continue with independent
         tasks. (Full rule: `../pal-review/references/console-render-verification.md`.)
-      Verify data effects indirectly — after a write, run the spec's read-back action and
-      confirm the row.
-   6. `pal_sync_datasets` after pushing a **§8a** definition (never §8b).
-   - `pal_preview`/`pal_fetch`/`pal_seo_audit`/`pal_test` all act on the LAST PUSHED version —
-     push before verifying.
+   6. ANY write action (create/edit/delete): `pal_exercise` — trigger the action and assert the
+      result in the rendered output. Web: `steps:[{action, params, expect}]`. Console:
+      `steps:[{fill:{name:value}, click:"<exact link text>", expect:[...]}]`. After an EDIT, put
+      the new value in `expect` AND the old value in `absent` — a surviving old value means the
+      edit inserted a duplicate. This is the read-back check; a failing step is a task failure.
+   7. `pal_sync_datasets` after pushing a **§8a** definition (never §8b).
+   - `pal_preview`/`pal_fetch`/`pal_exercise`/`pal_seo_audit`/`pal_test` all act on the LAST
+     PUSHED version — push before verifying.
 6. **On pass:** `palsync task <id> done`; `palsync checkpoint "<date>, <task id>,
    <tool-output summary>"`; `git add -A && git commit -m "<task id>: <task name>"`; continue.
 7. **On fail:** fix and re-verify, up to TWO attempts. Still failing → `palsync task <id>

@@ -167,4 +167,4 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
     }
 }
 
-module.exports = { runScreenshot, detectRenderError, VIEWPORTS };
+module.exports = { runScreenshot, detectRenderError, sanitizeUrl, loadChromium, VIEWPORTS };

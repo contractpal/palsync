@@ -8,6 +8,7 @@ const { push } = require("../core/push");
 const { runTest } = require("../core/test");
 const { runPreview, fetchPagePath, checkExpect, extractSelector } = require("../core/preview");
 const { runScreenshot } = require("../core/screenshot");
+const { runExercise, formatExercise } = require("../core/exercise");
 const { mergeWorkspace, formatMerge } = require("../core/merge");
 const { runSeoAudit, formatSeoAudit } = require("../core/seoAudit");
 const { runRegression } = require("../core/regression");
@@ -385,6 +386,31 @@ const TOOLS = [
                     { type: "image", data: res.pngBase64, mimeType: "image/png" }
                 ]
             });
+        }
+    },
+    {
+        name: "pal_exercise",
+        description: "Functionally EXERCISE workflow actions end-to-end and assert the persisted result in the rendered output — the check above compile (pal_test) and render (pal_screenshot): did the WRITE actually do the right thing? Acts on the LAST PUSHED version — pal_push first. Each step triggers an action, then asserts expect:[strings that MUST appear] and absent:[strings that must NOT appear] — put the OLD value in absent after an edit to catch a duplicate insert. WEB pal: steps use action+params (headless). CONSOLE/transaction pal: steps use fill (inputs by name=) + click (the action link's exact visible text) — drives the real authenticated screen. Steps run in order and stop at the first failure. Use after building any create/edit/delete action, and to verify pal-loop's read-back requirement.",
+        inputShape: {
+            steps: z.array(z.object({
+                page: z.string().optional().describe("WEB only: page path under the site root to load first, e.g. \"equipment.html\"."),
+                action: z.string().optional().describe("WEB only: workflow action to invoke, e.g. \"saveEquipment\". Sent as ?action=<name> with params."),
+                params: z.record(z.union([z.string(), z.number()])).optional().describe("WEB only: query params sent with the action, e.g. {\"name\":\"Camera\"}."),
+                fill: z.record(z.union([z.string(), z.number()])).optional().describe("Fill inputs by their name= attribute before clicking, e.g. {\"name\":\"Camera\",\"category\":\"AV\"}."),
+                click: z.string().optional().describe("EXACT visible text of the link/button to click (a c:a Save link), or a simple #id/.class selector."),
+                expect: z.array(z.string()).optional().describe("Strings that MUST appear in the rendered output after this step (the saved value in the list)."),
+                absent: z.array(z.string()).optional().describe("Strings that must NOT appear after this step (the pre-edit value; a stale row proves a duplicate insert).")
+            })).min(1).max(10).describe("Steps run in order; the run stops at the first failing step."),
+            workflow: z.enum(["console", "web", "transaction"]).optional().describe("Engine to exercise (default: auto-detected)."),
+            viewport: z.enum(["desktop", "mobile"]).optional().describe("Browser-mode viewport (default desktop).")
+        },
+        async run(ctx, { steps, workflow, viewport } = {}) {
+            const res = await runExercise(ctx.session, ctx.record.palGuid, { steps, workflow, viewport });
+            if (ctx.lifecycle) ctx.lifecycle.onActivity();
+            // A passing exercise observed the real rendered output — the strongest render proof we have.
+            if (res.ran && res.pass) ctx.renderVerified = true;
+            if (!res.ran && res.available === false) ctx.renderVerified = ctx.renderVerified || "unavailable";
+            return Object.assign({}, res, { message: formatExercise(res) });
         }
     },
     {

@@ -152,6 +152,12 @@ async function openInstanceSession(session, guid) {
     if (!t.ran) {
         return { opened: false, reason: "Could not start a test instance (" + (t.blocked || "unknown") + ")." };
     }
+    return openInstanceSessionFromTest(t);
+}
+
+// Same, from an ALREADY-RUN runTest result — callers that already tested (pal_exercise) reuse it
+// instead of paying a second Test round trip.
+async function openInstanceSessionFromTest(t) {
     if (!t.validated) {
         return { opened: false, validation: t.validation,
                  reason: "The pal did not validate on the server — fix the validation notes and push first." };
@@ -196,4 +202,4 @@ async function fetchPagePath(session, guid, path) {
     return Object.assign({ fetched: true }, r);
 }
 
-module.exports = { runPreview, fetchRendered, fetchPagePath, openInstanceSession, titleOf, checkExpect, extractSelector };
+module.exports = { runPreview, fetchRendered, fetchPagePath, openInstanceSession, openInstanceSessionFromTest, titleOf, checkExpect, extractSelector };
