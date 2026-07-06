@@ -34,8 +34,8 @@ const USAGE = [
     "  palsync test   [--workflow console|web|transaction] [--preview] [--keep-lock] [--dir <ws>]",
     "  palsync fetch <page> [--expect <str> ...] [--selector <css>] [--max-chars <n>]  Fetch ONE served page (verify a route renders)",
     "                                                               Server-validate a workflow (preview opens only with --preview)",
-    "  palsync preview [--workflow console|web|transaction] [--open] [--keep-lock] [--dir <ws>]",
-    "                                                               Render the pal (web: prints HTML; console: opens only with --open)",
+    "  palsync preview [--workflow console|web|transaction] [--open|--no-open] [--keep-lock] [--dir <ws>]",
+    "                                                               Render the pal (web: prints HTML; console: opens in an interactive terminal)",
     "  palsync screenshot [<page>] [--viewport desktop|mobile] [--full-page] [--keep-lock] [--dir <ws>]",
     "                                                               Render a WEB pal to a PNG (saves the file, prints the path)",
     "  palsync seo-audit [--keep-lock] [--dir <ws>]             On-page SEO audit of a WEB pal's rendered page",
@@ -56,7 +56,8 @@ const USAGE = [
     "  --keep-lock        push/test/sync-datasets: keep holding the pal lock afterwards (default releases it)",
     "  --workflow         test: which engine to test (default: auto-detected from the pal)",
     "  --preview          test: open a live browser preview for human review (default: validate only)",
-    "  --open             preview: open console/transaction preview in a browser for human review (default: do not open)",
+    "  --open             preview: open console/transaction preview in a browser (default: open only in an interactive terminal)",
+    "  --no-open          preview: do not open a browser, even in an interactive terminal",
     "  --viewport         screenshot: desktop (default 1280x800) | mobile (~390x844)",
     "  --full-page        screenshot: capture the whole scroll height, not just the viewport",
     "  --expect <str>     fetch/preview: assert the served page contains <str> (repeatable); prints found/missing per string, NOT the HTML",
@@ -71,7 +72,7 @@ const USAGE = [
 ].join("\n");
 
 function parseFlags(argv) {
-    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, preview: false, open: false, skipValidation: false, datasets: undefined, recreate: false, template: undefined, list: false, viewport: undefined, fullPage: false, expect: undefined, selector: undefined, maxChars: undefined };
+    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, preview: false, open: undefined, skipValidation: false, datasets: undefined, recreate: false, template: undefined, list: false, viewport: undefined, fullPage: false, expect: undefined, selector: undefined, maxChars: undefined };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--force" || a === "-f") flags.force = true;
@@ -79,6 +80,7 @@ function parseFlags(argv) {
         else if (a === "--preview") flags.preview = true;
         else if (a === "--no-preview") flags.preview = false;
         else if (a === "--open") flags.open = true;
+        else if (a === "--no-open") flags.open = false;
         else if (a === "--list") flags.list = true;
         else if (a === "--template") { flags.template = argv[++i]; if (!flags.template) throw new Error("--template requires a value"); }
         else if (a.startsWith("--template=")) flags.template = a.slice("--template=".length);
@@ -111,6 +113,10 @@ function parseFlags(argv) {
 }
 
 function toolByName(name) { return TOOLS.find(t => t.name === name); }
+
+function defaultPreviewOpen() {
+    return !!(process.stdin && process.stdin.isTTY && process.stdout && process.stdout.isTTY);
+}
 
 // Best-effort lock release after a one-shot command (no live session remains to hold it).
 // Failure is swallowed: your own next session auto-reclaims the lock.
@@ -290,7 +296,8 @@ async function run(cmd, argv) {
     }
 
     if (cmd === "preview") {
-        const res = await toolByName("pal_preview").run(ctx, { workflow: flags.workflow, expect: flags.expect, selector: flags.selector, maxChars: flags.maxChars, open: flags.open });
+        const open = flags.open === undefined ? defaultPreviewOpen() : flags.open;
+        const res = await toolByName("pal_preview").run(ctx, { workflow: flags.workflow, expect: flags.expect, selector: flags.selector, maxChars: flags.maxChars, open });
         console.log(res.message);
         if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
         return res.previewed ? 0 : 1;
@@ -380,4 +387,4 @@ async function run(cmd, argv) {
     throw new Error("Unknown subcommand: " + cmd + "\n\n" + USAGE);
 }
 
-module.exports = { run, parseFlags, USAGE };
+module.exports = { run, parseFlags, defaultPreviewOpen, USAGE };

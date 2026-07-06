@@ -121,7 +121,7 @@ palsync merge    # 3-way merge local + server changes (keeps both where they don
 palsync status   # server drift + un-pushed local changes (per file) + lock holder
 palsync test     # server-side workflow validation (no browser; add --preview for human review)
 palsync seo-audit # on-page SEO audit of a WEB pal's rendered page
-palsync preview  # render the pal (web: prints HTML; console: opens only with --open)
+palsync preview  # render the pal (web: prints HTML; console: opens in an interactive terminal)
 palsync sync-datasets  # provision dataset tables from pal.json (safe by default)
 palsync scaffold --template <name>  # apply a starter template (offline; --list shows them)
 palsync cost     # palsync's own context contribution (offline) — see below

@@ -141,7 +141,7 @@ palsync pull     --dir ~/pals/isr
 palsync merge    --dir ~/pals/isr            # 3-way merge local + server changes
 palsync push     --dir ~/pals/isr            # validates first; refuses on new errors
 palsync test     --dir ~/pals/isr
-palsync preview  --dir ~/pals/isr            # web HTML to stdout; console does not open unless --open
+palsync preview  --dir ~/pals/isr            # web HTML to stdout; console opens only in a TTY, or with --open
 palsync fetch about.html --expect "About us" --dir ~/pals/isr   # verify a page WITHOUT dumping HTML
 palsync seo-audit --dir ~/pals/isr
 palsync sync-datasets --dir ~/pals/isr
