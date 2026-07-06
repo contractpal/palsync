@@ -45,6 +45,29 @@ test("swapped c:list name/id — errors, message names the swap explicitly", () 
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("inline pal.getDataSet(...).getRecords(..., name) satisfies c:list name", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": [
+            "function run(controller) {",
+            "    var pal = controller.getPal();",
+            "    var filter = pal.getDataSet('equipment').createFilter();",
+            "    var rows = pal.getDataSet('equipment').getRecords(filter, 'items');",
+            "    payload.addDataList(rows);",
+            "}",
+        ].join("\n"),
+        "fragments/list.html": [
+            "<c:ignore xmlns:c=\"contractpal\">",
+            "  <c:list name=\"items\" id=\"item\">",
+            "    <p>${item.name}</p>",
+            "  </c:list>",
+            "</c:ignore>",
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "listNameContract");
+    assert.strictEqual(findings.length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("dead ajax-target — no matching id anywhere", () => {
     const dir = tmpWorkspace({
         "workflows/console.js": "function run(controller) {}",

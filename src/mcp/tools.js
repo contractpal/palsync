@@ -701,7 +701,7 @@ const TOOLS = [
     },
     {
         name: "pal_push",
-        description: "Push local changes to the server (UPDATE). FIRST runs the offline code check (pal_validate) and REFUSES on errors — every error must be fixed before the push can proceed; each finding says exactly how. Also refuses on drift (force:true) or if the pal is locked by another person (typed confirmOverride). On success returns the server's save result plus any code WARNINGS.",
+        description: "Push local changes to the server (UPDATE). FIRST runs the offline code check (pal_validate) and REFUSES on errors — every error must be fixed before the push can proceed; each finding says exactly how. force:true is drift-only: it can overwrite a newer server marker, but it cannot bypass validation errors. Also refuses if the pal is locked by another person (typed confirmOverride). On success returns the server's save result plus any code WARNINGS.",
         // skipValidation is deliberately NOT in inputShape (the MCP layer strips unknown keys, so
         // agents cannot pass it). In the test-06 haiku run the agent read the "call pal_push with
         // skipValidation:true" hint in this tool's refusal message, decided the validator was
@@ -719,8 +719,8 @@ const TOOLS = [
                     message: "REFUSED: the offline code check found errors that would break in PalBuilder, so nothing was pushed.\n\n" +
                         formatLint(res.lint, { context: "pre-push" }) +
                         "\n\nFix the ERROR items above and push again — each finding tells you exactly how. There is no " +
-                        "bypass: these errors describe code the server will reject or mis-render, and a passing pal_test " +
-                        "does not clear them."
+                        "bypass: force:true is drift-only and cannot push past validation; these errors describe code the " +
+                        "server will reject or mis-render, and a passing pal_test does not clear them."
                 });
             }
             if (res.pushed) {

@@ -196,10 +196,42 @@ function splitTopLevelArgs(text) {
     return parts;
 }
 
+function callArgsFrom(src, argsStart) {
+    let i = argsStart, depth = 1, inStr = null;
+    while (i < src.length && depth > 0) {
+        const ch = src[i];
+        if (inStr) {
+            if (ch === inStr && src[i - 1] !== "\\") inStr = null;
+            i++;
+            continue;
+        }
+        if (ch === '"' || ch === "'") { inStr = ch; i++; continue; }
+        if (ch === "(" || ch === "[" || ch === "{") depth++;
+        else if (ch === ")" || ch === "]" || ch === "}") depth--;
+        i++;
+    }
+    return { args: splitTopLevelArgs(src.slice(argsStart, i - 1)), end: i };
+}
+
+function namedListFromGetRecords(src, argsStart, defaultName) {
+    const call = callArgsFrom(src, argsStart);
+    let produced = null;
+    if (call.args.length >= 2) {
+        const strMatch = /^\s*["']([^"']+)["']\s*$/.exec(call.args[1]);
+        if (strMatch) produced = strMatch[1];
+    }
+    // chained .copy("name") right after the call overrides the default name.
+    const after = /^\s*\.copy\(\s*["']([^"']+)["']\s*\)/.exec(src.slice(call.end, call.end + 80));
+    if (after) produced = after[1];
+    if (!produced && call.args.length <= 1) produced = defaultName;
+    return produced;
+}
+
 // Collect DataList names a workflow file can PRODUCE, per datasets.md / payloads.md:
 //   ds.getRecords(filter)             -> DataList named after the DataSet ("ds" must trace to
 //                                         a pal.getDataSet("<name>") assignment; no rename).
 //   ds.getRecords(filter, "custom")   -> DataList named "custom".
+//   pal.getDataSet("name").getRecords(filter, "custom") -> DataList named "custom".
 //   <anything>.copy("custom")         -> renames/produces a DataList named "custom".
 //   c.createDataList("custom", [...])  -> DataList named "custom".
 function collectListNames(workflowFiles) {
@@ -216,26 +248,16 @@ function collectListNames(workflowFiles) {
         const copyRe = /\.copy\(\s*["']([^"']+)["']\s*\)/g;
         while ((m = copyRe.exec(src))) names.add(m[1]);
 
+        const inlineRecordsRe = /pal\.getDataSet\(\s*(["'])([^"']+)\1\s*\)\.getRecords\(/g;
+        while ((m = inlineRecordsRe.exec(src))) {
+            const produced = namedListFromGetRecords(src, m.index + m[0].length, m[2]);
+            if (produced) names.add(produced);
+        }
+
         const getRecordsRe = /(\w+)\.getRecords\(/g;
         while ((m = getRecordsRe.exec(src))) {
             const receiver = m[1];
-            let i = m.index + m[0].length, depth = 1;
-            const argsStart = i;
-            while (i < src.length && depth > 0) {
-                if (src[i] === "(") depth++;
-                else if (src[i] === ")") depth--;
-                i++;
-            }
-            const args = splitTopLevelArgs(src.slice(argsStart, i - 1));
-            let produced = null;
-            if (args.length >= 2) {
-                const strMatch = /^\s*["']([^"']+)["']\s*$/.exec(args[1]);
-                if (strMatch) produced = strMatch[1];
-            }
-            // chained .copy("name") right after the call overrides the default name.
-            const after = /^\s*\.copy\(\s*["']([^"']+)["']\s*\)/.exec(src.slice(i, i + 80));
-            if (after) produced = after[1];
-            if (!produced && args.length <= 1 && varToDataset[receiver]) produced = varToDataset[receiver];
+            const produced = namedListFromGetRecords(src, m.index + m[0].length, varToDataset[receiver] || null);
             if (produced) names.add(produced);
         }
     }

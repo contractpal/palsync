@@ -84,12 +84,37 @@ function errorsByRule(findings) {
     return m;
 }
 
+const WORKSPACE_GATE_RULES = new Set([
+    "unknownPalJsonKey", "missingPalJsonEntry",
+    "listNameContract", "ajaxTargetExists", "actionRouted", "elSyntax", "hrefAction",
+    "formTag", "destructiveConfirm", "unknownApiMethod", "fragmentBinding"
+]);
+
+function findingKey(f) {
+    return [f.file, f.line, f.column || 0, f.rule, f.severity, f.message].join("\t");
+}
+
+function addWorkspaceGateFindings(workspaceDir, findings) {
+    const seen = new Set(findings.map(findingKey));
+    const whole = validateWorkspace(workspaceDir);
+    for (const f of whole.findings) {
+        if (f.severity !== "error" || !WORKSPACE_GATE_RULES.has(f.rule)) continue;
+        const key = findingKey(f);
+        if (seen.has(key)) continue;
+        findings.push(f);
+        seen.add(key);
+    }
+}
+
 // The PRE-PUSH GATE lint. Blocks a push ONLY on errors THIS change is responsible for:
 //   - NEW files (added vs baseline): every error counts — the agent created the file.
 //   - MODIFIED files with a baseline snapshot: lint the baseline vs the current version and block
 //     only on the NET-NEW errors (per rule count). Pre-existing errors a touched file already had
 //     (e.g. a legacy workflow's object literals) do NOT block — they're surfaced as informational,
 //     not a wall the agent must rewrite legacy code to clear.
+//   - Workspace-level contract errors (pal.json manifest and cross-file contracts) always block
+//     in their CURRENT form. Per-file lint cannot see "fragment expects a DataList the workflow
+//     no longer produces", which is exactly the class of false bypass weak models exploit.
 //   - No per-file hash baseline (fresh/legacy record): lint the whole workspace (conservative).
 //   - Baseline hashes but no baseline CONTENT (pre-feature workspace): block on all errors in
 //     changed files (the prior behavior) — we can't tell new from old without the content.
@@ -98,7 +123,13 @@ function gateLint(record, workspaceDir) {
     if (!record || !record.fileHashes) return validateWorkspace(workspaceDir); // no diff possible
     const d = diffWorkspace(record, workspaceDir);
     const changed = [...d.added, ...d.changed];
-    if (!changed.length) return { errors: 0, warnings: 0, findings: [], filesChecked: 0, scope: "new-errors" };
+    if (!changed.length) {
+        const findings = [];
+        addWorkspaceGateFindings(workspaceDir, findings);
+        return { errors: findings.filter(f => f.severity === "error").length,
+                 warnings: findings.filter(f => f.severity === "warn").length,
+                 findings, filesChecked: 0, scope: "new-errors" };
+    }
     const addedSet = new Set(d.added);
     const haveBaselineContent = baseline.exists(workspaceDir);
     const findings = [];
@@ -129,6 +160,7 @@ function gateLint(record, workspaceDir) {
             });
         }
     }
+    addWorkspaceGateFindings(workspaceDir, findings);
     const errors = findings.filter(f => f.severity === "error").length;
     const warnings = findings.filter(f => f.severity === "warn").length;
     return { errors, warnings, findings, filesChecked: changed.length, scope: haveBaselineContent ? "new-errors" : "changed" };
@@ -331,4 +363,4 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
              serverPaths: pushedPaths, webRegistered, consoleRegistered, prunedFolders };
 }
 
-module.exports = { push, buildSaveTask, normalizeValidation, guardWorkflows, ensureWebRegistration, ensureConsoleRegistration };
+module.exports = { push, buildSaveTask, normalizeValidation, gateLint, guardWorkflows, ensureWebRegistration, ensureConsoleRegistration };
