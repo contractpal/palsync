@@ -37,3 +37,78 @@ test("lintWorkflowJs: identical labels in different switches are allowed", () =>
     ].join("\n");
     assert.equal(lintWorkflowJs("workflows/main.js", src).filter(f => f.rule === "duplicateCase").length, 0);
 });
+
+test("lintWorkflowJs: undeclared run globals are errors", () => {
+    const src = [
+        "function run(controller) {",
+        "  c = controller;",
+        "  page = c.getPage('console');",
+        "  payload = c.createPayload();",
+        "  return page;",
+        "}"
+    ].join("\n");
+    const findings = lintWorkflowJs("workflows/console.js", src);
+    const implicit = findings.filter(f => f.rule === "implicitGlobal");
+    assert.equal(implicit.length, 3);
+    assert.deepEqual(implicit.map(f => f.line), [2, 3, 4]);
+    assert.match(implicit[0].message, /Variable <name> not declared|Function run doesn't return value/i);
+    assert.match(implicit[0].message, /declare the variable with 'var'/i);
+});
+
+test("lintWorkflowJs: top-of-file workflow globals may be assigned in run", () => {
+    const src = [
+        "var c;",
+        "var page;",
+        "var payload;",
+        "var pal;",
+        "var request;",
+        "var frag;",
+        "var ajax;",
+        "",
+        "function run(controller) {",
+        "  c = controller;",
+        "  page = c.getPage('console');",
+        "  payload = c.createPayload();",
+        "  pal = c.getPal();",
+        "  request = c.getRequest();",
+        "  frag = 'equipmentList';",
+        "  if (request.isAjax()) {",
+        "    ajax = c.createAjaxResponse(pal.getAjaxFragment(frag), true);",
+        "    ajax.addPayload(payload);",
+        "    return ajax;",
+        "  }",
+        "  payload.set('frag', frag);",
+        "  page.addPayload(payload);",
+        "  return page;",
+        "}"
+    ].join("\n");
+    assert.equal(lintWorkflowJs("workflows/console.js", src).filter(f => f.rule === "implicitGlobal").length, 0);
+});
+
+test("lintWorkflowJs: local run variables may be assigned after declaration", () => {
+    const src = [
+        "function run(controller) {",
+        "  var c = controller;",
+        "  var page = c.getPage('console');",
+        "  page = c.getPage('console');",
+        "  return page;",
+        "}"
+    ].join("\n");
+    assert.equal(lintWorkflowJs("workflows/console.js", src).filter(f => f.rule === "implicitGlobal").length, 0);
+});
+
+test("lintWorkflowJs: helper-local declarations do not satisfy run globals", () => {
+    const src = [
+        "function helper() {",
+        "  var c = null;",
+        "  return c;",
+        "}",
+        "function run(controller) {",
+        "  c = controller;",
+        "  return c.getPage('console');",
+        "}"
+    ].join("\n");
+    const implicit = lintWorkflowJs("workflows/console.js", src).filter(f => f.rule === "implicitGlobal");
+    assert.equal(implicit.length, 1);
+    assert.equal(implicit[0].line, 6);
+});

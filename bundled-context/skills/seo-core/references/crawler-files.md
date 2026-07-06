@@ -12,6 +12,8 @@ instances every path falls through to the workflow, so without this intercept a 
 parse errors in production).
 
 ```js
+var c;
+
 function run(controller) {
     c = controller;
     var crawler = serveCrawlerFile();
@@ -75,7 +77,7 @@ workflow:
 
 ```js
 function getSitemap() {
-    ajax = c.createAjaxResponse(pal.getServiceFragment("sitemap"), true);
+    var ajax = c.createAjaxResponse(pal.getServiceFragment("sitemap"), true);
     ajax.set("site", getBaseUrl());
     var list = pal.getDataList("sitemap").copy("sitemap");
     for (var i = 0; i < list.getRecordCount(); i++) {

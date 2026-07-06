@@ -31,7 +31,7 @@ Companion references:
 ### The three attachment types
 
 ```js
-payload = c.createPayload();
+var payload = c.createPayload();
 
 // 1. Root Data — set/get scalars directly on the payload
 payload.set("userName", "Alice");

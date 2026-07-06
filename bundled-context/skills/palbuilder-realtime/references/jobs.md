@@ -73,6 +73,9 @@ A job workflow's `run(controller)` reads the **Job**, not the action. There is n
 `c.getAction()` — the switch pattern doesn't apply.
 
 ```js
+var c;
+var pal;
+
 function run(controller) {
     c   = controller;
     pal = c.getPal();

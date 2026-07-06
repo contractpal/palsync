@@ -74,6 +74,14 @@ const RULES = {
         msg: "Function expression (var f = function(){}) — not confirmed supported by the workflow engine. " +
             "Fix: use a function declaration, function f(args) { ... }. See palbuilder-core/references/es3-cheatsheet.md."
     },
+    implicitGlobal: {
+        severity: "error",
+        msg: "Assignment to an undeclared workflow variable — PalBuilder's workflow compiler treats implicit globals as " +
+            "\"Variable <name> not declared\" and can then report the misleading \"Function run doesn't return value\". " +
+            "Fix: declare the variable with 'var' before assigning it. For run(controller), put the standard globals at " +
+            "the top of the file (for example: var c; var pal; var page; var request; var payload; var ajax; var frag;) " +
+            "then assign them at the top of run(). See palbuilder-core/references/es3-cheatsheet.md."
+    },
     duplicateCase: {
         severity: "error",
         msg: "Duplicate switch case label — this action branch is defined more than once in the same switch. " +
@@ -104,6 +112,86 @@ function walk(node, parent, key, visit) {
     }
 }
 
+function createScope(parent) {
+    return { parent, names: new Set() };
+}
+
+function addPatternName(scope, node) {
+    if (!scope || !node) return;
+    if (node.type === "Identifier") {
+        scope.names.add(node.name);
+    } else if (node.type === "RestElement") {
+        addPatternName(scope, node.argument);
+    } else if (node.type === "AssignmentPattern") {
+        addPatternName(scope, node.left);
+    } else if (node.type === "ArrayPattern") {
+        for (const e of node.elements || []) addPatternName(scope, e);
+    } else if (node.type === "ObjectPattern") {
+        for (const p of node.properties || []) {
+            if (!p) continue;
+            addPatternName(scope, p.type === "Property" ? p.value : p.argument);
+        }
+    }
+}
+
+function isDeclared(scope, name) {
+    for (let s = scope; s; s = s.parent) {
+        if (s.names.has(name)) return true;
+    }
+    return false;
+}
+
+function collectScopeDeclarations(node, scope) {
+    if (!node || typeof node.type !== "string") return;
+    if (node.type === "FunctionDeclaration") {
+        if (node.id) scope.names.add(node.id.name);
+        return; // declarations inside the function belong to that function's own scope
+    }
+    if (node.type === "FunctionExpression" || node.type === "ArrowFunctionExpression") {
+        return; // declarations inside the function expression are not visible here
+    }
+    if (node.type === "VariableDeclarator") {
+        addPatternName(scope, node.id);
+    }
+    for (const k of Object.keys(node)) {
+        if (k === "loc" || k === "start" || k === "end" || k === "range") continue;
+        const v = node[k];
+        if (Array.isArray(v)) { for (const c of v) collectScopeDeclarations(c, scope); }
+        else if (v && typeof v.type === "string") collectScopeDeclarations(v, scope);
+    }
+}
+
+function scanImplicitGlobals(rel, node, scope, findings) {
+    if (!node || typeof node.type !== "string") return;
+
+    if (node.type === "Program") {
+        const childScope = createScope(scope);
+        for (const stmt of node.body || []) collectScopeDeclarations(stmt, childScope);
+        for (const stmt of node.body || []) scanImplicitGlobals(rel, stmt, childScope, findings);
+        return;
+    }
+
+    if (node.type === "FunctionDeclaration" || node.type === "FunctionExpression" || node.type === "ArrowFunctionExpression") {
+        const childScope = createScope(scope);
+        if (node.type !== "ArrowFunctionExpression" && node.id) childScope.names.add(node.id.name);
+        for (const p of node.params || []) addPatternName(childScope, p);
+        collectScopeDeclarations(node.body, childScope);
+        scanImplicitGlobals(rel, node.body, childScope, findings);
+        return;
+    }
+
+    if (node.type === "AssignmentExpression" && node.left && node.left.type === "Identifier" && !isDeclared(scope, node.left.name)) {
+        findings.push(finding(rel, node.left, "implicitGlobal", "(\"" + node.left.name + "\" is assigned but never declared)"));
+    }
+
+    for (const k of Object.keys(node)) {
+        if (k === "loc" || k === "start" || k === "end" || k === "range") continue;
+        const v = node[k];
+        if (Array.isArray(v)) { for (const c of v) scanImplicitGlobals(rel, c, scope, findings); }
+        else if (v && typeof v.type === "string") scanImplicitGlobals(rel, v, scope, findings);
+    }
+}
+
 // Lint one workflow file's source. rel is the display path (e.g. "workflows/main.js").
 function lintWorkflowJs(rel, source) {
     const findings = [];
@@ -120,6 +208,8 @@ function lintWorkflowJs(rel, source) {
                 ". This file will not compile. Fix the syntax (the PalBuilder builder will report the same error)."
         }];
     }
+
+    scanImplicitGlobals(rel, ast, null, findings);
 
     walk(ast, null, null, (node, parent, key) => {
         switch (node.type) {

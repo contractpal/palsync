@@ -140,7 +140,7 @@ by `run()`'s common tail — that pattern is extremely common — but payloads c
 anywhere else to encapsulate data.
 
 ```js
-payload = c.createPayload();
+var payload = c.createPayload();
 
 // Root Data — payload.set(key, val) writes to the root Data object
 payload.set("userName", "Alice");

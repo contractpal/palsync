@@ -31,7 +31,7 @@ The default response for a first-load request. Pages are registered in `pal.json
 `palbuilder-core/references/pal-structure.md`).
 
 ```js
-page = pal.getPage("dashboard");            // page name is REQUIRED
+var page = pal.getPage("dashboard");        // page name is REQUIRED
 page.addPayload(payload);
 return page;
 ```
@@ -73,7 +73,7 @@ if (request.isAjax()) {
 
 ```js
 // Ignore — no fragment update, just a payload for JS to read
-ajax = c.createAjaxResponse("ignore", false);
+var ajax = c.createAjaxResponse("ignore", false);
 
 // Named fragment — replace the ajax-target div with this fragment
 ajax = c.createAjaxResponse(pal.getAjaxFragment("dashboard"), true);

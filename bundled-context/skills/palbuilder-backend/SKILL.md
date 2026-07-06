@@ -1,6 +1,6 @@
 ---
 name: palbuilder-backend
-description: Compatibility skill for older palsync guidance that asks for "backend" work. For new server-side workflow code, prefer palbuilder-workflow. For datasets, dataviews, payloads, and request/data shaping, prefer palbuilder-data. Keep this skill only when you need its older CRUD worked example or API reference.
+description: Compatibility skill for older palsync guidance that asks for "backend" work. For new server-side workflow code, prefer palbuilder-workflow. For datasets, dataviews, payloads, and request/data shaping, prefer palbuilder-data. Keep this skill only when you need its older API reference.
 ---
 
 # PalBuilder Backend — Compatibility Router
@@ -18,7 +18,6 @@ Use this skill only as a router:
 
 Legacy references kept here:
 
-- **`references/worked-example-crud.md`** — older end-to-end CRUD walkthrough.
 - **`references/api-reference.md`** — older method-level API notes for controller,
   payload, request, DataSet, DataView, and DataList calls.
 

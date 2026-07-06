@@ -51,6 +51,9 @@ function startProcessing() {
 ### Job side — do work, push progress
 
 ```js
+var c;
+var pal;
+
 function run(controller) {
     c   = controller;
     pal = c.getPal();

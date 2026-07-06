@@ -27,6 +27,34 @@ replacement.
 
 ## ❌ Banned Constructs (with workarounds)
 
+### Implicit globals (`c = controller` without `var c`)
+
+Declare workflow variables before assigning them. The platform may save undeclared assignments,
+but compile/test can report `Variable <name> not declared` and the misleading follow-on error
+`Function run doesn't return value`.
+
+```js
+// ✗ WRONG
+function run(controller) {
+    c = controller;
+    page = c.getPage("console");
+    payload = c.createPayload();
+    return page;
+}
+
+// ✓ RIGHT — globals at the top, assignments at the top of run()
+var c;
+var page;
+var payload;
+
+function run(controller) {
+    c = controller;
+    page = c.getPage("console");
+    payload = c.createPayload();
+    return page;
+}
+```
+
 ### Object literals `{ }`
 
 Throws `Objects not supported` plus a cascading `Variable <propName> not declared` for every
