@@ -8,9 +8,8 @@ It is JSON, not workflow JS — normal object/array literals are fine here.
 > default workflows, the full `workflowType` table (all 10 values), library `workflowContext`
 > values, and the `folders` registration pattern.
 >
-> Configuration areas (store settings, resources, PWA) have their own references in
-> `palbuilder-config`. Specific workflow-type usage patterns (writing a job, writing a
-> transaction handler) live in `palbuilder-workflow`.
+> Specific workflow-type usage patterns (writing a job, writing a transaction handler) live in
+> `palbuilder-workflow`. Store settings and server-side HTTP live in `palbuilder-data`.
 
 ---
 

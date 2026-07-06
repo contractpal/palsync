@@ -348,7 +348,7 @@ test("createAjaxResponse WITH isAjax() — no ajaxTransport finding", () => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-// Modeled on test-01-crud-mimo / tag-reference.md's documented ✓ examples — must produce ZERO
+// Modeled on test-01-crud-mimo / c-tags.md's documented examples — must produce ZERO
 // contract findings of any severity (a fully clean, well-formed pal).
 test("clean fixture (modeled on the passing reference pal) — zero contract findings", () => {
     const dir = tmpWorkspace({

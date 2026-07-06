@@ -1,5 +1,5 @@
 // {{PAL_NAME}} — console workflow (console-app starter skeleton).
-// Pattern per the palbuilder-backend skill: one run(controller), declare only the globals you
+// Pattern per the palbuilder-workflow skill: one run(controller), declare only the globals you
 // use, action switch with one thin handler per case, the `frag` variable carries the fragment
 // to render (AJAX or full page). RESTRICTED engine: var only (no let/const), NO object literals
 // (use c.createData()/createRecord()), no ES6.
@@ -33,7 +33,7 @@ function run(controller)
 }
 
 /* Presentation handler: seed the dashboard payload. Replace the placeholder values with real
-   dataset reads (pal.getDataSet(...).getRecords(filter) — see the palbuilder-backend skill). */
+   dataset reads (pal.getDataSet(...).getRecords(filter) — see the palbuilder-data skill). */
 function getDashboard()
 {
     payload.set("active", "dashboard");

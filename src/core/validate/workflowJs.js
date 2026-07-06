@@ -1,7 +1,7 @@
 "use strict";
 // Lint a PalBuilder workflow .js file against the RESTRICTED server-side compile engine.
-// Source of truth: bundled-context/skills/palbuilder-backend/SKILL.md ("Workflow JS engine —
-// supported syntax"). These constructs SAVE fine over the API but FAIL TO COMPILE in the
+// Source of truth: bundled-context/skills/palbuilder-core/references/es3-cheatsheet.md.
+// These constructs SAVE fine over the API but FAIL TO COMPILE in the
 // builder — the exact silent-failure class pal_validate exists to catch before a push.
 //
 // Severity:
@@ -28,51 +28,51 @@ const RULES = {
             "The save will succeed but the workflow will FAIL TO COMPILE in the builder (\"Objects not supported\" plus " +
             "\"Variable <name> not declared\" for each property). Fix: for a key→value map use c.createData() with .get()/.set(); " +
             "for a record use pal.getDataSet(name).createRecord() then .set(col, value); for a fixed list use " +
-            "c.createDataList(name, [cols]). See the palbuilder-backend skill, \"NEVER use object literals\"."
+            "c.createDataList(name, [cols]). See palbuilder-core/references/es3-cheatsheet.md."
     },
     letConst: {
         severity: "error",
         msg: "'let'/'const' — PalBuilder's workflow engine does NOT support them (pre-ES6). " +
             "Fix: use 'var'. Signal a constant with an UPPER_SNAKE_CASE name (var MAX_ROWS = 100;). " +
-            "See the palbuilder-backend skill, \"let / const are not available\"."
+            "See palbuilder-core/references/es3-cheatsheet.md."
     },
     arrow: {
         severity: "warn",
         msg: "Arrow function (=>) — not confirmed supported by the workflow engine; the skill says to avoid it. " +
             "Fix: use a function declaration, function name(args) { ... }. Verify in the PalBuilder builder if unsure. " +
-            "See the palbuilder-backend skill, \"Unsupported until verified\"."
+            "See palbuilder-core/references/es3-cheatsheet.md."
     },
     template: {
         severity: "warn",
         msg: "Template literal (backtick `${ }` string) — not confirmed supported by the workflow engine, and ${ } " +
             "also collides with PalBuilder's server-side EL. Fix: use string concatenation with + (\"x \" + y). " +
-            "See the palbuilder-backend skill, \"Unsupported until verified\"."
+            "See palbuilder-core/references/es3-cheatsheet.md."
     },
     destructuring: {
         severity: "warn",
         msg: "Destructuring (var {a} = obj / var [a,b] = arr) — not confirmed supported by the workflow engine. " +
-            "Fix: assign each variable explicitly (var a = obj.a;). See the palbuilder-backend skill."
+            "Fix: assign each variable explicitly (var a = obj.a;). See palbuilder-core/references/es3-cheatsheet.md."
     },
     forOf: {
         severity: "warn",
         msg: "for...of loop — not confirmed supported by the workflow engine. " +
-            "Fix: use a classic indexed loop, for (var i = 0; i < arr.length; i++). See the palbuilder-backend skill."
+            "Fix: use a classic indexed loop, for (var i = 0; i < arr.length; i++). See palbuilder-core/references/es3-cheatsheet.md."
     },
     forIn: {
         severity: "warn",
         msg: "for...in loop — not confirmed supported by the workflow engine. " +
             "Fix: iterate a DataList/DataSet with the platform API, or a classic indexed loop over an array. " +
-            "See the palbuilder-backend skill."
+            "See palbuilder-core/references/es3-cheatsheet.md."
     },
     hof: {
         severity: "warn",
         msg: "Array higher-order method (.map/.filter/.forEach/.reduce) — not confirmed supported by the workflow " +
-            "engine. Fix: use a classic for loop, or the DataSet/DataList API for row work. See the palbuilder-backend skill."
+            "engine. Fix: use a classic for loop, or the DataSet/DataList API for row work. See palbuilder-core/references/es3-cheatsheet.md."
     },
     funcExpr: {
         severity: "warn",
         msg: "Function expression (var f = function(){}) — not confirmed supported by the workflow engine. " +
-            "Fix: use a function declaration, function f(args) { ... }. See the palbuilder-backend skill."
+            "Fix: use a function declaration, function f(args) { ... }. See palbuilder-core/references/es3-cheatsheet.md."
     },
     duplicateCase: {
         severity: "error",

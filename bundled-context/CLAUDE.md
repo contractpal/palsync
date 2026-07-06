@@ -31,19 +31,24 @@ Bug fix:      pal-fix (escalates to pal-init/pal-spec if scope grows)
 
 ## Platform skills — where the depth lives
 
-Load every skill the task touches. `palbuilder-core` is the foundation — read it alongside
-any other skill; the others assume it.
+Load every skill the task touches. `palbuilder-core` is the reference library for
+cross-cutting platform facts; the task skills point at it when they need manifest,
+structure, or ES3 details.
 
-- **palbuilder-core** — file layout, naming, three-layer architecture, restricted ES3
-  workflow-JS subset, `pal.json` manifest, `workflowType` values, security baseline.
+- **palbuilder-core** — `pal.json` manifest, `workflowType` values, `palType` values,
+  typed category structure, folder registration, restricted workflow-JS subset.
+- **palbuilder-workflow** — server-side workflow JS: `run()` pattern, reserved globals,
+  action handlers, response types, includes/libraries, validation/error idioms, workflow
+  types (console, web, transaction, webservice, tunnel, console-system jobs).
 - **palbuilder-data** — datasets, dataviews, payloads/DataMaps/DataLists, cache, files,
   server-side HTTP client. Read whenever you read, write, or shape data.
 - **palbuilder-frontend** — pages vs fragments, `c:` tags and attributes, XHTML rules, modals.
-- **palbuilder-backend** — workflow JS: `run()` pattern, action handlers, response types,
-  includes, validation idioms, routing edge cases.
-- **palbuilder-jobs-http** — background jobs (`JobManager`), long-running work.
-- **palbuilder-websockets** — realtime sockets, progress UI.
+- **palbuilder-realtime** — background jobs (`JobManager`, `workflowType: 11`),
+  WebSockets, and progress UI patterns.
 - **palbuilder-email** — email templates.
+
+`palbuilder-backend` remains only as a compatibility skill for older CRUD/API examples;
+prefer `palbuilder-workflow` + `palbuilder-data` for new workflow work.
 
 Skills live in `.claude/skills/<name>/SKILL.md`, depth in `references/*.md`.
 

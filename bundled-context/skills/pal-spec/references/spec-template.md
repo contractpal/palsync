@@ -53,10 +53,11 @@ Brownfield (MAP.md present): populate §8b from MAP.md's Dataset inventory — e
 no server drift since MAP.md's `mapped` date; if it drifted, re-verify against the live dataset.
 
 **§9 Required skills** — list only what §5/§7/§8 actually require; this scopes the build's context.
-`palbuilder-backend` keys off real logic/data, NOT just "has a workflow" (every pal has a serving
-workflow). For a webservice/tunnel action, no dedicated skill covers the
-ConsoleWebServiceController/TunnelController API — look up exact methods at the cp-api docs before
-writing; never guess a method name.
+`palbuilder-workflow` keys off real server-side logic, validation, response handling, or workflow
+routing, NOT just "has a workflow" (every pal has a serving workflow). `palbuilder-data` keys off
+dataset/dataview/payload/cache/file/HTTP work. For a webservice/tunnel action, load
+`palbuilder-workflow` and look up exact controller methods at the cp-api docs before writing;
+never guess a method name.
 
 **§10 PalBuilder surface** — every line must be a REAL primitive; this manifest feeds the reality
 check and the build plan.
@@ -132,12 +133,12 @@ Canonical base: <https://...>
 
 ## 9. Required skills (which palsync skills this build loads)
 - ALWAYS: palbuilder-frontend, design-build, pal-restraint
-- IF server-side logic, validation, or data writes/reads:  palbuilder-backend
-- IF background jobs / external HTTP / long-running work:   palbuilder-jobs-http
-- IF real-time / server push:                              palbuilder-websockets
+- IF server-side workflow logic, validation, routing, or responses: palbuilder-workflow
+- IF data writes/reads, payloads/DataLists, cache, files, or server-side HTTP: palbuilder-data
+- IF background jobs, long-running work, realtime, server push, or progress UI: palbuilder-realtime
 - IF sending email (OTP, notifications, transactional):     palbuilder-email
 - IF any §3 page is publicly indexable (§7 non-empty):      seo-core
-- IF a webservice or tunnel action (Q5): palbuilder-backend + look up the exact
+- IF a webservice or tunnel action (Q5): palbuilder-workflow + look up the exact
   ConsoleWebServiceController/TunnelController methods in the cp-api docs before writing.
 
 ## 10. PalBuilder surface (the platform primitives this build touches)

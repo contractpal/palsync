@@ -6,8 +6,8 @@
 // filter — a fragment can reference a workflow contract that changed in a DIFFERENT file than
 // the one currently being edited, so scoping to "just the changed files" would miss it.
 //
-// Source of truth: bundled-context/skills/palbuilder-frontend/references/tag-reference.md,
-// palbuilder-backend/references/api-reference.md, palbuilder-data/references/{datasets,payloads}.md.
+// Source of truth: bundled-context/skills/palbuilder-frontend/references/c-tags.md,
+// palbuilder-workflow/references/responses.md, palbuilder-data/references/{datasets,payloads}.md.
 // Ground-truthed against real bug corpora in /Users/apple/PalBuilder/test-0{1,2,4,5}-*.
 const fs = require("fs");
 const path = require("path");
@@ -151,8 +151,8 @@ function findSuggestion(m, allowlist) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Check 6 allowlist — MANUALLY extracted from bundled-context/skills/palbuilder-backend/
-// references/api-reference.md + palbuilder-data/references/{datasets,payloads}.md (2026-07-03).
+// Check 6 allowlist — MANUALLY extracted from palbuilder-workflow/references/*.md +
+// palbuilder-data/references/{datasets,payloads}.md (2026-07-06).
 // If those docs gain/rename methods, update this list too — it is NOT generated.
 // ---------------------------------------------------------------------------------------------
 const KNOWN_API_METHODS = [
@@ -551,14 +551,14 @@ function checkUnknownApiMethod(rel, src, findings) {
                 file: rel, line, column, severity: "error", rule: "unknownApiMethod",
                 message: "." + m + "(...) is not a documented PalBuilder API method — did you mean ." + suggestion +
                     "(...)? This will fail at runtime (or fail to compile) even though the file saves successfully. " +
-                    "Fix: use ." + suggestion + "(...) instead. See the palbuilder-backend/palbuilder-data API references."
+                    "Fix: use ." + suggestion + "(...) instead. See the palbuilder-workflow/palbuilder-data API references."
             });
         } else {
             findings.push({
                 file: rel, line, column, severity: "warn", rule: "unknownApiMethod",
                 message: "." + m + "(...) is not in PalBuilder's documented API method set. It may be a fabricated " +
                     "method that will fail even though the file saves successfully. Verify it exists in the " +
-                    "palbuilder-backend/api-reference.md or palbuilder-data/{datasets,payloads}.md before shipping."
+                    "palbuilder-workflow/references/*.md or palbuilder-data/{datasets,payloads}.md before shipping."
             });
         }
     });
@@ -682,8 +682,8 @@ function checkAjaxTransport(rel, src, findings) {
         file: rel, line: lineAt(src, idx), column: 0, severity: "warn", rule: "ajaxTransport",
         message: "createAjaxResponse(...) is used but this file never calls isAjax() — the response type is " +
             "hardcoded per action instead of following the request's actual transport. Canonical pattern: " +
-            "if (request.isAjax()) { ...; return ajax; } ...; return page;. See the palbuilder-backend skill's " +
-            "worked CRUD example (run()'s common tail)."
+            "if (request.isAjax()) { ...; return ajax; } ...; return page;. See " +
+            "palbuilder-workflow/references/responses.md (common tail)."
     });
 }
 

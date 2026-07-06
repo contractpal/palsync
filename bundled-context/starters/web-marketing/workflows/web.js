@@ -1,5 +1,5 @@
 // {{PAL_NAME}} — web workflow (web-marketing starter skeleton).
-// Pattern per the palbuilder-backend skill: one run(controller), declare only the globals you
+// Pattern per the palbuilder-workflow skill: one run(controller), declare only the globals you
 // use, action switch with thin handlers, unknown action falls through to the home page.
 // Workflow JS is the RESTRICTED engine: var only (no let/const), no object literals, no ES6.
 var c, page, payload;

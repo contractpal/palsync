@@ -36,7 +36,8 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
    task. **git is a LOCAL checkpoint only** — the server is the source of truth; `git
    checkout` does NOT undo a pushed change (recovery: "On fail" below). Never push this repo.
 4. **Load exactly the skills SPEC.md §9 lists, before coding.** §9 is the manifest — don't
-   guess it (it may include palbuilder-jobs-http/websockets). palbuilder-frontend and
+   guess it (it may include palbuilder-workflow, palbuilder-data, or palbuilder-realtime).
+   palbuilder-frontend and
    design-build are always in it. pal-restraint is not a §9 skill — it's the default
    discipline on every task.
 5. `pal_status`. Server newer than your last pull → `pal_pull` first.

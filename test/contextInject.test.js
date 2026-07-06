@@ -56,8 +56,8 @@ test("Pi pal carries only AGENTS.md + .agents skills — no CLAUDE files", async
     const ws = tmpWorkspace();
     await ci.inject(ws, { palName: "Demo", agent: "pi" });
     assert.ok(fs.existsSync(path.join(ws, "AGENTS.md")), "Pi gets AGENTS.md");
-    assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-backend/SKILL.md")), "Pi skills at .agents/");
-    assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-websockets/SKILL.md")), "Pi skills at .agents/ (websockets)");
+    assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-workflow/SKILL.md")), "Pi skills at .agents/ (workflow)");
+    assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-realtime/SKILL.md")), "Pi skills at .agents/ (realtime)");
     // The full doc is inlined in AGENTS.md (no fragile @import), with the stamp + contract.
     const md = fs.readFileSync(path.join(ws, "AGENTS.md"), "utf8");
     assert.ok(/<!--\s*palsync-context v/.test(md), "AGENTS.md carries the stamp");
@@ -125,7 +125,7 @@ test("OpenCode pal carries only AGENTS.md + .agents skills, MCP flavor", async (
     const ws = tmpWorkspace();
     await ci.inject(ws, { palName: "Demo", agent: "opencode" });
     assert.ok(fs.existsSync(path.join(ws, "AGENTS.md")), "OpenCode gets AGENTS.md");
-    assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-backend/SKILL.md")), "OpenCode skills at .agents/");
+    assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-workflow/SKILL.md")), "OpenCode skills at .agents/");
     const md = fs.readFileSync(path.join(ws, "AGENTS.md"), "utf8");
     assert.ok(md.includes("`pal_push`"), "OpenCode AGENTS.md uses the MCP tool pal_push");
     assert.ok(!md.includes("`palsync push`"), "OpenCode flavor must not use CLI subcommands");
@@ -144,7 +144,7 @@ test("Pi AGENTS.md uses the palsync CLI, not MCP", async () => {
     }
     assert.ok(!md.includes("`pal_push`"), "Pi must not reference MCP tools");
     assert.ok(!md.includes("locked for your session"), "Pi locks per-command, not per-session");
-    assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-backend/SKILL.md")), "Pi gets skills at .agents/");
+    assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-workflow/SKILL.md")), "Pi gets skills at .agents/");
     fs.rmSync(ws, { recursive: true, force: true });
 });
 

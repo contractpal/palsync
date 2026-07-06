@@ -5,7 +5,7 @@ description: "Sending email from a PalBuilder (CloudPiston) pal — OTP/login co
 
 # Email Sending — Palbuilder Skill
 
-Companion to `palbuilder-backend`. Covers the `Email`/`TextEmail` API and a real platform
+Companion to `palbuilder-workflow`. Covers the `Email`/`TextEmail` API and a real platform
 restriction discovered building an email-based flow on a live pal — read this before assuming
 email sending "just works" from a Web pal.
 
@@ -43,7 +43,7 @@ time — you only find out by exercising the real action.
   settings, enterprise admin, billing tier) is not visible from workflow code or docs; ask the
   human to check PalBuilder/CloudPiston account-level settings.
 - If Enterprise SMTP isn't available, the fallback is sending over `ServiceRequest` (see
-  `palbuilder-jobs-http`) to a third-party email API (SendGrid, Mailgun, etc.) instead of the
+  `palbuilder-data/references/http-client.md`) to a third-party email API (SendGrid, Mailgun, etc.) instead of the
   platform's own Email API — more moving parts, but not gated by this restriction.
 
 ---

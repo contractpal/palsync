@@ -164,9 +164,9 @@ go trim a skill or tool description" once it's crossed.
 - **The MCP server never exits on its own.** Idle releases only the pal lock (a courtesy to
   teammates); the next tool call re-locks. The server lives exactly as long as Claude Code does.
 
-The PalBuilder coding skills (`palbuilder-frontend`, `palbuilder-backend`, and `palbuilder-jobs-http`
-— background Jobs, server-side HTTP, JSON parsing and long-running work, with a self-polling progress
-UI) are **always** injected, and so are the **design skills**: `design-system-init` (interview the user + reference images into a
+The PalBuilder coding skills (`palbuilder-frontend`, `palbuilder-workflow`, `palbuilder-data`, and
+`palbuilder-realtime` — workflow JS, data access, background jobs, WebSockets, and progress UI) are
+**always** injected, and so are the **design skills**: `design-system-init` (interview the user + reference images into a
 project `DESIGN_SYSTEM.md` + `COMPONENTS.md`) and `design-build` (enforce that system while building
 UI, with a render-and-critique review gate). They cost no context until the agent opens them, so they
 ride along every session — reach for them on any UI work.
