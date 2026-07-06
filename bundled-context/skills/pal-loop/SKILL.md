@@ -70,8 +70,10 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
 5. **Verify** against the success condition with tool outputs, not opinion. Offline first, so
    a bad result never reaches the server. **Batch every edit for the task first, then verify
    once — target ONE `pal_push` per task, never push per-file:**
-   1. `pal_validate` → 0 errors. Fix real warnings. Never run it twice without an edit in
-      between — same input, same output; `pal_push` re-runs this validation itself as its gate.
+   1. `pal_validate` → 0 errors. Fix warnings too, or checkpoint why each warning is safe for
+      this task before marking it `done`; warnings are allowed to push but never silently ignored.
+      Never run it twice without an edit in between — same input, same output; `pal_push`
+      re-runs this validation itself as its gate.
    2. `pal_push` (push policy `checkpoint` → ask the user first).
    3. `pal_test` → workflow VALIDATED, 0 notes — the real server compile (console AND web).
       Always run after a workflow change. Read `messages` too (whole-test failures like
@@ -98,7 +100,8 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
    7. `pal_sync_datasets` after pushing a **§8a** definition (never §8b).
    - `pal_preview`/`pal_fetch`/`pal_exercise`/`pal_seo_audit`/`pal_test` all act on the LAST
      PUSHED version — push before verifying.
-6. **On pass:** `palsync task <id> done`; `palsync checkpoint "<date>, <task id>,
+6. **On pass:** first confirm there are no unhandled `pal_validate` warnings (fixed, or each
+   one checkpointed with a concrete reason it is safe). Then `palsync task <id> done`; `palsync checkpoint "<date>, <task id>,
    <tool-output summary>"`; `git add -A && git commit -m "<task id>: <task name>"`; continue.
 7. **On fail:** fix and re-verify, up to TWO attempts. Still failing → `palsync task <id>
    blocked` with a Blockers entry naming what failed (exact tool output), what you tried, and

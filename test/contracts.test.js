@@ -8,6 +8,7 @@ const assert = require("node:assert");
 const fs = require("fs");
 const { lintContracts } = require("../src/core/validate/contracts");
 const { lintPalJson } = require("../src/core/validate/palJson");
+const { prunePhantomFolderRegistrations } = require("../src/core/palFolders");
 const { tmpWorkspace } = require("./helpers");
 
 function basePalJson(extra) {
@@ -72,6 +73,26 @@ test("unrouted action — no matching case anywhere, no default fallback either"
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "error", "no default: case anywhere — nothing handles it");
     assert.match(findings[0].message, /saveThing/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("default-routed list action is accepted as the conventional return-to-list path", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": [
+            "function run(controller) {",
+            "    switch (controller.getAction()) {",
+            "        case 'saveThing': break;",
+            "        default: break;",
+            "    }",
+            "}",
+        ].join("\n"),
+        "fragments/form.html": "<c:ignore xmlns:c=\"contractpal\"><c:a action=\"list\">Cancel</c:a><c:a action=\"typo\">Typo</c:a></c:ignore>",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "actionRouted");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "warn");
+    assert.match(findings[0].message, /typo/);
+    assert.doesNotMatch(findings[0].message, /action="list"/);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -193,6 +214,38 @@ test("wired dataset — datasets/foo.json WITH a matching pal.json entry produce
     });
     const findings = lintPalJson(dir).filter(f => f.message.includes("datasets/foo.json"));
     assert.strictEqual(findings.length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("nested creatable file without pal.json entry is reported", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({ fragments: { entry: [] } }),
+        "fragments/equipment/list.html": "<c:ignore xmlns:c=\"contractpal\">x</c:ignore>",
+    });
+    const findings = lintPalJson(dir).filter(f => f.rule === "missingPalJsonEntry" && f.message.includes("fragments/equipment/list.html"));
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /string\" and \"filename\" to \"equipment\/list\.html/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("workspace bucket folder registrations warn and are pruned from push payloads", () => {
+    const manifest = JSON.parse(basePalJson({
+        pages: { entry: [{ string: "console.html", Page: { filename: "console.html" } }] },
+        workflows: { entry: [{ string: "defaults/default_console.js", Workflow: { filename: "defaults/default_console.js" } }] },
+        folders: { Folder: [
+            { name: "pages", folderType: "Pages" },
+            { name: "defaults", folderType: "Workflows" },
+        ] },
+    }));
+    const dir = tmpWorkspace({ "pal.json": JSON.stringify(manifest) });
+    const findings = lintPalJson(dir).filter(f => f.rule === "unusedFolderRegistration");
+    assert.strictEqual(findings.length, 1);
+    assert.match(findings[0].message, /Pages\/pages/);
+
+    const pruned = prunePhantomFolderRegistrations(manifest);
+    assert.deepEqual(pruned.map(f => f.name), ["pages"]);
+    assert.deepEqual(manifest.folders.Folder.map(f => f.name), ["defaults"]);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 

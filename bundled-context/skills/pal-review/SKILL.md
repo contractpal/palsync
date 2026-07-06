@@ -36,7 +36,10 @@ never pal-loop's self-report.
 - Every `done` task in EXECUTION.md traces via its `spec ref` to its SPEC.md § and that
   requirement is satisfied.
 
-Output: per-criterion PASS / FAIL with evidence, citing each finding's `spec ref` §.
+Output: per-criterion PASS / FAIL with evidence, citing each finding's `spec ref` §. The
+evidence cell must name the exact proof artifact (`pal_fetch expect` result, `pal_exercise`
+step, `pal_screenshot captured:true`, or file:line trace); vague "code inspection" is not a
+proof artifact for rendered output or data effects.
 
 ### 2. Quality / behavior (always runs)
 - `pal_test` confirms a workflow *compiles*, not that its logic is correct. For **every** §5
@@ -49,6 +52,10 @@ Output: per-criterion PASS / FAIL with evidence, citing each finding's `spec ref
   inputs, `expect` the persisted value, `absent` the pre-edit value (catches duplicate
   insert). A passing exercise is the strongest evidence class for a data-effects criterion;
   a failing one is a finding with the step output as evidence.
+- **Code trace is necessary but not sufficient for write-action PASS.** If `pal_exercise` is
+  available and a §5 write action was not exercised, mark that action `NOT VERIFIED` and the
+  verdict `CHANGES-NEEDED` with a fix task to run the exercise. Do not convert a plausible
+  file:line trace into a data-effects pass.
 - Copy on-brand per BRAND_VOICE / DESIGN_SYSTEM intent, not just present?
 - §6 layout matches the composition the spec described?
 
@@ -84,6 +91,8 @@ REVIEW.md is incomplete.
 # REVIEW — <project> — <date> — reviewer: fresh session
 verdict: PASS | CHANGES-NEEDED
 pal_validate: <quoted verdict line — required; no line means the review is invalid>
+## Proof ledger
+| proof id | tool/file evidence | proves |
 ## Conformance
 | criterion (§) | result | evidence (must match the required evidence class) |
 ## §5 action trace (one row per spec action — an incomplete row means that action FAILS)
@@ -109,12 +118,18 @@ pal_validate: <quoted verdict line — required; no line means the review is inv
 - **Evidence classes — PASS requires the matching evidence, or it's fabrication:**
   rendered-output criteria need `pal_screenshot`/`pal_fetch` evidence taken from a state where
   the criterion is observable (a data-effects criterion cannot PASS from an empty-list
-  screenshot); behavior criteria need the complete hop-by-hop trace row. Anything you cannot
+  screenshot); behavior criteria need the complete hop-by-hop trace row; write/data-effect
+  criteria need live `pal_exercise` evidence when the tool is available. Anything you cannot
   verify with the tools at hand goes under `## NOT VERIFIED — human gate`, never an assumed
   pass. **A fabricated PASS is worse than an honest CHANGES-NEEDED.**
-- **Verdict gating — PASS only when all three hold:** `pal_validate` reports 0 errors (quote
-  the line); every §5 action has a complete trace row; no §12 criterion sits in PASS without
-  its evidence class. Any one missing → CHANGES-NEEDED with fix tasks.
+- **Proof ledger required.** Every PASS row must cite a proof id from `## Proof ledger`. Tool
+  proofs name the tool and the relevant result (`pal_exercise step 2 PASS`,
+  `pal_fetch expect all found`, `pal_screenshot captured:true renderError:null`). File proofs
+  name exact `file:line`. A row with no proof id is not reviewed.
+- **Verdict gating — PASS only when all four hold:** `pal_validate` reports 0 errors (quote
+  the line); every §5 action has a complete trace row; every runnable write/data-effect action
+  has passing `pal_exercise` evidence; no §12 criterion sits in PASS without its evidence
+  class. Any one missing → CHANGES-NEEDED with fix tasks.
 - **`pal_test` never outranks `pal_validate`.** pal_test proves the workflow COMPILES, nothing
   more; validate errors describe code that mis-renders or dies at runtime after a clean
   compile. "pal_test showed successful validation" is not a rebuttal to a validate error — the

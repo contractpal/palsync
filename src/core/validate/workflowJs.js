@@ -73,6 +73,13 @@ const RULES = {
         severity: "warn",
         msg: "Function expression (var f = function(){}) — not confirmed supported by the workflow engine. " +
             "Fix: use a function declaration, function f(args) { ... }. See the palbuilder-backend skill."
+    },
+    duplicateCase: {
+        severity: "error",
+        msg: "Duplicate switch case label — this action branch is defined more than once in the same switch. " +
+            "PalBuilder may compile it, but only one branch can be the intended handler and reviewers have already " +
+            "missed duplicate action code in passing builds. Fix: keep one case, merge any needed statements into it, " +
+            "and delete the duplicate branch."
     }
 };
 
@@ -156,6 +163,21 @@ function lintWorkflowJs(rel, source) {
                     findings.push(finding(rel, node.callee.property, "hof", "(.'" + node.callee.property.name + "')"));
                 }
                 break;
+            case "SwitchStatement": {
+                const seen = {};
+                for (const c of node.cases || []) {
+                    if (!c.test) continue;
+                    if (c.test.type !== "Literal" || typeof c.test.value !== "string") continue;
+                    const label = c.test.value;
+                    if (seen[label]) {
+                        findings.push(finding(rel, c, "duplicateCase", "(duplicate case \"" + label +
+                            "\"; first defined on line " + seen[label] + ")"));
+                    } else {
+                        seen[label] = c.loc ? c.loc.start.line : 0;
+                    }
+                }
+                break;
+            }
             default: break;
         }
     });

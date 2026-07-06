@@ -105,14 +105,17 @@ pal-root/
 ├── attachments/           ← arbitrary binary files (PDFs, CSVs, XLSX, XML, etc.)
 ├── wizards/               ← wizard definitions
 │
-└── folders                ← (array in pal.json) — registers every subfolder above,
+└── folders                ← (array in pal.json) — registers real subfolders inside categories,
                               each entry has { name, folderType }
 ```
 
-**Every subfolder must be registered** in the manifest's `folders` array with a `name` (which
+**Only real subfolders are registered** in the manifest's `folders` array, with a `name` (which
 can be nested, e.g., `doc_folder/level2`) and a `folderType` matching the category
-(`Workflows`, `Documents`, `Pages`, `Emails`, `Styles`, `Fragments`, etc.). A folder that isn't
-registered doesn't exist to the runtime — even if files at that path do.
+(`Workflows`, `Documents`, `Pages`, `Emails`, `Styles`, `Fragments`, etc.). Never register the
+top-level local workspace buckets themselves (`pages`, `fragments`, `styles`, `scripts`,
+`workflows`, etc.) — PalBuilder already has those categories, and registering the bucket names
+creates unnecessary empty folders in Pal Explorer. A folder that isn't registered doesn't exist
+to the runtime — even if files at that path do.
 
 ### Common workflow subfolder conventions
 

@@ -197,10 +197,12 @@ Optional fields:
 
 ---
 
-## `folders` — Every Subfolder Must Be Registered
+## `folders` — Register Real Subfolders Only
 
-The `folders` array registers each subfolder in the pal. Every entry has a `name` and a
-`folderType` matching the category.
+The `folders` array registers each real subfolder inside a PalBuilder category. Every entry has
+a `name` and a `folderType` matching the category. Do not register the top-level local workspace
+buckets themselves (`pages`, `fragments`, `styles`, `scripts`, `workflows`, etc.); PalBuilder
+already has those categories, and registering bucket names creates empty clutter folders.
 
 ```json
 "folders": [
@@ -222,6 +224,8 @@ Rules:
   `doc_folder` — declaring the parent does NOT auto-register children.
 - **A file at `libs/console_lib.js` requires the `libs` folder to exist in `folders`** with
   `folderType: Workflows`. Otherwise the runtime treats the folder as unregistered.
+- **A file at `pages/console.html` does NOT require `{ "name": "pages", "folderType": "Pages" }`.**
+  That entry is wrong: `pages` is the local bucket/category, not a PalBuilder subfolder.
 - **`folderType` values** track category names, but **use singular Pascal-case**:
   `Workflows`, `Documents`, `Pages`, `Fragments`, `Emails`, `Styles`. Match the casing exactly.
 

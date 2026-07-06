@@ -5,7 +5,7 @@
 // the report format, and the no-server invalid path of runExercise.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { runExercise, validateSteps, checkStep, stepLabel, needsBrowser, formatExercise, MAX_STEPS } = require("../src/core/exercise");
+const { runExercise, validateSteps, checkStep, stepLabel, needsBrowser, formatExercise, applyRunId, MAX_STEPS } = require("../src/core/exercise");
 
 // ---- validateSteps ---------------------------------------------------------
 
@@ -68,6 +68,25 @@ test("stepLabel: readable one-liners", () => {
     assert.strictEqual(stepLabel({ expect: ["x"] }), "assert-only");
 });
 
+test("applyRunId: substitutes {{runId}} deeply without touching the original steps", () => {
+    const steps = [{
+        action: "create",
+        params: { name: "Camera {{runId}}", nested: ["tag-{{runId}}"] },
+        fill: { search: "Camera {{runId}}" },
+        expect: ["Camera {{runId}}"],
+        absent: ["old-{{runId}}"]
+    }];
+    const out = applyRunId(steps, "run123");
+    assert.deepStrictEqual(out, [{
+        action: "create",
+        params: { name: "Camera run123", nested: ["tag-run123"] },
+        fill: { search: "Camera run123" },
+        expect: ["Camera run123"],
+        absent: ["old-run123"]
+    }]);
+    assert.strictEqual(steps[0].params.name, "Camera {{runId}}");
+});
+
 // ---- runExercise: invalid steps never reach the server ---------------------
 
 test("runExercise: invalid steps return {invalid} without any session use", async () => {
@@ -102,8 +121,9 @@ test("formatExercise: reports pass/fail, missing strings, surviving absents, ren
     const invalid = formatExercise({ ran: false, invalid: true, problems: ["step 1 does nothing"] });
     assert.match(invalid, /invalid steps/);
 
-    const passing = formatExercise({ ran: true, kind: "web", mode: "fetch", pass: true,
+    const passing = formatExercise({ ran: true, kind: "web", mode: "fetch", pass: true, runId: "run123",
         steps: [{ step: 1, label: "action=list", pass: true, expect: [{ string: "Camera", found: true }], absent: [] }] });
     assert.match(passing, /PASS/);
+    assert.match(passing, /runId: run123/);
     assert.match(passing, /expect "Camera": found/);
 });

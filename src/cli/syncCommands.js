@@ -31,11 +31,11 @@ const USAGE = [
     "  palsync pull   [--force] [--dir <workspace>]                 Pull/sync from the server",
     "  palsync merge  [--keep-lock] [--dir <workspace>]            3-way merge local + server changes (keeps both where they don't collide)",
     "  palsync status [--dir <workspace>]                           Server drift, local changes, lock holder",
-    "  palsync test   [--workflow console|web|transaction] [--no-preview] [--keep-lock] [--dir <ws>]",
+    "  palsync test   [--workflow console|web|transaction] [--preview] [--keep-lock] [--dir <ws>]",
     "  palsync fetch <page> [--expect <str> ...] [--selector <css>] [--max-chars <n>]  Fetch ONE served page (verify a route renders)",
-    "                                                               Server-validate a workflow + open a live preview",
-    "  palsync preview [--workflow console|web|transaction] [--keep-lock] [--dir <ws>]",
-    "                                                               Render the pal (web: prints the HTML; console: opens a browser)",
+    "                                                               Server-validate a workflow (preview opens only with --preview)",
+    "  palsync preview [--workflow console|web|transaction] [--open] [--keep-lock] [--dir <ws>]",
+    "                                                               Render the pal (web: prints HTML; console: opens only with --open)",
     "  palsync screenshot [<page>] [--viewport desktop|mobile] [--full-page] [--keep-lock] [--dir <ws>]",
     "                                                               Render a WEB pal to a PNG (saves the file, prints the path)",
     "  palsync seo-audit [--keep-lock] [--dir <ws>]             On-page SEO audit of a WEB pal's rendered page",
@@ -55,7 +55,8 @@ const USAGE = [
     "  --skip-validation  push: push even if the offline code check finds errors (not recommended)",
     "  --keep-lock        push/test/sync-datasets: keep holding the pal lock afterwards (default releases it)",
     "  --workflow         test: which engine to test (default: auto-detected from the pal)",
-    "  --no-preview       test: validate only, don't open the browser preview",
+    "  --preview          test: open a live browser preview for human review (default: validate only)",
+    "  --open             preview: open console/transaction preview in a browser for human review (default: do not open)",
     "  --viewport         screenshot: desktop (default 1280x800) | mobile (~390x844)",
     "  --full-page        screenshot: capture the whole scroll height, not just the viewport",
     "  --expect <str>     fetch/preview: assert the served page contains <str> (repeatable); prints found/missing per string, NOT the HTML",
@@ -70,12 +71,14 @@ const USAGE = [
 ].join("\n");
 
 function parseFlags(argv) {
-    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, preview: true, skipValidation: false, datasets: undefined, recreate: false, template: undefined, list: false, viewport: undefined, fullPage: false, expect: undefined, selector: undefined, maxChars: undefined };
+    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, preview: false, open: false, skipValidation: false, datasets: undefined, recreate: false, template: undefined, list: false, viewport: undefined, fullPage: false, expect: undefined, selector: undefined, maxChars: undefined };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--force" || a === "-f") flags.force = true;
         else if (a === "--keep-lock") flags.keepLock = true;
+        else if (a === "--preview") flags.preview = true;
         else if (a === "--no-preview") flags.preview = false;
+        else if (a === "--open") flags.open = true;
         else if (a === "--list") flags.list = true;
         else if (a === "--template") { flags.template = argv[++i]; if (!flags.template) throw new Error("--template requires a value"); }
         else if (a.startsWith("--template=")) flags.template = a.slice("--template=".length);
@@ -287,7 +290,7 @@ async function run(cmd, argv) {
     }
 
     if (cmd === "preview") {
-        const res = await toolByName("pal_preview").run(ctx, { workflow: flags.workflow, expect: flags.expect, selector: flags.selector, maxChars: flags.maxChars });
+        const res = await toolByName("pal_preview").run(ctx, { workflow: flags.workflow, expect: flags.expect, selector: flags.selector, maxChars: flags.maxChars, open: flags.open });
         console.log(res.message);
         if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
         return res.previewed ? 0 : 1;

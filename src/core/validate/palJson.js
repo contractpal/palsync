@@ -12,6 +12,7 @@
 const fs = require("fs");
 const path = require("path");
 const { findSuggestion } = require("./suggest");
+const { analyzeFolderRegistrations } = require("../palFolders");
 
 // Folders whose files are pushed via pal.json entries. Matches the keys used in real pal.json
 // files (verified against V2-OE-Website).
@@ -162,6 +163,44 @@ function checkUnknownKeys(manifest) {
     return findings;
 }
 
+function listFilesRecursive(root) {
+    const out = [];
+    function walk(abs, relBase) {
+        let entries;
+        try { entries = fs.readdirSync(abs, { withFileTypes: true }); }
+        catch (e) { if (e.code === "ENOENT") return; throw e; }
+        for (const de of entries) {
+            if (de.name.startsWith(".")) continue;
+            const childAbs = path.join(abs, de.name);
+            const childRel = relBase ? relBase + "/" + de.name : de.name;
+            if (de.isDirectory()) walk(childAbs, childRel);
+            else if (de.isFile()) out.push(childRel);
+        }
+    }
+    walk(root, "");
+    return out;
+}
+
+function checkFolderRegistrations(manifest) {
+    return analyzeFolderRegistrations(manifest).map(f => {
+        const isBucket = f.phantomBucket;
+        return {
+            file: "pal.json",
+            line: 1,
+            column: 0,
+            severity: "warn",
+            rule: "unusedFolderRegistration",
+            message: isBucket
+                ? "pal.json folders registers " + f.folderType + "/" + f.name + ", but \"" + f.name +
+                  "\" is a local workspace bucket name, not a real PalBuilder subfolder. PalBuilder will show an unnecessary empty folder. " +
+                  "Fix: remove this folders.Folder entry; files already belong to the " + f.folderType + " category via their own manifest section."
+                : "pal.json folders registers " + f.folderType + "/" + f.name + ", but no manifest entry in that category lives under \"" +
+                  f.name + "/\". This creates an empty PalBuilder folder. Fix: remove the folders.Folder entry, or move/register a file under \"" +
+                  f.name + "/...\" if the subfolder is intentional."
+        };
+    });
+}
+
 function lintPalJson(workspaceDir) {
     // Locate pal.json.
     const palJsonPath = path.join(workspaceDir, "pal.json");
@@ -178,14 +217,7 @@ function lintPalJson(workspaceDir) {
     for (const folder of CREATABLE_FOLDERS) {
         const folderPath = path.join(workspaceDir, folder);
 
-        // Collect files on disk (non-recursive — pal.json entries are flat per folder).
-        let diskFiles;
-        try {
-            diskFiles = fs.readdirSync(folderPath, { withFileTypes: true });
-        } catch (e) {
-            if (e.code === "ENOENT") continue; // folder doesn't exist — fine
-            throw e;
-        }
+        const diskFiles = listFilesRecursive(folderPath);
 
         // Build the set of strings registered in pal.json for this folder.
         const section = manifest[folder];
@@ -196,12 +228,10 @@ function lintPalJson(workspaceDir) {
             }
         }
 
-        // Report any file on disk that has no pal.json entry.
-        for (const de of diskFiles) {
-            if (!de.isFile()) continue;
-            if (de.name.startsWith(".")) continue; // skip dotfiles
-
-            if (!registered.has(de.name)) {
+        // Report any file on disk that has no pal.json entry. Recursive because manifest strings
+        // may contain subpaths, e.g. fragments/equipment/list.html.
+        for (const rel of diskFiles) {
+            if (!registered.has(rel)) {
                 const typeHint = FOLDER_TYPE[folder] || folder;
                 findings.push({
                     file: "pal.json",
@@ -209,10 +239,10 @@ function lintPalJson(workspaceDir) {
                     column: 0,
                     severity: "error",
                     rule: "missingPalJsonEntry",
-                    message: folder + "/" + de.name + " exists on disk but has NO pal.json entry — " +
+                    message: folder + "/" + rel + " exists on disk but has NO pal.json entry — " +
                         "push will silently skip it and the server will never receive it. " +
                         "Fix: add a matching entry to pal.json (copy an existing " + typeHint + " entry " +
-                        "inside the \"" + folder + "\".entry array and set both \"string\" and \"filename\" to \"" + de.name + "\").",
+                        "inside the \"" + folder + "\".entry array and set both \"string\" and \"filename\" to \"" + rel + "\").",
                 });
             }
         }
@@ -262,8 +292,9 @@ function lintPalJson(workspaceDir) {
     }
 
     findings.push(...checkUnknownKeys(manifest));
+    findings.push(...checkFolderRegistrations(manifest));
 
     return findings;
 }
 
-module.exports = { lintPalJson, checkUnknownKeys };
+module.exports = { lintPalJson, checkUnknownKeys, checkFolderRegistrations, listFilesRecursive };

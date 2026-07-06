@@ -13,6 +13,7 @@ const { resolveServerPalByGuid, refreshResolvedPal } = require("./resolve");
 const { manifestPaths } = require("./pull");
 const { validateWorkspace, lintContent } = require("./validate");
 const { diffWorkspace } = require("./localDrift");
+const { prunePhantomFolderRegistrations } = require("./palFolders");
 const baseline = require("./baseline");
 const lock = require("./lock");
 const drift = require("./drift");
@@ -42,8 +43,7 @@ function findStrayCreatable(pal, workspaceDir) {
     const stray = [];
     for (const t of CREATABLE) {
         const manifest = new Set((((pal[t.key] && pal[t.key].entry)) || []).map(e => e.string));
-        let files = [];
-        try { files = fs.readdirSync(path.join(workspaceDir, t.folder)).filter(f => !f.startsWith(".") && isFile(path.join(workspaceDir, t.folder, f))); } catch (e) {}
+        const files = listFilesRecursive(path.join(workspaceDir, t.folder));
         for (const f of files) if (!manifest.has(f)) stray.push(t.folder + "/" + f);
     }
     return stray;
@@ -59,6 +59,24 @@ const UNCREATABLE = [
 const WORKFLOW_TYPES = new Set([2, 3, 4, 5, 7, 9, 11, 12, 14, 15]);
 
 function isFile(p) { try { return fs.statSync(p).isFile(); } catch (e) { return false; } }
+
+function listFilesRecursive(root) {
+    const out = [];
+    function walk(abs, relBase) {
+        let entries;
+        try { entries = fs.readdirSync(abs, { withFileTypes: true }); }
+        catch (e) { if (e.code === "ENOENT") return; throw e; }
+        for (const de of entries) {
+            if (de.name.startsWith(".")) continue;
+            const childAbs = path.join(abs, de.name);
+            const childRel = relBase ? relBase + "/" + de.name : de.name;
+            if (de.isDirectory()) walk(childAbs, childRel);
+            else if (de.isFile()) out.push(childRel);
+        }
+    }
+    walk(root, "");
+    return out;
+}
 
 function errorsByRule(findings) {
     const m = {};
@@ -264,6 +282,7 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
     // 3) inject from disk + save (body pal.id == lock header id, matching the extension invariant)
     const pal = await Pal.fromPath(workspaceDir);
     pal.id = id;
+    const prunedFolders = prunePhantomFolderRegistrations(pal);
     // Backstop: strip NEW entries of uncreatable types (documents/fonts) so they can't sink the
     // whole push; report stray files. Plus strip only MALFORMED new workflows (no workflowType) —
     // well-formed new workflows now push. Creatable types are never touched. Parsed from the
@@ -309,7 +328,7 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
     return { pushed: success, refused: success ? undefined : "save-rejected",
              forced: !!force, filesPushed: injected.length, strayCreatable, validation,
              newMarker: record.lastModifiedDate, skipped, lint, skippedValidation: skipValidation && lint.errors > 0,
-             serverPaths: pushedPaths, webRegistered };
+             serverPaths: pushedPaths, webRegistered, consoleRegistered, prunedFolders };
 }
 
 module.exports = { push, buildSaveTask, normalizeValidation, guardWorkflows, ensureWebRegistration, ensureConsoleRegistration };

@@ -327,6 +327,10 @@ function checkActionRouted(markupFiles, workflowFiles, actions, findings) {
             const name = raw.split("?")[0];
             if (!name || name.includes("${")) return; // dynamic action name — can't check statically
             if (actions.has(name)) return;
+            // Conventional console/web return-to-list links often rely on the workflow default:
+            // branch, which is the actual landing/list behavior. Warn on other unknown actions
+            // with a default, but do not make the common "Cancel" -> list pattern noisy.
+            if (hasDefault && name === "list") return;
             findings.push({
                 file: rel, line: lineAt(src, pos), column: 0, severity: hasDefault ? "warn" : "error", rule: "actionRouted",
                 message: "action=\"" + raw + "\" — \"" + name + "\" is not routed by any workflow (no `case \"" + name +

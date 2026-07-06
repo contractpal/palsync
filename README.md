@@ -119,9 +119,9 @@ palsync push     # validate, then push; releases the lock after (--keep-lock to 
 palsync pull     # sync from the server (refuses to overwrite un-pushed edits; --force overrides)
 palsync merge    # 3-way merge local + server changes (keeps both where they don't collide)
 palsync status   # server drift + un-pushed local changes (per file) + lock holder
-palsync test     # server-side workflow validation + live preview in your browser
+palsync test     # server-side workflow validation (no browser; add --preview for human review)
 palsync seo-audit # on-page SEO audit of a WEB pal's rendered page
-palsync preview  # render the pal (web: prints the HTML; console: opens a browser)
+palsync preview  # render the pal (web: prints HTML; console: opens only with --open)
 palsync sync-datasets  # provision dataset tables from pal.json (safe by default)
 palsync scaffold --template <name>  # apply a starter template (offline; --list shows them)
 palsync cost     # palsync's own context contribution (offline) — see below
@@ -260,25 +260,26 @@ MCP server** — there's nothing to register, and `pi` is launched in the worksp
 | `pal_push` | **Validates first** (refuses on errors — no agent-facing bypass; humans can use the CLI's `--skip-validation`), then pushes. Refuses if the server advanced since your last pull (drift) unless forced. |
 | `pal_pull` | Sync the pal from the server. Preserves new un-pushed local files; refuses (naming files) if it would overwrite un-pushed edits. |
 | `pal_merge` | **3-way merge** of your un-pushed local changes with the server's changes. Keeps both wherever they don't collide; a file changed on both sides stays yours with theirs saved as `<file>.server`. Never overwrites your work silently. |
-| `pal_test` | Run the server's own workflow validation and open a **live preview** in your browser (the agent never sees the credential-bearing URL). |
+| `pal_test` | Run the server's own workflow validation. Browser preview is opt-in for human review (`preview:true`); the agent never sees the credential-bearing URL. |
 | `pal_tunnel_test` | **Call a tunnel workflow (workflowType 15) as a real web service** and return its JSON response. Asks you for the action, workflow (listing the pal's tunnels), and payload (none / inline JSON / a `.json` file) before running; the short-lived tunnel credentials are minted via `CreateTunnel.do` and refreshed automatically when they expire. |
 | `pal_debug` | **Retrieve server-side `c.debug(...)` output** — the PalBuilder IDE debug feed. The agent gets its debugs back automatically (attached to `pal_tunnel_test`/`pal_fetch`/`pal_preview`(web)/`pal_screenshot` results) instead of asking you to copy/paste; this tool covers manual/browser runs. The buffer is consume-once and shared with PalBuilder's debug view. |
-| `pal_preview` | **Render the pal and return it to the agent.** For a **web** pal, fetches the server-rendered HTML so Claude can read its own output; for a **console** pal, opens it in your browser (the agent can't see it). |
+| `pal_preview` | **Render the pal and return it to the agent.** For a **web** pal, fetches the server-rendered HTML so Claude can read its own output; for a **console** pal, does not open a browser by default; use `open:true` only at a human-review stop (the agent can't see that browser). |
 | `pal_seo_audit` | **On-page SEO audit of a web pal's rendered page** — title/description lengths, canonical, the 5 `og:` tags with absolute `og:image`/`og:url`, twitter:card, one H1, viewport, JSON-LD, img alt, non-ASCII attribute values. Every finding carries the exact fix; passing checks are listed too. |
 | `pal_sync_datasets` | **Create/update dataset tables** from `pal.json` definitions. Safe by default (never deletes data); the destructive `recreate` path requires an exact typed confirmation. |
 | `pal_status` | Is the server newer than your last pull? Any un-pushed local changes? Who holds the lock? |
 | `pal_lock` | Acquire the lock (auto-reclaims your own stale lock). |
 | `pal_unlock` | Release the lock (never breaks another user's). |
 
-### `pal_test` — validation + live preview
+### `pal_test` — validation + optional live preview
 
 PalBuilder's save API returns **cached** workflow validation, so a workflow can push
 "successfully" yet fail to compile in the builder. `pal_test` runs the builder's real
-`Test<Console|Web|Pal>.do` and returns the **fresh** compile result to the agent, then opens a
-live preview of the pal in your default browser. The preview URL carries your credentials, so
-it is opened **locally and never shown** to the agent or written to any log. (A console pal
-renders inside the CloudPiston console shell; a web pal renders directly.) Available headless
-too: `palsync test [--workflow console|web|transaction] [--no-preview]`.
+`Test<Console|Web|Pal>.do` and returns the **fresh** compile result to the agent. It does **not**
+open a browser by default, which keeps auto-mode evals from stealing focus. For a human review
+stop, opt into a live preview with `pal_test` `preview:true` or `palsync test --preview`. The
+preview URL carries your credentials, so it is opened **locally and never shown** to the agent
+or written to any log. (A console pal renders inside the CloudPiston console shell; a web pal
+renders directly.)
 
 ## Limitations
 

@@ -35,8 +35,8 @@ export CP_URL='https://secure.cloudpiston.com'   # optional; this is the default
 ```
 
 The password is read only to authenticate. It is never written to disk, never logged, and never
-returned to the agent. (The `pal_preview`/`pal_test` browser URL that embeds credentials is opened
-locally and likewise never surfaced to the agent.)
+returned to the agent. (`pal_test --preview` and `pal_preview --open` browser URLs that embed
+credentials are opened locally and likewise never surfaced to the agent.)
 
 ---
 
@@ -141,7 +141,7 @@ palsync pull     --dir ~/pals/isr
 palsync merge    --dir ~/pals/isr            # 3-way merge local + server changes
 palsync push     --dir ~/pals/isr            # validates first; refuses on new errors
 palsync test     --dir ~/pals/isr
-palsync preview  --dir ~/pals/isr
+palsync preview  --dir ~/pals/isr            # web HTML to stdout; console does not open unless --open
 palsync fetch about.html --expect "About us" --dir ~/pals/isr   # verify a page WITHOUT dumping HTML
 palsync seo-audit --dir ~/pals/isr
 palsync sync-datasets --dir ~/pals/isr

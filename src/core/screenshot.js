@@ -9,7 +9,8 @@
 // link, so Playwright just navigates to it. No auth, no credentials in the URL.
 //
 // CONSOLE / transaction pals (Phase 2): runTest already builds the cp-auth'd preview URL
-// (_previewUrl) — the same URL pal_test opens in the user's browser. Playwright navigates to it
+// (_previewUrl) — the same URL pal_test can open when preview is explicitly requested.
+// Playwright navigates to it
 // and absorbs the auth redirect chain exactly as that browser does (no separate cookie loading
 // needed — the cp-auth param drives session establishment server-side). If the auth replay fails
 // (timeout, no token, blank), we return { captured:false } so pal-review falls back to the human

@@ -62,8 +62,24 @@ function renderNotVerifiedReminder(ctx) {
 // a count hides content-affecting warnings (e.g. a page with no body tag that won't save).
 function formatValidation(notes) {
     if (!notes || !notes.length) return "No validation notes.";
-    return "Server validation notes (" + notes.length + "):\n" +
-        notes.map(v => "   - " + (v.group || "?") + "/" + (v.object || "(general)") + ": " + v.message).join("\n");
+    const benign = [], blocking = [];
+    for (const v of notes) (isBenignServerNote(v) ? benign : blocking).push(v);
+    const fmt = (title, xs) => title + " (" + xs.length + "):\n" +
+        xs.map(v => "   - " + (v.group || "?") + "/" + (v.object || "(general)") + ": " + v.message).join("\n");
+    const parts = [];
+    if (blocking.length) parts.push(fmt("Server validation notes", blocking));
+    else parts.push("No blocking server validation notes.");
+    if (benign.length) parts.push(fmt("Server informational notes (non-blocking)", benign));
+    return parts.join("\n");
+}
+
+function isBenignServerNote(v) {
+    const group = String((v && v.group) || "");
+    const object = String((v && v.object) || "");
+    const msg = String((v && v.message) || "");
+    if (group === "workflow" && object === "Validation" && /^vCPU:\s*\d+,\s*batchSize:\s*\d+$/i.test(msg)) return true;
+    if (group === "console" && object === "" && /^Console Desktop (Image|Label) required\.?$/i.test(msg)) return true;
+    return false;
 }
 
 // Token-efficient verification message: the per-string verdict, never the page body. `meta`
@@ -206,13 +222,13 @@ const TOOLS = [
     },
     {
         name: "pal_test",
-        description: "Validate a workflow ON THE SERVER and open a live preview in the user's browser; returns the server's validation notes. The preview URL carries the user's credentials, is NEVER returned to you, and you CANNOT see the rendered page — ask the user if you need to know. Use after a push to confirm the workflow runs server-side.",
+        description: "Validate a workflow ON THE SERVER and return the server's validation notes. Does NOT open a browser by default; pass preview:true only when the user has stopped for human review and wants a live browser preview. The preview URL carries the user's credentials, is NEVER returned to you, and you CANNOT see the rendered page — use pal_screenshot/pal_exercise for agent-visible verification.",
         inputShape: {
             workflow: z.enum(["console", "web", "transaction"]).optional(),
             workflowName: z.string().optional(),
             preview: z.boolean().optional()
         },
-        async run(ctx, { workflow, workflowName, preview = true } = {}) {
+        async run(ctx, { workflow, workflowName, preview = false } = {}) {
             const res = await runTest(ctx.session, ctx.record.palGuid, { kind: workflow, workflowName });
             if (ctx.lifecycle) ctx.lifecycle.onActivity(); // pal_test takes the lock — re-arm idle
             if (!res.ran) {
@@ -233,7 +249,7 @@ const TOOLS = [
                     ? "Live preview opened in your browser" + (res.kind === "console" ? " (the console pal renders inside the CloudPiston console shell)." : ".")
                     : "Live preview URL is ready but the browser couldn't be opened automatically (" + opened.reason + ") — it carries your credentials, so it isn't shown here; re-run on a desktop session.";
             } else if (res._previewUrl) {
-                previewMsg = "Live preview available (preview:false set — not opened).";
+                previewMsg = "Live preview available but NOT opened (auto-mode default). For human review, call pal_test with preview:true; for agent-visible verification, use pal_screenshot or pal_exercise.";
             } else {
                 previewMsg = "No live preview — the workflow did not validate (fix the notes above, push, and test again).";
             }
@@ -345,7 +361,7 @@ const TOOLS = [
     },
     {
         name: "pal_debug",
-        description: "Retrieve the pal's server-side c.debug(...) output — the PalBuilder IDE debug feed; any workflow engine on a test pal writes to it when it executes. CONSUME-ONCE and SHARED: reading clears the buffer for every viewer, including a developer watching PalBuilder's debug view. pal_tunnel_test / pal_fetch / pal_preview (web) / pal_screenshot attach this automatically — call this directly after pal_test's browser preview or a manual run in the user's browser.",
+        description: "Retrieve the pal's server-side c.debug(...) output — the PalBuilder IDE debug feed; any workflow engine on a test pal writes to it when it executes. CONSUME-ONCE and SHARED: reading clears the buffer for every viewer, including a developer watching PalBuilder's debug view. pal_tunnel_test / pal_fetch / pal_preview (web) / pal_screenshot attach this automatically — call this directly after an opt-in browser preview or a manual run in the user's browser.",
         inputShape: {},
         async run(ctx) {
             const dbg = await retrieveServerDebug(ctx.session, ctx.record.palGuid, { palId: ctx.debugPalId });
@@ -364,14 +380,15 @@ const TOOLS = [
     },
     {
         name: "pal_preview",
-        description: "See what the pal RENDERS. WEB pal: pass expect:[strings] for a found/missing verdict (token-efficient default), or selector/maxChars for markup; full HTML otherwise. CONSOLE/transaction pal: opens in the user's browser and you will NOT see it (ask the user). Shows the LAST PUSHED version — pal_push first.",
+        description: "See what the pal RENDERS. WEB pal: pass expect:[strings] for a found/missing verdict (token-efficient default), or selector/maxChars for markup; full HTML otherwise. CONSOLE/transaction pal: does NOT open a browser by default; pass open:true only at a human-review stop. Shows the LAST PUSHED version — pal_push first.",
         inputShape: {
             workflow: z.enum(["console", "web", "transaction"]).optional(),
             expect: z.array(z.string()).optional().describe("Strings the rendered page must contain — returns a per-string found/missing verdict instead of the HTML (the default, token-efficient check)."),
             selector: z.string().optional().describe("Simple CSS selector (tag/.class/#id) to return only that region's markup."),
-            maxChars: z.number().optional().describe("Cap the returned markup to this many characters.")
+            maxChars: z.number().optional().describe("Cap the returned markup to this many characters."),
+            open: z.boolean().optional().describe("Console/transaction only: open the preview in the user's browser. Default false for auto mode.")
         },
-        async run(ctx, { workflow, expect, selector, maxChars } = {}) {
+        async run(ctx, { workflow, expect, selector, maxChars, open = false } = {}) {
             const res = await runPreview(ctx.session, ctx.record.palGuid, ctx.record, ctx.workspaceDir, { workflow });
             if (ctx.lifecycle) ctx.lifecycle.onActivity(); // preview takes the lock — re-arm idle
             const dirtyNote = res.dirty
@@ -413,13 +430,15 @@ const TOOLS = [
                         "\n\n--- rendered HTML" + (truncated ? " (first " + PREVIEW_INLINE_CAP + " of " + res.bytes + " bytes — read the file for the rest)" : "") + " ---\n" + shown
                 }));
             }
-            // console/transaction — open in the user's browser; the agent cannot see it.
+            // console/transaction — optionally open in the user's browser; the agent cannot see it.
             let opened = { opened: false };
-            if (res._previewUrl) opened = await openUrl(res._previewUrl);
+            if (res._previewUrl && open) opened = await openUrl(res._previewUrl);
             const safe = Object.assign({}, res); delete safe._previewUrl;
+            const openMsg = open
+                ? (opened.opened ? "Opened the preview in the user's browser. " : "Could not open a browser automatically (" + opened.reason + "). ")
+                : "Preview available but NOT opened (auto-mode default). For human review, call pal_preview with open:true. ";
             return Object.assign(safe, {
-                message: (opened.opened ? "Opened the preview in the user's browser. " : "Could not open a browser automatically (" + opened.reason + "). ") +
-                    res.reason + dirtyNote +
+                message: openMsg + res.reason + dirtyNote +
                     "\n⚠ You did NOT see this render. Do not report what the page shows, whether a save/click/flow" +
                     " succeeded, or any specific data as observed fact — you have no evidence of it. Use" +
                     " pal_screenshot to actually see a console/transaction render, or ask the user."
@@ -711,13 +730,22 @@ const TOOLS = [
                 // Surface any pre-push WARNINGS even on success (errors can't reach here unless
                 // skipValidation forced past them — say so loudly).
                 const warnBlock = res.lint && res.lint.warnings > 0
-                    ? "\n\n⚠ Code warnings (did not block the push — review them):\n" + formatLint(res.lint, { context: "validate" })
+                    ? "\n\n⚠ Code warnings (push allowed, task not done until handled):\n" + formatLint(res.lint, { context: "validate" }) +
+                      "\n\nFix these warnings, or checkpoint why each one is safe before marking the task done."
                     : "";
                 const skippedBlock = res.skippedValidation
                     ? "\n\n⚠ You pushed past " + res.lint.errors + " validation ERROR(s) with skipValidation — the pal may not compile/render in PalBuilder:\n" + formatLint(res.lint, { context: "validate" })
                     : "";
                 const webBlock = res.webRegistered
                     ? "\n\n🌐 Registered \"" + res.webRegistered + "\" as the pal's web workflow (this makes it a Web Pal so it can render/preview). Run pal_pull to sync the registration into pal.json."
+                    : "";
+                const consoleBlock = res.consoleRegistered
+                    ? "\n\nRegistered \"" + res.consoleRegistered + "\" as the pal's console workflow. Run pal_pull to sync the registration into pal.json."
+                    : "";
+                const folderBlock = res.prunedFolders && res.prunedFolders.length
+                    ? "\n\nPruned phantom PalBuilder folder registrations from the push payload:\n" +
+                      res.prunedFolders.map(f => "   - " + f.folderType + "/" + f.name + " (" + f.reason + ")").join("\n") +
+                      "\nThese are local workspace bucket names, not real PalBuilder subfolders; removing them prevents empty folders from appearing in Pal Explorer."
                     : "";
                 return Object.assign(res, {
                     message: "Pushed " + res.filesPushed + " files" + (res.forced ? " (forced past drift)" : "") +
@@ -731,7 +759,7 @@ const TOOLS = [
                             ? "\n\n🚨 WARNING: " + res.strayCreatable.length + " file(s) on disk were NOT pushed — they have no pal.json entry, so the server never receives them:\n" +
                               res.strayCreatable.map(f => "   - " + f).join("\n") +
                               "\nFix: add a matching entry to pal.json (copy an existing entry of the same type, e.g. a Page entry for pages/, a Fragment entry for fragments/, set string+filename to the file name), then push again. Until you do, these files exist only on disk."
-                            : "") + skippedBlock + warnBlock + webBlock + renderNotVerifiedReminder(ctx)
+                            : "") + folderBlock + skippedBlock + warnBlock + webBlock + consoleBlock + renderNotVerifiedReminder(ctx)
                 });
             }
             if (res.refused === "drift") {
@@ -800,4 +828,4 @@ const TOOLS = [
     }
 ];
 
-module.exports = { TOOLS, overridePhrase, blockedMessage, formatExpect, htmlRegionResult };
+module.exports = { TOOLS, overridePhrase, blockedMessage, formatExpect, formatValidation, isBenignServerNote, htmlRegionResult };
