@@ -35,7 +35,7 @@ const USAGE = [
     "  palsync fetch <page> [--expect <str> ...] [--selector <css>] [--max-chars <n>]  Fetch ONE served page (verify a route renders)",
     "                                                               Server-validate a workflow (preview opens only with --preview)",
     "  palsync preview [--workflow console|web|transaction] [--open|--no-open] [--keep-lock] [--dir <ws>]",
-    "                                                               Render the pal (web: prints HTML; console: opens in an interactive terminal)",
+    "                                                               Render the pal (opens console/transaction previews in a browser by default)",
     "  palsync screenshot [<page>] [--viewport desktop|mobile] [--full-page] [--keep-lock] [--dir <ws>]",
     "                                                               Render a WEB pal to a PNG (saves the file, prints the path)",
     "  palsync seo-audit [--keep-lock] [--dir <ws>]             On-page SEO audit of a WEB pal's rendered page",
@@ -56,8 +56,8 @@ const USAGE = [
     "  --keep-lock        push/test/sync-datasets: keep holding the pal lock afterwards (default releases it)",
     "  --workflow         test: which engine to test (default: auto-detected from the pal)",
     "  --preview          test: open a live browser preview for human review (default: validate only)",
-    "  --open             preview: open console/transaction preview in a browser (default: open only in an interactive terminal)",
-    "  --no-open          preview: do not open a browser, even in an interactive terminal",
+    "  --open             preview: open console/transaction preview in a browser (default)",
+    "  --no-open          preview: do not open a browser",
     "  --viewport         screenshot: desktop (default 1280x800) | mobile (~390x844)",
     "  --full-page        screenshot: capture the whole scroll height, not just the viewport",
     "  --expect <str>     fetch/preview: assert the served page contains <str> (repeatable); prints found/missing per string, NOT the HTML",
@@ -115,7 +115,7 @@ function parseFlags(argv) {
 function toolByName(name) { return TOOLS.find(t => t.name === name); }
 
 function defaultPreviewOpen() {
-    return !!(process.stdin && process.stdin.isTTY && process.stdout && process.stdout.isTTY);
+    return true;
 }
 
 // Best-effort lock release after a one-shot command (no live session remains to hold it).
