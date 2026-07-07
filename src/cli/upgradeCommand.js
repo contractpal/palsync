@@ -14,6 +14,7 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const pkg = require("../../package.json");
+const NPM_INSTALL_FLAGS = ["--ignore-scripts=false", "--include=optional"];
 
 // npm strips _resolved/gitHead from installed git packages and keeps no global lockfile, so the
 // only durable record of which commit this build came from is one we write ourselves: after a
@@ -31,9 +32,9 @@ function repoSlug() {
 // The commit this build was installed from, read from the stamp a prior `palsync upgrade` wrote.
 // null on the first run after a manual `npm install` (no stamp yet) or in a dev clone — which makes
 // upgrade reinstall once and then stamp, after which it correctly no-ops when current.
-function installedSha() {
+function installedSha(stampPath = SHA_STAMP) {
     try {
-        const s = fs.readFileSync(SHA_STAMP, "utf8").trim().toLowerCase();
+        const s = fs.readFileSync(stampPath, "utf8").trim().toLowerCase();
         return /^[0-9a-f]{40}$/.test(s) ? s : null;
     } catch { return null; }
 }
@@ -49,10 +50,10 @@ async function fetchLatestSha(slug) {
     return sha;
 }
 
-function npmInstall(slug, sha) {
+function npmInstall(slug, sha, { spawn = spawnSync } = {}) {
     const spec = "github:" + slug + "#" + sha;
     const useShell = process.platform === "win32";
-    const r = spawnSync("npm", ["install", "-g", spec], { stdio: "inherit", shell: useShell });
+    const r = spawn("npm", ["install", "-g", spec].concat(NPM_INSTALL_FLAGS), { stdio: "inherit", shell: useShell });
     return r.status === 0;
 }
 
@@ -93,4 +94,4 @@ async function run(argv) {
     return 0;
 }
 
-module.exports = { run, repoSlug, installedSha, fetchLatestSha };
+module.exports = { run, repoSlug, installedSha, fetchLatestSha, npmInstall, NPM_INSTALL_FLAGS };
