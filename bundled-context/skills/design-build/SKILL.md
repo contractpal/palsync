@@ -11,7 +11,11 @@ Build UI that conforms to the design system, decomposes cleanly, defines its int
 
 - Read `DESIGN_SYSTEM.md` and `COMPONENTS.md`. If absent and the task is non-trivial, recommend `design-system-init` first — building without a system drifts to generic output. If the user proceeds anyway, infer a minimal system from existing code and state your assumptions.
 - Look at `design/refs/` if present. Read the images, not just tokens — they encode composition and restraint tokens can't. Build toward how they look and feel.
+- For non-trivial UI, read `../design-system-init/references/design-principles.md` before building
+  or reviewing. It is the practical checklist for hierarchy, UX flow, Gestalt grouping, Fitts target
+  sizing, typography, color meaning, consistency, and simplicity.
 - For Palbuilder UI, read `../design-system-init/references/component-library.md` before implementing any non-trivial component. It contains Palbuilder-valid XHTML, CSS, and `c:` tag recipes. Pair it with `palbuilder-frontend/references/c-tags.md` before using any `c:` attribute you have not verified.
+- Enforce the current palsync visual stack unless the project explicitly overrides it: system or Fontshare typography, inline SVG icons from one approved family (Iconoir, Tabler, or Phosphor), and GSAP in `scripts/*.js` for scripted animation.
 
 ## Vision routing
 
@@ -33,6 +37,8 @@ Plan structure first — one giant file is the top driver of AI-looking, unmaint
 - Get hierarchy from the system's stated mechanism — often spacing and size before weight, weight before color. A new accent color for emphasis usually means the spacing is wrong.
 - Honor the stated density and layout posture. If the system says airy, generous whitespace is the design; if it says break the grid, do so deliberately — uniform even spacing reads as templated.
 - Use the project's component inventory first. If no local component exists, adapt the closest recipe from `component-library.md` and record it in `COMPONENTS.md` when it becomes reusable.
+- If the screen needs a common modern primitive, do not improvise it from a bare card. Check for button group, dropdown/menu, drawer, command palette, combobox, accordion, segmented control, date picker, data-grid affordance, kanban, comments, attachments, code block, metrics panel, or review checklist recipes first.
+- Build the hierarchy path explicitly: title/object/status/first decision/primary action/feedback/next step. If those are not visible at a glance, fix composition before polishing color or shadows.
 
 ## Step 3 — Define every interaction state
 
@@ -57,15 +63,23 @@ Treat your first output as a junior draft; review it like a demanding senior des
 **Against structure**
 - Decomposed per `COMPONENTS.md`, or collapsed into a monolith?
 - Any near-duplicate components that should be one?
+- Do Gestalt grouping rules make relationships obvious: proximity for labels/errors, similarity for
+  same-role controls, common regions only where needed, and clear figure-ground for overlays?
 
 **Against interaction**
 - Does every interactive element define its full state set, including focus-visible, disabled, loading, error, and empty where relevant?
 - Keyboard-operable? Contrast adequate for text and focus indicators?
+- Are frequent and primary actions large enough and near the user's likely path? Are destructive
+  actions separated enough to avoid accidental activation?
+- Is complexity staged with progressive disclosure instead of dumped on the default view or removed
+  from the workflow?
 - Palbuilder-specific: no undocumented `c:` attributes, no inline scripts in fragments, no `onclick` on `c:a`, no ARIA attributes on `c:field`, and direct `${row.field}` access inside `c:list`.
 
 **Against slop** (the fingerprint list below is the authority; this is the backstop)
 - Any known fingerprints — generic gradient-blob hero, pill-everything uniform radius, the only layout idea being a three-card row, default "AI editorial" serif-on-cream-with-sage?
 - Does it resemble the references in feel, or just in surface palette?
+- Would it look credible next to shadcn/ui, Radix/Headless examples, or a mature product system like Polaris, Carbon, or Atlassian? If not, identify whether the failure is coverage, density, type, iconography, spacing, interaction states, or motion.
+- Palbuilder-specific modernity: no icon fonts, no Google Fonts default, no Lucide leftover unless the project explicitly chose it, no inline animation scripts, no giant tool-surface headings, and no flat teal-gray admin output without a product rationale.
 
 Report what you changed. If a check fails and you chose not to fix it, say why.
 
@@ -83,7 +97,10 @@ Apply the same vocabulary to yourself at the review gate.
 
 ## Acceptance checklist
 - [ ] DESIGN_SYSTEM.md, COMPONENTS.md, and `design/refs/` loaded before building.
+- [ ] Applied design-principles review: user journey, hierarchy, grouping, Fitts target sizing,
+      progressive disclosure, typography, color meaning, and consistency.
 - [ ] Palbuilder component library consulted for non-trivial UI and local reusable components recorded back into COMPONENTS.md.
+- [ ] Typography, SVG icons, and motion match the stack policy: system/Fontshare fonts, inline Iconoir/Tabler/Phosphor-style SVGs, GSAP only from external JS when scripted motion is needed.
 - [ ] Decomposed into atomic units with explicit interfaces; no monolith, no near-duplicates.
 - [ ] All values from tokens; any new need added to the system, not hardcoded.
 - [ ] Every interactive element defines its full state set, including focus-visible and loading/error/empty where relevant.

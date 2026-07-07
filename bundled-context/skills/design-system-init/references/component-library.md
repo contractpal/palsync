@@ -1,24 +1,31 @@
 # Palbuilder Component Library
 
 Palbuilder-ready recipes for `DESIGN_SYSTEM.md` and `COMPONENTS.md`. These are patterns to adapt,
-not a package to install. They use plain CSS, XHTML-safe markup, and documented `c:` tag patterns.
+not a package to install. They use plain CSS, XHTML-safe markup, inline SVG icons, GSAP-ready
+external JavaScript hooks, and documented `c:` tag patterns.
+
+Quality target: match or beat the practical coverage of shadcn/ui, Radix, Headless UI, Polaris,
+Carbon, and Atlassian patterns while staying Palbuilder-native. A generated pal should feel
+intentional before any custom brand work: crisp hierarchy, complete states, modern density, clean
+SVG icons, restrained motion, and enough component coverage that agents do not invent one-off UI.
 
 ## Naming And Files
 
 Recommended files:
 
 - `styles/design-system.css` - tokens, base styles, components.
+- `scripts/vendor/gsap.min.js` - local GSAP build when scripted animation is used.
 - `scripts/ui-main.js` - page-level module loaded once from the page shell when JS is needed.
 - `fragments/common/*` - shared composites such as nav, modal bodies, alerts, empty states.
 
 Recommended class prefix: `pb-`. It avoids collisions with Bootstrap and old pal CSS.
 
-Optional font load in the page head, when external fonts are allowed:
+Optional Fontshare load in the page head, when external fonts are allowed. Replace the URL with the
+project's selected Fontshare families; otherwise keep the system stack and omit this block.
 
 ```html
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin" />
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+<link rel="preconnect" href="https://api.fontshare.com" />
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700,800&amp;display=swap" rel="stylesheet" />
 ```
 
 Page shell load:
@@ -28,6 +35,7 @@ Page shell load:
     <head>
         <title>${pageTitle}</title>
         <link rel="STYLESHEET" type="text/css" href="../Styles/design-system.css" />
+        <script src="../Scripts/vendor/gsap.min.js"></script>
         <script type="module" src="../Scripts/ui-main.js"></script>
     </head>
     <body>
@@ -57,27 +65,33 @@ Fragment shell:
 
 ```css
 :root {
-  --ds-bg: #f6f8f7;
-  --ds-bg-subtle: #eef3f1;
+  --ds-bg: #f7f8fb;
+  --ds-bg-subtle: #f0f2f5;
   --ds-surface: #ffffff;
-  --ds-surface-raised: #fbfcfc;
-  --ds-text: #151918;
-  --ds-text-muted: #56615e;
-  --ds-text-soft: #77817e;
-  --ds-border: #d9e2df;
-  --ds-border-strong: #b8c7c2;
-  --ds-primary: #0f766e;
-  --ds-primary-hover: #0b5f59;
-  --ds-primary-soft: #d9f0ec;
+  --ds-surface-raised: #fcfcfd;
+  --ds-text: #101114;
+  --ds-text-muted: #5f6673;
+  --ds-text-soft: #848b98;
+  --ds-border: #e1e5eb;
+  --ds-border-strong: #c7ced8;
+  --ds-focus: #3b82f6;
+  --ds-focus-ring: #dbeafe;
+  --ds-primary: #18181b;
+  --ds-primary-hover: #27272a;
+  --ds-primary-soft: #eceef2;
   --ds-primary-text: #ffffff;
-  --ds-accent: #b45309;
-  --ds-accent-soft: #fde8cc;
-  --ds-success: #2f7d4f;
-  --ds-warning: #b7791f;
+  --ds-accent: #2563eb;
+  --ds-accent-soft: #dbeafe;
+  --ds-success: #15803d;
+  --ds-success-soft: #dcfce7;
+  --ds-warning: #b45309;
+  --ds-warning-soft: #fef3c7;
   --ds-danger: #b42318;
-  --ds-info: #2563a9;
+  --ds-danger-soft: #fee2e2;
+  --ds-info: #1d4ed8;
+  --ds-info-soft: #dbeafe;
 
-  --ds-font-ui: "Manrope", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ds-font-ui: "Satoshi", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --ds-font-display: var(--ds-font-ui);
   --ds-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
@@ -95,34 +109,47 @@ Fragment shell:
   --ds-radius-xs: 4px;
   --ds-radius-sm: 6px;
   --ds-radius-md: 8px;
+  --ds-radius-lg: 12px;
   --ds-radius-pill: 999px;
-  --ds-shadow-sm: 0 1px 2px rgba(21, 25, 24, 0.06);
-  --ds-shadow-md: 0 8px 22px rgba(21, 25, 24, 0.10);
+  --ds-shadow-xs: 0 1px 1px rgba(16, 17, 20, 0.04);
+  --ds-shadow-sm: 0 1px 2px rgba(16, 17, 20, 0.08);
+  --ds-shadow-md: 0 16px 40px rgba(16, 17, 20, 0.12);
+  --ds-shadow-pop: 0 24px 70px rgba(16, 17, 20, 0.18);
   --ds-ease: cubic-bezier(0.2, 0, 0, 1);
+  --ds-duration-fast: 120ms;
+  --ds-duration-med: 180ms;
+  --ds-duration-slow: 280ms;
 }
 
 [data-theme="dark"] {
-  --ds-bg: #141817;
-  --ds-bg-subtle: #1d2422;
-  --ds-surface: #202826;
-  --ds-surface-raised: #26302d;
-  --ds-text: #eef5f2;
-  --ds-text-muted: #b6c3bf;
-  --ds-text-soft: #879591;
-  --ds-border: #35413e;
-  --ds-border-strong: #4b5a56;
-  --ds-primary: #63d2c6;
-  --ds-primary-hover: #8be0d7;
-  --ds-primary-soft: #173c39;
-  --ds-primary-text: #0b1514;
-  --ds-accent: #f2a65a;
-  --ds-accent-soft: #442b13;
-  --ds-success: #79d69a;
-  --ds-warning: #f2c66d;
-  --ds-danger: #ff8a7a;
-  --ds-info: #8ab9ff;
+  --ds-bg: #0b0d10;
+  --ds-bg-subtle: #11151a;
+  --ds-surface: #161a20;
+  --ds-surface-raised: #1d232b;
+  --ds-text: #f6f7f9;
+  --ds-text-muted: #b6bdc8;
+  --ds-text-soft: #8b94a3;
+  --ds-border: #2a3039;
+  --ds-border-strong: #3c4654;
+  --ds-focus: #60a5fa;
+  --ds-focus-ring: #172a45;
+  --ds-primary: #f6f7f9;
+  --ds-primary-hover: #ffffff;
+  --ds-primary-soft: #242a33;
+  --ds-primary-text: #0b0d10;
+  --ds-accent: #60a5fa;
+  --ds-accent-soft: #172a45;
+  --ds-success: #4ade80;
+  --ds-success-soft: #12351f;
+  --ds-warning: #fbbf24;
+  --ds-warning-soft: #422b07;
+  --ds-danger: #fb7185;
+  --ds-danger-soft: #43151c;
+  --ds-info: #93c5fd;
+  --ds-info-soft: #172a45;
   --ds-shadow-sm: none;
   --ds-shadow-md: 0 16px 40px rgba(0, 0, 0, 0.35);
+  --ds-shadow-pop: 0 24px 70px rgba(0, 0, 0, 0.50);
 }
 
 * { box-sizing: border-box; }
@@ -135,12 +162,14 @@ body {
 }
 a { color: inherit; }
 .pb-app { min-height: 100vh; background: var(--ds-bg); color: var(--ds-text); }
-.pb-main { width: 100%; max-width: 1280px; margin: 0 auto; padding: var(--ds-space-8); }
+.pb-main { width: 100%; max-width: 1200px; margin: 0 auto; padding: var(--ds-space-8); }
 .pb-section { display: grid; gap: var(--ds-space-6); }
 .pb-stack { display: grid; gap: var(--ds-space-4); }
 .pb-cluster { display: flex; align-items: center; gap: var(--ds-space-3); flex-wrap: wrap; }
 .pb-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ds-space-6); }
 .pb-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ds-space-6); }
+.pb-surface { background: var(--ds-surface); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); box-shadow: var(--ds-shadow-xs); }
+.pb-muted { color: var(--ds-text-muted); }
 .pb-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
 
 @media (max-width: 760px) {
@@ -155,7 +184,7 @@ States: default, hover, focus-visible, active, disabled, loading. Use one primar
 
 ```css
 .pb-btn {
-  min-height: 40px;
+  min-height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -166,11 +195,11 @@ States: default, hover, focus-visible, active, disabled, loading. Use one primar
   font: 600 0.875rem/1 var(--ds-font-ui);
   text-decoration: none;
   cursor: pointer;
-  transition: transform 140ms var(--ds-ease), background 140ms var(--ds-ease), border-color 140ms var(--ds-ease), box-shadow 140ms var(--ds-ease);
+  transition: transform var(--ds-duration-fast) var(--ds-ease), background var(--ds-duration-fast) var(--ds-ease), border-color var(--ds-duration-fast) var(--ds-ease), box-shadow var(--ds-duration-fast) var(--ds-ease), color var(--ds-duration-fast) var(--ds-ease);
 }
 .pb-btn:hover { transform: translateY(-1px); }
 .pb-btn:active { transform: translateY(0); }
-.pb-btn:focus-visible { outline: 3px solid var(--ds-primary-soft); outline-offset: 2px; }
+.pb-btn:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: 2px; }
 .pb-btn[disabled], .pb-btn.is-disabled { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
 .pb-btn-primary { background: var(--ds-primary); color: var(--ds-primary-text); box-shadow: var(--ds-shadow-sm); }
 .pb-btn-primary:hover { background: var(--ds-primary-hover); box-shadow: var(--ds-shadow-md); }
@@ -220,10 +249,13 @@ Busy state:
 
 ## 2. Icon Buttons And Icons
 
-Default icon family: Lucide-style inline SVG. Do not use icon fonts or JS replacers.
+Default icon families: Iconoir, Tabler, or Phosphor inline SVG. Pick one family per pal and keep
+stroke width, caps, joins, and viewBox consistent. Do not use icon fonts, image icons, external
+sprite injection, or JS replacers.
 
 ```css
 .pb-icon { width: 16px; height: 16px; flex: 0 0 auto; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pb-icon-lg { width: 20px; height: 20px; }
 .pb-icon-btn {
   width: 40px;
   height: 40px;
@@ -235,16 +267,23 @@ Default icon family: Lucide-style inline SVG. Do not use icon fonts or JS replac
   background: var(--ds-surface);
   color: var(--ds-text-muted);
   cursor: pointer;
+  transition: background var(--ds-duration-fast) var(--ds-ease), border-color var(--ds-duration-fast) var(--ds-ease), color var(--ds-duration-fast) var(--ds-ease), transform var(--ds-duration-fast) var(--ds-ease);
 }
-.pb-icon-btn:hover { color: var(--ds-text); border-color: var(--ds-border-strong); }
-.pb-icon-btn:focus-visible { outline: 3px solid var(--ds-primary-soft); outline-offset: 2px; }
+.pb-icon-btn:hover { color: var(--ds-text); border-color: var(--ds-border-strong); transform: translateY(-1px); }
+.pb-icon-btn:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: 2px; }
 ```
 
 ```html
 <button type="button" class="pb-icon-btn" aria-label="Search" onclick="palUI.openSearch()">
-    <svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+    <svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 19a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" /><path d="m21 21-4.35-4.35" /></svg>
 </button>
 ```
+
+Icon rules:
+- Use decorative icons with `aria-hidden="true"` and no label.
+- Icon-only buttons must have `aria-label`.
+- SVG children must be valid XHTML: self-close `<path />`, `<circle />`, `<rect />`, `<line />`.
+- Do not paste brand icons unless the license allows it.
 
 ## 3. Fields
 
@@ -267,8 +306,8 @@ message wrappers.
 .pb-textarea { min-height: 112px; padding-top: var(--ds-space-3); resize: vertical; }
 .pb-input:focus, .pb-select:focus, .pb-textarea:focus {
   outline: none;
-  border-color: var(--ds-primary);
-  box-shadow: 0 0 0 3px var(--ds-primary-soft);
+  border-color: var(--ds-focus);
+  box-shadow: 0 0 0 3px var(--ds-focus-ring);
 }
 .pb-help { color: var(--ds-text-soft); font-size: 0.8125rem; }
 .pb-field-error { color: var(--ds-danger); font-size: 0.8125rem; }
@@ -371,10 +410,10 @@ Use cards for repeated items and framed tools. Do not put cards inside cards.
 
 ```css
 .pb-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--ds-space-6); margin-bottom: var(--ds-space-8); }
-.pb-title { margin: 0; font: 700 clamp(1.75rem, 4vw, 2.5rem)/1.08 var(--ds-font-display); color: var(--ds-text); }
+.pb-title { margin: 0; font: 750 2rem/1.08 var(--ds-font-display); color: var(--ds-text); }
 .pb-subtitle { margin: var(--ds-space-2) 0 0; color: var(--ds-text-muted); font-size: 0.9375rem; max-width: 62ch; }
 .pb-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--ds-space-4); padding: var(--ds-space-3); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); }
-@media (max-width: 760px) { .pb-page-head, .pb-toolbar { align-items: stretch; flex-direction: column; } }
+@media (max-width: 760px) { .pb-title { font-size: 1.625rem; } .pb-page-head, .pb-toolbar { align-items: stretch; flex-direction: column; } }
 ```
 
 ```html
@@ -442,10 +481,10 @@ Tabs in Palbuilder are usually server actions that swap a fragment.
 }
 .pb-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .pb-badge-neutral { background: var(--ds-bg-subtle); color: var(--ds-text-muted); }
-.pb-badge-success { background: #e0f2e7; color: var(--ds-success); }
-.pb-badge-warning { background: #fff1d6; color: var(--ds-warning); }
-.pb-badge-danger { background: #fee4df; color: var(--ds-danger); }
-.pb-badge-info { background: #dfeeff; color: var(--ds-info); }
+.pb-badge-success { background: var(--ds-success-soft); color: var(--ds-success); }
+.pb-badge-warning { background: var(--ds-warning-soft); color: var(--ds-warning); }
+.pb-badge-danger { background: var(--ds-danger-soft); color: var(--ds-danger); }
+.pb-badge-info { background: var(--ds-info-soft); color: var(--ds-info); }
 ```
 
 ```html
@@ -461,9 +500,9 @@ Tabs in Palbuilder are usually server actions that swap a fragment.
 
 ```css
 .pb-alert { display: flex; align-items: flex-start; gap: var(--ds-space-3); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); padding: var(--ds-space-4); }
-.pb-alert-success { border-color: #bfe5cc; background: #f1fbf5; color: var(--ds-success); }
-.pb-alert-warning { border-color: #f2d28f; background: #fff8e8; color: var(--ds-warning); }
-.pb-alert-danger { border-color: #f4b8b0; background: #fff2f0; color: var(--ds-danger); }
+.pb-alert-success { border-color: var(--ds-success); background: var(--ds-success-soft); color: var(--ds-success); }
+.pb-alert-warning { border-color: var(--ds-warning); background: var(--ds-warning-soft); color: var(--ds-warning); }
+.pb-alert-danger { border-color: var(--ds-danger); background: var(--ds-danger-soft); color: var(--ds-danger); }
 .pb-alert-title { margin: 0; color: var(--ds-text); font-weight: 700; }
 .pb-alert-msg { margin: 2px 0 0; color: var(--ds-text-muted); font-size: 0.875rem; }
 ```
@@ -943,7 +982,539 @@ workflow `runJS`. Do not put scripts in fragments.
 </div>
 ```
 
-## 29. Responsive Rules
+## 29. Motion With GSAP
+
+Use CSS for hover/focus and GSAP for scripted UI motion. Load GSAP once from the page shell,
+preferably from a local vendor file checked into `Scripts/vendor/gsap.min.js`. Every animation must
+respect reduced motion and leave the UI usable when GSAP is absent.
+
+```html
+<script src="../Scripts/vendor/gsap.min.js"></script>
+<script type="module" src="../Scripts/ui-main.js"></script>
+```
+
+```js
+window.palUI = window.palUI || {};
+
+window.palUI.motionOK = function () {
+  return !window.matchMedia || !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+};
+
+window.palUI.reveal = function (root) {
+  if (!window.gsap || !window.palUI.motionOK() || !root) return;
+  window.gsap.from(root.querySelectorAll("[data-animate='item']"), {
+    autoAlpha: 0,
+    y: 8,
+    duration: 0.28,
+    ease: "power2.out",
+    stagger: 0.035
+  });
+};
+
+window.palUI.openPanel = function (panel) {
+  if (!panel) return;
+  panel.removeAttribute("hidden");
+  if (!window.gsap || !window.palUI.motionOK()) return;
+  window.gsap.fromTo(panel, { autoAlpha: 0, x: 20 }, { autoAlpha: 1, x: 0, duration: 0.22, ease: "power2.out" });
+};
+```
+
+## 30. Button Group And Split Actions
+
+Use for adjacent actions with equal scope, or a primary action plus overflow.
+
+```css
+.pb-btn-group { display: inline-flex; align-items: center; isolation: isolate; }
+.pb-btn-group .pb-btn { border-radius: 0; margin-left: -1px; }
+.pb-btn-group .pb-btn:first-child { border-radius: var(--ds-radius-sm) 0 0 var(--ds-radius-sm); margin-left: 0; }
+.pb-btn-group .pb-btn:last-child { border-radius: 0 var(--ds-radius-sm) var(--ds-radius-sm) 0; }
+.pb-split { display: inline-flex; align-items: stretch; }
+.pb-split .pb-btn:first-child { border-radius: var(--ds-radius-sm) 0 0 var(--ds-radius-sm); }
+.pb-split .pb-icon-btn { border-left: 0; border-radius: 0 var(--ds-radius-sm) var(--ds-radius-sm) 0; }
+```
+
+```html
+<div class="pb-split">
+    <c:a action="approveRecord?id=${record.id}" ajax-target="body" class="pb-btn pb-btn-primary">Approve</c:a>
+    <button type="button" class="pb-icon-btn" aria-label="More approval actions" onclick="palUI.toggleMenu('approvalMenu')">
+        <svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+    </button>
+</div>
+```
+
+## 31. Input Group, Textarea, And Form Grid
+
+Use input groups for search, currency, URL, and attached action controls. Keep prefixes visual; do
+not rely on them as the only label.
+
+```css
+.pb-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ds-space-4) var(--ds-space-5); }
+.pb-form-span { grid-column: 1 / -1; }
+.pb-input-group { display: flex; align-items: stretch; width: 100%; }
+.pb-input-addon { display: inline-flex; align-items: center; padding: 0 var(--ds-space-3); border: 1px solid var(--ds-border); background: var(--ds-bg-subtle); color: var(--ds-text-muted); font-weight: 650; font-size: 0.875rem; }
+.pb-input-addon:first-child { border-radius: var(--ds-radius-sm) 0 0 var(--ds-radius-sm); border-right: 0; }
+.pb-input-addon:last-child { border-radius: 0 var(--ds-radius-sm) var(--ds-radius-sm) 0; border-left: 0; }
+.pb-input-group .pb-input { border-radius: 0; }
+.pb-input-group .pb-input:first-child { border-radius: var(--ds-radius-sm) 0 0 var(--ds-radius-sm); }
+.pb-input-group .pb-input:last-child { border-radius: 0 var(--ds-radius-sm) var(--ds-radius-sm) 0; }
+@media (max-width: 760px) { .pb-form-grid { grid-template-columns: 1fr; } }
+```
+
+```html
+<div class="pb-form-grid">
+    <div class="pb-field-group">
+        <label class="pb-label" for="amount">Amount</label>
+        <div class="pb-input-group">
+            <span class="pb-input-addon">$</span>
+            <input id="amount" name="amount" class="pb-input" inputmode="decimal" />
+        </div>
+    </div>
+    <div class="pb-field-group pb-form-span">
+        <label class="pb-label">
+            Notes
+            <c:field type="textarea" name="notes" class="pb-textarea" value="${notes}" />
+        </label>
+    </div>
+</div>
+```
+
+## 32. Radio, Choice Cards, And Segmented Control
+
+Use radio groups for one-of-many choices; use choice cards when options need descriptions.
+
+```css
+.pb-radio-group, .pb-choice-grid { display: grid; gap: var(--ds-space-3); }
+.pb-choice-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pb-radio { display: inline-flex; align-items: center; gap: var(--ds-space-2); }
+.pb-radio input { width: 18px; height: 18px; accent-color: var(--ds-primary); }
+.pb-choice { display: grid; gap: var(--ds-space-2); padding: var(--ds-space-4); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); cursor: pointer; }
+.pb-choice.is-selected { border-color: var(--ds-focus); box-shadow: 0 0 0 3px var(--ds-focus-ring); }
+.pb-segmented { display: inline-flex; padding: 3px; border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-bg-subtle); }
+.pb-segment { min-height: 32px; padding: 0 var(--ds-space-3); border: 0; border-radius: var(--ds-radius-sm); background: transparent; color: var(--ds-text-muted); font-weight: 650; cursor: pointer; }
+.pb-segment.active { background: var(--ds-surface); color: var(--ds-text); box-shadow: var(--ds-shadow-xs); }
+@media (max-width: 760px) { .pb-choice-grid { grid-template-columns: 1fr; } }
+```
+
+```html
+<div class="pb-choice-grid" role="radiogroup" aria-label="Plan">
+    <label class="pb-choice">
+        <span><c:field type="radio" name="plan" value="starter" checked="${plan eq 'starter'}" /> Starter</span>
+        <span class="pb-muted">For simple internal workflows.</span>
+    </label>
+    <label class="pb-choice">
+        <span><c:field type="radio" name="plan" value="team" checked="${plan eq 'team'}" /> Team</span>
+        <span class="pb-muted">Adds approvals and collaboration.</span>
+    </label>
+</div>
+```
+
+## 33. Dropdown And Overflow Menu
+
+Use menus for secondary actions. The trigger is a plain button; menu items can be `c:a` actions.
+
+```css
+.pb-menu-wrap { position: relative; display: inline-block; }
+.pb-menu { position: absolute; right: 0; top: calc(100% + var(--ds-space-2)); min-width: 220px; padding: var(--ds-space-2); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); box-shadow: var(--ds-shadow-pop); z-index: 50; }
+.pb-menu-item { display: flex; align-items: center; gap: var(--ds-space-2); width: 100%; min-height: 36px; padding: 0 var(--ds-space-3); border-radius: var(--ds-radius-sm); color: var(--ds-text); text-decoration: none; font-size: 0.875rem; font-weight: 600; }
+.pb-menu-item:hover, .pb-menu-item:focus-visible { background: var(--ds-bg-subtle); outline: none; }
+.pb-menu-sep { height: 1px; margin: var(--ds-space-2); background: var(--ds-border); }
+```
+
+```html
+<div class="pb-menu-wrap">
+    <button type="button" class="pb-icon-btn" aria-label="Record actions" aria-expanded="false" onclick="palUI.toggleMenu('recordMenu')">
+        <svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6h.01" /><path d="M12 12h.01" /><path d="M12 18h.01" /></svg>
+    </button>
+    <div id="recordMenu" class="pb-menu" hidden="hidden">
+        <c:a action="editRecord?id=${record.id}" ajax-target="modalContent" class="pb-menu-item">Edit</c:a>
+        <c:a action="duplicateRecord?id=${record.id}" ajax-target="body" class="pb-menu-item">Duplicate</c:a>
+        <div class="pb-menu-sep"></div>
+        <c:a action="deleteRecord?id=${record.id}" confirm="Delete this record?" ajax-target="body" class="pb-menu-item">Delete</c:a>
+    </div>
+</div>
+```
+
+## 34. Tooltip, Popover, And Hover Card
+
+Use tooltips for short labels and popovers for actionable detail. For complex content, prefer a
+drawer or detail panel.
+
+```css
+.pb-tip-wrap { position: relative; display: inline-flex; }
+.pb-tooltip, .pb-popover { position: absolute; z-index: 40; border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); color: var(--ds-text); box-shadow: var(--ds-shadow-pop); }
+.pb-tooltip { bottom: calc(100% + var(--ds-space-2)); left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 6px 9px; font-size: 0.8125rem; font-weight: 650; }
+.pb-popover { top: calc(100% + var(--ds-space-2)); right: 0; width: 320px; padding: var(--ds-space-4); }
+.pb-hover-card { display: grid; gap: var(--ds-space-3); }
+```
+
+```html
+<span class="pb-tip-wrap">
+    <button type="button" class="pb-icon-btn" aria-label="Show SLA details" onclick="palUI.toggleMenu('slaPopover')">?</button>
+    <div id="slaPopover" class="pb-popover" hidden="hidden">
+        <div class="pb-hover-card">
+            <strong>Response SLA</strong>
+            <span class="pb-muted">Business-hours response target for this customer tier.</span>
+        </div>
+    </div>
+</span>
+```
+
+## 35. Accordion And Collapsible
+
+Use native `details`/`summary` where possible. It is accessible, simple, and Palbuilder-safe.
+
+```css
+.pb-accordion { border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); overflow: hidden; }
+.pb-accordion details + details { border-top: 1px solid var(--ds-border); }
+.pb-accordion summary { min-height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--ds-space-4); cursor: pointer; font-weight: 700; }
+.pb-accordion-body { padding: 0 var(--ds-space-4) var(--ds-space-4); color: var(--ds-text-muted); }
+```
+
+```html
+<div class="pb-accordion">
+    <details open="open">
+        <summary>Billing details</summary>
+        <div class="pb-accordion-body">Plan, renewal, and invoice settings.</div>
+    </details>
+    <details>
+        <summary>Security</summary>
+        <div class="pb-accordion-body">Roles, locks, and audit events.</div>
+    </details>
+</div>
+```
+
+## 36. Drawer / Sheet
+
+Use drawers for contextual details or forms that should not replace the list.
+
+```css
+.pb-drawer-scrim { position: fixed; inset: 0; background: rgba(11, 13, 16, 0.42); z-index: 80; }
+.pb-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100%); display: grid; grid-template-rows: auto 1fr auto; background: var(--ds-surface); border-left: 1px solid var(--ds-border); box-shadow: var(--ds-shadow-pop); z-index: 81; }
+.pb-drawer-head, .pb-drawer-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--ds-space-4); padding: var(--ds-space-5); border-bottom: 1px solid var(--ds-border); }
+.pb-drawer-foot { border-top: 1px solid var(--ds-border); border-bottom: 0; justify-content: flex-end; }
+.pb-drawer-body { padding: var(--ds-space-5); overflow: auto; }
+```
+
+```html
+<div id="customerDrawer" hidden="hidden">
+    <div class="pb-drawer-scrim" onclick="palUI.closePanel('customerDrawer')"></div>
+    <div class="pb-drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+        <div class="pb-drawer-head">
+            <h2 id="drawerTitle" class="pb-modal-title">Customer details</h2>
+            <button type="button" class="pb-icon-btn" aria-label="Close" onclick="palUI.closePanel('customerDrawer')">
+                <svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+            </button>
+        </div>
+        <div class="pb-drawer-body" id="drawerBody"></div>
+    </div>
+</div>
+```
+
+## 37. Command Palette
+
+Use for global navigation and fast actions. Keep commands server-backed where possible.
+
+```css
+.pb-command { width: min(680px, calc(100vw - 32px)); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-lg); background: var(--ds-surface); box-shadow: var(--ds-shadow-pop); overflow: hidden; }
+.pb-command-search { display: flex; align-items: center; gap: var(--ds-space-3); padding: var(--ds-space-3) var(--ds-space-4); border-bottom: 1px solid var(--ds-border); }
+.pb-command-search input { border: 0; outline: 0; width: 100%; background: transparent; color: var(--ds-text); font: inherit; }
+.pb-command-list { max-height: 360px; overflow: auto; padding: var(--ds-space-2); }
+.pb-command-item { display: flex; align-items: center; justify-content: space-between; gap: var(--ds-space-3); min-height: 42px; padding: 0 var(--ds-space-3); border-radius: var(--ds-radius-sm); color: var(--ds-text); text-decoration: none; font-weight: 650; }
+.pb-command-item:hover, .pb-command-item:focus-visible { background: var(--ds-bg-subtle); outline: none; }
+.pb-kbd { display: inline-flex; align-items: center; min-height: 22px; padding: 0 6px; border: 1px solid var(--ds-border); border-bottom-color: var(--ds-border-strong); border-radius: var(--ds-radius-xs); background: var(--ds-surface-raised); color: var(--ds-text-muted); font: 700 0.75rem/1 var(--ds-font-mono); }
+```
+
+```html
+<div class="pb-command" role="dialog" aria-label="Command menu">
+    <div class="pb-command-search">
+        <svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 19a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" /><path d="m21 21-4.35-4.35" /></svg>
+        <input type="search" placeholder="Search actions, records, or pages" />
+    </div>
+    <div class="pb-command-list">
+        <c:a action="newCustomer" ajax-target="modalContent" class="pb-command-item"><span>New customer</span><span class="pb-kbd">N</span></c:a>
+        <c:a action="listCustomers" ajax-target="body" class="pb-command-item"><span>Go to customers</span><span class="pb-kbd">G C</span></c:a>
+    </div>
+</div>
+```
+
+## 38. Combobox / Autocomplete
+
+For simple cases, use native `datalist`; for server-backed search, render suggestions into a
+popover target and select with `c:a`.
+
+```html
+<div class="pb-field-group">
+    <label class="pb-label" for="customerSearch">Customer</label>
+    <input id="customerSearch" name="customerSearch" class="pb-input" list="customerOptions" autocomplete="off" />
+    <datalist id="customerOptions">
+        <c:list name="customers" id="customer">
+            <option value="${customer.name}"></option>
+        </c:list>
+    </datalist>
+</div>
+```
+
+Server-backed pattern:
+
+```html
+<div class="pb-field-group">
+    <label class="pb-label">
+        Search records
+        <c:field type="text" name="q" class="pb-input" value="${q}" placeholder="Type a name or ID" />
+    </label>
+    <c:a action="searchRecords" ajax-target="recordSuggestions" class="pb-btn pb-btn-secondary">Search</c:a>
+    <div id="recordSuggestions" class="pb-menu"></div>
+</div>
+```
+
+## 39. Date Picker And Calendar List
+
+Use native date inputs for simple capture. Use a calendar list for scheduling and review screens.
+
+```css
+.pb-date-row { display: flex; align-items: center; gap: var(--ds-space-3); }
+.pb-calendar-list { display: grid; gap: var(--ds-space-3); }
+.pb-calendar-item { display: grid; grid-template-columns: 72px 1fr auto; gap: var(--ds-space-4); align-items: center; padding: var(--ds-space-4); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); }
+.pb-calendar-date { display: grid; place-items: center; min-height: 58px; border-radius: var(--ds-radius-md); background: var(--ds-bg-subtle); color: var(--ds-text); font-weight: 800; }
+@media (max-width: 640px) { .pb-calendar-item { grid-template-columns: 1fr; } .pb-calendar-date { place-items: start; padding: var(--ds-space-3); } }
+```
+
+```html
+<div class="pb-field-group">
+    <label class="pb-label" for="dueDate">Due date</label>
+    <input id="dueDate" name="dueDate" type="date" class="pb-input" value="${dueDate}" />
+</div>
+```
+
+## 40. Slider / Range
+
+Use only when approximate adjustment is acceptable. Pair with a visible number.
+
+```css
+.pb-range { display: grid; gap: var(--ds-space-2); }
+.pb-range input[type="range"] { width: 100%; accent-color: var(--ds-primary); }
+.pb-range-value { color: var(--ds-text); font-weight: 800; font-variant-numeric: tabular-nums; }
+```
+
+```html
+<label class="pb-range">
+    <span class="pb-label">Risk threshold <strong class="pb-range-value">${threshold}%</strong></span>
+    <input type="range" name="threshold" min="0" max="100" value="${threshold}" />
+</label>
+```
+
+## 41. OTP / PIN Input
+
+Use for short verification codes. Keep paste behavior in external JS if enhanced.
+
+```css
+.pb-otp { display: flex; gap: var(--ds-space-2); }
+.pb-otp input { width: 44px; height: 48px; text-align: center; border: 1px solid var(--ds-border); border-radius: var(--ds-radius-sm); background: var(--ds-surface); color: var(--ds-text); font: 800 1.125rem/1 var(--ds-font-ui); }
+.pb-otp input:focus { outline: 2px solid var(--ds-focus); outline-offset: 2px; }
+```
+
+```html
+<div class="pb-otp" aria-label="Verification code">
+    <input name="code1" maxlength="1" inputmode="numeric" />
+    <input name="code2" maxlength="1" inputmode="numeric" />
+    <input name="code3" maxlength="1" inputmode="numeric" />
+    <input name="code4" maxlength="1" inputmode="numeric" />
+</div>
+```
+
+## 42. Data Grid Affordances
+
+A full data grid is a composition: table, row selection, sortable headers, filters, pagination,
+bulk bar, row menu, loading, empty, and error states.
+
+```css
+.pb-table th .pb-sort { display: inline-flex; align-items: center; gap: 6px; color: inherit; text-decoration: none; }
+.pb-row-actions { display: flex; justify-content: flex-end; gap: var(--ds-space-2); }
+.pb-row-click { cursor: pointer; }
+.pb-row-click:hover td { background: var(--ds-bg-subtle); }
+```
+
+```html
+<th>
+    <c:a action="sortRecords?by=name" ajax-target="body" class="pb-sort">
+        Customer
+        <svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 9 4-4 4 4" /><path d="m16 15-4 4-4-4" /></svg>
+    </c:a>
+</th>
+```
+
+## 43. Kanban / Status Board
+
+Use for workflow state, not decorative task theater. Every card must have a clear action path.
+
+```css
+.pb-board { display: grid; grid-template-columns: repeat(3, minmax(240px, 1fr)); gap: var(--ds-space-4); overflow-x: auto; }
+.pb-board-col { min-width: 240px; display: grid; align-content: start; gap: var(--ds-space-3); padding: var(--ds-space-3); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-bg-subtle); }
+.pb-board-title { margin: 0; display: flex; justify-content: space-between; color: var(--ds-text-muted); font-size: 0.8125rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+.pb-board-card { display: grid; gap: var(--ds-space-2); padding: var(--ds-space-4); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); box-shadow: var(--ds-shadow-xs); }
+```
+
+```html
+<div class="pb-board">
+    <div class="pb-board-col">
+        <h3 class="pb-board-title"><span>Review</span><span>${reviewCount}</span></h3>
+        <c:list name="reviewRecords" id="record">
+            <c:a action="viewRecord?id=${record.id}" ajax-target="body" class="pb-board-card">
+                <strong>${record.title}</strong>
+                <span class="pb-muted">${record.owner}</span>
+            </c:a>
+        </c:list>
+    </div>
+</div>
+```
+
+## 44. Comments And Messages
+
+Use for collaboration, approvals, and audit trails. Keep system events in activity feeds; keep human
+messages here.
+
+```css
+.pb-thread { display: grid; gap: var(--ds-space-4); }
+.pb-message { display: grid; grid-template-columns: 36px 1fr; gap: var(--ds-space-3); }
+.pb-message-bubble { padding: var(--ds-space-3) var(--ds-space-4); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); }
+.pb-message-meta { margin-top: var(--ds-space-1); color: var(--ds-text-soft); font-size: 0.8125rem; }
+```
+
+```html
+<div class="pb-thread">
+    <c:list name="comments" id="comment">
+        <div class="pb-message">
+            <span class="pb-avatar" aria-hidden="true">${comment.initials}</span>
+            <div>
+                <div class="pb-message-bubble">${comment.body}</div>
+                <div class="pb-message-meta">${comment.author} - ${comment.createDate}</div>
+            </div>
+        </div>
+    </c:list>
+</div>
+```
+
+## 45. Attachment List
+
+Use with upload/download flows. Show type, size, owner, status, and actions.
+
+```css
+.pb-attachments { display: grid; gap: var(--ds-space-2); }
+.pb-attachment { display: grid; grid-template-columns: 32px 1fr auto; gap: var(--ds-space-3); align-items: center; padding: var(--ds-space-3); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); }
+.pb-attachment-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: var(--ds-radius-sm); background: var(--ds-bg-subtle); color: var(--ds-text-muted); }
+```
+
+```html
+<div class="pb-attachments">
+    <c:list name="attachments" id="file">
+        <div class="pb-attachment">
+            <span class="pb-attachment-icon" aria-hidden="true">PDF</span>
+            <div>
+                <strong>${file.name}</strong>
+                <div class="pb-muted">${file.sizeLabel} - ${file.owner}</div>
+            </div>
+            <c:a action="downloadFile?id=${file.id}" class="pb-btn pb-btn-secondary">Download</c:a>
+        </div>
+    </c:list>
+</div>
+```
+
+## 46. Code, Kbd, And Preview Blocks
+
+Use for developer pals, generated document previews, and recipe catalogs.
+
+```css
+.pb-code-card { border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); overflow: hidden; }
+.pb-code-head { display: flex; align-items: center; justify-content: space-between; gap: var(--ds-space-3); padding: var(--ds-space-3) var(--ds-space-4); border-bottom: 1px solid var(--ds-border); background: var(--ds-bg-subtle); }
+.pb-code { margin: 0; padding: var(--ds-space-4); overflow: auto; color: var(--ds-text); font: 500 0.8125rem/1.6 var(--ds-font-mono); }
+```
+
+```html
+<div class="pb-code-card">
+    <div class="pb-code-head">
+        <strong>Markup</strong>
+        <button type="button" class="pb-btn pb-btn-secondary" onclick="palUI.copyCode('buttonCode')">Copy</button>
+    </div>
+    <pre id="buttonCode" class="pb-code">&lt;c:a action="save" class="pb-btn pb-btn-primary"&gt;Save&lt;/c:a&gt;</pre>
+</div>
+```
+
+## 47. Metrics Panel
+
+Use when a dashboard needs hierarchy beyond equal stat cards.
+
+```css
+.pb-metrics { display: grid; grid-template-columns: 1.4fr repeat(2, 1fr); gap: var(--ds-space-4); }
+.pb-metric-hero { padding: var(--ds-space-6); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); box-shadow: var(--ds-shadow-xs); }
+.pb-metric-value { margin: var(--ds-space-3) 0 0; font: 800 2.5rem/1 var(--ds-font-display); }
+.pb-trend { display: inline-flex; align-items: center; gap: 6px; color: var(--ds-success); font-weight: 800; }
+@media (max-width: 900px) { .pb-metrics { grid-template-columns: 1fr; } }
+```
+
+```html
+<div class="pb-metrics">
+    <div class="pb-metric-hero">
+        <p class="pb-stat-label">Revenue at risk</p>
+        <p class="pb-metric-value">${formatter.formatCurrency(riskTotal)}</p>
+        <span class="pb-trend">${riskTrendLabel}</span>
+    </div>
+    <div class="pb-stat"><p class="pb-stat-label">Open</p><p class="pb-stat-value">${openCount}</p></div>
+    <div class="pb-stat"><p class="pb-stat-label">Blocked</p><p class="pb-stat-value">${blockedCount}</p></div>
+</div>
+```
+
+## 48. Split Panels And Scroll Area
+
+Use for master-detail tools, document review, and dense admin layouts.
+
+```css
+.pb-split-panel { display: grid; grid-template-columns: minmax(260px, 0.42fr) minmax(0, 1fr); min-height: 520px; border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); overflow: hidden; }
+.pb-split-list { border-right: 1px solid var(--ds-border); overflow: auto; }
+.pb-split-detail { overflow: auto; padding: var(--ds-space-5); }
+.pb-scroll-fade { position: relative; max-height: 360px; overflow: auto; }
+@media (max-width: 860px) { .pb-split-panel { grid-template-columns: 1fr; } .pb-split-list { border-right: 0; border-bottom: 1px solid var(--ds-border); } }
+```
+
+```html
+<div class="pb-split-panel">
+    <div class="pb-split-list">
+        <c:list name="records" id="record">
+            <c:a action="viewRecord?id=${record.id}" ajax-target="splitDetail" class="pb-command-item">${record.title}</c:a>
+        </c:list>
+    </div>
+    <div id="splitDetail" class="pb-split-detail"></div>
+</div>
+```
+
+## 49. Review, Approval, And Onboarding Checklist
+
+Use for workflow completion. It should show what is done, what blocks submission, and the next
+action.
+
+```css
+.pb-checklist { display: grid; gap: var(--ds-space-3); }
+.pb-checkitem { display: grid; grid-template-columns: 24px 1fr auto; gap: var(--ds-space-3); align-items: start; padding: var(--ds-space-3); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); }
+.pb-checkmark { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: var(--ds-bg-subtle); color: var(--ds-text-muted); font-weight: 800; }
+.pb-checkitem.is-done .pb-checkmark { background: var(--ds-success-soft); color: var(--ds-success); }
+.pb-checkitem.is-blocked .pb-checkmark { background: var(--ds-danger-soft); color: var(--ds-danger); }
+```
+
+```html
+<div class="pb-checklist">
+    <div class="pb-checkitem is-done">
+        <span class="pb-checkmark"><svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5L20 7" /></svg></span>
+        <div><strong>Profile complete</strong><div class="pb-muted">All required fields are present.</div></div>
+        <span class="pb-badge pb-badge-success">Done</span>
+    </div>
+    <div class="pb-checkitem is-blocked">
+        <span class="pb-checkmark">!</span>
+        <div><strong>Approval missing</strong><div class="pb-muted">Finance approval is required before submit.</div></div>
+        <c:a action="requestApproval" ajax-target="body" class="pb-btn pb-btn-secondary">Request</c:a>
+    </div>
+</div>
+```
+
+## 50. Responsive Rules
 
 - At 1024px: sidebar may collapse to a narrower rail.
 - At 760px: shell stacks, toolbar wraps, primary action remains visible.
@@ -964,7 +1535,12 @@ workflow `runJS`. Do not put scripts in fragments.
 - Tables have numeric alignment and mobile `data-label` collapse.
 - Forms have validation messages with `role="alert"`.
 - There is exactly one primary action in the current view.
-- Icons are one family, inline SVG, decorative icons `aria-hidden="true"`.
+- Hierarchy, grouping, target size, progressive disclosure, and next-step feedback pass the
+  applied design-principles checklist.
+- Icons are one family, inline SVG, decorative icons `aria-hidden="true"`, and from Iconoir,
+  Tabler, or Phosphor unless the project documents another SVG family.
+- Typography is system-stack or Fontshare. Do not add a Google Fonts dependency by default.
+- Scripted motion uses GSAP from external `scripts/*.js`; no inline animation scripts in fragments.
 - No undocumented `c:` attributes.
 - No inline fragment scripts.
 - No `${...}` inside inline `<script>`.

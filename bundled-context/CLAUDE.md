@@ -52,6 +52,11 @@ prefer `palbuilder-workflow` + `palbuilder-data` for new workflow work.
 
 Skills live in `.claude/skills/<name>/SKILL.md`, depth in `references/*.md`.
 
+For non-trivial UI, use the design skills as part of the pipeline: `design-system-init` owns the
+user journey, hierarchy, tokens, components, typography, color, SVG icon policy, and motion
+strategy; `design-build` enforces them while building. Do not treat visual work as decoration after
+the spec is written.
+
 ---
 
 ## Workspace layout

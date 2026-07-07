@@ -16,6 +16,8 @@ never pal-loop's self-report.
   §6 layout, §11 constraints, §12 acceptance criteria.
 - `EXECUTION.md` — what was built and in what state.
 - `DESIGN_SYSTEM.md` / `COMPONENTS.md` — what "on-brand / good" means visually.
+- `design-system-init/references/design-principles.md` (from the injected skills folder) —
+  applied UX/hierarchy/grouping/target/simplicity rubric for visually significant screens.
 - Built artifacts: `pal_fetch` each web page (server-rendered HTML); workflow/fragment files
   on disk.
 
@@ -63,9 +65,11 @@ proof artifact for rendered output or data effects.
 Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per screen.
 - **`captured:true`:** first check `renderError` — non-null = hard FAIL (compiled but threw at
   render). Null → judge each screen against DESIGN_SYSTEM.md and a short UX rubric: visual
-  hierarchy, spacing rhythm, legibility, responsive behavior if testable, plus the AI
-  fingerprints the design skills flag (gradient-blob hero, pill-everything uniform radius,
-  three-card-row-as-only-idea, serif-on-cream-with-sage). Report each issue with screenshot + fix.
+  hierarchy, primary journey, Gestalt grouping, Fitts target sizing/proximity, progressive
+  disclosure, spacing rhythm, legibility, color meaning/contrast, consistency, responsive behavior
+  if testable, plus the AI fingerprints the design skills flag (gradient-blob hero, pill-everything
+  uniform radius, three-card-row-as-only-idea, serif-on-cream-with-sage). Report each issue with
+  screenshot + fix.
 - **`captured:false` / no screenshot tool / no vision:** do NOT guess from HTML — emit a
   `needs-human` eyeball gate naming each screen and what to confirm.
   (Full rule: `references/console-render-verification.md`.)

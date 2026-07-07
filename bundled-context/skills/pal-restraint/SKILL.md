@@ -50,6 +50,8 @@ Lazy, not negligent. Never removed in the name of less code:
 - **Security** — server actions via encrypted `c:` tags (`c:a`, `c:upload`, `c:download`),
   never `fetch`/ClientPal.
 - **Accessibility** — alt text on images, labels on inputs, one meaningful H1.
+- **UX clarity** — the primary action, feedback, error recovery, and next step stay visible.
+  Simplicity means progressive disclosure, not hiding required information or shrinking targets.
 - **The pal-loop gates** — `pal_validate`/`pal_test`/render verification are never "extra
   effort" to skip. Less code never means less verification.
 
@@ -84,6 +86,19 @@ made necessary. Traces to neither → it doesn't belong in the diff.
 | A chart | `npm install` or hand-drawn SVG | the charting lib the project already loads via `c:resource` |
 | Call the server from a fragment | a `fetch` wrapper | `c:a action="..."` |
 | A modal | build a modal shell | the platform shell provides the wrapper; the fragment holds inner content only |
+
+## Design restraint
+
+When touching UI, use the same ladder for visual decisions:
+
+1. Remove content only if it does not serve the user's current job.
+2. Stage complexity with tabs, drawers, details, menus, and empty/error states instead of dumping
+   everything on the default screen.
+3. Keep target size and proximity usable; do not save space by making common actions tiny.
+4. Preserve hierarchy: title/object/status/primary action/feedback/next step should remain obvious.
+5. Reuse the local design tokens and component inventory before inventing one-off CSS.
+
+The cleanest interface is the one that makes the next correct action easiest.
 
 ## What this skill does NOT do
 - **Not a correctness reference** — HOW to write PalBuilder lives in the golden rules and

@@ -9,6 +9,9 @@ foundations or `design-build` needs a tie-breaker.
 - Component libraries: https://www.designsystemscollective.com/the-ui-component-libraries-that-actually-save-hours-part-1-3-e9503b3d8642
 - Color, icons, typography: https://www.designsystemscollective.com/color-tools-and-icon-libraries-that-actually-work-part-2-3-f7b3dd71dd5b
 - Design systems and CSS tools: https://mohitphogat.medium.com/design-systems-and-css-tools-worth-bookmarking-part-3-3-6d12a6b9df74
+- Design fundamentals: Figma Design Basics and linked articles on hierarchy, UX, UI principles,
+  interaction design, Fitts' law, Gestalt, color theory, typography, consistency, simplicity,
+  design tokens, and skeuomorphism. Use `design-principles.md` for the actionable distilled rules.
 
 ## What To Borrow
 
@@ -16,7 +19,13 @@ foundations or `design-build` needs a tie-breaker.
 
 - shadcn/ui, Tailwind Plus, Catalyst, v0: prefer owned code over opaque runtime dependencies.
   Palbuilder cannot install React component packages into a pal, so copy the idea: small recipes,
-  semantic class names, variants, and states the project owns.
+  semantic class names, variants, states, and copyable source the project owns. shadcn's current
+  coverage is the minimum competitive bar: accordion, alert/dialog, avatar, badge, breadcrumb,
+  button group, calendar/date picker, carousel, chart, checkbox, collapsible, combobox, command,
+  context/dropdown menu, data table, drawer/sheet, empty, field/input groups, hover card, kbd,
+  menubar/navigation, pagination, popover, progress, radio, resizable, scroll area, select, sidebar,
+  skeleton, slider, spinner, switch, table, tabs, textarea, toast/sonner, toggle group, tooltip, and
+  typography.
 - Headless UI and Radix: separate behavior/anatomy from styling. For Palbuilder, that means
   documenting component states and keyboard/focus expectations even when the implementation is
   plain XHTML plus `c:` tags.
@@ -31,12 +40,36 @@ foundations or `design-build` needs a tie-breaker.
 - Magic UI and Aceternity: motion and visual personality can help public/marketing surfaces, but
   for Palbuilder they must be restrained, CSS/external-JS based, and never block core workflows.
 
+### Design fundamentals
+
+- UX precedes UI. Start every screen with the user state, job, entry point, first decision, primary
+  action, feedback, and next step.
+- Visual hierarchy is a priority order, not a type scale. Use content order, size, spacing, weight,
+  contrast, color, and motion to guide attention deliberately.
+- Gestalt principles are practical layout rules: proximity groups related controls, similarity
+  establishes roles, common regions frame complex groups, continuity helps scanning, and one focal
+  point can break the pattern for emphasis.
+- Fitts' law belongs in component specs: frequent and primary actions need adequate target size and
+  proximity to the user's likely path; destructive actions need separation.
+- Simplicity means staged complexity. Use progressive disclosure, drawers, accordions, details,
+  filters, and command palettes to keep the default view clear without deleting necessary power.
+- Consistency is an affordance. Same role means same placement, state, label pattern, and behavior;
+  break consistency only to solve a real user problem.
+
 ### Color and palette workflow
 
 - Ask for palette/reference images first. If none, use the default palette in `SKILL.md`.
+- The default workflow is:
+  1. Generate 20-30 palette directions in a Coolors-style generator.
+  2. Pick the strongest 2-3 based on product fit, contrast potential, and distinctiveness.
+  3. Refine the chosen palette in an Adobe Color-style harmony pass.
+  4. Check contrast before committing roles: WCAG AA 4.5:1 for normal text and 3:1 for large text
+     and non-text UI indicators.
+  5. Preview on an actual interface in Realtime Colors or an equivalent mockup, not just swatches.
+  6. Export semantic CSS variables and document the derivation.
 - Use palette tools as thinking aids:
-  - Coolors and Adobe Color for exploration, image extraction, and contrast checking.
-  - Realtime Colors for seeing text/background/primary/accent distribution on UI, not in swatches.
+  - Coolors and Adobe Color for exploration, image extraction, and harmony refinement.
+  - Realtime Colors for seeing text/background/primary/accent distribution on UI.
   - Paletton when color harmony or color-vision simulation matters.
   - Khroma when the user has taste references but no palette.
   - ColorSpace when the user has one brand hex and needs supporting tones.
@@ -49,13 +82,14 @@ foundations or `design-build` needs a tie-breaker.
 
 ### Icons and imagery
 
-- Prefer one stroke icon family. Lucide is the default for palsync because it is consistent,
-  lightweight, customizable SVG, and broad enough for product UI.
-- Heroicons is a good fallback for Tailwind-like UI. Tabler and Phosphor are useful when Lucide lacks
-  a specific domain concept. Noun Project is for highly specific concepts, but check license and
-  attribution before use.
-- Inline SVG in Palbuilder fragments. Do not depend on icon fonts or JS replacers; AJAX fragments do
-  not rerun page boot code automatically.
+- Prefer one SVG icon family per pal. The approved default set is Iconoir, Tabler, and Phosphor:
+  Iconoir and Tabler for crisp stroke-based product UI, Phosphor when a pal needs broader weights or
+  friendlier object metaphors.
+- Heroicons is useful as a Tailwind-aesthetic reference, but generated Palbuilder markup should still
+  inline the chosen SVG paths. Noun Project is for highly specific concepts only after checking
+  license and attribution.
+- Inline SVG in Palbuilder fragments. Do not depend on icon fonts, external sprite injection, or JS
+  replacers; AJAX fragments do not rerun page boot code automatically.
 - Reference photos should influence composition, palette temperature, density, and imagery rules,
   not become copied brand assets.
 
@@ -63,11 +97,13 @@ foundations or `design-build` needs a tie-breaker.
 
 - Prefer one strong UI family and one optional display family. Most console pals should use only the
   UI family.
-- Good UI defaults: Manrope, Source Sans 3, IBM Plex Sans, Plus Jakarta Sans, or system UI.
-- Good display accents when the product genuinely needs editorial tone: Source Serif 4, Newsreader,
-  Playfair Display. Use sparingly.
-- Fontsource is best when the stack can self-host. In Palbuilder, a Google Fonts `<link>` in the page
-  head is acceptable when the environment allows external assets; otherwise use system stacks.
+- Good UI defaults: system UI, Satoshi, General Sans, Switzer, Supreme, or other Fontshare sans
+  families selected for the brand.
+- Good display accents when the product genuinely needs editorial tone: Cabinet Grotesk, Gambetta,
+  Boska, Sentient, Newsreader, or Playfair-like Fontshare alternatives. Use sparingly.
+- Fonts must be system-stack or Fontshare. Fontsource-style self-hosting is preferred when build
+  tooling exists; in Palbuilder, use the Fontshare CSS link selected for the project when external
+  assets are allowed. Do not default to Google Fonts.
 - Body text uses `rem`; spacing/radius/borders can stay in `px`.
 
 ### CSS and motion
@@ -77,25 +113,29 @@ foundations or `design-build` needs a tie-breaker.
   rules, and small composable classes.
 - Do not require Tailwind, UnoCSS, React, Vue, Framer Motion, or build tooling inside a pal. Translate
   their ideas into plain CSS and Palbuilder fragments.
-- Motion defaults: 120-180ms for hover/press/focus, 180-240ms for panels/modals, 400-700ms only for
+- Motion defaults: 120-180ms for hover/press/focus, 180-280ms for panels/modals, 400-700ms only for
   progress/chart changes. Respect `prefers-reduced-motion`.
-- GSAP/Lottie are reserved for public marketing or narrative surfaces with explicit need. Console and
-  workflow pals should stay CSS-first.
+- GSAP is the standard JavaScript animation library for palsync when scripted motion is needed:
+  mounted section reveals, drawer/modal choreography, command palette open/close, chart/count-up
+  reveals, reorder/FLIP, and scroll storytelling. Keep simple hover/focus states in CSS. Console and
+  workflow pals should use restrained GSAP; public/narrative pals can be more expressive.
 
 ## Design System Coverage Target
 
 A Palbuilder design system should be able to cover:
 
 - Page shells: console app frame, public page frame, modal shell, detail drawer/panel.
-- Navigation: topbar, sidebar, tabs, breadcrumbs, mobile nav.
-- Actions: primary/secondary/ghost/destructive buttons, icon buttons, split/overflow action areas.
-- Forms: text, textarea, select, checkbox, toggle, radio-like choice, field groups, validation,
-  upload.
-- Data: tables, responsive record cards, filters/search, pagination, bulk action bar, status chips,
-  KPI/stat cards, progress bars/rings, simple charts.
+- Navigation: topbar, sidebar, tabs, breadcrumbs, mobile nav, command palette, menu/overflow.
+- Actions: primary/secondary/ghost/destructive buttons, icon buttons, button groups, split actions,
+  menus, contextual row actions.
+- Forms: text, textarea, input group, select, combobox, checkbox, toggle, radio, choice cards,
+  segmented control, slider, date picker, OTP/PIN, field groups, validation, upload.
+- Data: tables, responsive record cards, data-grid affordances, filters/search, pagination, bulk
+  action bar, status chips, KPI/stat cards, progress bars/rings, charts, metrics panels, kanban.
 - States: loading skeletons, empty, error, success toast/alert, disabled, permission-denied,
   read-only.
-- Workflow: stepper, review/approval block, activity feed, timeline, attachments.
+- Workflow: stepper, review/approval block, activity feed, timeline, attachments, comments/messages,
+  schedule/calendar list, settings panels, onboarding checklist.
 - Content: hero/marketing section only when the pal is public-facing; no landing-page theater for
   dense operational tools.
 

@@ -10,6 +10,8 @@ Create the project's source of truth for visual language and reusable UI. Output
 that points to the component recipes in `references/component-library.md`.
 
 Read before acting:
+- `references/design-principles.md` when defining UX flow, hierarchy, typography, color, motion,
+  grouping, or review criteria.
 - `references/research-brief.md` when choosing foundations or explaining design tradeoffs.
 - `references/component-library.md` when defining the component inventory or writing Palbuilder
   examples.
@@ -17,8 +19,13 @@ Read before acting:
   judged visually.
 
 The job is not to theme a generic dashboard. The job is to make a pal feel designed: clear intent,
-semantic tokens, complete states, accessible interaction, real responsive behavior, and a reusable
-component vocabulary that works in Palbuilder XHTML and `c:` tags.
+semantic tokens, complete states, accessible interaction, real responsive behavior, tasteful motion,
+excellent SVG icons, and a reusable component vocabulary that works in Palbuilder XHTML and `c:`
+tags. The quality target is shadcn/ui-level clarity with Polaris/Carbon-level operational coverage,
+translated into Palbuilder-owned CSS and fragments.
+
+Design quality starts before colors. Establish the user's journey, visual hierarchy, grouping,
+target sizing, progressive disclosure, and typography rules before choosing decorative treatments.
 
 ## Modes
 
@@ -45,12 +52,17 @@ Ask in one compact turn when possible. If interactive elicitation buttons exist,
    - Who uses it, and what state are they in? Rushed admin, careful reviewer, buyer, applicant,
      executive, field user?
    - What is the one job the interface must do better than anything else?
+   - What is the path through the primary screen? Entry point, first decision, primary action,
+     feedback, and next step.
 
 2. Palette and reference material:
    - Do you have a color palette, brand color, logo, or existing CSS that must be respected?
    - Do you have reference photos, screenshots, apps, or sites? Ask for 2-3. For each, ask what
      specifically to borrow: density, type, color mood, navigation, data display, motion, restraint,
      or a single moment.
+   - If they do not have a palette, ask whether to run the default workflow: generate 20-30 palette
+     directions externally (Coolors-style), narrow to 2-3, refine harmony (Adobe Color-style), check
+     AA contrast, preview in a real UI (Realtime Colors-style), then export CSS variables.
    - What should this definitely not feel like?
 
 3. Operating constraints:
@@ -69,41 +81,54 @@ palette and components from the existing pal.
 
 ## Default Palette
 
-If the user does not care, use this as the starting point. It is neutral enough for most pal
-projects, avoids the overused purple-gradient / cream-sage AI fingerprint, and gives operational
-screens a calm professional center.
+If the user does not care, use this as the starting point. It is neutral, crisp, and high-contrast
+like the best shadcn-style product UI, but avoids the generic blue/gray admin look by keeping color
+semantic and sparse. The primary action is ink by default; accent color appears only for highlights,
+charts, and product-specific moments.
 
 ```css
 :root {
-  --ds-bg: #f6f8f7;
-  --ds-bg-subtle: #eef3f1;
+  --ds-bg: #f7f8fb;
+  --ds-bg-subtle: #f0f2f5;
   --ds-surface: #ffffff;
-  --ds-surface-raised: #fbfcfc;
-  --ds-text: #151918;
-  --ds-text-muted: #56615e;
-  --ds-text-soft: #77817e;
-  --ds-border: #d9e2df;
-  --ds-border-strong: #b8c7c2;
+  --ds-surface-raised: #fcfcfd;
+  --ds-text: #101114;
+  --ds-text-muted: #5f6673;
+  --ds-text-soft: #848b98;
+  --ds-border: #e1e5eb;
+  --ds-border-strong: #c7ced8;
+  --ds-focus: #3b82f6;
+  --ds-focus-ring: #dbeafe;
 
-  --ds-primary: #0f766e;
-  --ds-primary-hover: #0b5f59;
-  --ds-primary-soft: #d9f0ec;
+  --ds-primary: #18181b;
+  --ds-primary-hover: #27272a;
+  --ds-primary-soft: #eceef2;
   --ds-primary-text: #ffffff;
-  --ds-accent: #b45309;
-  --ds-accent-soft: #fde8cc;
+  --ds-accent: #2563eb;
+  --ds-accent-soft: #dbeafe;
 
-  --ds-success: #2f7d4f;
-  --ds-warning: #b7791f;
+  --ds-success: #15803d;
+  --ds-success-soft: #dcfce7;
+  --ds-warning: #b45309;
+  --ds-warning-soft: #fef3c7;
   --ds-danger: #b42318;
-  --ds-info: #2563a9;
+  --ds-danger-soft: #fee2e2;
+  --ds-info: #1d4ed8;
+  --ds-info-soft: #dbeafe;
 
   --ds-radius-xs: 4px;
   --ds-radius-sm: 6px;
   --ds-radius-md: 8px;
+  --ds-radius-lg: 12px;
   --ds-radius-pill: 999px;
-  --ds-shadow-sm: 0 1px 2px rgba(21, 25, 24, 0.06);
-  --ds-shadow-md: 0 8px 22px rgba(21, 25, 24, 0.10);
+  --ds-shadow-xs: 0 1px 1px rgba(16, 17, 20, 0.04);
+  --ds-shadow-sm: 0 1px 2px rgba(16, 17, 20, 0.08);
+  --ds-shadow-md: 0 16px 40px rgba(16, 17, 20, 0.12);
+  --ds-shadow-pop: 0 24px 70px rgba(16, 17, 20, 0.18);
   --ds-ease: cubic-bezier(0.2, 0, 0, 1);
+  --ds-duration-fast: 120ms;
+  --ds-duration-med: 180ms;
+  --ds-duration-slow: 280ms;
 }
 ```
 
@@ -116,27 +141,33 @@ Dark variant, when the user asks for dark or the existing pal is dark-locked:
 ```css
 :root,
 [data-theme="dark"] {
-  --ds-bg: #141817;
-  --ds-bg-subtle: #1d2422;
-  --ds-surface: #202826;
-  --ds-surface-raised: #26302d;
-  --ds-text: #eef5f2;
-  --ds-text-muted: #b6c3bf;
-  --ds-text-soft: #879591;
-  --ds-border: #35413e;
-  --ds-border-strong: #4b5a56;
+  --ds-bg: #0b0d10;
+  --ds-bg-subtle: #11151a;
+  --ds-surface: #161a20;
+  --ds-surface-raised: #1d232b;
+  --ds-text: #f6f7f9;
+  --ds-text-muted: #b6bdc8;
+  --ds-text-soft: #8b94a3;
+  --ds-border: #2a3039;
+  --ds-border-strong: #3c4654;
+  --ds-focus: #60a5fa;
+  --ds-focus-ring: #172a45;
 
-  --ds-primary: #63d2c6;
-  --ds-primary-hover: #8be0d7;
-  --ds-primary-soft: #173c39;
-  --ds-primary-text: #0b1514;
-  --ds-accent: #f2a65a;
-  --ds-accent-soft: #442b13;
+  --ds-primary: #f6f7f9;
+  --ds-primary-hover: #ffffff;
+  --ds-primary-soft: #242a33;
+  --ds-primary-text: #0b0d10;
+  --ds-accent: #60a5fa;
+  --ds-accent-soft: #172a45;
 
-  --ds-success: #79d69a;
-  --ds-warning: #f2c66d;
-  --ds-danger: #ff8a7a;
-  --ds-info: #8ab9ff;
+  --ds-success: #4ade80;
+  --ds-success-soft: #12351f;
+  --ds-warning: #fbbf24;
+  --ds-warning-soft: #422b07;
+  --ds-danger: #fb7185;
+  --ds-danger-soft: #43151c;
+  --ds-info: #93c5fd;
+  --ds-info-soft: #172a45;
 }
 ```
 
@@ -173,12 +204,22 @@ Define:
   border, strong border, primary, primary hover, primary soft, primary text, accent, success,
   warning, danger, info.
 - Type: UI family, optional display family, scale, weight range, numeric rules. Use external fonts
-  only when the pal can load them reliably; otherwise use system stacks.
+  only when the pal can load them reliably; otherwise use system stacks. Fonts must be system fonts
+  or Fontshare fonts. If self-hosting is available, install through Fontsource-style packages; if
+  not, use the Fontshare CSS link selected for the project. Do not default to Google Fonts.
+- Iconography: always inline SVG, never icon fonts or JS icon replacers. Default to Iconoir, Tabler,
+  or Phosphor; use one family per pal unless a single domain icon is missing. Heroicons can inform
+  Tailwind-like proportions, but the generated Palbuilder output must still be inline SVG.
 - Spacing: 4px base with named steps: 4, 8, 12, 16, 20, 24, 32, 40, 48, 64.
 - Radius: small set only. Cards default to 8px or less unless references require more.
 - Border/shadow/elevation: decide whether separation comes from tone, border, shadow, or layout.
-- Motion: duration/ease tokens and reduced-motion behavior.
+- Motion: GSAP is the JavaScript animation library for Palbuilder surfaces that need scripted
+  animation. Use CSS transitions for simple hover/focus states; use GSAP in `scripts/*.js` for
+  mounted sections, overlays, drawers, command palettes, chart reveals, reorder/FLIP, and scroll
+  storytelling. Define duration/ease tokens, reduced-motion behavior, and a no-motion fallback.
 - Density: page rhythm, table/list row height, card padding, mobile collapse behavior.
+- UX flow: primary path, hierarchy order, progressive disclosure, Fitts target rules, Gestalt
+  grouping, and how complexity is staged.
 
 ### 3. Build the component inventory
 
@@ -187,13 +228,16 @@ Use `references/component-library.md` as the canonical Palbuilder-ready library.
 component must list variants, states, tokens, and the Palbuilder implementation pattern.
 
 Required baseline for most pals:
-- Primitives: Button, IconButton, Field, Select, Checkbox/Toggle, Badge, Alert, Card, Divider,
-  Skeleton, Progress, Avatar/Initial, Tooltip/help text.
+- Primitives: Button, IconButton, ButtonGroup, Field, Textarea, InputGroup, Select, Checkbox,
+  Toggle, Radio/ChoiceCard, SegmentedControl, Slider, Badge, Alert, Card, Divider, Skeleton,
+  Progress, Avatar/Initial, Tooltip/help text, Kbd, Spinner.
 - Data: Table, responsive record list, stat/KPI card, filter bar, pagination, empty state, error
-  state.
-- Shells: page shell, topbar/sidebar/nav, toolbar, modal body, drawer/panel if needed.
-- Domain composites: workflow stepper, activity feed, file upload, data-detail row, approval
-  actions, CRUD form.
+  state, data grid affordances, row actions, bulk action bar, charts, metrics panel.
+- Shells: page shell, topbar/sidebar/nav, toolbar, modal body, drawer/sheet, popover, command
+  palette, responsive mobile nav.
+- Domain composites: workflow stepper, activity feed, file upload, attachment list, data-detail row,
+  approval actions, CRUD form, review summary, comment thread, kanban/status board, calendar/list
+  schedule, settings page, onboarding checklist.
 
 The inventory maps to Palbuilder fragments/classes, not React components. A primitive may be a CSS
 class plus a markup recipe. A composite may be a fragment under `fragments/common/` or a feature
@@ -209,6 +253,8 @@ Before writing final tokens, call out collisions:
 - Too many words, helper paragraphs, and redundant headings.
 - Saturated rainbow charts or status fills.
 - Generic Inter/Roboto + gray cards + blue primary with no reference rationale.
+- Flat teal-and-gray admin output with oversized headings, plain cards, no icons, no command/menu
+  affordances, and no motion layer.
 - Mobile as an afterthought.
 
 If the user explicitly wants one of these, keep the request but make it intentional and constrained.
@@ -246,6 +292,10 @@ Radix/Headless-style accessible states, Polaris-style dense tables, Carbon-style
 ## Density & Layout
 [Page rhythm, grid/shell posture, table/list density, mobile behavior.]
 
+## UX Flow & Hierarchy
+[Primary user path, first decision, primary action placement, feedback/next step, grouping,
+progressive disclosure, target sizing, and intentional hierarchy mechanisms.]
+
 ## Accessibility
 [Contrast target, focus-visible style, keyboard expectations, reduced motion, error announcement.]
 
@@ -254,7 +304,8 @@ Radix/Headless-style accessible states, Polaris-style dense tables, Carbon-style
 
 ## Stack Mapping
 [Palbuilder XHTML/CSS mapping: style files, page head links, fragment naming, c: tag patterns,
-which recipes from references/component-library.md to use.]
+which recipes from references/component-library.md to use, GSAP loading strategy, SVG icon family,
+and Fontshare/system font choice.]
 ```
 
 ### 6. Write COMPONENTS.md
@@ -311,6 +362,11 @@ reality. A correction means re-check references or source files before editing t
 - Use `c:field` for bound inputs, but do not put ARIA attributes on `c:field`; pair it with a
   wrapping `<label>` and sibling `role="alert"` message.
 - Inline SVG icons are allowed; self-close SVG children and use one icon family.
+- Icon fonts and JS icon replacement libraries are not allowed. Use inline SVG from Iconoir, Tabler,
+  or Phosphor unless the user explicitly chooses another SVG family.
+- Use system fonts or Fontshare fonts. Do not introduce a Google Fonts dependency by default.
+- Use GSAP for scripted UI animation in `scripts/*.js` when motion is needed. Load GSAP once from a
+  local vendor file or approved CDN in the page shell; never put animation scripts in fragments.
 - Never place `${...}` inside inline `<script>`. Put browser JS in `scripts/*.js` loaded from the
   page shell.
 - Use JPG/PNG for images; avoid WebP in Palbuilder.
@@ -319,11 +375,17 @@ reality. A correction means re-check references or source files before editing t
 
 - [ ] User was asked for palette/brand color and 2-3 reference photos/screenshots; default palette
       used only when they did not care or could not provide them.
+- [ ] Palette workflow used or explicitly skipped: generate options, narrow, refine harmony, check
+      WCAG AA, preview on real UI, export semantic CSS variables.
+- [ ] Typography is system-stack or Fontshare; icons are inline SVG from one approved family; GSAP
+      strategy is documented for scripted animation.
 - [ ] `design/refs/` contains durable reference assets and notes.
 - [ ] `DESIGN_SYSTEM.md` exists with semantic tokens, density/layout, accessibility, Do / Don't,
       and Palbuilder stack mapping.
 - [ ] `COMPONENTS.md` exists with primitives, composites, layout shells, states, and recipe links.
 - [ ] Direction was checked against anti-slop fingerprints.
+- [ ] Direction was checked against `references/design-principles.md`: user journey, hierarchy,
+      grouping, Fitts target sizing, typography, color meaning, consistency, and simplicity.
 - [ ] Component choices point to Palbuilder-valid recipes in `references/component-library.md`.
 - [ ] Extract mode only: every token cites a real source; inconsistencies are documented, not
       silently normalized.

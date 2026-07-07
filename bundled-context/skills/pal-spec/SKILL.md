@@ -20,8 +20,8 @@ MINE → INTERVIEW → LOCK ASSUMPTIONS → SPEC.md draft → REALITY CHECK → 
   `TBD`, never "placeholder", never "decide later" inline.
 - **DESIGN IS A HANDOFF, NOT A SECTION.** No palettes, fonts, or aesthetic direction in the
   spec — those live in `DESIGN_SYSTEM.md` / `COMPONENTS.md` (from **design-system-init**).
-  The spec carries only per-page composition (§6). No DESIGN_SYSTEM.md → stop, run
-  design-system-init first.
+  The spec carries only per-page composition and UX flow (§6): primary path, hierarchy, and
+  progressive disclosure. No DESIGN_SYSTEM.md → stop, run design-system-init first.
 - **Never invent facts** — no made-up stats, prices, or testimonials. Record the source of
   every claim; a claim with no source is an open question.
 
@@ -64,30 +64,34 @@ came from.
 **Step 2 — Ask in batches of 3–4** (skip what mining answered):
 
 - **Product & audience** — Q1 What is this (one sentence)? Q2 Who for? Q3 The ONE primary
-  action? Q4 Web (public), console (logged-in), or both? If both, get the page split now.
-- **Integration surface** *(most pals: none — skip)* — Q5 Does anything OTHER than a browser
+  action? Q4 What state is the user in (rushed, careful, comparing, approving, anxious)?
+  Q5 Web (public), console (logged-in), or both? If both, get the page split now.
+- **Primary journey** — Q6 For the main screen, what is the entry point → first decision →
+  primary action → feedback → next step? What friction must the UI remove?
+- **Integration surface** *(most pals: none — skip)* — Q7 Does anything OTHER than a browser
   call this pal? **webservice** (`workflowType: 12`) = external REST/SOAP caller; **tunnel**
   (`workflowType: 15`) = pal-to-pal / cross-cloud. If either: which caller, which action(s),
   request/response shape. Non-page-serving — no sitemap row; capture as §5 behavior, list the
   workflow + type in §9/§10.
-- **Scope & structure** — Q6 Pages/screens? (propose a sitemap; tag each row web or console)
-  Q7 Explicitly OUT of scope?
-- **Copy** — Q8 Per page: draft H1/subhead/CTA/section copy YOURSELF from mined material,
-  present it, get it corrected — page by page. Q9 Claims/stats/pricing that must be exact?
+- **Scope & structure** — Q8 Pages/screens? (propose a sitemap; tag each row web or console)
+  Q9 Explicitly OUT of scope?
+- **Copy** — Q10 Per page: draft H1/subhead/CTA/section copy YOURSELF from mined material,
+  present it, get it corrected — page by page. Q11 Claims/stats/pricing that must be exact?
   (ask; never invent; record source)
-- **Behavior** *(console/app pals, any page with logic, any Q5 action)* — Q10 Per action:
-  trigger, INPUT, VALIDATION, STATE change (which dataset/field), OUTPUT. Q11 **[FULL]**
+- **Behavior** *(console/app pals, any page with logic, any Q7 action)* — Q12 Per action:
+  trigger, INPUT, VALIDATION, STATE change (which dataset/field), OUTPUT. Q13 **[FULL]**
   Edge & error cases: empty, invalid, not-found, duplicate, auth-fail. *(LITE: note as deferred.)*
-- **Data** — Q12 Entities, fields, exact PalBuilder types? (propose schemas; confirm — types
+- **Data** — Q14 Entities, fields, exact PalBuilder types? (propose schemas; confirm — types
   come from `references/palbuilder-types.md`)
-- **Design handoff** — Q13 DESIGN_SYSTEM.md + COMPONENTS.md present? No → run
+- **Design handoff** — Q15 DESIGN_SYSTEM.md + COMPONENTS.md present? No → run
   design-system-init, then return here. Yes → per page, propose a layout skeleton: section
-  order + which named component fills each slot. No colors/fonts.
+  order + which named component fills each slot + hierarchy/primary action/progressive disclosure
+  notes. No colors/fonts.
 - **SEO** *(usually web; a publicly indexed console landing/login page can qualify; never a
-  webservice/tunnel action)* — Q14 Domain? Per §3 page: publicly indexable? Target phrase for
+  webservice/tunnel action)* — Q16 Domain? Per §3 page: publicly indexable? Target phrase for
   each page that is (propose from approved copy).
-- **Constraints & ops** — Q15 Push policy: free or checkpoint? Q16 Review cadence: each-task,
-  every-N (pick N), or end (default)? Q17 What must the agent NEVER touch? Non-negotiable
+- **Constraints & ops** — Q17 Push policy: free or checkpoint? Q18 Review cadence: each-task,
+  every-N (pick N), or end (default)? Q19 What must the agent NEVER touch? Non-negotiable
   decisions to protect, with rationale?
 
 **Step 3 — LOCK ASSUMPTIONS (gate).** Before writing, list every assumption and open question
@@ -110,6 +114,9 @@ OPEN QUESTIONS (I will not invent answers):
 2. Read `references/reality-check.md` and do the judgment half the linter cannot:
    capability→primitive mapping, §6 components exist in COMPONENTS.md, §8b consumed fields
    verified against the live dataset, scope honesty.
+   For any visually significant page, check §6 against the design-principles reference:
+   user journey, hierarchy, grouping, target sizing, and progressive disclosure are explicit enough
+   for a build agent to implement.
 3. Write results into §13. Any hard flag → stay `status: draft`, `reality_check: blocked`.
    All clear → `status: approved`, `reality_check: pass`.
 
