@@ -26,6 +26,7 @@ tmp/
 temp/
 *.tmp
 *-workspace/
+.agent-work-history/
 .DS_Store
 
 # internal: editor config, verification scripts, internal specs — not part of the public tool

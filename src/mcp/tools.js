@@ -18,8 +18,13 @@ const { lintSpec, formatSpecLint } = require("../core/specLint");
 const { syncDatasets } = require("../core/datasets");
 const { validateWorkspace, formatValidation: formatLint } = require("../core/validate");
 const { openUrl } = require("../platform/openUrl");
+const {
+    createWorkHistoryRun,
+    writeArtifactFile,
+    writeRunMetadata,
+    writeRunNotes
+} = require("./workHistory");
 const fs = require("fs");
-const os = require("os");
 const pathMod = require("path");
 
 // How much rendered HTML to inline in the tool result before pointing the agent at the full
@@ -94,13 +99,34 @@ function formatExpect(headline, meta, chk) {
 
 // Build a capped-inline + full-file-on-disk HTML result, optionally narrowed to one region by a
 // simple selector. Shared by pal_fetch and pal_preview's selector/maxChars modes.
-function htmlRegionResult(res, { headline, filePrefix, guid, selector, maxChars, extraLine = "", dirtyNote = "" }) {
+function htmlRegionResult(res, { headline, filePrefix, guid, selector, maxChars, extraLine = "", dirtyNote = "", workspaceDir, tool = "pal_fetch", feature }) {
     let body = res.html, missSel = false;
     if (selector) { const region = extractSelector(res.html, selector); if (region == null) { missSel = true; body = ""; } else body = region; }
     let filePath = null;
+    let run = null;
     try {
-        filePath = pathMod.join(os.tmpdir(), filePrefix + guid.replace(/[^A-Za-z0-9_-]/g, "") + ".html");
-        fs.writeFileSync(filePath, body, "utf8");
+        if (!missSel && workspaceDir) {
+            run = createWorkHistoryRun(workspaceDir, { tool, feature: feature || headline });
+            filePath = writeArtifactFile(run, selector ? "selected-markup.html" : "body.html", body, "utf8");
+            writeRunMetadata(run, {
+                palGuid: guid,
+                status: res.status,
+                contentType: res.contentType,
+                title: res.title,
+                bytes: res.bytes,
+                selector: selector || null,
+                maxChars: maxChars || null,
+                artifact: filePath ? pathMod.basename(filePath) : null
+            });
+            writeRunNotes(run, [
+                "# " + headline,
+                "",
+                "- Artifact: `" + (filePath ? pathMod.basename(filePath) : "not written") + "`",
+                "- Status: " + res.status,
+                "- Content-Type: " + res.contentType,
+                selector ? "- Selector: `" + selector + "`" : null
+            ]);
+        }
     } catch (e) { /* best-effort */ }
     const cap = maxChars && maxChars > 0 ? maxChars : PREVIEW_INLINE_CAP;
     const truncated = body.length > cap;
@@ -114,6 +140,7 @@ function htmlRegionResult(res, { headline, filePrefix, guid, selector, maxChars,
         htmlFile: missSel ? null : filePath,
         message: headline + " — status=" + res.status + " content-type=" + res.contentType +
             " title=" + JSON.stringify(res.title) + " size=" + res.bytes + " bytes" + extraLine + selNote + dirtyNote +
+            (run ? "\n  Work-history run: " + run.dir : "") +
             (missSel ? "" : (filePath ? "\n  Full " + (selector ? "region" : "body") + " saved to: " + filePath : "") +
                 "\n\n--- " + (selector ? "selected markup" : "served body") +
                 (truncated ? " (first " + cap + " of " + body.length + " bytes — read the file for the rest)" : "") + " ---\n" + shown)
@@ -411,13 +438,44 @@ const TOOLS = [
                 }
                 // Narrowed markup: one region and/or a char cap when the agent genuinely needs HTML.
                 if (selector || maxChars) {
-                    return withServerDebug(ctx, htmlRegionResult(res, { headline: "WEB preview rendered", filePrefix: "palsync-preview-", guid: ctx.record.palGuid, selector, maxChars, dirtyNote }));
+                    return withServerDebug(ctx, htmlRegionResult(res, {
+                        headline: "WEB preview rendered",
+                        filePrefix: "palsync-preview-",
+                        guid: ctx.record.palGuid,
+                        selector,
+                        maxChars,
+                        dirtyNote,
+                        workspaceDir: ctx.workspaceDir,
+                        tool: "pal_preview",
+                        feature: "preview-" + (workflow || res.kind || "web")
+                    }));
                 }
                 // Save the full HTML to a file the agent can Read, and inline a capped slice.
                 let filePath = null;
+                let run = null;
                 try {
-                    filePath = pathMod.join(os.tmpdir(), "palsync-preview-" + ctx.record.palGuid.replace(/[^A-Za-z0-9_-]/g, "") + ".html");
-                    fs.writeFileSync(filePath, res.html, "utf8");
+                    run = createWorkHistoryRun(ctx.workspaceDir, { tool: "pal_preview", feature: "preview-" + (workflow || res.kind || "web") });
+                    filePath = writeArtifactFile(run, "rendered.html", res.html, "utf8");
+                    writeRunMetadata(run, {
+                        palGuid: ctx.record.palGuid,
+                        palName: ctx.record.palName,
+                        url: res.url,
+                        status: res.status,
+                        contentType: res.contentType,
+                        title: res.title,
+                        bytes: res.bytes,
+                        dirty: !!res.dirty,
+                        dirtyFiles: res.dirtyFiles || [],
+                        artifact: filePath ? pathMod.basename(filePath) : null
+                    });
+                    writeRunNotes(run, [
+                        "# pal_preview",
+                        "",
+                        "- URL: " + res.url,
+                        "- Status: " + res.status,
+                        "- Size: " + res.bytes + " bytes",
+                        "- Artifact: `" + (filePath ? pathMod.basename(filePath) : "not written") + "`"
+                    ]);
                 } catch (e) { /* best-effort */ }
                 const truncated = res.html.length > PREVIEW_INLINE_CAP;
                 const shown = truncated ? res.html.slice(0, PREVIEW_INLINE_CAP) : res.html;
@@ -426,6 +484,7 @@ const TOOLS = [
                     htmlFile: filePath,
                     message: "WEB preview rendered — this is your pal's actual server-rendered HTML output.\n" +
                         "  url=" + res.url + "  content-type=" + res.contentType + "  title=" + JSON.stringify(res.title) + "  size=" + res.bytes + " bytes" + dirtyNote +
+                        (run ? "\n  Work-history run: " + run.dir : "") +
                         (filePath ? "\n  Full HTML saved to: " + filePath + " (Read it to inspect the whole page)." : "") +
                         "\n\n--- rendered HTML" + (truncated ? " (first " + PREVIEW_INLINE_CAP + " of " + res.bytes + " bytes — read the file for the rest)" : "") + " ---\n" + shown
                 }));
@@ -469,12 +528,42 @@ const TOOLS = [
                     message: formatExpect("Fetched " + path, { status: res.status, bytes: res.bytes }, chk) }));
             }
             if (selector || maxChars) {
-                return withServerDebug(ctx, htmlRegionResult(res, { headline: "Fetched " + path, filePrefix: "palsync-fetch-", guid: ctx.record.palGuid, selector, maxChars }));
+                return withServerDebug(ctx, htmlRegionResult(res, {
+                    headline: "Fetched " + path,
+                    filePrefix: "palsync-fetch-",
+                    guid: ctx.record.palGuid,
+                    selector,
+                    maxChars,
+                    workspaceDir: ctx.workspaceDir,
+                    tool: "pal_fetch",
+                    feature: "fetch-" + path
+                }));
             }
             let filePath = null;
+            let run = null;
             try {
-                filePath = pathMod.join(os.tmpdir(), "palsync-fetch-" + ctx.record.palGuid.replace(/[^A-Za-z0-9_-]/g, "") + ".html");
-                fs.writeFileSync(filePath, res.html, "utf8");
+                run = createWorkHistoryRun(ctx.workspaceDir, { tool: "pal_fetch", feature: "fetch-" + path });
+                filePath = writeArtifactFile(run, "body.html", res.html, "utf8");
+                writeRunMetadata(run, {
+                    palGuid: ctx.record.palGuid,
+                    palName: ctx.record.palName,
+                    path,
+                    url: res.url,
+                    status: res.status,
+                    contentType: res.contentType,
+                    title: res.title,
+                    bytes: res.bytes,
+                    artifact: filePath ? pathMod.basename(filePath) : null
+                });
+                writeRunNotes(run, [
+                    "# pal_fetch",
+                    "",
+                    "- Path: `" + path + "`",
+                    "- URL: " + res.url,
+                    "- Status: " + res.status,
+                    "- Size: " + res.bytes + " bytes",
+                    "- Artifact: `" + (filePath ? pathMod.basename(filePath) : "not written") + "`"
+                ]);
             } catch (e) { /* best-effort */ }
             const truncated = res.html.length > PREVIEW_INLINE_CAP;
             const shown = truncated ? res.html.slice(0, PREVIEW_INLINE_CAP) : res.html;
@@ -483,6 +572,7 @@ const TOOLS = [
                 htmlFile: filePath,
                 message: "Fetched " + path + " — status=" + res.status + " content-type=" + res.contentType +
                     " title=" + JSON.stringify(res.title) + " size=" + res.bytes + " bytes" +
+                    (run ? "\n  Work-history run: " + run.dir : "") +
                     (filePath ? "\n  Full body saved to: " + filePath : "") +
                     "\n\n--- served body" + (truncated ? " (first " + PREVIEW_INLINE_CAP + " bytes — read the file for the rest)" : "") + " ---\n" + shown
             }));
@@ -493,10 +583,11 @@ const TOOLS = [
         description: "Render a pal's screen to a PNG to judge its UI/UX visually (pal-review's visual arm) AND detect runtime render errors. Acts on the LAST PUSHED version — pal_push first. Scans the rendered page for a CloudPiston runtime-error block (a workflow that compiled but THREW — bad SQL, null deref, missing column) and reports it as a FAIL: pal_test passing only proves the workflow compiles, not that it renders. WEB renders directly; CONSOLE/transaction render via authenticated replay. If auth fails, or the runtime lacks Playwright/Chromium, it returns a clean unavailable signal (review falls back to the human eyeball gate) — never a blank or fake image.",
         inputShape: {
             page: z.string().optional().describe("Page path under the site root, e.g. \"about.html\" (WEB only). Default: home page."),
+            feature: z.string().optional().describe("Human label for the feature or flow being tested. Used to name the .agent-work-history run folder."),
             viewport: z.enum(["desktop", "mobile"]).optional().describe("desktop (1280x800, default) or mobile (~390x844)."),
             fullPage: z.boolean().optional().describe("Capture the whole scroll height, not just the viewport.")
         },
-        async run(ctx, { page, viewport, fullPage } = {}) {
+        async run(ctx, { page, feature, viewport, fullPage } = {}) {
             const res = await runScreenshot(ctx.session, ctx.record.palGuid, { page, viewport, fullPage });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             if (!res.captured) {
@@ -512,9 +603,35 @@ const TOOLS = [
             // Save the PNG to a file the harness can Read, and return MCP image content so a
             // vision-capable model sees the render inline.
             let filePath = null;
+            let run = null;
+            const featureLabel = feature || (page ? "page-" + page : (res.kind || "pal") + "-" + res.viewportName);
             try {
-                filePath = pathMod.join(os.tmpdir(), "palsync-screenshot-" + ctx.record.palGuid.replace(/[^A-Za-z0-9_-]/g, "") + "-" + res.viewportName + ".png");
-                fs.writeFileSync(filePath, Buffer.from(res.pngBase64, "base64"));
+                run = createWorkHistoryRun(ctx.workspaceDir, { tool: "pal_screenshot", feature: featureLabel });
+                filePath = writeArtifactFile(run, "screenshot-" + res.viewportName + ".png", Buffer.from(res.pngBase64, "base64"));
+                writeRunMetadata(run, {
+                    palGuid: ctx.record.palGuid,
+                    palName: ctx.record.palName,
+                    page: page || null,
+                    url: res.url,
+                    kind: res.kind,
+                    viewportName: res.viewportName,
+                    viewport: res.viewport,
+                    fullPage: !!fullPage,
+                    renderError: res.renderError || null,
+                    artifact: filePath ? pathMod.basename(filePath) : null,
+                    smallDims: res.smallDims || null
+                });
+                writeRunNotes(run, [
+                    "# pal_screenshot",
+                    "",
+                    "- Feature: " + featureLabel,
+                    "- URL: " + res.url,
+                    "- Kind: " + (res.kind || "web"),
+                    "- Viewport: " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height,
+                    "- Full page: " + (!!fullPage),
+                    "- Artifact: `" + (filePath ? pathMod.basename(filePath) : "not written") + "`",
+                    res.renderError ? "- Runtime render error: " + res.renderError.message : "- Runtime render error: none"
+                ]);
             } catch (e) { /* best-effort */ }
             const errBlock = res.renderError
                 ? "\n\n⚠ RUNTIME RENDER ERROR — the page did NOT render its UI; it threw at runtime:\n"
@@ -527,6 +644,7 @@ const TOOLS = [
                 : "";
             const text = (res.kind ? res.kind.toUpperCase() : "WEB") + " screenshot captured — " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height +
                 (fullPage ? " (full page)" : "") + "\n  url=" + res.url +
+                (run ? "\n  Work-history run: " + run.dir : "") +
                 (filePath ? "\n  PNG saved to: " + filePath : "") + errBlock;
             const safe = Object.assign({}, res); delete safe.pngBase64; delete safe.jpegSmallBase64; // don't double-include the base64 blobs
             // Attach the c.debug trail (prime evidence beside a renderError) BEFORE assembling the

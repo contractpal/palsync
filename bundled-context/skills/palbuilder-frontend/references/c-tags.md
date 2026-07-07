@@ -61,6 +61,11 @@ Renders as an `<a>` element that fires a server action or navigates.
 - **`onclick`** (CLAUDE.md rule 5) — use `<button onclick="fn()">` or
   `<a href="#" onclick="fn(); return false;">` for JS-only behavior
 
+**Navigation caveat:** `c:a` navigation does not reliably update `window.location`. Browser
+JS that needs current query/filter state after a `c:a` click must receive that state from
+server-rendered values instead of reading `window.location.search`. See
+`platform-facts.md`.
+
 **`test` is a universal attribute** — it conditionally renders any element, not just `c:`
 tags: `<div test="${status eq 'draft'}">...</div>` works.
 

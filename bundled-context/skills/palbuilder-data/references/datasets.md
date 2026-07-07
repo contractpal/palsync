@@ -8,59 +8,8 @@ record-by-id access, updates, and deletes.
 
 Companion references:
 - `dataviews.md` — DataView (read-model, joins) — uses the same filter API shape
+- `analytics.md` — `createAnalyticFilter()` for aggregates, group-by, having, date extraction
 - `payloads.md` — DataList shaping after a read
-
----
-
-## Registering a dataset — the schema lives in `pal.json`
-
-Before you can `getDataSet` a name, the dataset must be registered in `pal.json`'s `datasets`
-array. The schema is the **inline `Dataset` object** on that entry — its `fields.DatasetField[]`
-array IS the column definition. This is the ONLY place the schema lives; a `datasets/<name>.json`
-file on disk is a passthrough copy, not the source of truth.
-
-```json
-{ "string": "equipment", "Dataset": { "name": "equipment", "freeform": true, "fields": { "DatasetField": [
-  { "fieldName": "equipmentId", "fieldType": "Primary key" },
-  { "fieldName": "name",        "fieldType": "String", "fieldSize": 100, "notNull": true, "notEmpty": true },
-  { "fieldName": "status",      "fieldType": "String", "fieldSize": 20, "indexed": true },
-  { "fieldName": "createdAt",   "fieldType": "Date" }
-] }, "indexes": "" } }
-```
-
-- **`"freeform": true` is required.** Without it the provisioned table has no per-field columns, so
-  `SELECT <fieldName>` throws `Unknown column` at runtime even though the definition saved and the
-  workflow compiled. The server defaults it to `false`, so an omitted `freeform` is silently broken.
-  (palsync's dataset-sync step defaults it to true for you, but set it explicitly.) The `"Primary key"`
-  field is the platform row id (internally `CP_ID`); with `freeform:true` you still read/query it by
-  its own `fieldName` (e.g. `equipmentId`).
-- `string` and `Dataset.name` are both the dataset name (camelCase, plural).
-
-### Per-field attributes
-
-Every entry in `DatasetField[]` needs `fieldName` + `fieldType`; the rest are optional:
-
-| attribute | meaning |
-|---|---|
-| `fieldSize` | max length — **String/Char only** (character length); precision/scale for `Decimal`. Other types have a fixed width — omit it. |
-| `notNull` | the value must not be null |
-| `notEmpty` | a string value must not be empty — the closest thing to a minimum. **There is no min-length attribute**; enforce a longer minimum in the workflow. |
-| `indexed` | index the column — set `true` on any column you filter or sort by |
-| `defaultValue` | server default applied when an inserted row omits the column (e.g. `"available"` for a status) |
-| `description` | free-text note; cosmetic |
-
-Numeric range is chosen by the TYPE, not an attribute — pick `Tiny/Small/Medium integer`, `Number`,
-`Big Number` (or the unsigned variants) for the range you need. There is no max-value attribute.
-- Every dataset gets ONE `"Primary key"` field named `<name>Id`. Flag an indexed column `"indexed": true`.
-- `fieldType` uses EXACT strings — the integer type is `"Number"`, NOT `"Integer"`/`"int"`.
-  Valid: `"Primary key"`, `"String"` (+`fieldSize`), `"Char"`, `"Text"`, `"Boolean"`, `"Number"`,
-  `"Big Number"`, `"Decimal"`, `"Date"`, `"DateOnly"`, `"File"`, `"Encrypted"`.
-
-**Registering the schema does not create the table** — the definition and the storage are two
-separate steps. In a palsync workspace, after adding the entry you MUST run the dataset-sync
-step to provision the actual table (see the "Datasets" section of `CLAUDE.palsync.md`); until you
-do, `pal.getDataSet("<name>")` reads an empty/absent table and writes silently fail. Full
-`pal.json` registration rules: `palbuilder-core/references/pal-json.md`.
 
 ---
 
@@ -69,6 +18,141 @@ do, `pal.getDataSet("<name>")` reads an empty/absent table and writes silently f
 ```js
 var ds = pal.getDataSet("<name>");     // by registered dataset name (camelCase, plural)
 ```
+
+The name matches the dataset entry in `pal.json` (see
+`palbuilder-core/references/pal-json.md` for dataset registration).
+
+### Registering a dataset — `freeform:true` is required
+
+Before a workflow can read or write a dataset, the dataset must be registered in
+`pal.json`'s `datasets` array. The schema is the inline `Dataset` object on that entry; the
+`fields.DatasetField[]` array is the column definition. A `datasets/<name>.json` file on
+disk is only a passthrough copy, not the source of truth.
+
+```json
+{
+  "string": "equipment",
+  "Dataset": {
+    "name": "equipment",
+    "freeform": true,
+    "fields": { "DatasetField": [
+      { "fieldName": "equipmentId", "fieldType": "Primary key" },
+      { "fieldName": "name", "fieldType": "String", "fieldSize": 100, "notNull": true },
+      { "fieldName": "status", "fieldType": "String", "fieldSize": 20, "indexed": true },
+      { "fieldName": "createdAt", "fieldType": "Date" }
+    ] }
+  }
+}
+```
+
+**`"freeform": true` is required.** Without it, the provisioned table can save and compile
+but omit the per-field columns, so a later `SELECT equipmentId` throws `Unknown column` at
+render time. Set it explicitly. palsync's dataset-sync defaults omitted `freeform` to true,
+but the safest schema still spells it out.
+
+---
+
+## Column types
+
+A dataset's columns are typed at definition time (in `pal.json`, or via the Pal Manager
+schema editor). The type governs storage, validation, and how the platform casts filter
+values. The commonly-used types:
+
+**Keys and platform ids**
+- **Primary key** — the dataset's own id. Auto-generated, **automatically indexed**. Named
+  `<singular>Id` by convention (`users` → `userId`).
+- **Transaction id** — stores a transaction (packet) id.
+- **Transaction id auto-populate** — same, but auto-fills the current transaction id when a
+  row is written inside a transaction workflow.
+- **Profile id** — stores a profile id.
+- **Profile id auto-populate** — auto-fills the acting profile's id when written in a
+  console or transaction workflow. The standard way to stamp "who owns this row".
+
+**Strings**
+- **Varchar** — variable-length string, the everyday text column.
+- **Char** — fixed-size string.
+- **Text** — up to 65 KB.
+- **Medium text** — up to 16 MB.
+
+**Numbers**
+- **Tiny / Small / Medium / Integer / Big** — integer types of increasing range, each
+  **signed or unsigned**. Use unsigned when the value is never negative (ids, counts).
+- **Decimal** — fixed-precision. The length is specified as `precision,scale` — e.g. `4,2`
+  means 4 total digits with 2 after the decimal point (so up to `99.99`).
+
+**Dates / booleans**
+- **Date** — accepts `Date` objects from `dateUtil` (see
+  `palbuilder-workflow/references/utilities.md`).
+- **DateTime** — same, with time component.
+- **Boolean** — filters and writes use the strings `"true"` / `"false"`; when reading a
+  Boolean-typed value back in workflow JS, coerce before comparing (see "Boolean-typed
+  record values" below).
+
+**Encrypted and files**
+- **Encrypted** — value encrypted at rest, decrypted on read.
+- **File** — a stored file.
+- **File encrypted** — a stored file, encrypted at rest.
+- **Remote file** / **Remote file encrypted** — a file held in remote storage, optionally
+  encrypted.
+
+### Keys, "foreign keys", and the unsigned-integer convention
+
+The platform has **primary keys** but **no foreign-key concept** — there is no enforced
+referential constraint between datasets. You still reference other datasets' ids freely; it's
+just a plain column with a matching value.
+
+**Convention:** when a column holds another dataset's primary key (a "foreign key" in intent),
+type it as an **unsigned integer**. For example, a `stuff` dataset referencing `users.userId`
+declares its `ownerId` column as unsigned integer. Nothing enforces the relationship — joins
+and cascades are all manual (see "The platform does not cascade" below) — but the convention
+keeps referenced-id columns consistent and correctly sized.
+
+---
+
+## Indexes
+
+Beyond the auto-indexed primary key, datasets can carry **additional indexes** on columns
+that frequently appear in query conditions — **especially the join columns used by
+DataViews**. An unindexed join column forces a full scan on every view query; indexing it is
+the single highest-leverage dataset performance change.
+
+An index is defined by:
+- A **name**
+- **One or more columns, in order of use** — exactly like a conventional compound (composite)
+  index. Column order matters: an index on `(palId, profileId)` accelerates queries that
+  filter on `palId` alone or `palId` + `profileId`, but not `profileId` alone.
+
+Indexes are declared in the dataset definition (in `pal.json`'s dataset entry — see
+`palbuilder-core/references/pal-json.md` — or via the Pal Manager schema editor). Example
+from a `users` dataset:
+
+```
+Index "email"          → columns: [email]
+Index "palAndProfile"  → columns: [palId, profileId]
+```
+
+### When to add an index
+
+- **DataView join columns** — the top priority. Every column a view joins on should be
+  indexed on both sides.
+- **Frequently-filtered columns** — a column hit by `addEqual` / `addGreaterThan` / etc. on
+  most reads of a large dataset.
+- **Sort columns on large datasets** — a column used in `sortAscending` / `sortDescending`
+  where the result set is big.
+
+### When NOT to bother
+
+- Tiny datasets (a few hundred rows) — the scan is already fast; the index is overhead on
+  every write for no read benefit.
+- Columns rarely used in conditions — an index that's never hit is pure write-time cost.
+
+### Diagnosing index usage
+
+The filter's `explain(true)` method (development-only, output goes to the Pal Manager debug
+panel) describes which indexes a query will use. The analytic filter additionally exposes
+`useIndex(indexName)` and `forceIndex(indexName)` to influence the choice — see
+`analytics.md`. Reach for these only when `explain` shows the planner picking a suboptimal
+index.
 
 ---
 
@@ -201,6 +285,25 @@ Full DataSetRecord / DataViewRecord APIs:
 - https://secure.cloudpiston.com/cpal/cp-api/web/DataSetRecord.html
 - https://secure.cloudpiston.com/cpal/cp-api/web/DataViewRecord.html
 
+### Boolean-typed record values
+
+Dataset fields declared as type **Boolean** do not reliably compare with a plain JS string
+when read back from a record. Coerce the returned value before comparing:
+
+```js
+// Wrong — unreliable for a Boolean-typed column
+if (sticky.get("pinned") == "true") { ... }
+
+// Right — force a string comparison
+if (("" + sticky.get("pinned")) == "true") { ... }
+```
+
+This applies to read-then-compare workflow JS paths (`getRecord`, `findRecord`, copied
+DataList rows). Writes still use `record.set("pinned", "true")`, filters still use
+`addEqual("pinned", "true")`, and EL template comparisons such as `${row.pinned eq 'true'}`
+are fine. String columns that store `"true"` / `"false"` as text do not need this defensive
+coercion.
+
 For iterating a DataList, use its own count and index accessors:
 
 ```js
@@ -221,7 +324,7 @@ var rec = ds.createRecord();                // empty record built off the DataSe
 rec.set("email", email);
 rec.set("firstName", firstName);
 rec.setInt("count", 0);                     // typed integer setter
-rec.setDate("createDate", new Date());      // date setter (Date object)
+rec.setDate("createDate", dateUtil.createDate());   // prefer DateUtil.createDate() over new Date()
 var newId = ds.insertRecord(rec);           // returns the new primary-key id
 ```
 
@@ -306,8 +409,14 @@ you.
   is the #1 workflow crash cause.
 - **Booleans stored as strings** — `"true"` / `"false"`. `addEqual("col", true)` will not match
   a row where the column is the string `"true"`.
+- **Boolean-typed record reads need coercion** — compare `("" + rec.get("col")) == "true"`,
+  not `rec.get("col") == "true"`.
 - **`selectColumns` omission** — pulls every column. Fast to hit, slow to debug when it scales.
 - **`enablePaging` is 0-indexed** — page 0 is the first page.
 - **`deleteRecord` takes a String id** — use `id.toString()` to coerce.
 - **No automatic cascades** — every child-row cleanup must be written explicitly. See the
   Deleting section above.
+- **Unindexed join columns are a silent performance cliff.** A DataView that joins on an
+  unindexed column scans the whole table on every query. Index both sides of every join.
+- **No foreign keys** — referenced-id columns are plain (unsigned integer by convention);
+  nothing enforces the relationship. Joins and cascades are all manual.

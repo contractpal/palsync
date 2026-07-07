@@ -77,6 +77,49 @@ report "buttons don't work." Easy to miss because static clicks on native `<a>` 
 
 ---
 
+## `c:a` navigation can leave `window.location` stale
+
+Clicking a `c:a` link changes the rendered page, but it does not reliably update the
+browser's visible address bar or `window.location`. A live pal hit this with filter
+dropdown JS that read `window.location.search` to preserve existing filters; after earlier
+`c:a` navigation, the handler kept using stale `action` and query parameters from the last
+real redirect.
+
+```js
+// Wrong — may read stale params after c:a navigation
+function filterChange(paramName, value, token) {
+    var params = new URLSearchParams(window.location.search);
+    params.set(paramName, value);
+    // ...
+}
+```
+
+Pass the workflow's current, server-known state into the client function instead:
+
+```js
+function filterChange(paramName, value, token, current) {
+    var merged = {
+        category: current.category || "",
+        label: current.label || ""
+    };
+    merged[paramName] = value;
+    // ...
+}
+```
+
+```html
+<select onchange="filterChange('category', this.value, '${token}', {
+    category: '${categoryParam}',
+    label: '${labelParam}'
+})">
+```
+
+Only a real `c.redirect()` / HTTP 302 reliably updates `window.location`. Any JS that needs
+"the current URL" on a page reachable through `c:a` must get current state from the
+workflow-rendered payload.
+
+---
+
 ## Only five named entities are safe
 
 The server's XML validator accepts only these named entities:

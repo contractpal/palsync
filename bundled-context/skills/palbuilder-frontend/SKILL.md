@@ -427,6 +427,9 @@ From the workflow: `runJS("generalUI.initDropdowns()");`
   named entity (or non-ASCII byte) triggers a validation flag. Write arrows as `-&gt;`.
 - **`c:a` renders as `javascript:` href** — any JS click-interceptor MUST guard
   `a.protocol !== "http:" && a.protocol !== "https:"` or it silently breaks every `c:a`.
+- **`c:a` navigation does not reliably update `window.location`** — if JS needs current
+  filter/query state after `c:a` navigation, pass server-rendered state into the function
+  instead of reading `window.location.search`.
 - **Never edit markup or CSS with regex.** Read the region and hand-edit — regex surgery
   has repeatedly caused orphan closing tags and corrupted stylesheets.
 

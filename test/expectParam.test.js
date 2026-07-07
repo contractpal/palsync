@@ -3,9 +3,13 @@
 // extraction), maxChars (truncation), and the repeated-finding cap. All pure — no server needed.
 const { test } = require("node:test");
 const assert = require("node:assert");
+const fs = require("fs");
+const path = require("path");
 const { checkExpect, extractSelector } = require("../src/core/preview");
 const { capRepeats } = require("../src/core/findingCap");
 const { formatExpect, htmlRegionResult } = require("../src/mcp/tools");
+const { HISTORY_DIR } = require("../src/mcp/workHistory");
+const { tmpWorkspace } = require("./helpers");
 
 const HTML = [
     "<html>",
@@ -81,6 +85,25 @@ test("htmlRegionResult: selector extracts the region; miss reports and inlines n
     const miss = htmlRegionResult(res, { headline: "Fetched a", filePrefix: "t-", guid: "g", selector: "#absent" });
     assert.match(miss.message, /matched nothing/);
     assert.equal(miss.htmlFile, null);
+});
+
+test("htmlRegionResult: with workspaceDir writes artifacts under .agent-work-history", () => {
+    const ws = tmpWorkspace();
+    const res = { html: "<body><main id=\"m\">HI</main></body>", status: 200, contentType: "text/html", title: "T", bytes: 36 };
+    const out = htmlRegionResult(res, {
+        headline: "Fetched about.html",
+        filePrefix: "t-",
+        guid: "GUID",
+        selector: "#m",
+        workspaceDir: ws,
+        tool: "pal_fetch",
+        feature: "fetch-about.html"
+    });
+
+    assert.ok(out.htmlFile.startsWith(path.join(ws, HISTORY_DIR)));
+    assert.equal(fs.readFileSync(out.htmlFile, "utf8"), '<main id="m">HI</main>');
+    assert.match(out.message, /Work-history run:/);
+    assert.match(fs.readFileSync(path.join(ws, ".gitignore"), "utf8"), /\.agent-work-history\//);
 });
 
 test("formatExpect: verdict line + per-string marks, no page body", () => {

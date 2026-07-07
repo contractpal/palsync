@@ -1,6 +1,6 @@
 ---
 name: palbuilder-data
-description: Use this skill whenever reading, writing, or shaping data in a CloudPiston pal — datasets, dataviews, payloads, DataMaps, DataLists, pal-level data, cache, files/attachments, or server-side HTTP calls to external services. Covers the standard read pattern (getDataSet + createFilter + selectColumns + addEqual + getRecords), the standard write pattern (createRecord + set + insertRecord + updateRecord) with find-or-create idempotency, payload composition (root data + named DataMaps + DataLists), pal.getSettings() for secure config, dataset naming conventions (camelCase plural, PK = singular + "Id"), and pointers to deeper references for the full API surface. Trigger when writing any dataset query, building a payload, joining data in memory, calling an external API from a workflow, or reading pal-level constants and cache values.
+description: Use this skill whenever reading, writing, or shaping data in a CloudPiston pal — datasets, dataviews, payloads, DataMaps, DataLists, pal-level data, cache, session storage, cookies, files/attachments, or server-side HTTP calls to external services. Covers the standard read pattern (getDataSet + createFilter + selectColumns + addEqual + getRecords), the standard write pattern (createRecord + set + insertRecord + updateRecord) with find-or-create idempotency, dataset column types and indexes, analytic filters (createAnalyticFilter for aggregates/group-by/having/date-extraction), the runtime DataViewBuilder, payload composition (root data + named DataMaps + DataLists), pal.getSettings() for secure config, request.setSessionValue/setSessionData and cookies for per-user state, the storage decision (session vs. cookie vs. cache vs. dataset vs. settings), dataset naming conventions (camelCase plural, PK = singular + "Id"), and pointers to deeper references for the full API surface. Trigger when writing any dataset query, defining a schema or index, running an aggregate/group-by, building a payload, joining data in memory or at runtime, calling an external API from a workflow, storing per-user session state, or reading pal-level constants and cache values.
 ---
 
 # CloudPiston Pal — Data Layer
@@ -18,22 +18,83 @@ teaches the data-specific patterns.
 
 ## Read [reference].md when
 
-- **`references/datasets.md`** — DataSet CRUD, deep filter API (grouping/paging/sorting),
-  record-by-id access, typed accessors, updates, deletes (`deleteRecord`, `deleteRecords`,
-  `bulkDelete`), and the explicit-cascade rule (the platform does not auto-cascade — you
-  must write it).
-- **`references/dataviews.md`** — DataView read-model, joins, when to use a view vs a dataset.
+- **`references/datasets.md`** — DataSet registration (`freeform:true`), CRUD, column types
+  (varchar/text/decimal/encrypted/file/profile id/transaction id, signed/unsigned ints),
+  indexes (compound, join-driven),
+  deep filter API (grouping/paging/sorting), record-by-id access, typed accessors, updates,
+  deletes (`deleteRecord`, `deleteRecords`, `bulkDelete`), and the explicit-cascade rule (the
+  platform does not auto-cascade — you must write it).
+- **`references/dataviews.md`** — DataView read-model, joins, when to use a view vs a dataset,
+  and the runtime `DataViewBuilder` (`pal.createDataViewBuilder()`).
+- **`references/analytics.md`** — `createAnalyticFilter()` on datasets and views: aggregates
+  (sum/avg/count/min/max), group-by, having, distinct count, date-part extraction, and
+  date/time diffs. Reach here when the database should compute the answer, not return rows.
 - **`references/payloads.md`** — Payload as a container for a root `Data` + named DataMaps +
   DataLists; DataList shaping/joining; `pal.getData(name)` and `pal.getDataList(name)` for
   pal-level constants.
 - **`references/cache.md`** — CacheManager (`cm`), the three cache scopes (pal / enterprise /
   cloud), and put/get/deleteItem across strings, `Data`, `DataList`, and `Payload`.
-- **`references/files.md`** — Attachments, images, and pal-level file storage.
+- **`references/session.md`** — Request-based session values, session data, cookies, and
+  when to pair session with cache for large or long-lived per-user state.
 - **`references/http-client.md`** — ServiceRequest, JSONParser, JSONBuffer, Buffer for
   server-side HTTP and JSON; `pal.getSettings()` for API keys and secrets.
 
 If you're not sure which reference applies, start with `datasets.md` — that's where most
 data work lives.
+
+---
+
+## The storage decision — which surface for what data
+
+Before reaching for a specific API, decide **where the data belongs**. CloudPiston gives you
+five storage surfaces and they overlap in what they *can* do — the decision is about what
+each *should* be used for.
+
+| Kind of data | Best storage |
+|---|---|
+| Auth token / session id | Cookie |
+| "Remember me" flag | Cookie |
+| User's current filter, sort, page — same session | Session value |
+| Wizard step index / draft state — same session | Session data |
+| Small in-progress cart — same session | Session data |
+| Large draft, big filter result set, anything that should survive session expiry | Cache, keyed by user id |
+| Frequently-read reference data (shared across users) | Cache |
+| Permanent schema-less blob, no query/filter needed | Cache (omit the TTL) |
+| Long-lived, queryable, per-user or shared records | Dataset |
+| Secrets / API keys / connection strings | `pal.getSettings()` (see `http-client.md`) |
+| Cross-pal / cross-enterprise config | Enterprise settings (see `palbuilder-workflow/references/console.md`) |
+
+### Rule-of-thumb axes
+
+**Scope**
+- Same user, same session, gone when the session ends → session value/data
+- Same user, needs to survive session expiry or be reachable with no session (a job, a
+  tunnel receiver) → cache, keyed by user/profile id
+- Same pal, shared across all users → cache (pal-wide by default — no keying needed for
+  truly shared data)
+- Same enterprise, across every pal → enterprise settings
+
+**Size**
+- Tiny (a token, an id, a flag) → cookie or session value
+- Small (a few fields) → session data
+- Large (a DataList, an export bundle, a big blob) → cache
+- Structured and something you'll filter/sort/query → dataset, not cache
+
+**Persistence**
+- Until the session ends → session value/data
+- A fixed duration → cookie (`age` in seconds) or cache (TTL in minutes)
+- Permanent, no query needed → cache with the TTL argument omitted (backed by a
+  platform-managed database — this is real durable storage, not a session shim)
+- Permanent AND queryable/filterable → dataset
+
+**Sensitivity**
+- Never expose to the browser → cache, session, dataset, settings
+- Small and safe for the browser to hold → cookie
+- Anything treated as a secret (API key, connection string) → `pal.getSettings()`, **never**
+  a cookie or session value
+
+Full session/cookie API and cache-pairing patterns: `references/session.md`. Full cache API
+and scopes: `references/cache.md`.
 
 ---
 
@@ -48,6 +109,9 @@ Applies to every new dataset field and column:
 - **Boolean values in String columns** are stored as the strings `"true"` / `"false"` (not
   actual booleans). Compare with `addEqual("col", "true")` — see `datasets.md` for the full
   filter API.
+- **Boolean-typed columns** also filter with `"true"` / `"false"`, but when reading a
+  record value in workflow JS, coerce before comparing: `("" + rec.get("pinned")) == "true"`.
+  See `datasets.md` for the gotcha.
 
 ---
 
@@ -115,7 +179,7 @@ if (rec == null) {
     rec.set("email", email);                     // .set(col, value) per field
     rec.set("firstName", firstName);
     rec.set("status", "Active");
-    rec.setDate("createDate", new Date());       // .setDate() for date columns
+    rec.setDate("createDate", dateUtil.createDate());  // .setDate() for date columns
     ds.insertRecord(rec);                        // insert; returns new id
 } else {
     rec.set("status", "Active");
@@ -140,7 +204,7 @@ by `run()`'s common tail — that pattern is extremely common — but payloads c
 anywhere else to encapsulate data.
 
 ```js
-var payload = c.createPayload();
+payload = c.createPayload();
 
 // Root Data — payload.set(key, val) writes to the root Data object
 payload.set("userName", "Alice");
@@ -254,14 +318,14 @@ efficient string building (`c.createBuffer`), and pal-settings integration, see
 
 ## Debug helpers
 
-Available during development; **remove before finishing** (CLAUDE.md anti-patterns):
+Debug helpers (`c.debug`, `c.debugData`, `c.debugList`) apply to all workflow code, not just
+data-layer work. Full detail lives in `palbuilder-workflow/SKILL.md`; the short version:
 
-- `c.debug(obj)` — accepts a `String`, `Data`, `DataList`, or `Payload`. **Prefer this** over
-  the more explicit variants below.
-- `c.debugData(data)` — dumps a `Data` object (single-argument, no label).
-- `c.debugList(dataList)` — dumps a `DataList` (single-argument, no label).
+- `c.debug(obj)` — accepts `String`, `Data`, `DataList`, or `Payload`. **Preferred.**
+- `c.debugData(data)` — `Data`-only, single-argument.
+- `c.debugList(dataList)` — `DataList`-only, single-argument.
 
-Use these to inspect what a filter actually returned instead of guessing.
+**Remove before finishing** (CLAUDE.md anti-patterns).
 
 ---
 
