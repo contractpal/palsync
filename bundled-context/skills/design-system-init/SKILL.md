@@ -1,179 +1,329 @@
 ---
 name: design-system-init
-description: "Establish a project's design system before any UI is built, from a short interview plus 2-3 references the user likes: produces DESIGN_SYSTEM.md + COMPONENTS.md, enforced later by design-build. Triggers: 'set up a design system', design references, 'make it look like X', brand direction, 'what aesthetic should we use', or a redesign."
+description: "Establish or extract a world-class Palbuilder design system before UI work: asks for intent, palette, and reference photos when available; falls back to a strong default palette; writes DESIGN_SYSTEM.md + COMPONENTS.md + a Palbuilder-ready stack mapping enforced by design-build. Triggers: set up a design system, redesign, visual direction, color palette, reference screenshots, component library, make it look professional, or any non-trivial new pal UI."
 ---
 
 # Design System Init
 
-Build a project's source-of-truth design system from a short interview plus 2-3 references the user likes. Outputs: `DESIGN_SYSTEM.md` (visual language) and `COMPONENTS.md` (structural inventory), enforced later by `design-build`.
+Create the project's source of truth for visual language and reusable UI. Outputs:
+`DESIGN_SYSTEM.md`, `COMPONENTS.md`, persisted `design/refs/*`, and a Palbuilder stack mapping
+that points to the component recipes in `references/component-library.md`.
 
-**Taste is not tokens.** Capture *intent* (why the user likes each reference) and persist the reference images alongside extracted values — because composition, density, and restraint don't survive a style-scrape, so a scrape alone hands an agent Linear's palette without Linear's restraint.
+Read before acting:
+- `references/research-brief.md` when choosing foundations or explaining design tradeoffs.
+- `references/component-library.md` when defining the component inventory or writing Palbuilder
+  examples.
+- `references/vision-routing.md` whenever reference photos/screenshots or rendered output must be
+  judged visually.
+
+The job is not to theme a generic dashboard. The job is to make a pal feel designed: clear intent,
+semantic tokens, complete states, accessible interaction, real responsive behavior, and a reusable
+component vocabulary that works in Palbuilder XHTML and `c:` tags.
+
+## Modes
+
+### Declare mode
+
+Default for a new pal or redesign. Ask for user intent, desired palette, and reference photos or
+screenshots. If the user has no palette or references, continue with the default system below and
+state the assumption.
+
+### Extract mode
+
+Triggers when `MAP.md` exists and no `DESIGN_SYSTEM.md` / `COMPONENTS.md` exists yet. The existing
+pal is the reference. Extract from `MAP.md`, live screenshots, `styles/*.css`, `pages/*.html`, and
+`fragments/*.html`. Do not invent new tokens in extract mode; cite source files for every token.
+Flag inconsistencies in Do / Don't instead of "fixing" them silently.
+
+## Interview
+
+Ask in one compact turn when possible. If interactive elicitation buttons exist, use them.
+
+1. Product and user:
+   - What kind of pal is this? Console app, public web page, workflow wizard, internal dashboard,
+     document tool, marketing surface, client portal?
+   - Who uses it, and what state are they in? Rushed admin, careful reviewer, buyer, applicant,
+     executive, field user?
+   - What is the one job the interface must do better than anything else?
+
+2. Palette and reference material:
+   - Do you have a color palette, brand color, logo, or existing CSS that must be respected?
+   - Do you have reference photos, screenshots, apps, or sites? Ask for 2-3. For each, ask what
+     specifically to borrow: density, type, color mood, navigation, data display, motion, restraint,
+     or a single moment.
+   - What should this definitely not feel like?
+
+3. Operating constraints:
+   - Density: compact, balanced, or spacious?
+   - Motion: none, restrained, or expressive?
+   - Theme: light, dark, or both?
+   - Target: console pal, public web pal, mobile-heavy, desktop-heavy, printable/document-heavy?
+   - Any platform constraints: Bootstrap already loaded, existing fragment structure, locked
+     enterprise branding, old browser concerns?
+
+Stop once you can state the design intent in 2-3 sentences and the user agrees. If the user says
+"you decide", use the default palette and component system below.
+
+**Extract mode:** skip external reference questions. Ask only product/user/constraints, then derive
+palette and components from the existing pal.
+
+## Default Palette
+
+If the user does not care, use this as the starting point. It is neutral enough for most pal
+projects, avoids the overused purple-gradient / cream-sage AI fingerprint, and gives operational
+screens a calm professional center.
+
+```css
+:root {
+  --ds-bg: #f6f8f7;
+  --ds-bg-subtle: #eef3f1;
+  --ds-surface: #ffffff;
+  --ds-surface-raised: #fbfcfc;
+  --ds-text: #151918;
+  --ds-text-muted: #56615e;
+  --ds-text-soft: #77817e;
+  --ds-border: #d9e2df;
+  --ds-border-strong: #b8c7c2;
+
+  --ds-primary: #0f766e;
+  --ds-primary-hover: #0b5f59;
+  --ds-primary-soft: #d9f0ec;
+  --ds-primary-text: #ffffff;
+  --ds-accent: #b45309;
+  --ds-accent-soft: #fde8cc;
+
+  --ds-success: #2f7d4f;
+  --ds-warning: #b7791f;
+  --ds-danger: #b42318;
+  --ds-info: #2563a9;
+
+  --ds-radius-xs: 4px;
+  --ds-radius-sm: 6px;
+  --ds-radius-md: 8px;
+  --ds-radius-pill: 999px;
+  --ds-shadow-sm: 0 1px 2px rgba(21, 25, 24, 0.06);
+  --ds-shadow-md: 0 8px 22px rgba(21, 25, 24, 0.10);
+  --ds-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+```
+
+Use one saturated brand/accent family per screen unless status semantics require a small green,
+amber, red, or blue cue. The default primary can be replaced by a user brand color, but then
+`--ds-primary-text` must be checked for AA contrast.
+
+Dark variant, when the user asks for dark or the existing pal is dark-locked:
+
+```css
+:root,
+[data-theme="dark"] {
+  --ds-bg: #141817;
+  --ds-bg-subtle: #1d2422;
+  --ds-surface: #202826;
+  --ds-surface-raised: #26302d;
+  --ds-text: #eef5f2;
+  --ds-text-muted: #b6c3bf;
+  --ds-text-soft: #879591;
+  --ds-border: #35413e;
+  --ds-border-strong: #4b5a56;
+
+  --ds-primary: #63d2c6;
+  --ds-primary-hover: #8be0d7;
+  --ds-primary-soft: #173c39;
+  --ds-primary-text: #0b1514;
+  --ds-accent: #f2a65a;
+  --ds-accent-soft: #442b13;
+
+  --ds-success: #79d69a;
+  --ds-warning: #f2c66d;
+  --ds-danger: #ff8a7a;
+  --ds-info: #8ab9ff;
+}
+```
+
+On dark, separation comes primarily from surface tone and borders; use shadows only for overlays.
 
 ## Process
 
-In order. Don't skip the interview to reach extraction faster.
+Run these steps in order.
 
-1. **Interview** for intent and constraints.
-2. **Ingest references**: save the 2-3 examples as images in the repo; pull computed style values if available.
-3. **Cross-check** direction against known AI-slop fingerprints.
-4. **Synthesize** tokens and a component inventory.
-5. **Write** `DESIGN_SYSTEM.md` and `COMPONENTS.md`, plus a stack-mapping note.
-6. **Confirm** with the user before declaring done.
+### 1. Persist references
 
-## Vision routing
+Create `design/refs/`.
 
-Steps 2-3 require *seeing* references (composition, density, restraint, slop fingerprints). If the executing model can't accept images, route visual work to a vision-capable model and consume findings as text — don't skip or fake from filenames. Protocol: **read `references/vision-routing.md`**.
+Declare mode:
+- Save each provided reference photo/screenshot/URL capture with a descriptive filename.
+- Write `design/refs/NOTES.md`: what it is, what the user likes, what not to copy.
+- If a URL can be inspected, save raw computed observations in `design/refs/extracted.md`
+  as input only: color values, font families, radius, shadow, spacing rhythm, component ideas.
 
-## Mode: declare vs extract
+Extract mode:
+- Save screenshots of the live pal as `design/refs/ref-<screen>-<viewport>.png`.
+- In `design/refs/extracted.md`, cite the actual source for every observed value:
+  `styles/main.css`, `pages/*.html`, `fragments/*.html`, and rendered screenshots.
 
-- **Declare (default)** — new project, no existing pal. Runs as written: ask for 2-3 external references, interview for intent, synthesize new tokens.
-- **Extract** — triggers when **a MAP.md is present** (brownfield handoff from pal-init) **and** no `DESIGN_SYSTEM.md`/`COMPONENTS.md` exists yet in the workspace. Either condition failing → declare mode. The pal itself is the reference: derive tokens and composition from what's built (MAP.md's Design reality section, the pulled `styles/*.css`, `pages/*.html`, `fragments/*.html`, the pal's rendered screens) instead of asking for sites. Every step below has an **"Extract mode:"** note where behavior diverges; unmarked steps run as written in both modes.
+If the executing model cannot see images, read `references/vision-routing.md` and route only the
+visual observation step to a vision-capable model.
 
-## Step 1 — Interview
+### 2. Synthesize foundations
 
-Ask in small clusters, one per turn; adapt. Elicit *feeling* and *purpose*, not a form. On a flat adjective ("clean," "modern," "professional"), push once for what it means concretely — those words breed slop. Prefer interactive elicitation buttons for the multiple-choice clusters if available; else prose.
+Curate the system. Do not transcribe every color from a screenshot.
 
-**Cluster A — Surface and purpose**
-- What is being built? (marketing site, dense data app/dashboard, mobile app, docs, internal tool, ...)
-- Who uses it, in what state of mind? (a stressed admin scanning for one number vs. a buyer being persuaded vs. a developer reading reference material)
-- The one job the interface must do well above all else?
+Define:
+- Color roles: background, subtle background, surface, raised surface, text, muted text, soft text,
+  border, strong border, primary, primary hover, primary soft, primary text, accent, success,
+  warning, danger, info.
+- Type: UI family, optional display family, scale, weight range, numeric rules. Use external fonts
+  only when the pal can load them reliably; otherwise use system stacks.
+- Spacing: 4px base with named steps: 4, 8, 12, 16, 20, 24, 32, 40, 48, 64.
+- Radius: small set only. Cards default to 8px or less unless references require more.
+- Border/shadow/elevation: decide whether separation comes from tone, border, shadow, or layout.
+- Motion: duration/ease tokens and reduced-motion behavior.
+- Density: page rhythm, table/list row height, card padding, mobile collapse behavior.
 
-**Cluster B — References (the heart of it)**
-- Ask for 2-3 sites or apps they like. For *each*, ask: "What specifically do you like here — name the feeling or the moment, not just 'it's clean.'" Capture their words verbatim; these become the rationale notes.
-- Ask what they explicitly do NOT want it to feel like.
+### 3. Build the component inventory
 
-**Cluster C — Constraints**
-- Existing brand assets to respect? (logo, locked colors, a voice doc)
-- Density: airy/generous vs. compact/information-dense.
-- Motion appetite: still and quiet, restrained and purposeful, or expressive.
-- Light, dark, or both.
-- Target stack(s), so the output includes a correct mapping note (CSS custom properties, Tailwind theme, React Native StyleSheet, Bootstrap/XHTML). The system stays stack-agnostic; only the mapping note is stack-specific.
+Use `references/component-library.md` as the canonical Palbuilder-ready library. In
+`COMPONENTS.md`, name only the components this pal needs now plus likely shared primitives. Every
+component must list variants, states, tokens, and the Palbuilder implementation pattern.
 
-Stop once you can describe the intended feel in 2-3 sentences and the user agrees. Read it back first.
+Required baseline for most pals:
+- Primitives: Button, IconButton, Field, Select, Checkbox/Toggle, Badge, Alert, Card, Divider,
+  Skeleton, Progress, Avatar/Initial, Tooltip/help text.
+- Data: Table, responsive record list, stat/KPI card, filter bar, pagination, empty state, error
+  state.
+- Shells: page shell, topbar/sidebar/nav, toolbar, modal body, drawer/panel if needed.
+- Domain composites: workflow stepper, activity feed, file upload, data-detail row, approval
+  actions, CRUD form.
 
-**Extract mode:** skip Cluster B (sites you like) — the existing pal is the only reference, not optional. Keep Cluster A and Cluster C in full: motion appetite, density, and target stack are still real questions even when the palette is fixed.
+The inventory maps to Palbuilder fragments/classes, not React components. A primitive may be a CSS
+class plus a markup recipe. A composite may be a fragment under `fragments/common/` or a feature
+fragment under `fragments/<area>/`.
 
-## Step 2 — Ingest references
+### 4. Anti-slop check
 
-Treat references as durable project assets, not throwaway context.
+Before writing final tokens, call out collisions:
+- Purple/blue gradient hero with abstract blobs.
+- Cream/sage editorial palette when the product is not editorial.
+- Uniform pill-everything radius.
+- Three equal feature cards as the only layout idea.
+- Too many words, helper paragraphs, and redundant headings.
+- Saturated rainbow charts or status fills.
+- Generic Inter/Roboto + gray cards + blue primary with no reference rationale.
+- Mobile as an afterthought.
 
-- Create `design/refs/`. Save each image with a descriptive name (`ref-linear-sidebar.png`, not `image1.png`). Persist pasted screenshots; for URLs, capture or ask for a screenshot of the specific view meant.
-- Record per-reference Cluster B rationale in `design/refs/NOTES.md` — one block each: what it is, what the user values, what to deliberately NOT copy.
-- If a style-extraction tool is available (TypeUI extension, computed-style inspection), pull raw values — fonts, color stops, radius, shadow, spacing rhythm — into `design/refs/extracted.md` as *raw input*, labelled not-yet-curated: a starting point to edit, never the final tokens.
-- If you can view images directly, study what extraction misses: spacing rhythm, how much empty space carries the layout, type scale contrast, where emphasis lands, border/shadow restraint, implied motion.
+If the user explicitly wants one of these, keep the request but make it intentional and constrained.
 
-**Extract mode:** references ARE the pal's own rendered screens, not external sites.
-- `design/refs/`: screenshots of the LIVE pal (`pal_screenshot`/`palsync screenshot`, or reuse MAP.md's baseline screenshots if fresh). Name like `ref-home-desktop.png`, not `ref-linear-sidebar.png` — no borrowed brand to credit.
-- `design/refs/NOTES.md`: what each screen IS and which pal section it's from, not "what the user values" — description, not curation.
-- `design/refs/extracted.md`: still raw input, but from the pal's OWN source, not a scrape tool: `:root` custom properties and hex/rgb values in `styles/*.css`, font families/weights from `c:resource`/Google Fonts `<link>` tags in `pages/*.html`, border-radius/box-shadow/transition values in use — labelled by source file, not "not-yet-curated guesses." **Never invent a token with no corresponding value in use** — that's extracting vs. declaring.
-- Direct-viewing matters MORE here (see intro). Route the pal's screenshots through the Vision routing above (inline if vision-capable, else to a vision model) to capture spacing rhythm, hierarchy, restraint — CSS values alone populate Foundations but not Density & Layout or Do/Don't.
+Extract mode: do not erase live slop. Document it in Do / Don't as observed reality and a future
+improvement candidate.
 
-## Step 3 — Anti-slop cross-check
-
-Before committing to tokens, check direction against generic-AI-output fingerprints — these catch choices that "feel safe" because every model defaults to them.
-
-- Cross-reference proposed fonts, colors, and layout patterns against this safety net (the authority for this check): be suspicious of the default "AI editorial" fingerprint (a serif display like Fraunces paired with a cream/off-white background and a muted sage/green accent), all-purpose gradient-blob heroes, uniform pill-everything with identical border-radius, and evenly-spaced three-card feature rows as the only layout idea.
-- When the user's direction collides with a known fingerprint, say so plainly and propose a specific, deliberate alternative rather than silently steering. The user decides; make the collision visible.
-
-**Extract mode:** a fingerprint here is already LIVE, not a direction you're choosing. Don't silently avoid it — that breaks the observed-vs-declared honesty this mode depends on. Extract it faithfully, then flag it in Do/Don't as "known issue, not fixed here." Changing it is a scoped, human-approved, regression-checked decision made later (via pal-spec/pal-loop, per pal-spec's §12 REGRESSION criterion) — never an automatic side effect of this skill.
-
-## Step 4 — Synthesize
-
-Curate, don't transcribe. Resolve references and interview into one coherent system with deliberate choices; every token should trace to a stated intent or a reference.
-
-- **Color**: define semantic roles (surface, surface-raised, text, text-muted, border, primary, primary-contrast, accent, success/warn/danger as needed) with concrete values. Avoid more accents than needed; restraint reads as intentional.
-- **Type**: choose a primary and, if warranted, a display face; set a scale with real values and a *narrow* weight range. Note where weight vs. size vs. spacing carries hierarchy.
-- **Spacing**: one base unit and a scale built from it.
-- **Radius, border, shadow, motion**: each a small token set with stated intent (e.g. "shadows are near-flat; elevation is communicated by surface color, not blur").
-
-**Extract mode:** every token cites a source file (e.g. "from styles/main.css :root"), not a rationale. Per category:
-- **Color**: if `:root` custom properties exist, those ARE the semantic roles — use directly, don't rename or reorganize into a different role set. None → cluster repeated hex/rgb values in `styles/*.css` into roles.
-- **Type**: families/weights actually loaded via `c:resource`/Google Fonts `<link>` tags — not a fresh pick, even if a "better" pairing suggests itself.
-- **Spacing / Radius / Shadow / Motion**: actual values in `styles/*.css`. If inconsistent (e.g. three border-radius values, no evident pattern), flag as a Do/Don't candidate ("radius inconsistent: 4px/6px/8px in use, no clear rule — pick one going forward") rather than silently averaging or picking one as THE token.
-- **Components**: cross-reference MAP.md's Fragments table for COMPONENTS.md, not a fresh inventory — a fragment used by 3+ pages is a Composite/Primitive candidate; used once, page-specific, not reusable.
-- **Density & Layout / Do-Don't**: from Step 2's vision observations of the pal's screenshots, not CSS.
-
-## Step 5 — Write the outputs
-
-### DESIGN_SYSTEM.md
+### 5. Write DESIGN_SYSTEM.md
 
 Use this exact structure:
 
 ```markdown
-# Design System — [project]
+# Design System - [project]
 
 ## Intent
-[2-3 sentences: the feeling, the user, the one job. This is the north star;
-every later decision serves it.]
+[2-3 sentences: user, feeling, one job, and why the choices fit.]
 
 ## References
-[Per reference: name, link to design/refs/<file>, what we take from it,
-what we deliberately do NOT take. Mirror design/refs/NOTES.md.]
-<!-- Extract mode: references are the pal's own screenshots + source files (styles/main.css,
-     pages/main.html, MAP.md) — cite those instead of external sites; "what we take from it" /
-     "do NOT take" become "extracted as-is" / "flagged in Do/Don't, not changed here" (Step 3). -->
+[Each reference: file/link, what we take, what we avoid.]
+
+## Research Translation
+[Brief note on which external systems informed this pal: e.g. shadcn-style owned code,
+Radix/Headless-style accessible states, Polaris-style dense tables, Carbon-style data viz.]
 
 ## Foundations
-### Color  [semantic role → value, with light/dark if applicable]
-### Type   [families, scale with values, weight range, hierarchy rules]
-### Spacing [base unit + scale]
-### Radius / Border / Shadow / Motion [token sets + stated intent]
+### Color
+[Semantic role -> value. Include default fallback or brand derivation notes.]
+### Type
+[Families, loading method, scale, weights, numeric rules.]
+### Spacing
+[Base and scale.]
+### Radius / Border / Shadow / Motion
+[Token sets and intent.]
 
 ## Density & Layout
-[Airy vs dense; default page rhythm; how empty space is used; grid posture
-and when it is acceptable to break it on purpose.]
+[Page rhythm, grid/shell posture, table/list density, mobile behavior.]
+
+## Accessibility
+[Contrast target, focus-visible style, keyboard expectations, reduced motion, error announcement.]
 
 ## Do / Don't
-[Concrete, testable rules specific to THIS system. Include the anti-slop
-collisions found in Step 3 as explicit "don't"s.]
+[Concrete, testable rules. Include anti-slop collisions.]
 
 ## Stack Mapping
-[How these semantic tokens map to the target stack(s): CSS custom properties,
-Tailwind theme keys, RN StyleSheet, Bootstrap/XHTML variables, etc. Tokens
-stay semantic; this is the only stack-specific section.]
+[Palbuilder XHTML/CSS mapping: style files, page head links, fragment naming, c: tag patterns,
+which recipes from references/component-library.md to use.]
 ```
 
-### COMPONENTS.md
+### 6. Write COMPONENTS.md
 
-The visual system is not enough — without a structural plan, agents produce one monolithic file. Capture the atomic inventory so `design-build` can enforce decomposition:
+Use this exact structure:
 
 ```markdown
-# Component Inventory — [project]
+# Component Inventory - [project]
+
+## Token Contract
+[Names of required CSS files and token prefixes, e.g. `Styles/design-system.css`,
+`--ds-*`, `.pb-*`.]
 
 ## Primitives
-[The smallest reusable units this product needs: Button, Input, Card,
-Badge, etc. For each: variants, the states it must define
-(default/hover/focus-visible/active/disabled/loading/error as applicable),
-and which design tokens it consumes.]
+[For each: purpose, variants, states, tokens, Palbuilder markup recipe.]
 
 ## Composites
-[Units built from primitives: form rows, list items, nav, modal shell, etc.
-For each: which primitives it composes and its responsibility.]
+[For each: composed primitives, responsibility, fragment path if shared.]
 
-## Layout shells
-[Page-level structures: app frame, marketing section rhythm, etc.]
+## Layout Shells
+[App shell, page header, nav, toolbars, modal shell, responsive behavior.]
 
-## Conventions
-[Naming, where state lives, what stays presentational vs. stateful —
-expressed so it maps to functions, classes, partials, or components
-regardless of stack.]
+## Data & Workflow States
+[Loading, empty, error, success, validation, permissions, async/progress.]
+
+## Naming & Ownership
+[CSS class prefix, fragment placement, when to create shared vs feature-specific fragments.]
+
+## Recipe References
+[List relevant sections from `.agents/skills/design-system-init/references/component-library.md`
+or `.claude/skills/design-system-init/references/component-library.md`.]
 ```
 
-Keep both files framework-neutral in the body; concrete framework details live only in the Stack Mapping section.
+### 7. Confirm
 
-## Step 6 — Confirm
+Show the user:
+- Intent paragraph.
+- Color/type direction.
+- Do / Don't list.
+- Component inventory headline list.
 
-Show the user the Intent paragraph and the Do/Don't list first — that's where misalignment hides. Adjust, then hand off: `design-build` enforces this system, and `design/refs/` stays in the repo because the build agent looks at the images, not just tokens.
+Ask whether it matches the desired feel. In extract mode, ask whether it matches the live pal's
+reality. A correction means re-check references or source files before editing the docs.
 
-**Extract mode:** the confirm question shifts from taste approval to factual accuracy — not a new direction the user signs off on, but a description of what's already live. Ask "does this match reality, or did I miss/misread something?" instead of "do you like this?" A correction means the extraction was wrong (re-check the source file), not that the user wants a different design.
+## Palbuilder Rules For The Design System
 
-## Acceptance checklist
-- [ ] Intent is stated in 2-3 sentences the user endorsed.
-- [ ] 2-3 references persisted as images in `design/refs/` with per-reference rationale.
-- [ ] Direction cross-checked against anti-slop fingerprints; collisions surfaced to the user.
-- [ ] Tokens are concrete, semantic, and each traceable to an intent or reference.
-- [ ] COMPONENTS.md inventory exists with states enumerated per primitive.
-- [ ] Stack Mapping section present for the target stack(s); rest stays stack-neutral.
-- [ ] **Extract mode only:** every token cites a source file, not an intent/reference rationale;
-      no token exists that isn't backed by an actual CSS value or loaded resource; inconsistent
-      values are flagged in Do/Don't, not silently resolved.
+- Use external CSS files for the library, normally `styles/design-system.css` or
+  `styles/theme.css`; pages link them from `<head>`.
+- Fragments use `<c:ignore xmlns:c="contractpal">` and contain no `<html>`, `<head>`, `<body>`,
+  or inline `<script>`.
+- Server actions use `c:a` / `c:button` / `c:select` with only documented attributes from
+  `palbuilder-frontend/references/c-tags.md`.
+- `c:list` rows use direct EL: `${row.field}`.
+- Use `c:field` for bound inputs, but do not put ARIA attributes on `c:field`; pair it with a
+  wrapping `<label>` and sibling `role="alert"` message.
+- Inline SVG icons are allowed; self-close SVG children and use one icon family.
+- Never place `${...}` inside inline `<script>`. Put browser JS in `scripts/*.js` loaded from the
+  page shell.
+- Use JPG/PNG for images; avoid WebP in Palbuilder.
+
+## Acceptance Checklist
+
+- [ ] User was asked for palette/brand color and 2-3 reference photos/screenshots; default palette
+      used only when they did not care or could not provide them.
+- [ ] `design/refs/` contains durable reference assets and notes.
+- [ ] `DESIGN_SYSTEM.md` exists with semantic tokens, density/layout, accessibility, Do / Don't,
+      and Palbuilder stack mapping.
+- [ ] `COMPONENTS.md` exists with primitives, composites, layout shells, states, and recipe links.
+- [ ] Direction was checked against anti-slop fingerprints.
+- [ ] Component choices point to Palbuilder-valid recipes in `references/component-library.md`.
+- [ ] Extract mode only: every token cites a real source; inconsistencies are documented, not
+      silently normalized.

@@ -11,6 +11,7 @@ Build UI that conforms to the design system, decomposes cleanly, defines its int
 
 - Read `DESIGN_SYSTEM.md` and `COMPONENTS.md`. If absent and the task is non-trivial, recommend `design-system-init` first — building without a system drifts to generic output. If the user proceeds anyway, infer a minimal system from existing code and state your assumptions.
 - Look at `design/refs/` if present. Read the images, not just tokens — they encode composition and restraint tokens can't. Build toward how they look and feel.
+- For Palbuilder UI, read `../design-system-init/references/component-library.md` before implementing any non-trivial component. It contains Palbuilder-valid XHTML, CSS, and `c:` tag recipes. Pair it with `palbuilder-frontend/references/c-tags.md` before using any `c:` attribute you have not verified.
 
 ## Vision routing
 
@@ -31,6 +32,7 @@ Plan structure first — one giant file is the top driver of AI-looking, unmaint
 - If the design needs a value the system lacks, add it as a named token, don't hardcode inline — the system stays the source of truth.
 - Get hierarchy from the system's stated mechanism — often spacing and size before weight, weight before color. A new accent color for emphasis usually means the spacing is wrong.
 - Honor the stated density and layout posture. If the system says airy, generous whitespace is the design; if it says break the grid, do so deliberately — uniform even spacing reads as templated.
+- Use the project's component inventory first. If no local component exists, adapt the closest recipe from `component-library.md` and record it in `COMPONENTS.md` when it becomes reusable.
 
 ## Step 3 — Define every interaction state
 
@@ -59,6 +61,7 @@ Treat your first output as a junior draft; review it like a demanding senior des
 **Against interaction**
 - Does every interactive element define its full state set, including focus-visible, disabled, loading, error, and empty where relevant?
 - Keyboard-operable? Contrast adequate for text and focus indicators?
+- Palbuilder-specific: no undocumented `c:` attributes, no inline scripts in fragments, no `onclick` on `c:a`, no ARIA attributes on `c:field`, and direct `${row.field}` access inside `c:list`.
 
 **Against slop** (the fingerprint list below is the authority; this is the backstop)
 - Any known fingerprints — generic gradient-blob hero, pill-everything uniform radius, the only layout idea being a three-card row, default "AI editorial" serif-on-cream-with-sage?
@@ -80,6 +83,7 @@ Apply the same vocabulary to yourself at the review gate.
 
 ## Acceptance checklist
 - [ ] DESIGN_SYSTEM.md, COMPONENTS.md, and `design/refs/` loaded before building.
+- [ ] Palbuilder component library consulted for non-trivial UI and local reusable components recorded back into COMPONENTS.md.
 - [ ] Decomposed into atomic units with explicit interfaces; no monolith, no near-duplicates.
 - [ ] All values from tokens; any new need added to the system, not hardcoded.
 - [ ] Every interactive element defines its full state set, including focus-visible and loading/error/empty where relevant.
