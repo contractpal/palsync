@@ -96,6 +96,24 @@ truth:
 - §11 NEVER list seeded from the map's Load-bearing files + "must not change" answers.
 - §12 acceptance MUST add a REGRESSION criterion: the Step-3 baseline still passes and
   untouched UI didn't shift.
+
+### Existing-pal verification floor (required in EXECUTION.md)
+pal-init does not build, but its handoff must force the same gates pal-loop uses. The
+change-scoped EXECUTION.md must include verification tasks/criteria for:
+- `pal_validate` before push — 0 new errors; inherited warnings/errors stay documented.
+- `pal_push` after validation — no force/bypass flags unless the user explicitly approves a
+  drift or lock decision.
+- `pal_sync_datasets` if the approved change creates or alters dataset definitions (safe sync
+  by default; `recreate` is data-destructive and needs typed confirmation).
+- `pal_test` for every changed primary workflow — server VALIDATED, with notes triaged.
+- Render proof for every touched surface: WEB uses `pal_fetch`/`pal_preview` with `expect`;
+  console/transaction uses `pal_screenshot` when available, otherwise the canonical human
+  eyeball gate from `../pal-review/references/console-render-verification.md`.
+- `pal_exercise` for create/edit/delete/action behavior — assert the new/correct value with
+  `expect` and the old/wrong value with `absent` where applicable.
+- `pal_regression` against `baseline/baseline.json`; if stale, stop and refresh Step 3 before
+  claiming the existing-pal regression result.
+
 Then the normal pipeline: pal-spec gate → pal-loop build → pal-review (regression arm) → PASS.
 
 ---

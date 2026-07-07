@@ -40,6 +40,8 @@ When in doubt it's not a fix — escalate.
    - Console render fix: `pal_screenshot` — `captured:true` with `renderError` null = fixed;
      `captured:false` → `HUMAN GATE:` eyeball entry, don't claim the render fixed.
      (Full rule: `../pal-review/references/console-render-verification.md`.)
+   - Behavior fix: `pal_exercise` passes with `expect` for the new/correct value and `absent`
+     for the old/wrong value when edit/delete/replace behavior is involved.
 5. **Regression check** — a fix can break what worked:
    - `baseline/` exists → run `pal_regression`; act on `caused`; never verdict against a
      stale baseline (it returns `{stale}` → refresh via pal-init Step 3).
@@ -48,6 +50,11 @@ When in doubt it's not a fix — escalate.
    file, no build plan.
 
 ## Inherited rules
+- **pal-fix is not gate-light** — it skips the full SPEC.md ceremony, not the proof ladder.
+  Use the same gates as pal-loop for the touched behavior: `pal_validate` → `pal_push` →
+  `pal_test` when workflow code changed → render proof (`pal_fetch`/`pal_preview` or
+  `pal_screenshot`) → `pal_exercise` for actions/writes → `pal_regression` or the fallback
+  touched-page regression check.
 - **Never deploy** — deployment is a human action in PalBuilder.
 - **Respect push policy** — `checkpoint` means ask before `pal_push`.
 - **Handle drift** — `pal_status` before the first push; server moved → `pal_pull`/`pal_merge`
