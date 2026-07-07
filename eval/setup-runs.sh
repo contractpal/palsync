@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# eval/setup-runs.sh — materialize the 6 benchmark workspaces from the FROZEN specs.
+# eval/setup-runs.sh — materialize the benchmark workspaces from the FROZEN specs.
 #
 # Two phases:
 #   STAGE  (always, local, no creds): create eval/runs/<folder>/ for each row in eval/runs.map,
@@ -32,6 +32,8 @@ scenario_for() {
     01_*) echo "01_crud_equipment_checkout" ;;
     02_*) echo "02_data_structures_company_directory" ;;
     03_*) echo "03_console_tx_service_requests" ;;
+    04_*) echo "04_interpal_tunnels_partner_bridge" ;;
+    05_*) echo "05_marketing_website" ;;
     *)    echo "" ;;
   esac
 }
@@ -57,10 +59,11 @@ done < "$MAP"
 if [ "$DO_SETUP" -ne 1 ]; then
   cat <<EOF
 
-STAGE complete. eval/runs/ has 6 workspaces with specs + shared design files.
+STAGE complete. eval/runs/ has 10 workspaces with specs + shared design files.
 
 Remaining (needs your CloudPiston account — not doable offline):
   1. In PalBuilder, create one EMPTY pal per row in eval/runs.map (names as listed).
+     Scenario 04 also needs the provider fixture pal named partner_catalog_static.
   2. Re-run with creds to pull + inject skills:
        CP_USER=you@example.com CP_PASS=... ./eval/setup-runs.sh --setup
   3. Launch each: point your harness/model at the workspace and run in auto mode.

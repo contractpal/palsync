@@ -15,15 +15,18 @@ eval/runs/
   01_crud_cheap/        ...
   02_dirstruct_frontier/  02_dirstruct_cheap/
   03_console_frontier/    03_console_cheap/
+  04_interpal_frontier/   04_interpal_cheap/
+  05_marketing_frontier/  05_marketing_cheap/
 ```
 
-6 workspaces = 3 scenarios × {frontier, cheap}. A workspace is dirtied by its build and cannot be
+10 workspaces = 5 scenarios × {frontier, cheap}. A workspace is dirtied by its build and cannot be
 reused, so each model tier gets its own empty pal.
 
 ## How to run a test
 
 1. **Stage** (offline): `./eval/setup-runs.sh` — creates the 6 folders with specs + design files.
 2. **Create empty pals**: in PalBuilder, make one empty pal per row in [`../runs.map`](../runs.map).
+   Scenario 04 also requires the static provider fixture pal named in its SPEC.md.
 3. **Setup** (pulls + injects skills): `CP_USER=you@x.com CP_PASS=... ./eval/setup-runs.sh --setup`.
 4. **Set the `pal:` URL** in each folder's `SPEC.md` (replace the `<WORKSPACE …>` placeholder).
 5. **Launch** the folder in your harness, on the tier's model, **auto mode, zero intervention**:

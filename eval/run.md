@@ -5,7 +5,7 @@ scenarios, the shared files, and the Run A / Run B idea — all still true. This
 measurement layer: variable pinning, the one-variable rule, per-run cost capture, and the model
 matrix. Where the two disagree, this file wins.
 
-The scenarios themselves (`eval/specs/01…03`, `DESIGN_SYSTEM.md`, `COMPONENTS.md`) are frozen.
+The scenarios themselves (`eval/specs/01…05`, `DESIGN_SYSTEM.md`, `COMPONENTS.md`) are frozen.
 Do not edit spec content — a changed spec invalidates every prior row it would compare against.
 
 ---
@@ -20,7 +20,7 @@ therefore records BOTH the §12 score (via `eval/scoring.md`) AND the cost block
 
 Two work streams are being measured independently on this same benchmark:
 - the **orchestration skills** (pal-init / pal-loop / pal-review / pal-spec / pal-restraint …) — the user's refactor;
-- the **palbuilder domain skills** (palbuilder-frontend / -backend / -email / -jobs-http / -websockets) — a teammate's rebuild.
+- the **palbuilder domain skills** (palbuilder-core / -workflow / -data / -frontend / -realtime / -email) — a teammate's rebuild.
 
 The whole point of the pinning rules below is to keep those two streams separable. A row that
 changed both at once measures nothing.
@@ -35,7 +35,7 @@ discard it, do not "estimate" the gap.
 | Field | What to record | Where to get it |
 |---|---|---|
 | `date` | ISO date of the run | — |
-| `scenario` | `01_crud_equipment_checkout` / `02…` / `03…` | — |
+| `scenario` | `01_crud_equipment_checkout` / `02…` / `03…` / `04…` / `05…` | — |
 | `harness` | e.g. `Claude Code 0.4.x`, `Cursor`, `headless` | — |
 | `model` | **exact model, not the tier** — `claude-sonnet-5`, `claude-opus-4-8`, `claude-haiku-4-5`, `deepseek-v3`, `glm-4-…` | harness model selector |
 | `palsync SHA` | short commit of this repo at run time | `git rev-parse --short HEAD` |
@@ -128,6 +128,6 @@ is A vs B on §12 pass rate first (must hold or improve), then on tokens + tool 
 
 ## Sequencing (human steps, informs how rows get produced)
 
-1. **Baseline on current `main`** before merging any orchestration change: 3 scenarios × {frontier, cheap}. These are the canonical Run A rows.
+1. **Baseline on current `main`** before merging any orchestration change: 5 scenarios × {frontier, cheap}. These are the canonical Run A rows.
 2. When the teammate's **new palbuilder skills** replace the legacy ones, run the matrix once changing ONLY that (orchestration + model held) to isolate its effect, before layering orchestration changes on top.
 3. Only then evaluate orchestration-refactor runs, again one variable at a time.

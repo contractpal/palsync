@@ -4,35 +4,37 @@ spec: SPEC.md (status: approved)   mode: lite
 ## Auto mode
 This build runs fully autonomously. The agent executes all tasks end-to-end without stopping
 for human input. There are no mid-build gates, no "ask first" pauses, no blocker escalations.
-If the agent encounters ambiguity — especially around which storage primitive to use — it
-proceeds with its best judgment and documents what it chose. All review — visual, functional,
-and structure-choice scoring — happens once at the end by a human evaluator against §12.
+If the agent encounters ambiguity — especially around which data primitive to use — it proceeds
+with best judgment and documents what it chose. All review — visual, functional, and
+structure-choice scoring — happens once at the end by a human evaluator against §12.
 
 ## Build plan
-Dependency order:
-1. Datasets employees + departments (+ seed department rows).
-2. Reference/config storage — builder selects and creates the structures for OFFICES and
-   SITE SETTINGS per SPEC §5 (scored choice; §11 forbids inline hard-coding).
-3. Console shell + workflow skeleton.
-4. Directory list: the cross-record read (employee + department name) + directoryList fragment
-   (frontier — the read-model choice happens here).
-5. Office filter action.
-6. Add-employee form + saveEmployee.
-Sequential throughout — each step feeds the next.
-Risks: the join read is the likeliest failure point (N+1 loop instead of a proper read
-structure) — §12 STRUCTURE-CHOICE catches it at review. ES3 workflow limits; compile-verify
-via pal_test after each push.
+Dependency order (leaf-first — foundations before things that use them):
+1. Create employees and departments datasets; seed the four department rows.
+2. Create the selected reference/config structures for OFFICES and SITE SETTINGS.
+3. Apply the `console-app` starter via `palsync scaffold`, then adapt the shell/workflow.
+4. Build the joined directory read and directoryList fragment. This is frontier because the
+   read-model choice is the core measured behavior.
+5. Add office filtering.
+6. Add employeeForm + saveEmployee validation/write.
+
+Parallel-safe: T1 and T2 touch different data structures and can be planned independently; execute
+sequentially in one workspace to keep verification simple. Sequential: T3 → T4 → T5/T6 because
+workflow and fragment names are shared.
+Risks: choosing DataSet for offices/settings, N+1 department lookups, and ES3 workflow syntax.
+Verify workflow compile via pal_test after every push that changes workflow or markup.
+Checkpoints: after T2 (data structures exist), after T4 (joined list renders), final after T6.
 
 ## Tasks
-| id | task | tier | spec ref | depends | status | success condition |
+| id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |
 |---|---|---|---|---|---|---|
-| T1 | employees + departments datasets + dept seeds | cheap | §8a | — | todo | pal_validate 0; departments has 4 rows |
-| T2 | offices + settings storage (builder's structural choice) | frontier | §5, §2, §11 | — | todo | structures exist in pal; contain exact §5 values; nothing hard-coded in HTML/workflow |
-| T3 | console shell + workflow skeleton | standard | §3, §10 | T1 | todo | pal_validate 0; pal_test VALIDATED |
-| T4 | directory list w/ dept-name read + fragment | frontier | §5, §6 | T1,T2,T3 | todo | render shows names not ids; page size from settings; pal_test VALIDATED |
-| T5 | office filter | standard | §5 | T4 | todo | CED filter returns only CED rows; All offices restores |
-| T6 | employee form + saveEmployee + email validation | standard | §5 | T4 | todo | valid insert appears in list; bad email → exact §4 message, no write |
+| T1 | create employees/departments datasets + department seeds | cheap | §8a, §10 | — | todo | pal_validate 0 errors; pal_sync_datasets provisions both datasets; departments has Engineering/Sales/Operations/HR |
+| T2 | create offices + site settings using selected PalBuilder primitives | frontier | §2, §5 data needs, §10, §11 | — | todo | structures exist with exact office/settings values; offices/settings are not DataSets and are not hard-coded in markup/workflow |
+| T3 | scaffold console shell + workflow skeleton | standard | §3, §6, §10 | T1,T2 | todo | pal_validate 0 errors; pal_test console workflow VALIDATED |
+| T4 | directoryList with joined department/office read | frontier | §4, §5 list, §6, §12 | T3 | todo | render shows department names and office cities; footer uses support email; source avoids N+1 department loop; pal_test VALIDATED |
+| T5 | office filter | standard | §5 filterByOffice, §12 | T4 | todo | CED filter renders only Cedar City rows; All offices restores full list; pal_test VALIDATED |
+| T6 | employeeForm + saveEmployee validation/write | standard | §4, §5 saveEmployee, §8a | T4 | todo | valid save appears in directory; bad email returns `Enter a valid email address.` and writes no row |
 
-## Checkpoints (append-only)
-## Blockers
+## Checkpoints (append-only, one line per completed task)
+## Blockers (what needs the human — be exact)
 None — auto mode; workspace set by evaluator before run.

@@ -6,11 +6,17 @@ const path = require("node:path");
 const { listSpecs, resolveSpec, injectSpec } = require("../src/core/evalSpec");
 const { tmpWorkspace } = require("./helpers");
 
-test("listSpecs returns the 3 frozen benchmark specs", () => {
+test("listSpecs returns the 5 frozen benchmark specs", () => {
     const specs = listSpecs();
-    assert.equal(specs.length, 3);
+    assert.equal(specs.length, 5);
     const keys = specs.map(s => s.key).sort();
-    assert.deepEqual(keys, ["01_crud_equipment_checkout", "02_data_structures_company_directory", "03_console_tx_service_requests"]);
+    assert.deepEqual(keys, [
+        "01_crud_equipment_checkout",
+        "02_data_structures_company_directory",
+        "03_console_tx_service_requests",
+        "04_interpal_tunnels_partner_bridge",
+        "05_marketing_website"
+    ]);
     const eq = specs.find(s => s.key === "01_crud_equipment_checkout");
     assert.equal(eq.suggestedName, "equipment_checkout");
 });

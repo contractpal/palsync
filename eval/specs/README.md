@@ -1,6 +1,6 @@
 # Palsync Test Specs
 
-Three benchmark specs to measure palsync's ability to produce functional, structurally correct
+Five benchmark specs to measure palsync's ability to produce functional, structurally correct
 pal code. Each test runs fully autonomously (auto mode) — the agent builds end-to-end with
 zero human input. Evaluation happens once at the end.
 
@@ -11,6 +11,8 @@ zero human input. Evaluation happens once at the end.
 | 1 | `01_crud_equipment_checkout` | CRUD against a single DataSet | insert/update/delete, status toggle, validation, fragment swap, PAL Dev Standard compliance |
 | 2 | `02_data_structures_company_directory` | Correct storage primitive selection | DataList for fixed refs, Data for key-value config, DataView for joined reads — NOT specified in the spec |
 | 3 | `03_console_tx_service_requests` | Console ↔ transaction lifecycle | tx creation from console (type 7), tx completion (type 2), cancel/void, dataset ↔ tx linkage |
+| 4 | `04_interpal_tunnels_partner_bridge` | Inter-pal communication | tunnel request, webservice request, local tunnel provider, local webservice provider |
+| 5 | `05_marketing_website` | Static marketing website | web routing, exact copy, SEO heads, crawler files, visual anti-slop |
 
 ## Running a test
 
@@ -31,4 +33,4 @@ Record the §12 pass/fail checklist for each run to compare.
 ## Shared files
 
 - `DESIGN_SYSTEM.md` — minimal bootstrap-only design stub (all tests share it).
-- `COMPONENTS.md` — the seven components every §6 layout references.
+- `COMPONENTS.md` — the shared component vocabulary every §6 layout references.

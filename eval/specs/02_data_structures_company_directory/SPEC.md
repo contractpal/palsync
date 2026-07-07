@@ -1,153 +1,183 @@
-# SPEC — company_directory (palsync test 2: data-structure selection)
+# SPEC — company_directory (palsync test 2: data management / structure selection)
 status: approved
 reality_check: pass (1 recorded caveat — see §13)
-spec version: 1
+spec version: 2
 mode: lite
 run mode: auto — the build agent runs all tasks end-to-end with NO human intervention. All review (visual, data, structural) happens post-build by a human evaluator. The agent must never stop to ask questions or wait for input.
 pal: company_directory (console) @ <WORKSPACE — set by evaluator before run>
 push policy: free
 review cadence: end
 design system: ../DESIGN_SYSTEM.md (components: ../COMPONENTS.md)
-created: 2026-07-01   approved: 2026-07-01
+created: 2026-07-01   approved: 2026-07-06
 
 ## 1. Product & audience
-An internal employee directory for a ~60-person company. HR adds employees; anyone browses,
-filtered by office. One primary action: **add an employee to the directory**.
-BENCHMARK INTENT: this pal contains four kinds of data with different natures — runtime records,
-a cross-record read that spans two record types, a small fixed reference list, and key-value
-configuration. The spec describes each need *behaviorally* and deliberately does NOT name the
-storage primitive for two of them. The measured dimension is whether the builder selects the
-appropriate PalBuilder structure for each.
+Internal employee directory for a 60-person company. HR adds employees; staff browse the
+directory filtered by office. One primary action: **add an employee to the directory**.
+Benchmark intent: test whether the builder chooses the correct PalBuilder data structure for
+each data need: runtime records, fixed reference rows, key-value settings, and joined reads.
 
 ## 2. Decisions & open questions
 - DECISION: employees and departments are runtime-editable records and are declared as datasets
-  in §8a — records with schemas can't be left ambiguous. — PROTECTED: yes
-- DECISION: the storage mechanism for (a) the office reference list, (b) site settings, and
-  (c) the joined directory read is intentionally unstated — the builder must choose the
-  appropriate PalBuilder primitive from the platform's data structures. — PROTECTED: yes
+  in §8a — rationale: records with schema and writes should be DataSets — PROTECTED: yes
+- DECISION: the storage mechanism for offices, site settings, and the joined directory read is
+  intentionally not named in §8a — rationale: this eval scores whether the agent selects the
+  appropriate platform primitive from behavior — PROTECTED: yes
+- DECISION: office and settings values are exact approved seed data — rationale: deterministic
+  scoring — PROTECTED: yes
 - All open questions resolved. Workspace is set by the evaluator before the run begins.
 
 ## 3. Sitemap & routing
 | page/screen | type | file | workflow action | nav label | purpose |
 |---|---|---|---|---|---|
-| Directory | console | console.html + frag directoryList.html | (default) / list | Directory | browse employees with department + office |
-| Add employee | console | frag employeeForm.html | showForm | — (header button) | create an employee |
+| Directory | console | console.html + fragment directoryList.html | (default) / list | Directory | browse employees with department + office |
+| Add employee | console | fragment employeeForm.html | showForm | — header button | create an employee |
 
-## 4. Copy (real — ships verbatim)
+## 4. Copy (REAL — these exact words ship)
 ### Directory
 - H1: `Employee directory`
 - Primary action button: `Add employee` → showForm
-- Filter label: `Office`; options: all four office names from the reference list + `All offices`;
-  apply button: `Filter`
+- Filter label: `Office`
+- Filter options: `All offices`, `Salt Lake City`, `Cedar City`, `Austin`, `Raleigh`
+- Filter apply button: `Filter`
 - Table columns: `Name`, `Email`, `Department`, `Office`
-- EmptyState: `No employees match this filter.`
-- Footer line (reads from site settings): `Questions? Contact ` + support email value.
+- EmptyState copy: `No employees match this filter.`
+- Footer line: `Questions? Contact ` + support email value.
+
 ### Add employee
 - Card title: `Add employee`
-- Labels: `First name`, `Last name`, `Email`, `Department` (select of department names),
-  `Office` (select of office names); submit: `Save`; cancel: `Cancel`
-- Validation message (email empty/invalid): `Enter a valid email address.`
+- Labels: `First name`, `Last name`, `Email`, `Department`, `Office`
+- Submit: `Save`
+- Cancel: `Cancel`
+- Validation message when email is empty or invalid: `Enter a valid email address.`
 
-## 5. Behavior (happy-path — LITE)
-### list (default)
-- Effect: read employees; each row must display the employee's fields PLUS the NAME of its
-  department (departments store name; employees store only departmentId) — a cross-record read
-  the builder must implement with the platform's appropriate read structure, not a per-row
-  lookup loop. Sort: last name ascending. Rows per page: the `directoryPageSize` value from
-  site settings. Output: directoryList fragment.
+## 5. Behavior (what the logic DOES — drives acceptance criteria)
+### list
+- Trigger: first screen load, filter clear, or completed save.
+- Input: optional officeCode.
+- Effect: read employees sorted by last name ascending. Each row displays employee fields plus
+  the department name resolved from departmentId and the office city resolved from officeCode.
+  Rows per page honor the site setting directoryPageSize=`25`.
+- Output: directoryList fragment.
+- [LITE] Deferred edge cases: pagination controls, empty departments, inactive employees.
+
 ### filterByOffice
-- Input: officeCode (from the office reference list). Effect: same read, restricted to
-  employees whose officeCode matches; `All offices` clears the filter. Output: directoryList.
-### saveEmployee
-- Input: first, last, email, departmentId, officeCode. Validation: when email is empty or fails
-  email validation, re-show form with `Enter a valid email address.`; write nothing.
-  Effect: insert employees row, createdAt = today. Output: directory list.
-### Data needs the builder must satisfy (storage choice = scored)
-- OFFICES: exactly four fixed offices — (SLC, Salt Lake City, America/Denver),
-  (CED, Cedar City, America/Denver), (AUS, Austin, America/Chicago), (RDU, Raleigh,
-  America/New_York) — columns officeCode/city/timezone. Read-only at runtime; never edited by
-  any action; populates the Office filter and form select.
-- SITE SETTINGS: three key→value entries — companyName=`Acme Rentals`,
-  supportEmail=`help@acmerentals.example`, directoryPageSize=`25`. Read at render; never
-  written by any action.
-- Deferred (prototype): edit/delete employee; department management UI; pagination controls
-  beyond page size; photo upload.
+- Trigger: `Filter` in FilterBar.
+- Input: officeCode from the fixed office reference rows or blank for `All offices`.
+- Effect: same directory read, restricted to matching officeCode when present.
+- Output: directoryList fragment.
+- [LITE] Deferred edge cases: unknown officeCode, saved filter preference.
 
-## 6. Layout (composition only)
-### Directory — PageHeader (`Employee directory` + `Add employee`) → FilterBar (Office select) →
-  DataTable → footer support-email line (plain text under table)
-### Add employee — PageHeader → FormCard
+### saveEmployee
+- Trigger: `Save` on employeeForm.
+- Input: first (String), last (String), email (String), departmentId (Primary key), officeCode (String).
+- Validation: when email is empty or fails email validation, system shall re-show employeeForm with
+  `Enter a valid email address.` and write nothing.
+- Effect: insert employees row with createdAt=today.
+- Output: directoryList fragment.
+- [LITE] Deferred edge cases: duplicate email, edit/delete employee, department management UI.
+
+### Data needs the builder must satisfy (storage choice = scored)
+- OFFICES: exactly four fixed rows: SLC / Salt Lake City / America/Denver; CED / Cedar City /
+  America/Denver; AUS / Austin / America/Chicago; RDU / Raleigh / America/New_York. Columns:
+  officeCode, city, timezone. Read-only at runtime; populates the Office filter and form select.
+- SITE SETTINGS: key-value entries companyName=`Acme Rentals`,
+  supportEmail=`help@acmerentals.example`, directoryPageSize=`25`. Read at render; never written.
+- JOINED DIRECTORY READ: employee list must resolve department name without a per-row N+1 lookup loop.
+
+## 6. Layout (composition only — NO colors/fonts)
+### Directory
+- PageHeader (`Employee directory` + `Add employee`) → FilterBar (Office select) → DataTable →
+  footer support-email line
+### Add employee
+- PageHeader → FormCard
 
 ## 7. SEO
-None — console-only.
+None — console-only, nothing publicly indexable.
 
 ## 8. Data model
-### 8a. Datasets to CREATE (runtime records ONLY — other storage per §2 DECISION)
+### 8a. Datasets to CREATE
 ### dataset: employees
-| field | type | size | notes |
+| field | type (see references/palbuilder-types.md) | size | notes |
 |---|---|---|---|
 | employeeId | Primary key | — | |
 | first | String | 50 | notNull |
 | last | String | 50 | notNull; sorted on |
-| email | String | 100 | notNull, notEmpty, validation: email; indexed |
+| email | String | 100 | notNull, notEmpty, indexed; workflow validates email shape |
 | departmentId | String | 50 | references departments primary key |
-| officeCode | String | 10 | matches OFFICES officeCode; indexed (filtered on) |
-| createdAt | DateOnly | — | default now() |
+| officeCode | String | 10 | matches OFFICES officeCode; indexed |
+| createdAt | DateOnly | — | default today |
 Indexes: email; officeCode.
+
 ### dataset: departments
-| field | type | size | notes |
+| field | type (see references/palbuilder-types.md) | size | notes |
 |---|---|---|---|
 | departmentId | Primary key | — | |
 | name | String | 50 | notNull |
-Seed rows (create at build): Engineering, Sales, Operations, HR.
-### 8b. Datasets CONSUMED — none.
+Seed rows: Engineering, Sales, Operations, HR.
 
-## 9. Required skills
-- palbuilder-frontend, design-build, pal-restraint
-- palbuilder-backend (reads/writes, validation, the cross-record read)
+### 8b. Datasets CONSUMED (existing — read-only; the build must NOT create or alter these)
+None.
 
-## 10. PalBuilder surface
-- Pages: console.html. Fragments: directoryList, employeeForm.
-- c: tags: c:a, c:list, c:fragment, c:if, c:field, c:resource. c:resource: bootstrap 5.3.5.
-- Workflows: default console workflow — workflowType 7 — hub: no.
+## 9. Required skills (which palsync skills this build loads)
+- ALWAYS: palbuilder-frontend, design-build, pal-restraint
+- IF server-side workflow logic, validation, routing, or responses: palbuilder-workflow
+- IF data writes/reads, payloads/DataLists, cache, files, or server-side HTTP: palbuilder-data
+
+## 10. PalBuilder surface (the platform primitives this build touches)
+- Pages (page-shell): console.html.
+- Fragments (c:ignore): directoryList, employeeForm.
+- c: tags used: c:a, c:list, c:fragment, c:if, c:field, c:resource, c:debug.
+- c:resource libs: bootstrap 5.3.5.
+- Workflows: console.js — workflowType 7 console — hub: no.
 - Data: DataSet created: employees, departments. Additional read/reference/config structures:
-  builder's choice among real PalBuilder data primitives — no invented primitives permitted.
-- Workflow JS: ES3-style engine — no object literals, no let/const/arrow.
+  builder must choose real PalBuilder data primitives for offices, site settings, and the joined
+  directory read; invented primitives are forbidden.
+- Jobs: none.
+- HTTP/parse: none.
+- Sockets: none.
 
-## 11. Constraints
-- ALWAYS: pal_validate before push; §4 copy and §5 seed/reference/setting VALUES ship verbatim;
-  PAL Development Standard conventions.
-- AUTO MODE: the agent proceeds with best judgment on all decisions including storage structure
-  selection. No stopping for questions. If unsure, choose the most idiomatic PalBuilder approach.
-- NEVER: hard-code office rows or settings values inline in workflow/HTML (they must live in a
-  data structure); per-row department lookups inside a loop; extra pages or web workflows.
+## 11. Constraints (Always / Ask-first / Never)
+- ALWAYS: pal_validate before push; §4 copy and §5 seed/reference/setting values ship verbatim;
+  workflow JS stays in the restricted ES3-style subset.
+- AUTO MODE: the agent proceeds with best judgment on storage-structure choices. No stopping for
+  questions. If unsure, choose the most idiomatic documented PalBuilder primitive.
+- NEVER: hard-code office rows or settings values inline in workflow/HTML; use a dataset for offices
+  or settings; perform per-row department lookups inside a list loop; add extra pages or web workflows.
 
 ## 12. Acceptance criteria
-GLOBAL FLOOR: pal_validate 0 errors; pal_test workflow VALIDATED, 0 notes; §3 links route.
-CONSOLE (all verified post-build by human evaluator):
-- [ ] VISUAL (Directory): H1, filter bar, table with Department + Office columns populated by
-      NAMES not ids.
-- [ ] Data effect: after saveEmployee, directory list contains the new row with the correct
-      department NAME resolved.
-HAPPY-PATH:
-- [ ] saveEmployee: valid input → row appears with department name + office.
-- [ ] filterByOffice: pick CED → only CED rows; `All offices` restores full list.
-- [ ] settings read: footer renders `help@acmerentals.example`; page size honors 25.
-- [ ] saveEmployee edge: bad email → `Enter a valid email address.`, no row written.
-STRUCTURE-CHOICE (evaluator scores post-build from pal.json + workflow source):
-- [ ] offices stored in the platform's fixed tabular reference structure (not a dataset, not
-      hard-coded HTML).
-- [ ] settings stored in the platform's key-value structure (not a dataset).
-- [ ] directory read implemented via the platform's join/read-model structure (not N+1 lookups).
+GLOBAL FLOOR:
+- [ ] pal_validate: 0 errors
+- [ ] pal_test: console workflow VALIDATED, 0 notes
+- [ ] every §3 nav link routes (no dead links): list, showForm, saveEmployee, filterByOffice
+- [ ] REGRESSION: the pal-init baseline still passes and untouched UI did not shift.
+
+CONSOLE pages:
+- [ ] VISUAL (Directory): H1 `Employee directory`, FilterBar, striped table, Department and Office
+      columns populated by names/cities rather than ids/codes, no emoji.
+- [ ] Data effect: after saveEmployee, a follow-up directory render contains the new employee row
+      with the correct department name and office city.
+
+HAPPY-PATH [LITE]:
+- [ ] saveEmployee: valid input → row appears with department name and office city.
+- [ ] saveEmployee edge: bad email → `Enter a valid email address.`, and no row is written.
+- [ ] filterByOffice: choose Cedar City / CED → only CED rows render; `All offices` restores full list.
+- [ ] settings read: footer renders `Questions? Contact help@acmerentals.example`.
+- [ ] settings read: directory page size is read from directoryPageSize=`25`, not hard-coded in markup.
+
+STRUCTURE-CHOICE:
+- [ ] offices stored in the platform's fixed tabular reference structure, not a DataSet and not
+      hard-coded HTML/workflow strings.
+- [ ] settings stored in the platform's key-value data structure, not a DataSet and not hard-coded.
+- [ ] directory read implemented via the platform's join/read-model structure, not N+1 department
+      lookups inside a row loop.
 
 ## 13. Reality check
-- PASS: §8a types all stored strings; sizes only on String; indexed fields (email String,
-  officeCode String) indexable; employees/departments have Id keys; §6 components exist in
-  COMPONENTS.md; no dead links; workflow compile via pal_test in EXECUTION.md.
-- CAVEAT (accepted, by design): §10 leaves three storage primitives unbound, which the standard
-  reality check would flag as "capability with no primitive." Intentional — it is the measured
-  variable; §10 constrains the choice to real PalBuilder primitives, and §12 STRUCTURE-CHOICE
-  criteria close the verification gap.
+- PASS: §8a types are verified stored strings; size only on String; indexed fields are indexable;
+  employees and departments have primary keys; §6 components exist in COMPONENTS.md; no dead links;
+  workflow compile verification is explicit in EXECUTION.md.
+- CAVEAT (accepted, by design): §10 leaves three data primitives unbound, which the usual reality
+  check would flag as capability without primitive. This is the measured variable. §10 constrains
+  the choice to real PalBuilder primitives, and §12 STRUCTURE-CHOICE closes the verification gap.
 
-## 14. Amendment log
+## 14. Amendment log (append-only; empty until the first approved amendment)
 (empty)
