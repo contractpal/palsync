@@ -34,6 +34,8 @@ never pal-loop's self-report.
   (per-string found/missing verdict, no HTML dump). Real output, not source.
 - Every §3 nav link routes to a real page — no dead links.
 - Every §12 acceptance criterion actually met — the full set, not just the global floor.
+- Every UI page links `../Styles/spacing.css` before theme/design CSS, and Bootstrap is not loaded
+  merely for spacing/layout helpers.
 - §11 NEVER list not violated; §8b consumed datasets not altered.
 - Every `done` task in EXECUTION.md traces via its `spec ref` to its SPEC.md § and that
   requirement is satisfied.
@@ -67,7 +69,8 @@ Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per 
   render). Null → judge each screen against DESIGN_SYSTEM.md and a short UX rubric: visual
   hierarchy, primary journey, Gestalt grouping, Fitts target sizing/proximity, progressive
   disclosure, spacing rhythm, legibility, color meaning/contrast, consistency, responsive behavior
-  if testable, plus the AI fingerprints the design skills flag (gradient-blob hero, pill-everything
+  if testable, presence/use of the required spacing utility layer, plus the AI fingerprints the
+  design skills flag (gradient-blob hero, pill-everything
   uniform radius, three-card-row-as-only-idea, serif-on-cream-with-sage). Report each issue with
   screenshot + fix.
 - **`captured:false` / no screenshot tool / no vision:** do NOT guess from HTML — emit a

@@ -11,6 +11,9 @@ Build UI that conforms to the design system, decomposes cleanly, defines its int
 
 - Read `DESIGN_SYSTEM.md` and `COMPONENTS.md`. If absent and the task is non-trivial, recommend `design-system-init` first — building without a system drifts to generic output. If the user proceeds anyway, infer a minimal system from existing code and state your assumptions.
 - Look at `design/refs/` if present. Read the images, not just tokens — they encode composition and restraint tokens can't. Build toward how they look and feel.
+- For Palbuilder UI, verify every page shell links `../Styles/spacing.css` before the visual
+  stylesheet. `spacing.css` is the required Bootstrap replacement for spacing/layout utilities; do
+  not add Bootstrap only to get `.container`, `.row`, `.col-*`, margin, padding, gap, or flex helpers.
 - For non-trivial UI, read `../design-system-init/references/design-principles.md` before building
   or reviewing. It is the practical checklist for hierarchy, UX flow, Gestalt grouping, Fitts target
   sizing, typography, color meaning, consistency, and simplicity.
@@ -97,6 +100,8 @@ Apply the same vocabulary to yourself at the review gate.
 
 ## Acceptance checklist
 - [ ] DESIGN_SYSTEM.md, COMPONENTS.md, and `design/refs/` loaded before building.
+- [ ] `styles/spacing.css` present, registered, linked before theme/design CSS on every page, and
+      used for generic spacing/layout instead of Bootstrap.
 - [ ] Applied design-principles review: user journey, hierarchy, grouping, Fitts target sizing,
       progressive disclosure, typography, color meaning, and consistency.
 - [ ] Palbuilder component library consulted for non-trivial UI and local reusable components recorded back into COMPONENTS.md.

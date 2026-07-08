@@ -111,6 +111,9 @@ foundations or `design-build` needs a tie-breaker.
 - Palbuilder supports external CSS well; favor CSS custom properties and component classes over a
   build-time framework. Tailwind/Open Props still inform the structure: tokens, scales, responsive
   rules, and small composable classes.
+- Every generated pal should include `styles/spacing.css` as the stable spacing/layout utility
+  layer. It replaces Bootstrap for containers, rows/columns, display/flex, gaps, margin, padding,
+  width/height, and visibility helpers while keeping theme/component CSS project-specific.
 - Do not require Tailwind, UnoCSS, React, Vue, Framer Motion, or build tooling inside a pal. Translate
   their ideas into plain CSS and Palbuilder fragments.
 - Motion defaults: 120-180ms for hover/press/focus, 180-280ms for panels/modals, 400-700ms only for

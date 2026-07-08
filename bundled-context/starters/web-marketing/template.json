@@ -6,6 +6,7 @@
     { "path": "fragments/navbar.html" },
     { "path": "fragments/home-body.html" },
     { "path": "fragments/footer.html" },
+    { "path": "styles/spacing.css" },
     { "path": "styles/theme.css" },
     { "path": "workflows/web.js" }
   ]

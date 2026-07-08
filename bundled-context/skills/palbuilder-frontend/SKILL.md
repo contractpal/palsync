@@ -46,7 +46,7 @@ page without a `<body>` tag ("No body tag found, cannot save without losing cont
 <html xmlns:c="contractpal">
     <head>
         <title>Dashboard</title>
-        <c:resource source="bootstrap" version="5.3.5" name="bootstrap-min.css"/>
+        <link rel="STYLESHEET" type="text/css" href="../Styles/spacing.css"/>
         <link rel="STYLESHEET" type="text/css" href="../Styles/main.css"/>
         <script type="module" src="../Scripts/console-main.js"></script>
     </head>
@@ -60,6 +60,11 @@ page without a `<body>` tag ("No body tag found, cannot save without losing cont
     </body>
 </html>
 ```
+
+Use `styles/spacing.css` for Bootstrap-like spacing/layout helpers (`.container`, `.row`, `.col-*`,
+`.d-flex`, `.gap-*`, `.m-*`, `.p-*`). Do not load Bootstrap just for spacing. Only use
+`c:resource source="bootstrap"` when a legacy pal already depends on Bootstrap behavior or the spec
+explicitly requires Bootstrap components.
 
 ### Fragments hold the namespace on a wrapper
 

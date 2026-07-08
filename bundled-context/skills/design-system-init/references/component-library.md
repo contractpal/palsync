@@ -13,6 +13,8 @@ SVG icons, restrained motion, and enough component coverage that agents do not i
 
 Recommended files:
 
+- `styles/spacing.css` - required spacing/layout utility substrate copied from
+  `references/spacing.css`; load before all visual CSS.
 - `styles/design-system.css` - tokens, base styles, components.
 - `scripts/vendor/gsap.min.js` - local GSAP build when scripted animation is used.
 - `scripts/ui-main.js` - page-level module loaded once from the page shell when JS is needed.
@@ -34,6 +36,7 @@ Page shell load:
 <html xmlns:c="contractpal">
     <head>
         <title>${pageTitle}</title>
+        <link rel="STYLESHEET" type="text/css" href="../Styles/spacing.css" />
         <link rel="STYLESHEET" type="text/css" href="../Styles/design-system.css" />
         <script src="../Scripts/vendor/gsap.min.js"></script>
         <script type="module" src="../Scripts/ui-main.js"></script>
@@ -62,6 +65,10 @@ Fragment shell:
 ```
 
 ## Base CSS
+
+Copy `references/spacing.css` into `styles/spacing.css` for the project. It replaces Bootstrap for
+containers, grid, flex/display helpers, gaps, margin, padding, width/height, and visibility helpers.
+Keep product tokens and component styling in `design-system.css` or `theme.css`.
 
 ```css
 :root {

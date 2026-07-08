@@ -15,6 +15,7 @@ Read before acting:
 - `references/research-brief.md` when choosing foundations or explaining design tradeoffs.
 - `references/component-library.md` when defining the component inventory or writing Palbuilder
   examples.
+- `references/spacing.css` when creating the default Pal spacing/layout utility sheet.
 - `references/vision-routing.md` whenever reference photos/screenshots or rendered output must be
   judged visually.
 
@@ -210,7 +211,10 @@ Define:
 - Iconography: always inline SVG, never icon fonts or JS icon replacers. Default to Iconoir, Tabler,
   or Phosphor; use one family per pal unless a single domain icon is missing. Heroicons can inform
   Tailwind-like proportions, but the generated Palbuilder output must still be inline SVG.
-- Spacing: 4px base with named steps: 4, 8, 12, 16, 20, 24, 32, 40, 48, 64.
+- Spacing: every pal gets `styles/spacing.css` copied from `references/spacing.css`, linked before
+  theme/design CSS, and used as the Bootstrap replacement for spacing/layout utilities. It defines
+  the project spacing scale, container widths, `.row`/`.col-*`, flex/display helpers, gaps, margin,
+  padding, width/height, and visibility helpers. Do not use Bootstrap for spacing.
 - Radius: small set only. Cards default to 8px or less unless references require more.
 - Border/shadow/elevation: decide whether separation comes from tone, border, shadow, or layout.
 - Motion: GSAP is the JavaScript animation library for Palbuilder surfaces that need scripted
@@ -285,7 +289,9 @@ Radix/Headless-style accessible states, Polaris-style dense tables, Carbon-style
 ### Type
 [Families, loading method, scale, weights, numeric rules.]
 ### Spacing
-[Base and scale.]
+[Must state that `styles/spacing.css` is present, linked before theme/design CSS, and owns the
+spacing/layout utility scale. Note any project overrides to `--space-unit`, `--container-*`, or
+`--gutter-*`.]
 ### Radius / Border / Shadow / Motion
 [Token sets and intent.]
 
@@ -303,9 +309,10 @@ progressive disclosure, target sizing, and intentional hierarchy mechanisms.]
 [Concrete, testable rules. Include anti-slop collisions.]
 
 ## Stack Mapping
-[Palbuilder XHTML/CSS mapping: style files, page head links, fragment naming, c: tag patterns,
-which recipes from references/component-library.md to use, GSAP loading strategy, SVG icon family,
-and Fontshare/system font choice.]
+[Palbuilder XHTML/CSS mapping: `styles/spacing.css` copied from the bundled reference and linked
+first, `styles/theme.css` or `styles/design-system.css` linked after it, fragment naming, c: tag
+patterns, which recipes from references/component-library.md to use, GSAP loading strategy, SVG icon
+family, and Fontshare/system font choice.]
 ```
 
 ### 6. Write COMPONENTS.md
@@ -352,8 +359,13 @@ reality. A correction means re-check references or source files before editing t
 
 ## Palbuilder Rules For The Design System
 
-- Use external CSS files for the library, normally `styles/design-system.css` or
-  `styles/theme.css`; pages link them from `<head>`.
+- Every pal must include `styles/spacing.css` copied from `references/spacing.css` and link it from
+  every page shell before any theme/component stylesheet:
+  `<link rel="STYLESHEET" type="text/css" href="../Styles/spacing.css" />`.
+- Use external CSS files for the visual layer, normally `styles/design-system.css` or
+  `styles/theme.css`; pages link them from `<head>` after `spacing.css`.
+- `spacing.css` replaces Bootstrap for spacing/layout. Only load Bootstrap when a legacy pal already
+  depends on Bootstrap behavior or a specific platform resource is explicitly required.
 - Fragments use `<c:ignore xmlns:c="contractpal">` and contain no `<html>`, `<head>`, `<body>`,
   or inline `<script>`.
 - Server actions use `c:a` / `c:button` / `c:select` with only documented attributes from
@@ -382,6 +394,8 @@ reality. A correction means re-check references or source files before editing t
 - [ ] `design/refs/` contains durable reference assets and notes.
 - [ ] `DESIGN_SYSTEM.md` exists with semantic tokens, density/layout, accessibility, Do / Don't,
       and Palbuilder stack mapping.
+- [ ] `styles/spacing.css` exists, matches or intentionally extends `references/spacing.css`, is
+      registered in `pal.json`, and is linked before `theme.css`/`design-system.css` on every page.
 - [ ] `COMPONENTS.md` exists with primitives, composites, layout shells, states, and recipe links.
 - [ ] Direction was checked against anti-slop fingerprints.
 - [ ] Direction was checked against `references/design-principles.md`: user journey, hierarchy,

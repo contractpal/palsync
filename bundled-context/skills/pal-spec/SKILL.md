@@ -21,7 +21,9 @@ MINE → INTERVIEW → LOCK ASSUMPTIONS → SPEC.md draft → REALITY CHECK → 
 - **DESIGN IS A HANDOFF, NOT A SECTION.** No palettes, fonts, or aesthetic direction in the
   spec — those live in `DESIGN_SYSTEM.md` / `COMPONENTS.md` (from **design-system-init**).
   The spec carries only per-page composition and UX flow (§6): primary path, hierarchy, and
-  progressive disclosure. No DESIGN_SYSTEM.md → stop, run design-system-init first.
+  progressive disclosure. No DESIGN_SYSTEM.md → stop, run design-system-init first. Every
+  frontend spec should expect `styles/spacing.css` as the shared spacing/layout utility layer
+  unless the project is a non-UI service-only pal.
 - **Never invent facts** — no made-up stats, prices, or testimonials. Record the source of
   every claim; a claim with no source is an open question.
 
@@ -86,7 +88,8 @@ came from.
 - **Design handoff** — Q15 DESIGN_SYSTEM.md + COMPONENTS.md present? No → run
   design-system-init, then return here. Yes → per page, propose a layout skeleton: section
   order + which named component fills each slot + hierarchy/primary action/progressive disclosure
-  notes. No colors/fonts.
+  notes. Confirm every page shell will link `styles/spacing.css` before theme/design CSS. No
+  colors/fonts.
 - **SEO** *(usually web; a publicly indexed console landing/login page can qualify; never a
   webservice/tunnel action)* — Q16 Domain? Per §3 page: publicly indexable? Target phrase for
   each page that is (propose from approved copy).

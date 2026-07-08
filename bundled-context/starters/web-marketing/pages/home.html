@@ -34,23 +34,13 @@
         }
         </script>
 
-        <!-- 5. Async Google Fonts — Lighthouse-approved pattern.
-             preload as=style kicks the DNS/TCP early; onload swaps rel to stylesheet
-             so the font never blocks rendering. The server strips <noscript> tags, so
-             NO <noscript> fallback — the blocking <link> is re-introduced by the server
-             automatically for crawlers that need it. -->
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin" />
-        <link rel="preload" as="style"
-              href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;display=swap"
-              onload="this.onload=null;this.rel='stylesheet'" />
-
-        <!-- 6. Speculationrules — prerender pages the user is likely to navigate to.
+        <!-- 5. Speculationrules — prerender pages the user is likely to navigate to.
              Moderate eagerness: prefetches on hover, prerenders on mousedown. -->
         <script type="speculationrules">
         {"prerender":[{"where":{"href_matches":"/*"},"eagerness":"moderate"}]}
         </script>
 
+        <link rel="STYLESHEET" type="text/css" href="../Styles/spacing.css" />
         <link rel="STYLESHEET" type="text/css" href="../Styles/theme.css" />
     </head>
     <body>

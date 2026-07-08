@@ -5,6 +5,7 @@
     { "path": "pages/console.html" },
     { "path": "fragments/navbar.html" },
     { "path": "fragments/dashboard.html" },
+    { "path": "styles/spacing.css" },
     { "path": "styles/theme.css" },
     { "path": "workflows/console.js" }
   ]

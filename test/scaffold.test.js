@@ -41,3 +41,22 @@ test("bundled starters apply cleanly — every manifest file exists (no skips)",
         fs.rmSync(ws, { recursive: true, force: true });
     }
 });
+
+test("bundled UI starters include spacing.css before theme.css", () => {
+    for (const name of ["console-app", "web-marketing"]) {
+        const ws = tempWorkspace();
+        applyTemplate(ws, name, { palName: "T" });
+        const pal = JSON.parse(fs.readFileSync(path.join(ws, "pal.json"), "utf8"));
+        assert.ok(fs.existsSync(path.join(ws, "styles", "spacing.css")), name + " writes spacing.css");
+        assert.ok(pal.styles.entry.some(e => e.string === "spacing.css"), name + " registers spacing.css");
+
+        const pagePath = name === "console-app" ? "pages/console.html" : "pages/home.html";
+        const page = fs.readFileSync(path.join(ws, pagePath), "utf8");
+        const spacingIx = page.indexOf("../Styles/spacing.css");
+        const themeIx = page.indexOf("../Styles/theme.css");
+        assert.ok(spacingIx > -1, name + " links spacing.css");
+        assert.ok(themeIx > -1, name + " links theme.css");
+        assert.ok(spacingIx < themeIx, name + " loads spacing.css before theme.css");
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});

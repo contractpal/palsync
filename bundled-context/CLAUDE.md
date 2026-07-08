@@ -57,6 +57,10 @@ user journey, hierarchy, tokens, components, typography, color, SVG icon policy,
 strategy; `design-build` enforces them while building. Do not treat visual work as decoration after
 the spec is written.
 
+Every pal UI should include `styles/spacing.css` as the shared spacing/layout utility layer, linked
+before theme/design CSS on every page. It replaces Bootstrap for spacing, grid, flex, and gap
+helpers; load Bootstrap only for an explicit legacy/platform need.
+
 ---
 
 ## Workspace layout
