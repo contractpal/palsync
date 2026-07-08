@@ -1,12 +1,12 @@
 <html xmlns:c="contractpal">
     <head>
-        <!-- 1. charset + viewport FIRST — required for Lighthouse 100 -->
+        <!-- 1. charset + viewport first. -->
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
 
         <!-- 2. SEO head (seo-core skill). title <=60 chars, description 50-160,
              og:image/og:url ABSOLUTE. Use plain ASCII separators (| or -) in titles:
-             the server decodes entities in meta attributes, so an em-dash WILL reach crawlers. -->
+             the server decodes entities in meta attributes, so avoid em dashes there. -->
         <title>{{PAL_NAME}} | What It Does For Whom</title>
         <meta name="description" content="One plain sentence: what {{PAL_NAME}} does, for whom, and the outcome. 50 to 160 characters of honest description go here." />
         <link rel="canonical" href="https://YOUR-DOMAIN/" />
@@ -32,12 +32,6 @@
           "name": "{{PAL_NAME}}",
           "url": "https://YOUR-DOMAIN/"
         }
-        </script>
-
-        <!-- 5. Speculationrules — prerender pages the user is likely to navigate to.
-             Moderate eagerness: prefetches on hover, prerenders on mousedown. -->
-        <script type="speculationrules">
-        {"prerender":[{"where":{"href_matches":"/*"},"eagerness":"moderate"}]}
         </script>
 
         <link rel="STYLESHEET" type="text/css" href="../Styles/spacing.css" />

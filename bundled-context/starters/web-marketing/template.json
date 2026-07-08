@@ -1,5 +1,5 @@
 {
-  "description": "Marketing/landing site for a WEB pal: SEO-complete page shell, navbar/hero/footer fragments, Editorial Warmth design tokens. Customize the copy; the structure, design floor, and SEO floor are already correct.",
+  "description": "Marketing/landing site for a WEB pal: SEO-ready page shell, navbar/hero/footer fragments, spacing.css plus modern system-font design tokens. Customize copy, domain, SEO URLs, and real imagery before production.",
   "palType": "palTypeWeb",
   "files": [
     { "path": "pages/home.html" },

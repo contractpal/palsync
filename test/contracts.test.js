@@ -218,6 +218,24 @@ test("fabricated API method with no near match — warns, no suggestion claimed"
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("crawler intercept APIs are recognized by the fabricated API check", () => {
+    const dir = tmpWorkspace({
+        "workflows/web.js": [
+            "function run(controller) {",
+            "    var href = controller.getHref();",
+            "    if (href == '/robots.txt') {",
+            "        var robots = controller.createAjaxResponse('User-agent: *', false);",
+            "        robots.setContentType('text/plain');",
+            "        return robots;",
+            "    }",
+            "}",
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "unknownApiMethod");
+    assert.strictEqual(findings.length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("unwired dataset — datasets/foo.json with no pal.json entry (lintPalJson)", () => {
     const dir = tmpWorkspace({
         "pal.json": basePalJson({}),
@@ -339,6 +357,34 @@ test("createAjaxResponse WITH isAjax() — no ajaxTransport finding", () => {
             "    if (request.isAjax()) {",
             "        var ajax = c.createAjaxResponse(pal.getAjaxFragment('list'), true);",
             "        return ajax;",
+            "    }",
+            "}",
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "ajaxTransport");
+    assert.strictEqual(findings.length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("crawler file createAjaxResponse intercepts do not need isAjax()", () => {
+    const dir = tmpWorkspace({
+        "workflows/web.js": [
+            "function run(controller) {",
+            "    var href = controller.getHref();",
+            "    if (href == '/robots.txt') {",
+            "        var robots = controller.createAjaxResponse('User-agent: *', false);",
+            "        robots.setContentType('text/plain');",
+            "        return robots;",
+            "    }",
+            "    if (href == '/sitemap.xml') {",
+            "        var sitemap = controller.createAjaxResponse('<urlset></urlset>', false);",
+            "        sitemap.setContentType('application/xml');",
+            "        return sitemap;",
+            "    }",
+            "    if (href == '/llms.txt') {",
+            "        var llms = controller.createAjaxResponse('# Product', false);",
+            "        llms.setContentType('text/plain');",
+            "        return llms;",
             "    }",
             "}",
         ].join("\n"),

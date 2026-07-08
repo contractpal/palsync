@@ -1,5 +1,5 @@
 {
-  "description": "Console application for a CONSOLE pal: page shell (cp-root + navbar + swappable fragment slot), dashboard fragment with stat cards and an empty-state table, Editorial Warmth tokens, run() workflow skeleton with the frag pattern. Customize the dashboard; the structure and design floor are already correct.",
+  "description": "Console application for a CONSOLE pal: page shell (cp-root + navbar + swappable fragment slot), dashboard fragment with stat cards and an empty-state table, spacing.css plus modern system-font design tokens, and a run() workflow skeleton with the frag pattern.",
   "palType": "palTypeConsole",
   "files": [
     { "path": "pages/console.html" },

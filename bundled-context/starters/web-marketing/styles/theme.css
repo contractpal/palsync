@@ -133,14 +133,48 @@ a { color: inherit; }
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(247,248,251,0.20), rgba(247,248,251,0.94));
+  background: linear-gradient(180deg, rgba(247,248,251,0.64), rgba(247,248,251,0.96));
 }
-.hero-img {
+.hero-visual {
   position: absolute;
-  inset: 0;
+  inset: 96px 8vw auto;
+  min-height: 420px;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.5fr);
+  gap: var(--s5);
+  opacity: 0.9;
+}
+.hero-pane {
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s6);
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(199, 206, 216, 0.78);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-md);
+}
+.hero-pane-side { align-self: end; min-height: 220px; }
+.hero-kicker,
+.hero-line,
+.hero-dot {
+  display: block;
+  border-radius: var(--ds-radius-pill);
+  background: rgba(16, 17, 20, 0.16);
+}
+.hero-kicker { width: 72px; height: 10px; background: var(--ds-accent); }
+.hero-line { width: 68%; height: 12px; }
+.hero-line-wide { width: 88%; height: 18px; background: rgba(16, 17, 20, 0.24); }
+.hero-line-short { width: 42%; }
+.hero-dot { width: 36px; height: 36px; background: var(--ds-accent-soft); }
+.hero-pane-main::after {
+  content: "";
+  margin-top: auto;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: 96px;
+  border-radius: var(--ds-radius-md);
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.20), rgba(16, 17, 20, 0.10));
 }
 .hero-inner { position: relative; z-index: 1; padding-block: var(--s8); }
 .hero-sub { max-width: 620px; margin: 0 auto var(--s6); color: var(--ds-text-muted); font-size: 1.125rem; }
@@ -197,6 +231,8 @@ a { color: inherit; }
   .nav-links { display: none; }
   .nav-actions { margin-left: auto; }
   .hero { min-height: 720px; }
+  .hero-visual { inset: 88px var(--s4) auto; grid-template-columns: 1fr; opacity: 0.58; }
+  .hero-pane-side { display: none; }
   .feature-grid { grid-template-columns: 1fr; }
   .feature-grid .card { grid-column: auto; grid-row: auto; }
   .footer-inner { align-items: flex-start; flex-direction: column; }

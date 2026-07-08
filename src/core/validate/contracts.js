@@ -161,7 +161,7 @@ const KNOWN_API_METHODS = [
     "getData", "getUpload", "getDefaultValue", "getPersonalProfile", "getFullName",
     "getInt", "getBoolean", "getValue", "getId", "getUser", "getPal", "getPage", "getRequest",
     "getAction", "getTransaction", "getEnterprise", "getDateUtil", "getFormatter", "getValidator",
-    "getAjaxFragment",
+    "getAjaxFragment", "getHref",
     // create
     "createFilter", "createRecord", "createPayload", "createDataList", "createData",
     "createAjaxResponse", "createServiceRequest", "createGUID", "createBuffer",
@@ -169,7 +169,7 @@ const KNOWN_API_METHODS = [
     "addEqual", "addNotEqual", "addNotNull", "addNull", "addAnd", "addOr", "addColumn",
     "addDataList", "addDataMap", "addPayload",
     // set
-    "setInt", "setBoolean", "setDate", "setColumnValue",
+    "setInt", "setBoolean", "setDate", "setColumnValue", "setContentType",
     // insert / update / delete / remove / find / sort / select
     "insertRecord", "updateRecord", "deleteRecord", "deleteRecords", "removeColumn",
     "findRecord", "sortAscending", "sortDescending", "selectColumns",
@@ -678,6 +678,7 @@ function checkAjaxTransport(rel, src, findings) {
     const idx = src.indexOf("createAjaxResponse");
     if (idx === -1) return;
     if (/isAjax\s*\(\)/.test(src)) return;
+    if (/robots\.txt/.test(src) && /sitemap\.xml/.test(src) && /llms\.txt/.test(src) && /setContentType\s*\(/.test(src)) return;
     findings.push({
         file: rel, line: lineAt(src, idx), column: 0, severity: "warn", rule: "ajaxTransport",
         message: "createAjaxResponse(...) is used but this file never calls isAjax() — the response type is " +

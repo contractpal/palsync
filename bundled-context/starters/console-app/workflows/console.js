@@ -36,6 +36,8 @@ function run(controller)
    dataset reads (pal.getDataSet(...).getRecords(filter) — see the palbuilder-data skill). */
 function getDashboard()
 {
+    var items = c.createDataList("items", ["name", "value", "updated"]);
+    payload.addDataList(items);
     payload.set("active", "dashboard");
     payload.set("statCount", "0");
     payload.set("statWeek", "0");

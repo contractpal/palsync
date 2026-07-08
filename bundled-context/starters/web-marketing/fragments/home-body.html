@@ -1,31 +1,23 @@
 <c:ignore xmlns:c="contractpal">
   <main id="main">
 
-    <!-- HERO: in-document <img> for LCP — NOT a CSS background-image.
-         fetchpriority="high" tells the browser this is the LCP candidate.
-         srcset provides a mobile variant (swap paths to your actual assets).
-         loading="eager" is the default but stated explicitly for clarity.
-         Use a real asset; a placeholder kills the Lighthouse performance score.
-
-         CSS backgrounds are NOT eligible for fetchpriority and delay LCP.
-         If you need the image to cover the full hero (e.g. a painted landscape),
-         position the <img> as cover with object-fit:cover inside the section,
-         then layer the text content on top via CSS (position absolute / grid overlay). -->
+    <!-- HERO: before production, replace .hero-visual with a real in-document <img>
+         when the project has a product/place/person/image asset. Do not ship missing
+         ../Images/hero.jpg references from a starter. -->
     <section class="hero">
-      <img
-        src="../Images/hero.jpg"
-        srcset="../Images/hero-mobile.jpg 640w, ../Images/hero.jpg 1200w"
-        sizes="100vw"
-        alt="{{PAL_NAME}} — brief description of what the hero image shows"
-        fetchpriority="high"
-        loading="eager"
-        width="1200"
-        height="600"
-        class="hero-img"
-      />
-      <!-- width + height attributes prevent layout shift (CLS). Set to your actual
-           image dimensions. The CSS can override the rendered size — these just
-           give the browser the aspect ratio before the image loads. -->
+      <div class="hero-visual" aria-hidden="true">
+        <div class="hero-pane hero-pane-main">
+          <span class="hero-kicker"></span>
+          <span class="hero-line hero-line-wide"></span>
+          <span class="hero-line"></span>
+          <span class="hero-line hero-line-short"></span>
+        </div>
+        <div class="hero-pane hero-pane-side">
+          <span class="hero-dot"></span>
+          <span class="hero-line"></span>
+          <span class="hero-line hero-line-short"></span>
+        </div>
+      </div>
       <div class="wrap-narrow hero-inner">
         <span class="eyebrow">For your audience, in three words</span>
         <h1 class="h1">The one-line promise, <span class="em">stated plainly.</span></h1>
@@ -45,7 +37,7 @@
         <div class="feature-grid">
           <div class="card card-wide reveal">
             <h3 class="h3">The lead feature</h3>
-            <p>One or two sentences on the single most valuable thing. This card is wider because this feature matters most — rank, don't equal-weight.</p>
+            <p>One or two sentences on the single most valuable thing. This card is wider because this feature matters most; rank, do not equal-weight.</p>
           </div>
           <div class="card reveal">
             <h3 class="h3">Second feature</h3>
@@ -69,7 +61,7 @@
       <div class="wrap-narrow band-inner">
         <span class="eyebrow eyebrow-ondark">The proof</span>
         <p class="band-num">3&#215;</p>
-        <p class="band-line">One sentence that earns the number above. If you don't have a real stat yet, use a concrete fact instead — never invent one.</p>
+        <p class="band-line">One sentence that earns the number above. If you do not have a real stat yet, use a concrete fact instead. Never invent one.</p>
       </div>
     </section>
 
