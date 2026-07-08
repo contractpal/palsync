@@ -18,9 +18,16 @@ let nextGoto;             // (url) => void | throws   (simulates auth replay)
 let landedUrl;            // what page.url() returns after navigation
 let pageText;             // what page.innerText("body") returns (for render-error detection)
 const gotoCalls = [];     // every URL navigated to this test
+const callLog = [];       // high-level browser operations, for ordering assertions
 const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]); // fake PNG
 let chromiumPresent = true;
 let nextEvaluate;         // (fn, args) => any | throws — simulates page.evaluate for the JPEG downscale
+let nextStylePageState;   // returned by no-arg evaluate() calls for stylesheet diagnostics
+let pageListeners;
+
+function emitPage(event, arg) {
+    for (const fn of (pageListeners[event] || [])) fn(arg);
+}
 
 // --- inject fakes into the require cache ------------------------------------
 function stub(id, exportsObj) {
@@ -29,11 +36,19 @@ function stub(id, exportsObj) {
 }
 
 const fakePage = {
-    async goto(url) { gotoCalls.push(url); if (nextGoto) nextGoto(url); },
+    on(event, handler) { (pageListeners[event] = pageListeners[event] || []).push(handler); },
+    async goto(url, opts) { callLog.push("goto:" + ((opts && opts.waitUntil) || "")); gotoCalls.push(url); if (nextGoto) nextGoto(url); },
+    async waitForLoadState(state) { callLog.push("load:" + state); },
+    async waitForFunction() { callLog.push("waitForStyles"); },
+    async waitForTimeout() { callLog.push("settle"); },
     url() { return landedUrl; },
     async innerText() { return pageText; },
-    async screenshot() { return pngBytes; },
-    async evaluate(fn, args) { return nextEvaluate(fn, args); }
+    async screenshot() { callLog.push("screenshot"); return pngBytes; },
+    async evaluate(fn, args) {
+        if (args && Object.prototype.hasOwnProperty.call(args, "pngBase64")) return nextEvaluate(fn, args);
+        if (nextStylePageState instanceof Error) throw nextStylePageState;
+        return nextStylePageState;
+    }
 };
 const fakeBrowser = {
     async newContext() { return { async newPage() { return fakePage; } }; },
@@ -51,9 +66,31 @@ const { runScreenshot, detectRenderError } = require("../src/core/screenshot.js"
 
 function reset() {
     gotoCalls.length = 0;
+    callLog.length = 0;
+    pageListeners = {};
     nextGoto = null;
     chromiumPresent = true;
     pageText = "Equipment\nAdd equipment"; // a normal, error-free rendered page by default
+    nextStylePageState = {
+        links: [{
+            href: "https://webpals.cloudpiston.com/site/Styles/theme.css",
+            media: "",
+            mediaMatches: true,
+            disabled: false,
+            sheetPresent: true,
+            rules: 42,
+            access: "ok",
+            error: null
+        }],
+        inlineStyleTags: 0,
+        totalStyleSheets: 1,
+        bodyComputed: {
+            fontFamily: "Inter, sans-serif",
+            margin: "0px",
+            backgroundColor: "rgb(247, 248, 251)",
+            color: "rgb(20, 24, 33)"
+        }
+    };
     // Default: the in-page canvas re-encode succeeds, mirroring a real browser's behavior.
     nextEvaluate = (fn, args) => ({ dataUrl: "data:image/jpeg;base64,FAKESMALL", width: 800, height: 500 });
 }
@@ -115,6 +152,49 @@ test("web pal: navigates the no-auth rawToken and returns captured:true", async 
     assert.equal(res.kind, "web");
     assert.equal(gotoCalls[0], "https://webpals.cloudpiston.com/site/", "web navigates the rawToken");
     assert.ok(res.pngBase64);
+    assert.equal(res.styleStatus.likelyLoaded, true, "loaded CSS should be reported as loaded");
+    assert.equal(res.styleStatus.loaded, 1);
+    assert.equal(res.styleStatus.linked, 1);
+    assert.ok(callLog.indexOf("waitForStyles") !== -1, "must wait for stylesheet attachment");
+    assert.ok(callLog.indexOf("waitForStyles") < callLog.indexOf("screenshot"), "must wait before capturing the PNG");
+});
+
+test("web pal: missing/failed CSS is reported in styleStatus with sanitized URLs", async () => {
+    reset();
+    const SECRET = "DO_NOT_LEAK";
+    nextRunTest = async () => ({ ran: true, validated: true, kind: "web", rawToken: "https://webpals.cloudpiston.com/site/", _previewUrl: null });
+    landedUrl = "https://webpals.cloudpiston.com/site/";
+    nextStylePageState = {
+        links: [{
+            href: "https://webpals.cloudpiston.com/site/Styles/theme.css?token=" + SECRET,
+            media: "",
+            mediaMatches: true,
+            disabled: false,
+            sheetPresent: false,
+            rules: null,
+            access: "none",
+            error: null
+        }],
+        inlineStyleTags: 0,
+        totalStyleSheets: 0,
+        bodyComputed: null
+    };
+    nextGoto = () => {
+        emitPage("requestfailed", {
+            resourceType: () => "stylesheet",
+            url: () => "https://webpals.cloudpiston.com/site/Styles/theme.css?token=" + SECRET,
+            failure: () => ({ errorText: "net::ERR_FAILED" })
+        });
+    };
+
+    const res = await runScreenshot({}, "GUID", {});
+    assert.equal(res.captured, true, "CSS diagnostics must not sink the image capture");
+    assert.equal(res.styleStatus.likelyLoaded, false);
+    assert.equal(res.styleStatus.loaded, 0);
+    assert.equal(res.styleStatus.linked, 1);
+    assert.equal(res.styleStatus.missingStylesheets[0].href, "https://webpals.cloudpiston.com/site/Styles/theme.css");
+    assert.equal(res.styleStatus.failedRequests[0].url, "https://webpals.cloudpiston.com/site/Styles/theme.css");
+    assert.ok(!JSON.stringify(res.styleStatus).includes(SECRET), "style diagnostics must not leak URL query tokens");
 });
 
 test("a successful capture also returns a downscaled JPEG alongside the full-res PNG", async () => {

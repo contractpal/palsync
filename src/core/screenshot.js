@@ -69,6 +69,148 @@ function sanitizeUrl(u) {
     catch (e) { return ""; }
 }
 
+function sanitizeResourceUrl(u) {
+    try {
+        const x = new URL(u);
+        if (x.protocol === "data:" || x.protocol === "blob:") return x.protocol;
+        return x.origin + x.pathname;
+    } catch (e) {
+        return String(u || "").replace(/[?#].*$/, "").slice(0, 300);
+    }
+}
+
+function watchStylesheetNetwork(pg) {
+    const events = { responses: [], failed: [] };
+    const isStylesheet = (req) => {
+        if (!req) return false;
+        try { if (req.resourceType && req.resourceType() === "stylesheet") return true; } catch (e) { /* ignore */ }
+        try { return /\.css(?:[?#]|$)/i.test(req.url && req.url()); } catch (e) { return false; }
+    };
+    try {
+        pg.on("response", (resp) => {
+            try {
+                const req = resp.request && resp.request();
+                if (!isStylesheet(req)) return;
+                const url = (resp.url && resp.url()) || (req.url && req.url());
+                const status = resp.status ? resp.status() : null;
+                events.responses.push({ url: sanitizeResourceUrl(url), status, ok: resp.ok ? resp.ok() : !(status >= 400) });
+            } catch (e) { /* ignore */ }
+        });
+        pg.on("requestfailed", (req) => {
+            try {
+                if (!isStylesheet(req)) return;
+                const failure = req.failure && req.failure();
+                events.failed.push({
+                    url: sanitizeResourceUrl(req.url && req.url()),
+                    error: failure && failure.errorText ? failure.errorText : "request failed"
+                });
+            } catch (e) { /* ignore */ }
+        });
+    } catch (e) { /* older/fake Page implementations may not support events */ }
+    return events;
+}
+
+async function waitForStyles(pg, timeout = 5000) {
+    try {
+        await pg.waitForFunction(() => {
+            const links = Array.from(document.querySelectorAll("link"))
+                .filter(l => /\bstylesheet\b/i.test(l.rel || l.getAttribute("rel") || ""));
+            if (!links.length) return true;
+            return links.every((link) => {
+                if (link.disabled) return true;
+                const media = String(link.media || "").trim();
+                if (media && media.toLowerCase() !== "all" && window.matchMedia && !window.matchMedia(media).matches) return true;
+                if (link.sheet) return true;
+                const href = link.href;
+                return !!href && Array.from(document.styleSheets).some(sheet => sheet.href === href);
+            });
+        }, null, { timeout });
+    } catch (e) { /* capture diagnostics below instead of failing the screenshot */ }
+    try {
+        await pg.evaluate(() => document.fonts && document.fonts.ready ? document.fonts.ready.then(() => true) : true);
+    } catch (e) { /* ignore */ }
+    try { await pg.waitForTimeout(100); } catch (e) { /* ignore */ }
+}
+
+async function waitForRenderablePage(pg, url) {
+    await pg.goto(url, { waitUntil: "domcontentloaded" });
+    try { await pg.waitForLoadState("load", { timeout: 15000 }); } catch (e) { /* keep going; style diagnostics explain gaps */ }
+    try { await pg.waitForLoadState("networkidle", { timeout: 5000 }); } catch (e) { /* common with analytics/long polling */ }
+    await waitForStyles(pg);
+}
+
+async function inspectStyleStatus(pg, events = { responses: [], failed: [] }) {
+    let page = null;
+    try {
+        page = await pg.evaluate(() => {
+            const stylesheetLinks = Array.from(document.querySelectorAll("link"))
+                .filter(l => /\bstylesheet\b/i.test(l.rel || l.getAttribute("rel") || ""))
+                .map((link) => {
+                    const media = String(link.media || "").trim();
+                    const mediaMatches = !media || media.toLowerCase() === "all" ||
+                        !(window.matchMedia) || window.matchMedia(media).matches;
+                    const href = link.href || link.getAttribute("href") || "";
+                    const sheet = link.sheet || Array.from(document.styleSheets).find(s => s.href === href) || null;
+                    let rules = null, access = sheet ? "unknown" : "none", error = null;
+                    if (sheet) {
+                        try {
+                            rules = sheet.cssRules ? sheet.cssRules.length : null;
+                            access = "ok";
+                        } catch (e) {
+                            access = "blocked";
+                            error = e && e.name ? e.name : String(e);
+                        }
+                    }
+                    return {
+                        href,
+                        media,
+                        mediaMatches,
+                        disabled: !!link.disabled,
+                        sheetPresent: !!sheet,
+                        rules,
+                        access,
+                        error
+                    };
+                });
+            const body = document.body ? window.getComputedStyle(document.body) : null;
+            return {
+                links: stylesheetLinks,
+                inlineStyleTags: document.querySelectorAll("style").length,
+                totalStyleSheets: document.styleSheets.length,
+                bodyComputed: body ? {
+                    fontFamily: body.fontFamily,
+                    margin: body.margin,
+                    backgroundColor: body.backgroundColor,
+                    color: body.color
+                } : null
+            };
+        });
+    } catch (e) {
+        page = { links: [], inlineStyleTags: 0, totalStyleSheets: 0, bodyComputed: null,
+                 error: e && e.message ? e.message.split("\n")[0] : String(e) };
+    }
+
+    const links = (page.links || []).map(l => Object.assign({}, l, { href: sanitizeResourceUrl(l.href) }));
+    const active = links.filter(l => !l.disabled && l.mediaMatches !== false);
+    const missing = active.filter(l => !l.sheetPresent);
+    const failedResponses = (events.responses || []).filter(r => r.ok === false);
+    const failedRequests = (events.failed || []).concat(failedResponses);
+    return {
+        inspected: true,
+        linked: active.length,
+        loaded: active.length - missing.length,
+        inlineStyleTags: page.inlineStyleTags || 0,
+        totalStyleSheets: page.totalStyleSheets || 0,
+        accessibleRules: active.reduce((n, l) => n + (typeof l.rules === "number" ? l.rules : 0), 0),
+        missingStylesheets: missing.map(l => ({ href: l.href, media: l.media || "" })),
+        failedRequests,
+        responses: (events.responses || []).slice(-20),
+        likelyLoaded: active.length === 0 ? true : (missing.length === 0 && failedRequests.length === 0),
+        bodyComputed: page.bodyComputed || null,
+        error: page.error || null
+    };
+}
+
 // Playwright is an OPTIONAL dependency — some runtimes won't have it. require() inside try/catch
 // so a missing module degrades to a clean "unavailable" signal (pal-review falls back to the
 // human eyeball gate), never a crash.
@@ -152,19 +294,21 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
     try {
         const bctx = await browser.newContext({ viewport: vp });
         const pg = await bctx.newPage();
+        const styleEvents = watchStylesheetNetwork(pg);
         // The target URL activates the session and lands the render. For WEB it's the no-auth
         // rawToken; for CONSOLE/transaction it's the cp-auth'd URL — the browser absorbs the auth
         // redirect chain, same as a human opening the preview link. A failed/timed-out auth replay
         // throws here → caught below as a clean captured:false (eyeball-gate fallback).
-        await pg.goto(target, { waitUntil: "networkidle" });
+        await waitForRenderablePage(pg, target);
         if (page && isWeb) {
             // Sub-page navigation under the site root (web only; console renders one workflow).
             // Same base derivation preview.js openInstanceSession uses: origin + first path segment.
             const root = new URL(pg.url());
             const seg = root.pathname.split("/").filter(Boolean)[0] || "";
             const base = root.origin + "/" + (seg ? seg + "/" : "");
-            await pg.goto(base + String(page).replace(/^\/+/, ""), { waitUntil: "networkidle" });
+            await waitForRenderablePage(pg, base + String(page).replace(/^\/+/, ""));
         }
+        const styleStatus = await inspectStyleStatus(pg, styleEvents);
         const buf = await pg.screenshot({ fullPage: !!fullPage });
         const pngBase64 = buf.toString("base64");
         // Read the rendered text and check for a CloudPiston runtime-error block — a pal that
@@ -180,6 +324,7 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
             // URL — sanitize to origin+path so no credential is ever returned.
             url: isWeb ? pg.url() : sanitizeUrl(pg.url()),
             renderError,
+            styleStatus,
             pngBase64,
             jpegSmallBase64: small ? small.dataUrl.replace(/^data:image\/jpeg;base64,/, "") : null,
             smallDims: small ? { width: small.width, height: small.height } : null
@@ -197,4 +342,7 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
     }
 }
 
-module.exports = { runScreenshot, detectRenderError, sanitizeUrl, loadChromium, downscaleToJpeg, VIEWPORTS };
+module.exports = {
+    runScreenshot, detectRenderError, sanitizeUrl, sanitizeResourceUrl, loadChromium,
+    downscaleToJpeg, waitForStyles, inspectStyleStatus, VIEWPORTS
+};

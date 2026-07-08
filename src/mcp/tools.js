@@ -63,6 +63,23 @@ function renderNotVerifiedReminder(ctx) {
         " tools actually showed it to you.";
 }
 
+function formatStyleStatus(status) {
+    if (!status || !status.inspected) return "CSS: not inspected";
+    const parts = [
+        "CSS: " + status.loaded + "/" + status.linked + " linked stylesheet(s) loaded"
+    ];
+    if (status.inlineStyleTags) parts.push(status.inlineStyleTags + " inline <style> tag(s)");
+    if (status.missingStylesheets && status.missingStylesheets.length) {
+        parts.push(status.missingStylesheets.length + " missing stylesheet(s)");
+    }
+    if (status.failedRequests && status.failedRequests.length) {
+        parts.push(status.failedRequests.length + " failed stylesheet request(s)");
+    }
+    if (status.error) parts.push("inspection error: " + status.error);
+    if (status.likelyLoaded === false) parts.push("NOT fully loaded before screenshot");
+    return parts.join("; ");
+}
+
 // Print the FULL text of every server validation note (group/object: message), not just a count —
 // a count hides content-affecting warnings (e.g. a page with no body tag that won't save).
 function formatValidation(notes) {
@@ -599,7 +616,7 @@ const TOOLS = [
             }
             // A clean capture (no renderError) is the only thing that actually proves the UI renders —
             // a renderError leaves renderVerified false so the reminder keeps firing until it's fixed.
-            if (!res.renderError) ctx.renderVerified = true;
+            if (!res.renderError && (!res.styleStatus || res.styleStatus.likelyLoaded !== false)) ctx.renderVerified = true;
             // Save the PNG to a file the harness can Read, and return MCP image content so a
             // vision-capable model sees the render inline.
             let filePath = null;
@@ -618,6 +635,7 @@ const TOOLS = [
                     viewport: res.viewport,
                     fullPage: !!fullPage,
                     renderError: res.renderError || null,
+                    styleStatus: res.styleStatus || null,
                     artifact: filePath ? pathMod.basename(filePath) : null,
                     smallDims: res.smallDims || null
                 });
@@ -630,6 +648,7 @@ const TOOLS = [
                     "- Viewport: " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height,
                     "- Full page: " + (!!fullPage),
                     "- Artifact: `" + (filePath ? pathMod.basename(filePath) : "not written") + "`",
+                    "- " + formatStyleStatus(res.styleStatus),
                     res.renderError ? "- Runtime render error: " + res.renderError.message : "- Runtime render error: none"
                 ]);
             } catch (e) { /* best-effort */ }
@@ -644,6 +663,7 @@ const TOOLS = [
                 : "";
             const text = (res.kind ? res.kind.toUpperCase() : "WEB") + " screenshot captured — " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height +
                 (fullPage ? " (full page)" : "") + "\n  url=" + res.url +
+                "\n  " + formatStyleStatus(res.styleStatus) +
                 (run ? "\n  Work-history run: " + run.dir : "") +
                 (filePath ? "\n  PNG saved to: " + filePath : "") + errBlock;
             const safe = Object.assign({}, res); delete safe.pngBase64; delete safe.jpegSmallBase64; // don't double-include the base64 blobs
