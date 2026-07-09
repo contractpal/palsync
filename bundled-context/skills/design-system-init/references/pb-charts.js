@@ -57,7 +57,7 @@ function applyHeight(canvas) {
 }
 
 function commonOptions(root, type) {
-  var textSoft = readColor("--ds-text-soft", root) || "#848b98";
+  var textSoft = readColor("--ds-text-soft", root) || "#6b7280";
   var border = readColor("--ds-border", root) || "#e1e5eb";
   var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var options = {
