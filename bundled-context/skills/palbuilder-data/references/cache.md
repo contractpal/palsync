@@ -152,6 +152,58 @@ or invalidation timing.
 
 ---
 
+## Chunks — pre-rendered HTML cache
+
+A **chunk** is a pre-rendered, cached *fragment of HTML* — a step beyond caching the data
+behind a fragment. Instead of caching a `Data`/`Payload` and re-running the fragment render
+on every request, a chunk renders the fragment **once** and caches the resulting HTML.
+Subsequent requests for that chunk id skip the render entirely.
+
+Reach for a chunk when the same rendered markup is served to many requests and the
+underlying data doesn't change per-request — blog posts, published reports, and similar
+publish-once/read-often content are the canonical case.
+
+**Official API:** https://secure.cloudpiston.com/cpal/cp-api/web/Chunk.html
+
+### Creating and caching a chunk
+
+```js
+// Prod example (GiftHub blogs)
+var chunk = cache.createChunk(blog.get("url"));       // key — same key you'll pass as the id later
+chunk.addPayload(payload);                             // data the fragment needs to render
+chunk.setFragment(pal.getAjaxFragment("public/blogs/blogTemplate"));
+chunk.cache(-1);                                        // render + store; -1 = cache indefinitely
+```
+
+`cache.createChunk(key)` is called on a CacheManager (`cache`/`cm`), just like `put`/`get`.
+`chunk.cache(minutes)` does the actual render-and-store — same **minutes** convention as
+every other cache TTL (`-1` for indefinite, matching `cm.put`'s omitted-argument behavior).
+Nothing is rendered or cached until `.cache()` is called.
+
+### Rendering a chunk
+
+The fragment addresses the chunk with the `c:chunk` tag, passing the same key used to create
+it as `id`:
+
+```html
+<c:chunk id="${name}" scope="p"/>
+```
+
+The server supplies that key via the payload, e.g. `payload.set("name", blog.get("url"));` so
+the EL expression `${name}` resolves to the chunk's cache key at render time.
+
+### Chunk vs. caching data
+
+| | Caches | Skips on hit |
+|---|---|---|
+| `cm.putData` / `cm.putPayload` | The data | Dataset read / computation |
+| Chunk | The rendered HTML | Data read **and** fragment render |
+
+If the fragment render itself is cheap, caching the data is usually enough. Reach for a chunk
+when the render step (not just the data fetch) is the expensive or frequent part.
+
+---
+
 ## Common gotchas
 
 - **`cm` must be set in `run()`** before use. `cm = pal.getCacheManager()` — reads before
@@ -166,3 +218,9 @@ or invalidation timing.
 - **Per-user data leaks without user-scoped keys.** `cm.put("preferences", data)` is a
   cross-user smash if two users hit the same path — always include the user id in the key
   for per-user state.
+- **A chunk isn't cached until `.cache()` is called.** Building it (`createChunk`,
+  `addPayload`, `setFragment`) does nothing on its own — the render-and-store only happens
+  on `.cache(minutes)`.
+- **The `c:chunk` `id` must match the key used in `createChunk(key)`** exactly, or the tag
+  finds nothing. Since the key is typically data-driven (a blog URL, a report id), pass it
+  through the payload rather than hardcoding it in the fragment.
