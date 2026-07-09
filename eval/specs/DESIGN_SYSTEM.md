@@ -4,6 +4,12 @@ status: approved (test-suite stub)
 Purpose: satisfy the pal-spec design handoff for benchmark pals. Deliberately minimal —
 visual polish is NOT a scored dimension in these tests; correctness and structure are.
 
+## Reference precedence
+Provided reference images are the primary design authority — the inspiration above all else — and
+outrank this stub whenever an evaluator supplies them for a run. These benchmark pals ship NO
+reference images, so this default stub is authoritative here; the fallback path is the one under
+test. (Matches the design-system-init / design-build reference-precedence rule.)
+
 ## Foundation
 - Framework: bootstrap 5.3.5 via c:resource. Icons: bootstrap-icons 1.11.3 (only if needed).
 - Layout: single container (`container`, max-width default), page content starts with a
