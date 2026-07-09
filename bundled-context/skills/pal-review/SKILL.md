@@ -34,8 +34,9 @@ never pal-loop's self-report.
   (per-string found/missing verdict, no HTML dump). Real output, not source.
 - Every §3 nav link routes to a real page — no dead links.
 - Every §12 acceptance criterion actually met — the full set, not just the global floor.
-- Every UI page links `../Styles/spacing.css` before theme/design CSS, and Bootstrap is not loaded
-  merely for spacing/layout helpers.
+- Every UI page links `../Styles/spacing.css` before `../Styles/design-system.css`, and loads
+  `pb-ui.js`/`pb-motion.js` each exactly once as `<script type="module">` (design-system-init's
+  checklist has the exact order); Bootstrap is not loaded merely for spacing/layout helpers.
 - §11 NEVER list not violated; §8b consumed datasets not altered.
 - Every `done` task in EXECUTION.md traces via its `spec ref` to its SPEC.md § and that
   requirement is satisfied.

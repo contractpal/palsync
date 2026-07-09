@@ -689,6 +689,27 @@ function checkAjaxTransport(rel, src, findings) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Check 10a — lingering GSAP vendor <script src> after the design-system-v2 drop-GSAP migration
+// (scripts/pb-motion.js replaces it: data-animate/data-ticker/data-typewriter/data-tilt/
+// data-spotlight). A pal's own markup should never reference a gsap bundle.
+// ---------------------------------------------------------------------------------------------
+
+function checkStaleVendor(rel, src, findings) {
+    scanTags(src, (tag, pos) => {
+        if (tag.name.toLowerCase() !== "script") return;
+        const srcAttr = attr(tag, "src");
+        if (!srcAttr || !/gsap/i.test(srcAttr)) return;
+        findings.push({
+            file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "staleVendor",
+            message: "<script src=\"" + srcAttr + "\"> references a GSAP vendor file — GSAP was dropped in favor of " +
+                "scripts/pb-motion.js (data-animate/data-ticker/data-typewriter/data-tilt/data-spotlight). Remove the " +
+                "GSAP script tag and any GSAP calls; use the pb-motion.js data attributes instead. See " +
+                "design-system-init/references/marketing-library.md section 14 (Motion Recipes)."
+        });
+    });
+}
+
+// ---------------------------------------------------------------------------------------------
 // Check 10 — <c:fragment name="${var}"> placeholder must be bound by a payload.set("var", ...).
 // Real bug (test-02-crud-mimo): page read ${frag} but the workflow ran payload.set("main", frag)
 // — the EL variable resolves empty, <c:fragment name=""> renders nothing, and the whole UI is
@@ -769,6 +790,7 @@ function lintContracts(workspaceDir) {
             checkFormTag(tag, rel, src, pos, findings);
             checkDestructiveConfirm(tag, rel, src, pos, findings);
         });
+        checkStaleVendor(rel, src, findings);
     }
 
     for (const { rel, src } of workflowFiles) {

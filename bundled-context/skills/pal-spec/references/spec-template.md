@@ -149,7 +149,8 @@ Canonical base: <https://...>
 ## 10. PalBuilder surface (the platform primitives this build touches)
 - Pages (page-shell) / Fragments (c:ignore): <which>
 - c: tags used: <c:a, c:field, c:list, c:fragment, c:if/c:when, c:set, c:resource, c:debug>
-- CSS: styles/spacing.css linked before <theme/design stylesheet> on every page
+- CSS: styles/spacing.css linked before styles/design-system.css on every page; scripts/pb-ui.js
+  and scripts/pb-motion.js each loaded once as `<script type="module">`
 - c:resource libs: <jquery, chartjs, bootstrap/bootstrap-icons only if explicitly required —
   never Bootstrap just for spacing/layout>
 - Workflows: <names> — workflowType <7 console / 9 web / 11 job|receiver / 12 webservice /
@@ -168,7 +169,8 @@ Canonical base: <https://...>
 GLOBAL FLOOR (both modes):
 - [ ] pal_validate: 0 errors   - [ ] pal_test: workflow VALIDATED, 0 notes
 - [ ] every §3 nav link routes (no dead links)
-- [ ] every UI page links `../Styles/spacing.css` before theme/design CSS; no Bootstrap is loaded
+- [ ] every UI page links `../Styles/spacing.css` before `../Styles/design-system.css` and loads
+      `pb-ui.js`/`pb-motion.js` each once as `<script type="module">`; no Bootstrap is loaded
       just for spacing/layout utilities
 - [ ] [brownfield/MAP.md present — mandatory] REGRESSION: MAP.md's Step-3 baseline still passes
       (pal_validate/pal_test at least as clean as the baseline) and untouched UI didn't visually

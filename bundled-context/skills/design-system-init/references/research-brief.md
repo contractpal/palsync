@@ -101,9 +101,9 @@ foundations or `design-build` needs a tie-breaker.
   families selected for the brand.
 - Good display accents when the product genuinely needs editorial tone: Cabinet Grotesk, Gambetta,
   Boska, Sentient, Newsreader, or Playfair-like Fontshare alternatives. Use sparingly.
-- Fonts must be system-stack or Fontshare. Fontsource-style self-hosting is preferred when build
-  tooling exists; in Palbuilder, use the Fontshare CSS link selected for the project when external
-  assets are allowed. Do not default to Google Fonts.
+- Fonts must be system-stack or Fontshare. Palbuilder rejects remote page-head font resources; the
+  only web-font path is a Fontshare `@import` as the first line of
+  `design-system.css`. Do not default to Google Fonts.
 - Body text uses `rem`; spacing/radius/borders can stay in `px`.
 
 ### CSS and motion
@@ -118,10 +118,12 @@ foundations or `design-build` needs a tie-breaker.
   their ideas into plain CSS and Palbuilder fragments.
 - Motion defaults: 120-180ms for hover/press/focus, 180-280ms for panels/modals, 400-700ms only for
   progress/chart changes. Respect `prefers-reduced-motion`.
-- GSAP is the standard JavaScript animation library for palsync when scripted motion is needed:
-  mounted section reveals, drawer/modal choreography, command palette open/close, chart/count-up
-  reveals, reorder/FLIP, and scroll storytelling. Keep simple hover/focus states in CSS. Console and
-  workflow pals should use restrained GSAP; public/narrative pals can be more expressive.
+- Scripted motion policy: vanilla `pb-motion.js` (shipped verbatim, no library dependency) drives
+  every mounted effect — reveal-on-scroll, count-up stats, typewriter text, pointer tilt/spotlight,
+  scroll progress. It uses one shared `IntersectionObserver` plus CSS transform/opacity transitions,
+  is driven entirely by `data-animate`/`data-ticker`/`data-typewriter`/`data-tilt`/`data-spotlight`
+  attributes (no scripted timelines to hand-author), and auto-scans AJAX-swapped fragments via a
+  `MutationObserver`. Keep simple hover/focus states in CSS as before.
 
 ## Design System Coverage Target
 

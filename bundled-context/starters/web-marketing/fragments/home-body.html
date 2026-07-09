@@ -1,76 +1,70 @@
 <c:ignore xmlns:c="contractpal">
   <main id="main">
 
-    <!-- HERO: before production, replace .hero-visual with a real in-document <img>
-         when the project has a product/place/person/image asset. Do not ship missing
-         ../Images/hero.jpg references from a starter. -->
-    <section class="hero">
-      <div class="hero-visual" aria-hidden="true">
-        <div class="hero-pane hero-pane-main">
-          <span class="hero-kicker"></span>
-          <span class="hero-line hero-line-wide"></span>
-          <span class="hero-line"></span>
-          <span class="hero-line hero-line-short"></span>
-        </div>
-        <div class="hero-pane hero-pane-side">
-          <span class="hero-dot"></span>
-          <span class="hero-line"></span>
-          <span class="hero-line hero-line-short"></span>
-        </div>
-      </div>
-      <div class="wrap-narrow hero-inner">
-        <span class="eyebrow">For your audience, in three words</span>
-        <h1 class="h1">The one-line promise, <span class="em">stated plainly.</span></h1>
-        <p class="hero-sub">One supporting sentence: what it does and the outcome the visitor gets. No adjectives doing the work a fact should do.</p>
-        <div class="hero-cta">
-          <a href="#contact" class="btn btn-primary btn-lg">Get started</a>
-          <a href="#how" class="btn btn-secondary btn-lg">See how it works</a>
+    <!-- HERO: before production, replace .pb-mock-browser with a real product screenshot
+         <img> when the project has one. Do not ship missing ../Images/hero.jpg references
+         from a starter. -->
+    <section class="pb-hero pb-hero--centered pb-hero--aurora">
+      <div class="pb-hero-inner">
+        <span class="pb-hero-eyebrow" data-animate="fade-up">For your audience, in three words</span>
+        <h1 class="pb-hero-title" data-animate="fade-up" data-animate-delay="80">The one-line promise, <span class="pb-text-gradient">stated plainly.</span></h1>
+        <p class="pb-hero-sub" data-animate="fade-up" data-animate-delay="160">One supporting sentence: what it does and the outcome the visitor gets. No adjectives doing the work a fact should do.</p>
+        <div class="pb-hero-actions" data-animate="fade-up" data-animate-delay="240">
+          <a href="#contact" class="pb-btn pb-btn-primary">Get started</a>
+          <a href="#how" class="pb-btn pb-btn-secondary">See how it works</a>
         </div>
       </div>
     </section>
 
-    <!-- FEATURES: asymmetric 2/1 split, not three equal columns. -->
-    <section class="section" id="features">
-      <div class="wrap">
-        <span class="eyebrow">What you get</span>
-        <h2 class="h2">Three things, said as outcomes</h2>
-        <div class="feature-grid">
-          <div class="card card-wide reveal">
-            <h3 class="h3">The lead feature</h3>
-            <p>One or two sentences on the single most valuable thing. This card is wider because this feature matters most; rank, do not equal-weight.</p>
+    <!-- FEATURES: asymmetric bento grid, not three equal columns. -->
+    <section id="features">
+      <div class="pb-main">
+        <h2 class="pb-title" data-animate="fade-up">Three things, said as outcomes</h2>
+        <p class="pb-subtitle" data-animate="fade-up" data-animate-delay="80">What you get</p>
+        <div class="pb-bento" data-animate-stagger="80">
+          <div class="pb-bento-item pb-bento-item--lg" data-animate="fade-up">
+            <h3 class="pb-card-title">The lead feature</h3>
+            <p class="pb-muted">One or two sentences on the single most valuable thing. This cell is bigger because this feature matters most; rank, do not equal-weight.</p>
           </div>
-          <div class="card reveal">
-            <h3 class="h3">Second feature</h3>
-            <p>One sentence.</p>
+          <div class="pb-bento-item" data-animate="fade-up">
+            <h3 class="pb-card-title">Second feature</h3>
+            <p class="pb-muted">One sentence.</p>
           </div>
-          <div class="card reveal">
-            <h3 class="h3">Third feature</h3>
-            <p>One sentence.</p>
+          <div class="pb-bento-item" data-animate="fade-up">
+            <h3 class="pb-card-title">Third feature</h3>
+            <p class="pb-muted">One sentence.</p>
           </div>
-          <div class="card card-wide reveal">
-            <h3 class="h3">Fourth feature</h3>
-            <p>One or two sentences. The staggered widths give the grid rhythm.</p>
+          <div class="pb-bento-item pb-bento-item--wide" data-animate="fade-up">
+            <h3 class="pb-card-title">Fourth feature</h3>
+            <p class="pb-muted">One or two sentences. The staggered widths give the grid rhythm.</p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- RHYTHM BREAK: full-bleed dark band with one impact statement (the "one section should
-         surprise" rule). Replace the number with a real, defensible stat. -->
-    <section class="band reveal" id="how">
-      <div class="wrap-narrow band-inner">
-        <span class="eyebrow eyebrow-ondark">The proof</span>
-        <p class="band-num">3&#215;</p>
-        <p class="band-line">One sentence that earns the number above. If you do not have a real stat yet, use a concrete fact instead. Never invent one.</p>
+    <!-- RHYTHM BREAK: one impact stat (design-build: one section should surprise). Replace the
+         number with a real, defensible stat; never invent one. -->
+    <section id="how">
+      <div class="pb-main">
+        <div class="pb-stats" data-animate-stagger="100">
+          <div data-animate="fade-up">
+            <p class="pb-stats-value" data-ticker="3&#215;">0</p>
+            <p class="pb-stats-label">One sentence that earns the number above. If you do not have a real stat yet, use a concrete fact instead. Never invent one.</p>
+          </div>
+        </div>
       </div>
     </section>
 
     <!-- CTA: one primary action, one line. -->
-    <section class="section section-cta" id="contact">
-      <div class="wrap-narrow cta-inner">
-        <h2 class="h2">The closing ask, in one line</h2>
-        <a href="mailto:hello@example.com" class="btn btn-primary btn-lg">Get started</a>
-        <p class="cta-note">One reassurance line: response time, no obligation, or similar.</p>
+    <section id="contact">
+      <div class="pb-main">
+        <div class="pb-cta-band" data-animate="fade-up">
+          <div>
+            <h2 class="pb-title">The closing ask, in one line</h2>
+            <p class="pb-subtitle">One reassurance line: response time, no obligation, or similar.</p>
+          </div>
+          <a href="mailto:hello@example.com" class="pb-btn pb-btn-primary">Get started</a>
+        </div>
       </div>
     </section>
 

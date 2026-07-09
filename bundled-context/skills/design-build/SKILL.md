@@ -11,14 +11,29 @@ Build UI that conforms to the design system, decomposes cleanly, defines its int
 
 - Read `DESIGN_SYSTEM.md` and `COMPONENTS.md`. If absent and the task is non-trivial, recommend `design-system-init` first — building without a system drifts to generic output. If the user proceeds anyway, infer a minimal system from existing code and state your assumptions.
 - Look at `design/refs/` if present. Read the images, not just tokens — they encode composition and restraint tokens can't. Build toward how they look and feel.
-- For Palbuilder UI, verify every page shell links `../Styles/spacing.css` before the visual
-  stylesheet. `spacing.css` is the required Bootstrap replacement for spacing/layout utilities; do
-  not add Bootstrap only to get `.container`, `.row`, `.col-*`, margin, padding, gap, or flex helpers.
+- **Verify the four canonical files are byte-identical to this skill's references** (an append-only
+  `PAL OVERRIDES` block at the end of `design-system.css` is the one allowed exception):
+  `styles/spacing.css`, `styles/design-system.css` against
+  `../design-system-init/references/{spacing.css,design-system.css}`, and `scripts/pb-ui.js`,
+  `scripts/pb-motion.js` against `../design-system-init/references/{pb-ui.js,pb-motion.js}`. A diff
+  outside the overrides block means the file was hand-edited — restore it from the reference and
+  move the intended change into `PAL OVERRIDES` instead.
+- Verify page shell `<head>` link/script order matches design-system-init's checklist:
+  `styles/spacing.css` → `styles/design-system.css` (pal overrides append to that same file, never
+  a separate stylesheet), then `scripts/pb-ui.js` and `scripts/pb-motion.js` each loaded exactly
+  once as `<script type="module" src="...">`. `spacing.css` is the required Bootstrap replacement
+  for spacing/layout utilities; do not add Bootstrap only to get `.container`, `.row`, `.col-*`,
+  margin, padding, gap, or flex helpers.
+- Fontshare loads through the `@import` at the top of `design-system.css`; never add remote
+  page-head font resources.
 - For non-trivial UI, read `../design-system-init/references/design-principles.md` before building
   or reviewing. It is the practical checklist for hierarchy, UX flow, Gestalt grouping, Fitts target
   sizing, typography, color meaning, consistency, and simplicity.
-- For Palbuilder UI, read `../design-system-init/references/component-library.md` before implementing any non-trivial component. It contains Palbuilder-valid XHTML, CSS, and `c:` tag recipes. Pair it with `palbuilder-frontend/references/c-tags.md` before using any `c:` attribute you have not verified.
-- Enforce the current palsync visual stack unless the project explicitly overrides it: system or Fontshare typography, inline SVG icons from one approved family (Iconoir, Tabler, or Phosphor), and GSAP in `scripts/*.js` for scripted animation.
+- For Palbuilder UI, read `../design-system-init/references/component-library.md` before implementing any non-trivial app/console component, or `../design-system-init/references/marketing-library.md` for marketing sections (hero, bento, pricing, testimonials, logo cloud, CTA, stats, mockups). Both are HTML-only — every class and `data-*` attribute is already implemented in the shipped CSS/JS, there is no component CSS to write. Pair either with `palbuilder-frontend/references/c-tags.md` before using any `c:` attribute you have not verified.
+- Enforce the current palsync visual stack unless the project explicitly overrides it: system or Fontshare typography, inline SVG icons from one approved family (Iconoir, Tabler, or Phosphor), and `scripts/pb-motion.js` data attributes for scripted animation — no other motion library.
+- Chart.js is optional and only for chart-heavy pals: platform `<c:resource source="chartjs"
+  version="4.0.0" name="chart.js" />` plus opt-in `scripts/pb-charts.js`; it is not part of the
+  core four-file byte-identity set.
 
 ## Vision routing
 
@@ -100,12 +115,20 @@ Apply the same vocabulary to yourself at the review gate.
 
 ## Acceptance checklist
 - [ ] DESIGN_SYSTEM.md, COMPONENTS.md, and `design/refs/` loaded before building.
-- [ ] `styles/spacing.css` present, registered, linked before theme/design CSS on every page, and
-      used for generic spacing/layout instead of Bootstrap.
+- [ ] All four canonical files (`styles/spacing.css`, `styles/design-system.css`,
+      `scripts/pb-ui.js`, `scripts/pb-motion.js`) present, registered in `pal.json`, and
+      byte-identical to design-system-init's references outside the `PAL OVERRIDES` block.
+- [ ] Page shell `<head>` link/script order matches design-system-init's checklist: `spacing.css` →
+      `design-system.css`, then both scripts loaded exactly once as `<script type="module">`; used
+      for generic spacing/layout instead of Bootstrap.
 - [ ] Applied design-principles review: user journey, hierarchy, grouping, Fitts target sizing,
       progressive disclosure, typography, color meaning, and consistency.
-- [ ] Palbuilder component library consulted for non-trivial UI and local reusable components recorded back into COMPONENTS.md.
-- [ ] Typography, SVG icons, and motion match the stack policy: system/Fontshare fonts, inline Iconoir/Tabler/Phosphor-style SVGs, GSAP only from external JS when scripted motion is needed.
+- [ ] `component-library.md` (app/console) or `marketing-library.md` (marketing sections) consulted
+      for non-trivial UI and local reusable components recorded back into COMPONENTS.md.
+- [ ] Typography, SVG icons, and motion match the stack policy: system/Fontshare fonts, inline
+      Iconoir/Tabler/Phosphor-style SVGs, `pb-motion.js` data attributes only for scripted motion.
+- [ ] No leftover scripted-animation vendor file or `<script>` reference remains anywhere in the
+      pal's own files.
 - [ ] Decomposed into atomic units with explicit interfaces; no monolith, no near-duplicates.
 - [ ] All values from tokens; any new need added to the system, not hardcoded.
 - [ ] Every interactive element defines its full state set, including focus-visible and loading/error/empty where relevant.

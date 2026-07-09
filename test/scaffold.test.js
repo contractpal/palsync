@@ -42,7 +42,7 @@ test("bundled starters apply cleanly — every manifest file exists (no skips)",
     }
 });
 
-test("bundled UI starters include spacing.css before theme.css", () => {
+test("bundled UI starters include spacing.css before design-system.css", () => {
     for (const name of ["console-app", "web-marketing"]) {
         const ws = tempWorkspace();
         applyTemplate(ws, name, { palName: "T" });
@@ -53,10 +53,37 @@ test("bundled UI starters include spacing.css before theme.css", () => {
         const pagePath = name === "console-app" ? "pages/console.html" : "pages/home.html";
         const page = fs.readFileSync(path.join(ws, pagePath), "utf8");
         const spacingIx = page.indexOf("../Styles/spacing.css");
-        const themeIx = page.indexOf("../Styles/theme.css");
+        const dsIx = page.indexOf("../Styles/design-system.css");
         assert.ok(spacingIx > -1, name + " links spacing.css");
-        assert.ok(themeIx > -1, name + " links theme.css");
-        assert.ok(spacingIx < themeIx, name + " loads spacing.css before theme.css");
+        assert.ok(dsIx > -1, name + " links design-system.css");
+        assert.ok(spacingIx < dsIx, name + " loads spacing.css before design-system.css");
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("bundled UI starters ship the 4 canonical design-system files and never theme.css", () => {
+    for (const name of ["console-app", "web-marketing"]) {
+        const ws = tempWorkspace();
+        applyTemplate(ws, name, { palName: "T" });
+        const pal = JSON.parse(fs.readFileSync(path.join(ws, "pal.json"), "utf8"));
+
+        for (const f of ["spacing.css", "design-system.css"]) {
+            assert.ok(fs.existsSync(path.join(ws, "styles", f)), name + " writes styles/" + f);
+            assert.ok(pal.styles.entry.some(e => e.string === f), name + " registers styles/" + f);
+        }
+        for (const f of ["pb-ui.js", "pb-motion.js"]) {
+            assert.ok(fs.existsSync(path.join(ws, "scripts", f)), name + " writes scripts/" + f);
+            assert.ok(pal.scripts.entry.some(e => e.string === f), name + " registers scripts/" + f);
+        }
+
+        assert.ok(!fs.existsSync(path.join(ws, "styles", "theme.css")), name + " must not scaffold theme.css");
+        assert.ok(!(pal.styles.entry || []).some(e => e.string === "theme.css"), name + " must not register theme.css");
+
+        const pagePath = name === "console-app" ? "pages/console.html" : "pages/home.html";
+        const page = fs.readFileSync(path.join(ws, pagePath), "utf8");
+        assert.doesNotMatch(page, /theme\.css/, name + " page shell must not reference theme.css");
+        assert.match(page, /<script type="module" src="\.\.\/Scripts\/pb-ui\.js"><\/script>/, name + " loads pb-ui.js as a module script");
+        assert.match(page, /<script type="module" src="\.\.\/Scripts\/pb-motion\.js"><\/script>/, name + " loads pb-motion.js as a module script");
         fs.rmSync(ws, { recursive: true, force: true });
     }
 });
