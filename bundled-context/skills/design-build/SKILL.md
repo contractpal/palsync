@@ -10,7 +10,7 @@ Build UI that conforms to the design system, decomposes cleanly, defines its int
 ## Step 0 — Load the system
 
 - Read `DESIGN_SYSTEM.md` and `COMPONENTS.md`. If absent and the task is non-trivial, recommend `design-system-init` first — building without a system drifts to generic output. If the user proceeds anyway, infer a minimal system from existing code and state your assumptions.
-- Look at `design/refs/` if present. Read the images, not just tokens — they encode composition and restraint tokens can't. Build toward how they look and feel.
+- Look at `design/refs/` if present. Read the images, not just tokens — they encode composition and restraint tokens can't. **When references exist they are the primary design authority — the inspiration above all else.** Build toward how they look and feel; where a reference and a default choice disagree, the reference wins. Honor it within the byte-identity contract below: reference-driven palette/density/radius deviations go through a preset plus `PAL OVERRIDES` tokens, never by hand-editing a canonical file or flattening the reference back to a default.
 - **Verify the four canonical files are byte-identical to this skill's references** (an append-only
   `PAL OVERRIDES` block at the end of `design-system.css` is the one allowed exception):
   `styles/spacing.css`, `styles/design-system.css` against

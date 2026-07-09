@@ -33,6 +33,25 @@ translated into Palbuilder-owned CSS and fragments.
 Design quality starts before colors. Establish the user's journey, visual hierarchy, grouping,
 target sizing, progressive disclosure, and typography rules before choosing decorative treatments.
 
+## Reference precedence
+
+When the user provides reference images, screenshots, apps, or sites, **those references are the
+primary design authority — the inspiration above all else.** Everything else in this skill (the
+default palette, the six presets, token defaults, density, radius, motion) is the *fallback for when
+no reference exists*, not a ceiling on what a reference may specify. The reference wins over any
+default aesthetic choice.
+
+Honor references *within* the platform's byte-identity contract, never against it:
+- Derive palette, type feel, density, radius, and composition **from the reference**, then express
+  every reference-driven deviation by picking the closest preset and appending `--ds-*` overrides to
+  the `PAL OVERRIDES` block of `design-system.css`. Never hand-edit the canonical files, and never
+  discard what the reference asks for just to sit on a default preset.
+- Curate for coherence and accessibility (AA contrast, semantic roles), **not** to dilute the
+  reference. Curation resolves a system out of the reference's intent; it never overrules the
+  reference's mood, composition, or density with a generic default.
+
+If no reference is provided, say so, use the default system below, and state the assumption.
+
 ## Modes
 
 ### Declare mode
@@ -113,7 +132,9 @@ Set `data-preset="indigo|emerald|amber|rose|slate-dark"` on `<html>` in the page
 attribute entirely for `ink`. A brand color that doesn't match any preset is a handful of
 `--ds-*` overrides appended to the `PAL OVERRIDES` block at the end of `design-system.css` — never
 a new hand-authored token block. Check `--ds-primary-text` for AA contrast whenever a primary
-color changes.
+color changes. When a reference calls for a palette no preset matches, follow the reference and
+express it as `PAL OVERRIDES` — the presets are convenient starting points, not a constraint that
+overrides the reference.
 
 Dark mode is a separate, already-shipped mechanism: `[data-theme="dark"]` on `<html>` (or
 `data-pb-theme-toggle` client-side, persisted to `localStorage` by `pb-ui.js`) switches the dark
@@ -143,7 +164,9 @@ visual observation step to a vision-capable model.
 
 ### 2. Synthesize foundations
 
-Curate the system. Do not transcribe every color from a screenshot.
+Curate the system. Do not transcribe every color from a screenshot — but when references exist they
+are the primary authority (see Reference precedence): distil their mood, composition, and density
+into coherent tokens rather than overruling them with a default.
 
 Define:
 - Color roles: background, subtle background, surface, raised surface, text, muted text, soft text,
