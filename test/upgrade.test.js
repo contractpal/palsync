@@ -11,7 +11,10 @@ const {
     installedSha,
     cleanupBrokenGlobalPackage,
     npmInstallSpec,
+    manualInstallCommand,
+    browserInstallCommand,
     npmInstall,
+    installBrowser,
     NPM_INSTALL_FLAGS
 } = require("../src/cli/upgradeCommand");
 
@@ -75,7 +78,7 @@ test("npmInstallSpec: pins GitHub installs to an immutable tarball URL", () => {
     assert.equal(npmInstallSpec("owner/repo", sha), "https://codeload.github.com/owner/repo/tar.gz/" + sha);
 });
 
-test("npmInstall: upgrades with dependency and lifecycle scripts enabled", () => {
+test("npmInstall: installs with lifecycle scripts OFF so npm's allow-scripts gate can't block it", () => {
     const sha = "a".repeat(40);
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-upgrade-root-"));
     const calls = [];
@@ -99,9 +102,54 @@ test("npmInstall: upgrades with dependency and lifecycle scripts enabled", () =>
         "-g",
         "https://codeload.github.com/owner/repo/tar.gz/" + sha
     ].concat(NPM_INSTALL_FLAGS));
+    // Scripts must be off — the strict-allow-scripts gate blocks unallowlisted lifecycle scripts
+    // (palsync's postinstall AND transitive native deps), which would abort the whole install.
+    assert.ok(calls[1].args.includes("--ignore-scripts"));
     assert.equal(calls[1].opts.stdio, "inherit");
     assert.equal(calls[1].opts.shell, process.platform === "win32");
     fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("installBrowser: runs the freshly-installed package's Chromium installer in a fresh node process", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-upgrade-root-"));
+    const calls = [];
+    const ok = installBrowser("palsync", {
+        execPath: "/usr/bin/node",
+        spawn: (cmd, args, opts) => {
+            calls.push({ cmd, args, opts });
+            if (args.join(" ") === "root -g") return { status: 0, stdout: root + "\n" };
+            return { status: 0 };
+        }
+    });
+
+    assert.equal(ok, true);
+    assert.equal(calls.length, 2, "resolves the global root, then runs the installer");
+    assert.deepEqual(calls[0].args, ["root", "-g"]);
+    assert.equal(calls[1].cmd, "/usr/bin/node");
+    assert.deepEqual(calls[1].args, [path.join(root, "palsync", "src", "install", "playwrightChromium.js")]);
+    assert.equal(calls[1].opts.stdio, "inherit");
+    fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("installBrowser: reports failure when the browser installer exits non-zero", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-upgrade-root-"));
+    const ok = installBrowser("palsync", {
+        execPath: "/usr/bin/node",
+        spawn: (cmd, args) => (args.join(" ") === "root -g" ? { status: 0, stdout: root + "\n" } : { status: 1 })
+    });
+    assert.equal(ok, false);
+    fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("browserInstallCommand: resolves the global palsync installer at paste time", () => {
+    assert.equal(browserInstallCommand(), 'node "$(npm root -g)/palsync/src/install/playwrightChromium.js"');
+});
+
+test("manualInstallCommand: pairs a scripts-off tarball install with the explicit browser step", () => {
+    const sha = "a".repeat(40);
+    const cmd = manualInstallCommand("owner/repo", sha);
+    assert.match(cmd, /npm install -g https:\/\/codeload\.github\.com\/owner\/repo\/tar\.gz\/a{40} --ignore-scripts --include=optional/);
+    assert.ok(cmd.includes(browserInstallCommand()), "must include the browser install step");
 });
 
 test("cleanupBrokenGlobalPackage: removes dangling npm git temp symlink", () => {

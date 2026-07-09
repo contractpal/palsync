@@ -7,12 +7,21 @@
 //
 // Flow: read the SHA this build was installed from → fetch the default branch's HEAD SHA from the
 // GitHub API → if they differ (or ours is unknown), run `npm install -g <sha-pinned tarball>`
-// (inherits the user's npm prefix). `--check` reports without installing.
+// (inherits the user's npm prefix), then fetch the Chromium binary explicitly (see installBrowser).
+// `--check` reports without installing.
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const pkg = require("../../package.json");
-const NPM_INSTALL_FLAGS = ["--ignore-scripts=false", "--include=optional", "--allow-scripts=palsync"];
+
+// Install with scripts OFF, then run palsync's own browser install explicitly (see installBrowser).
+// Why not let npm fire the postinstall: npm 11's `strict-allow-scripts` (opt-in today, trending
+// toward default) BLOCKS any lifecycle script not in an allowlist — and the blocker isn't just
+// palsync's postinstall but every transitive native dep (fsevents, node-gyp rebuilds, …), whose set
+// varies by platform. `--allow-scripts=palsync` can't cover them, so the whole install aborts with
+// ESTRICTALLOWSCRIPTS. `--ignore-scripts` sidesteps the gate entirely and installs cleanly under any
+// npm config; the browser — the one script we actually need — we run ourselves afterward.
+const NPM_INSTALL_FLAGS = ["--ignore-scripts", "--include=optional"];
 
 // npm strips _resolved/gitHead from installed git packages and keeps no global lockfile, so the
 // only durable record of which commit this build came from is one we write ourselves: after a
@@ -87,11 +96,18 @@ function npmInstallSpec(slug, sha) {
     return "https://codeload.github.com/" + safeSlug + "/tar.gz/" + sha;
 }
 
-// The exact command a user can paste to reinstall/recover by hand. Includes the same flags the
-// automated upgrade uses — notably --allow-scripts=palsync, which npm 11 now requires or it silently
-// skips the postinstall and never downloads the Chromium binary palsync drives.
+// A copy-pasteable command that runs palsync's browser install against the globally-installed
+// package. Resolved at paste time via `npm root -g` so it works regardless of the user's npm prefix.
+function browserInstallCommand() {
+    return 'node "$(npm root -g)/' + pkg.name + '/src/install/playwrightChromium.js"';
+}
+
+// The exact commands a user can paste to reinstall/recover by hand — the same two steps the
+// automated upgrade runs: install with scripts off (works under any npm config), then fetch the
+// Chromium binary palsync drives (npm's script gate never runs it, so we always run it ourselves).
 function manualInstallCommand(slug, sha) {
-    return "npm install -g " + npmInstallSpec(slug, sha) + " " + NPM_INSTALL_FLAGS.join(" ");
+    return "npm install -g " + npmInstallSpec(slug, sha) + " " + NPM_INSTALL_FLAGS.join(" ")
+        + "\n    " + browserInstallCommand();
 }
 
 function npmInstall(slug, sha, { spawn = spawnSync, fsMod = fs, log = console.warn } = {}) {
@@ -101,6 +117,19 @@ function npmInstall(slug, sha, { spawn = spawnSync, fsMod = fs, log = console.wa
     const spec = npmInstallSpec(slug, sha);
     const useShell = process.platform === "win32";
     const r = spawn("npm", ["install", "-g", spec].concat(NPM_INSTALL_FLAGS), { stdio: "inherit", shell: useShell });
+    return r.status === 0;
+}
+
+// Run the browser install for the freshly-installed global palsync. We install with --ignore-scripts
+// (so the install itself can't be blocked by npm's allow-scripts gate), which means the postinstall
+// never fired — so we fetch Chromium here, in a fresh node process pointed at the newly-written
+// script on disk (not this old, about-to-be-replaced process's copy). Respects
+// PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD via the script itself. Returns true on success.
+function installBrowser(name = pkg.name, { spawn = spawnSync, execPath = process.execPath } = {}) {
+    const root = npmGlobalRoot({ spawn });
+    if (!root) return false;
+    const script = path.join(root, name, "src", "install", "playwrightChromium.js");
+    const r = spawn(execPath, [script], { stdio: "inherit" });
     return r.status === 0;
 }
 
@@ -137,6 +166,13 @@ async function run(argv) {
     }
     // Stamp the freshly-installed dir (npm just rewrote it) so the next run knows it's current.
     try { fs.writeFileSync(SHA_STAMP, latest + "\n"); } catch { /* best effort; falls back to reinstall-each-time */ }
+
+    // We installed with scripts off, so fetch the Chromium binary palsync drives ourselves. Best
+    // effort: the CLI is already updated and Chromium is often cached, so a download hiccup shouldn't
+    // fail the version bump — but tell the user exactly how to finish if it didn't complete.
+    if (!installBrowser()) {
+        console.error("palsync updated, but the Chromium browser install did not finish. Complete it with:\n    " + browserInstallCommand());
+    }
     console.log("Upgraded to " + latest.slice(0, 7) + ". (New shell or `hash -r` if `palsync --version` looks stale.)");
     return 0;
 }
@@ -150,6 +186,8 @@ module.exports = {
     cleanupBrokenGlobalPackage,
     npmInstallSpec,
     manualInstallCommand,
+    browserInstallCommand,
     npmInstall,
+    installBrowser,
     NPM_INSTALL_FLAGS
 };
