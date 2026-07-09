@@ -1,6 +1,6 @@
 /* spacing.css - Palbuilder spacing and layout utilities
    Purpose: replace Bootstrap for spacing/layout primitives only.
-   Load before theme.css. Keep color, typography, radius, and component styling in theme.css. */
+   Load before design-system.css. Keep color, typography, radius, and component styling in design-system.css. */
 
 :root {
   --space-unit: 1rem;

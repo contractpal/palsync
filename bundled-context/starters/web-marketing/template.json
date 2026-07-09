@@ -7,7 +7,9 @@
     { "path": "fragments/home-body.html" },
     { "path": "fragments/footer.html" },
     { "path": "styles/spacing.css" },
-    { "path": "styles/theme.css" },
+    { "path": "styles/design-system.css" },
+    { "path": "scripts/pb-ui.js" },
+    { "path": "scripts/pb-motion.js" },
     { "path": "workflows/web.js" }
   ]
 }

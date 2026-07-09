@@ -32,6 +32,8 @@ temp/
 # internal: editor config, verification scripts, internal specs — not part of the public tool
 .claude/
 scripts/
+!bundled-context/starters/*/scripts/
+!bundled-context/starters/*/scripts/**
 SPEC_*
 
 # vendored palbuilder platform source — local contract reference only, not part of the CLI
@@ -50,3 +52,7 @@ com/
 eval/runs/*
 !eval/runs/README.md
 CLAUDE.md
+
+# codex agent config + unrelated generated outputs
+.codex/
+outputs/

@@ -1,13 +1,26 @@
 <c:ignore xmlns:c="contractpal">
-  <footer class="footer">
-    <div class="wrap footer-inner">
-      <span class="footer-brand">{{PAL_NAME}}</span>
-      <nav class="footer-links" aria-label="Footer">
-        <a href="#features">Features</a>
-        <a href="#how">How it works</a>
-        <a href="#contact">Contact</a>
-      </nav>
-      <p class="footer-fine">&#169; {{PAL_NAME}}. All rights reserved.</p>
+  <footer class="pb-footer">
+    <div class="pb-footer-inner">
+      <div>
+        <p class="pb-footer-col-title">{{PAL_NAME}}</p>
+        <p class="pb-muted">One-line restatement of the promise above.</p>
+      </div>
+      <div>
+        <p class="pb-footer-col-title">Product</p>
+        <ul class="pb-footer-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how">How it works</a></li>
+        </ul>
+      </div>
+      <div>
+        <p class="pb-footer-col-title">Company</p>
+        <ul class="pb-footer-links">
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="pb-footer-bottom">
+      <span class="pb-muted">&#169; {{PAL_NAME}}. All rights reserved.</span>
     </div>
   </footer>
 </c:ignore>

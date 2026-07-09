@@ -394,6 +394,40 @@ test("crawler file createAjaxResponse intercepts do not need isAjax()", () => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("staleVendor — <script src> referencing gsap warns, names the rule", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": [
+            "<html xmlns:c=\"contractpal\">",
+            "  <head>",
+            "    <script type=\"module\" src=\"../Scripts/vendor/gsap.min.js\"></script>",
+            "  </head>",
+            "  <body></body>",
+            "</html>",
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "staleVendor");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "warn");
+    assert.match(findings[0].message, /pb-motion\.js/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("staleVendor — page shell with only pb-motion.js script produces no finding", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": [
+            "<html xmlns:c=\"contractpal\">",
+            "  <head>",
+            "    <script type=\"module\" src=\"../Scripts/pb-ui.js\"></script>",
+            "    <script type=\"module\" src=\"../Scripts/pb-motion.js\"></script>",
+            "  </head>",
+            "  <body></body>",
+            "</html>",
+        ].join("\n"),
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "staleVendor").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 // Modeled on test-01-crud-mimo / c-tags.md's documented examples — must produce ZERO
 // contract findings of any severity (a fully clean, well-formed pal).
 test("clean fixture (modeled on the passing reference pal) — zero contract findings", () => {

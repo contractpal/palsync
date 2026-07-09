@@ -1,19 +1,20 @@
 <c:ignore xmlns:c="contractpal">
-  <a href="#main" class="skip">Skip to content</a>
+  <a href="#main">Skip to content</a>
 
-  <header class="nav">
-    <div class="wrap nav-inner">
-      <a href="/" class="nav-brand">{{PAL_NAME}}</a>
+  <header class="pb-navbar pb-navbar--marketing">
+    <div class="pb-navbar-inner">
+      <a href="/" class="pb-navbar-brand">{{PAL_NAME}}</a>
 
-      <nav class="nav-links" aria-label="Primary">
-        <a href="#features" class="nav-link">Features</a>
-        <a href="#how" class="nav-link">How it works</a>
-        <a href="#contact" class="nav-link">Contact</a>
+      <nav class="pb-navbar-links" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#contact">Contact</a>
       </nav>
 
-      <div class="nav-actions">
-        <a href="#contact" class="btn btn-primary">Get started</a>
-      </div>
+      <a href="#contact" class="pb-btn pb-btn-primary">Get started</a>
+      <button type="button" class="pb-navbar-burger" aria-label="Toggle menu" aria-expanded="false" data-pb-toggle="dropdown" data-pb-target=".pb-navbar-links">
+        <span></span><span></span><span></span>
+      </button>
     </div>
   </header>
 </c:ignore>

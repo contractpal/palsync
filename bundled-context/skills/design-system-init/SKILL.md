@@ -14,8 +14,13 @@ Read before acting:
   grouping, or review criteria.
 - `references/research-brief.md` when choosing foundations or explaining design tradeoffs.
 - `references/component-library.md` when defining the component inventory or writing Palbuilder
-  examples.
-- `references/spacing.css` when creating the default Pal spacing/layout utility sheet.
+  examples for app/console UI. HTML-only — no CSS left to write, every class and `data-*`
+  attribute already exists in the shipped `design-system.css` / `pb-ui.js` / `pb-motion.js`.
+- `references/marketing-library.md` instead, when the pal (or a page of it) is marketing-oriented:
+  hero, bento, pricing, testimonials, logo cloud, CTA band, stats/ticker, mockups, text/glow
+  effects. Console-only pals should never need to load this file.
+- `references/spacing.css` and `references/design-system.css` — the two stylesheets copied
+  verbatim into every pal's `styles/`.
 - `references/vision-routing.md` whenever reference photos/screenshots or rendered output must be
   judged visually.
 
@@ -63,7 +68,15 @@ Ask in one compact turn when possible. If interactive elicitation buttons exist,
      or a single moment.
    - If they do not have a palette, ask whether to run the default workflow: generate 20-30 palette
      directions externally (Coolors-style), narrow to 2-3, refine harmony (Adobe Color-style), check
-     AA contrast, preview in a real UI (Realtime Colors-style), then export CSS variables.
+     AA contrast, preview in a real UI (Realtime Colors-style), then map the direction onto one of
+     the six shipped presets below (or override a handful of tokens on top of the closest one).
+   - Which shipped preset fits the vibe: `ink` (default — near-black primary on cool white/light-gray
+     surfaces; neutral, professional, works almost anywhere), `indigo` (deep indigo-violet primary;
+     confident, techy, SaaS), `emerald` (deep green primary; growth, trust, finance/health), `amber`
+     (warm amber-orange primary; energetic, warm, retail/hospitality), `rose` (bold rose-red primary;
+     bold, creative, consumer-facing), or `slate-dark` (dark navy surfaces with a periwinkle accent;
+     dark-first, technical/ops dashboards)? This sets `data-preset` on `<html>` (omit it entirely for
+     `ink`) — it does not require writing any CSS.
    - What should this definitely not feel like?
 
 3. Operating constraints:
@@ -80,99 +93,31 @@ Stop once you can state the design intent in 2-3 sentences and the user agrees. 
 **Extract mode:** skip external reference questions. Ask only product/user/constraints, then derive
 palette and components from the existing pal.
 
-## Default Palette
+## Presets
 
-If the user does not care, use this as the starting point. It is neutral, crisp, and high-contrast
-like the best shadcn-style product UI, but avoids the generic blue/gray admin look by keeping color
-semantic and sparse. The primary action is ink by default; accent color appears only for highlights,
-charts, and product-specific moments.
+There is no palette to hand-author. `design-system.css` ships the full token set plus six
+`:root[data-preset="..."]` overrides — picking one (or overriding a few tokens on top of the
+closest one) replaces writing a `:root` block from scratch.
 
-```css
-:root {
-  --ds-bg: #f7f8fb;
-  --ds-bg-subtle: #f0f2f5;
-  --ds-surface: #ffffff;
-  --ds-surface-raised: #fcfcfd;
-  --ds-text: #101114;
-  --ds-text-muted: #5f6673;
-  --ds-text-soft: #848b98;
-  --ds-border: #e1e5eb;
-  --ds-border-strong: #c7ced8;
-  --ds-focus: #3b82f6;
-  --ds-focus-ring: #dbeafe;
+- **ink** (default, no attribute needed) — near-black primary on cool white/light-gray surfaces.
+  Neutral, crisp, high-contrast; the primary action reads ink, accent color appears only for
+  highlights, charts, and product-specific moments. Fits almost any product.
+- **indigo** — deep indigo-violet primary. Confident, techy, SaaS.
+- **emerald** — deep green primary. Growth, trust, finance/health.
+- **amber** — warm amber-orange primary. Energetic, warm, retail/hospitality.
+- **rose** — bold rose-red primary. Bold, creative, consumer-facing.
+- **slate-dark** — dark navy surfaces with a periwinkle accent. Dark-first, technical/ops
+  dashboards.
 
-  --ds-primary: #18181b;
-  --ds-primary-hover: #27272a;
-  --ds-primary-soft: #eceef2;
-  --ds-primary-text: #ffffff;
-  --ds-accent: #2563eb;
-  --ds-accent-soft: #dbeafe;
+Set `data-preset="indigo|emerald|amber|rose|slate-dark"` on `<html>` in the page shell; omit the
+attribute entirely for `ink`. A brand color that doesn't match any preset is a handful of
+`--ds-*` overrides appended to the `PAL OVERRIDES` block at the end of `design-system.css` — never
+a new hand-authored token block. Check `--ds-primary-text` for AA contrast whenever a primary
+color changes.
 
-  --ds-success: #15803d;
-  --ds-success-soft: #dcfce7;
-  --ds-warning: #b45309;
-  --ds-warning-soft: #fef3c7;
-  --ds-danger: #b42318;
-  --ds-danger-soft: #fee2e2;
-  --ds-info: #1d4ed8;
-  --ds-info-soft: #dbeafe;
-
-  --ds-radius-xs: 4px;
-  --ds-radius-sm: 6px;
-  --ds-radius-md: 8px;
-  --ds-radius-lg: 12px;
-  --ds-radius-pill: 999px;
-  --ds-shadow-xs: 0 1px 1px rgba(16, 17, 20, 0.04);
-  --ds-shadow-sm: 0 1px 2px rgba(16, 17, 20, 0.08);
-  --ds-shadow-md: 0 16px 40px rgba(16, 17, 20, 0.12);
-  --ds-shadow-pop: 0 24px 70px rgba(16, 17, 20, 0.18);
-  --ds-ease: cubic-bezier(0.2, 0, 0, 1);
-  --ds-duration-fast: 120ms;
-  --ds-duration-med: 180ms;
-  --ds-duration-slow: 280ms;
-}
-```
-
-Use one saturated brand/accent family per screen unless status semantics require a small green,
-amber, red, or blue cue. The default primary can be replaced by a user brand color, but then
-`--ds-primary-text` must be checked for AA contrast.
-
-Dark variant, when the user asks for dark or the existing pal is dark-locked:
-
-```css
-:root,
-[data-theme="dark"] {
-  --ds-bg: #0b0d10;
-  --ds-bg-subtle: #11151a;
-  --ds-surface: #161a20;
-  --ds-surface-raised: #1d232b;
-  --ds-text: #f6f7f9;
-  --ds-text-muted: #b6bdc8;
-  --ds-text-soft: #8b94a3;
-  --ds-border: #2a3039;
-  --ds-border-strong: #3c4654;
-  --ds-focus: #60a5fa;
-  --ds-focus-ring: #172a45;
-
-  --ds-primary: #f6f7f9;
-  --ds-primary-hover: #ffffff;
-  --ds-primary-soft: #242a33;
-  --ds-primary-text: #0b0d10;
-  --ds-accent: #60a5fa;
-  --ds-accent-soft: #172a45;
-
-  --ds-success: #4ade80;
-  --ds-success-soft: #12351f;
-  --ds-warning: #fbbf24;
-  --ds-warning-soft: #422b07;
-  --ds-danger: #fb7185;
-  --ds-danger-soft: #43151c;
-  --ds-info: #93c5fd;
-  --ds-info-soft: #172a45;
-}
-```
-
-On dark, separation comes primarily from surface tone and borders; use shadows only for overlays.
+Dark mode is a separate, already-shipped mechanism: `[data-theme="dark"]` on `<html>` (or
+`data-pb-theme-toggle` client-side, persisted to `localStorage` by `pb-ui.js`) switches the dark
+theme block already defined in `design-system.css`. Never author a second dark variant.
 
 ## Process
 
@@ -204,32 +149,47 @@ Define:
 - Color roles: background, subtle background, surface, raised surface, text, muted text, soft text,
   border, strong border, primary, primary hover, primary soft, primary text, accent, success,
   warning, danger, info.
-- Type: UI family, optional display family, scale, weight range, numeric rules. Use external fonts
-  only when the pal can load them reliably; otherwise use system stacks. Fonts must be system fonts
-  or Fontshare fonts. If self-hosting is available, install through Fontsource-style packages; if
-  not, use the Fontshare CSS link selected for the project. Do not default to Google Fonts.
+- Type: UI family, optional display family, scale, weight range, numeric rules. Fonts must be
+  system fonts or Fontshare fonts. Palbuilder rejects remote page-head font resources; Fontshare
+  loads only through the `@import` kept as line 1 of `design-system.css`. Do not default to Google
+  Fonts.
 - Iconography: always inline SVG, never icon fonts or JS icon replacers. Default to Iconoir, Tabler,
   or Phosphor; use one family per pal unless a single domain icon is missing. Heroicons can inform
   Tailwind-like proportions, but the generated Palbuilder output must still be inline SVG.
-- Spacing: every pal gets `styles/spacing.css` copied from `references/spacing.css`, linked before
-  theme/design CSS, and used as the Bootstrap replacement for spacing/layout utilities. It defines
-  the project spacing scale, container widths, `.row`/`.col-*`, flex/display helpers, gaps, margin,
-  padding, width/height, and visibility helpers. Do not use Bootstrap for spacing.
-- Radius: small set only. Cards default to 8px or less unless references require more.
-- Border/shadow/elevation: decide whether separation comes from tone, border, shadow, or layout.
-- Motion: GSAP is the JavaScript animation library for Palbuilder surfaces that need scripted
-  animation. Use CSS transitions for simple hover/focus states; use GSAP in `scripts/*.js` for
-  mounted sections, overlays, drawers, command palettes, chart reveals, reorder/FLIP, and scroll
-  storytelling. Define duration/ease tokens, reduced-motion behavior, and a no-motion fallback.
+- Canonical files: copy four files verbatim into the pal — `references/spacing.css` and
+  `references/design-system.css` → `styles/`, `references/pb-ui.js` and `references/pb-motion.js`
+  → `scripts/`. Register all four in `pal.json`. Link order in the page shell `<head>` is
+  `spacing.css` → `design-system.css`, then both scripts loaded exactly once as
+  `<script type="module" src="...">`. `spacing.css` is the Bootstrap replacement for
+  spacing/layout utilities (container widths, `.row`/`.col-*`, flex/display helpers, gaps, margin,
+  padding, width/height, visibility) — do not use Bootstrap for spacing.
+- Optional charts: for showcase or chart-heavy pals only, add the platform resource
+  `<c:resource source="chartjs" version="4.0.0" name="chart.js" />` and load
+  `scripts/pb-charts.js` from `references/pb-charts.js`. This is opt-in and not part of the core
+  four-file byte-identity set or the starters.
+- Radius, border, shadow, elevation: fixed by `design-system.css` tokens (`--ds-radius-*`,
+  `--ds-shadow-*`) — there is nothing to author. Override a token in the `PAL OVERRIDES` block
+  only if a reference genuinely requires a different value.
+- Motion: `scripts/pb-motion.js` is the only motion layer — `data-animate="fade-up|fade-in|
+  fade-left|fade-right|zoom-in|blur-in|scale-in|slide-up-lg|flip-up"` (+ `data-animate-delay`/`-duration`/`-stagger`),
+  `data-ticker`, `data-typewriter`, `data-tilt`, `data-spotlight`, `data-scroll-progress`. It is
+  data-attribute driven and needs no script beyond the one load from the page shell; there is no
+  other animation library. See `references/marketing-library.md` for marketing motion recipes and
+  `references/component-library.md`'s load-order note for app pals.
 - Density: page rhythm, table/list row height, card padding, mobile collapse behavior.
 - UX flow: primary path, hierarchy order, progressive disclosure, Fitts target rules, Gestalt
   grouping, and how complexity is staged.
 
 ### 3. Build the component inventory
 
-Use `references/component-library.md` as the canonical Palbuilder-ready library. In
-`COMPONENTS.md`, name only the components this pal needs now plus likely shared primitives. Every
-component must list variants, states, tokens, and the Palbuilder implementation pattern.
+Use `references/component-library.md` as the canonical Palbuilder-ready library for app/console
+components, and `references/marketing-library.md` for marketing sections (hero, bento, pricing,
+testimonials, logo cloud, CTA band, stats/ticker, mockups, text effects) — load marketing-library
+only when the pal actually has marketing pages. Both are HTML-only: every class and `data-*`
+attribute is already implemented in the shipped `design-system.css`/`pb-ui.js`/`pb-motion.js`,
+there is no component CSS left to write. In `COMPONENTS.md`, name only the components this pal
+needs now plus likely shared primitives. Every component must list variants, states, tokens, and
+the Palbuilder implementation pattern.
 
 Required baseline for most pals:
 - Primitives: Button, IconButton, ButtonGroup, Field, Textarea, InputGroup, Select, Checkbox,
@@ -289,11 +249,12 @@ Radix/Headless-style accessible states, Polaris-style dense tables, Carbon-style
 ### Type
 [Families, loading method, scale, weights, numeric rules.]
 ### Spacing
-[Must state that `styles/spacing.css` is present, linked before theme/design CSS, and owns the
+[Must state that `styles/spacing.css` is present, linked before `design-system.css`, and owns the
 spacing/layout utility scale. Note any project overrides to `--space-unit`, `--container-*`, or
 `--gutter-*`.]
 ### Radius / Border / Shadow / Motion
-[Token sets and intent.]
+[Token sets are fixed by `design-system.css` — note the chosen preset and any `PAL OVERRIDES`
+deviations, plus which `pb-motion.js` data-attributes are used and where.]
 
 ## Density & Layout
 [Page rhythm, grid/shell posture, table/list density, mobile behavior.]
@@ -309,10 +270,12 @@ progressive disclosure, target sizing, and intentional hierarchy mechanisms.]
 [Concrete, testable rules. Include anti-slop collisions.]
 
 ## Stack Mapping
-[Palbuilder XHTML/CSS mapping: `styles/spacing.css` copied from the bundled reference and linked
-first, `styles/theme.css` or `styles/design-system.css` linked after it, fragment naming, c: tag
-patterns, which recipes from references/component-library.md to use, GSAP loading strategy, SVG icon
-family, and Fontshare/system font choice.]
+[Palbuilder XHTML/CSS mapping: `styles/spacing.css` and `styles/design-system.css` copied verbatim
+from the bundled references and linked in that order, `scripts/pb-ui.js` and `scripts/pb-motion.js`
+each loaded once from the page shell as `<script type="module">`, chosen `data-preset` (or "ink,
+no attribute"), fragment naming, c: tag patterns, which recipes from
+references/component-library.md (and references/marketing-library.md if the pal has marketing
+pages) to use, SVG icon family, and Fontshare/system font choice.]
 ```
 
 ### 6. Write COMPONENTS.md
@@ -343,7 +306,8 @@ Use this exact structure:
 
 ## Recipe References
 [List relevant sections from `.agents/skills/design-system-init/references/component-library.md`
-or `.claude/skills/design-system-init/references/component-library.md`.]
+or `.claude/skills/design-system-init/references/component-library.md`, plus
+`references/marketing-library.md` sections if the pal has marketing pages.]
 ```
 
 ### 7. Confirm
@@ -359,11 +323,15 @@ reality. A correction means re-check references or source files before editing t
 
 ## Palbuilder Rules For The Design System
 
-- Every pal must include `styles/spacing.css` copied from `references/spacing.css` and link it from
-  every page shell before any theme/component stylesheet:
-  `<link rel="STYLESHEET" type="text/css" href="../Styles/spacing.css" />`.
-- Use external CSS files for the visual layer, normally `styles/design-system.css` or
-  `styles/theme.css`; pages link them from `<head>` after `spacing.css`.
+- Every pal ships four files copied verbatim from this skill's `references/`: `styles/spacing.css`,
+  `styles/design-system.css`, `scripts/pb-ui.js`, `scripts/pb-motion.js` — registered in `pal.json`.
+  Never hand-author a `theme.css` or a bespoke component stylesheet; the only per-pal CSS write is
+  appending to the `PAL OVERRIDES` block at the end of `design-system.css`.
+- Page shell `<head>` link/script order: `styles/spacing.css` → `styles/design-system.css`, then
+  `scripts/pb-ui.js` and `scripts/pb-motion.js` each exactly once as
+  `<script type="module" src="../Scripts/pb-ui.js"></script>` /
+  `<script type="module" src="../Scripts/pb-motion.js"></script>`. Set `data-preset="..."` on
+  `<html>` (omit for `ink`).
 - `spacing.css` replaces Bootstrap for spacing/layout. Only load Bootstrap when a legacy pal already
   depends on Bootstrap behavior or a specific platform resource is explicitly required.
 - Fragments use `<c:ignore xmlns:c="contractpal">` and contain no `<html>`, `<head>`, `<body>`,
@@ -377,29 +345,40 @@ reality. A correction means re-check references or source files before editing t
 - Icon fonts and JS icon replacement libraries are not allowed. Use inline SVG from Iconoir, Tabler,
   or Phosphor unless the user explicitly chooses another SVG family.
 - Use system fonts or Fontshare fonts. Do not introduce a Google Fonts dependency by default.
-- Use GSAP for scripted UI animation in `scripts/*.js` when motion is needed. Load GSAP once from a
-  local vendor file or approved CDN in the page shell; never put animation scripts in fragments.
+- Load Fontshare only through the `@import` at the top of `design-system.css`; never add remote
+  page-head font resources.
+- Motion is `scripts/pb-motion.js` data attributes only (`data-animate`, `data-ticker`,
+  `data-typewriter`, `data-tilt`, `data-spotlight`, `data-scroll-progress`) — no other animation
+  library. It delegates from `document` and rescans AJAX-swapped fragments itself; never add a
+  per-fragment `<script>` or re-init call.
 - Never place `${...}` inside inline `<script>`. Put browser JS in `scripts/*.js` loaded from the
   page shell.
 - Use JPG/PNG for images; avoid WebP in Palbuilder.
 
 ## Acceptance Checklist
 
-- [ ] User was asked for palette/brand color and 2-3 reference photos/screenshots; default palette
-      used only when they did not care or could not provide them.
+- [ ] User was asked for palette/brand color and 2-3 reference photos/screenshots; default `ink`
+      preset used only when they did not care or could not provide them.
 - [ ] Palette workflow used or explicitly skipped: generate options, narrow, refine harmony, check
-      WCAG AA, preview on real UI, export semantic CSS variables.
-- [ ] Typography is system-stack or Fontshare; icons are inline SVG from one approved family; GSAP
-      strategy is documented for scripted animation.
+      WCAG AA, preview on real UI, map onto a shipped preset (or override a few tokens on top).
+- [ ] Typography is system-stack or Fontshare; icons are inline SVG from one approved family.
 - [ ] `design/refs/` contains durable reference assets and notes.
 - [ ] `DESIGN_SYSTEM.md` exists with semantic tokens, density/layout, accessibility, Do / Don't,
       and Palbuilder stack mapping.
-- [ ] `styles/spacing.css` exists, matches or intentionally extends `references/spacing.css`, is
-      registered in `pal.json`, and is linked before `theme.css`/`design-system.css` on every page.
-- [ ] `COMPONENTS.md` exists with primitives, composites, layout shells, states, and recipe links.
+- [ ] All four canonical files are present in the pal and registered in `pal.json`:
+      `styles/spacing.css`, `styles/design-system.css`, `scripts/pb-ui.js`, `scripts/pb-motion.js`.
+- [ ] Page shell `<head>` link order is `spacing.css` → `design-system.css` (pal overrides live in
+      the marked block at the end of that same file, not a separate stylesheet); `pb-ui.js` and
+      `pb-motion.js` are each loaded exactly once as `<script type="module" src="...">`.
+- [ ] Chosen `data-preset` is set on `<html>` (omitted entirely for `ink`).
+- [ ] No leftover scripted-animation vendor file or `<script>` reference remains anywhere in the
+      pal — motion is `pb-motion.js` data attributes only, nothing else.
+- [ ] `COMPONENTS.md` exists with primitives, composites, layout shells, states, and recipe links,
+      including `references/marketing-library.md` sections when the pal has marketing pages.
 - [ ] Direction was checked against anti-slop fingerprints.
 - [ ] Direction was checked against `references/design-principles.md`: user journey, hierarchy,
       grouping, Fitts target sizing, typography, color meaning, consistency, and simplicity.
-- [ ] Component choices point to Palbuilder-valid recipes in `references/component-library.md`.
+- [ ] Component choices point to Palbuilder-valid recipes in `references/component-library.md`
+      (app/console) or `references/marketing-library.md` (marketing sections) — no invented CSS.
 - [ ] Extract mode only: every token cites a real source; inconsistencies are documented, not
       silently normalized.

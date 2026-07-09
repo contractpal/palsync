@@ -47,7 +47,10 @@ page without a `<body>` tag ("No body tag found, cannot save without losing cont
     <head>
         <title>Dashboard</title>
         <link rel="STYLESHEET" type="text/css" href="../Styles/spacing.css"/>
+        <link rel="STYLESHEET" type="text/css" href="../Styles/design-system.css"/>
         <link rel="STYLESHEET" type="text/css" href="../Styles/main.css"/>
+        <script type="module" src="../Scripts/pb-ui.js"></script>
+        <script type="module" src="../Scripts/pb-motion.js"></script>
         <script type="module" src="../Scripts/console-main.js"></script>
     </head>
     <body>
@@ -65,6 +68,12 @@ Use `styles/spacing.css` for Bootstrap-like spacing/layout helpers (`.container`
 `.d-flex`, `.gap-*`, `.m-*`, `.p-*`). Do not load Bootstrap just for spacing. Only use
 `c:resource source="bootstrap"` when a legacy pal already depends on Bootstrap behavior or the spec
 explicitly requires Bootstrap components.
+
+Do not add remote page-head font resources; the server rejects them. If a pal uses Fontshare, it
+must load through the first-line `@import` in `styles/design-system.css`.
+Chart.js is the exception for charts: use the platform resource
+`<c:resource source="chartjs" version="4.0.0" name="chart.js" />` plus an opt-in local
+`scripts/pb-charts.js`.
 
 ### Fragments hold the namespace on a wrapper
 

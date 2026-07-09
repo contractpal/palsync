@@ -88,8 +88,8 @@ came from.
 - **Design handoff** — Q15 DESIGN_SYSTEM.md + COMPONENTS.md present? No → run
   design-system-init, then return here. Yes → per page, propose a layout skeleton: section
   order + which named component fills each slot + hierarchy/primary action/progressive disclosure
-  notes. Confirm every page shell will link `styles/spacing.css` before theme/design CSS. No
-  colors/fonts.
+  notes. Confirm every page shell will link `styles/spacing.css` before `styles/design-system.css`
+  and load `pb-ui.js`/`pb-motion.js` once each. No colors/fonts.
 - **SEO** *(usually web; a publicly indexed console landing/login page can qualify; never a
   webservice/tunnel action)* — Q16 Domain? Per §3 page: publicly indexable? Target phrase for
   each page that is (propose from approved copy).
