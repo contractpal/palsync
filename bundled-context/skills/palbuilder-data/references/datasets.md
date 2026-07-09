@@ -22,34 +22,6 @@ var ds = pal.getDataSet("<name>");     // by registered dataset name (camelCase,
 The name matches the dataset entry in `pal.json` (see
 `palbuilder-core/references/pal-json.md` for dataset registration).
 
-### Registering a dataset — `freeform:true` is required
-
-Before a workflow can read or write a dataset, the dataset must be registered in
-`pal.json`'s `datasets` array. The schema is the inline `Dataset` object on that entry; the
-`fields.DatasetField[]` array is the column definition. A `datasets/<name>.json` file on
-disk is only a passthrough copy, not the source of truth.
-
-```json
-{
-  "string": "equipment",
-  "Dataset": {
-    "name": "equipment",
-    "freeform": true,
-    "fields": { "DatasetField": [
-      { "fieldName": "equipmentId", "fieldType": "Primary key" },
-      { "fieldName": "name", "fieldType": "String", "fieldSize": 100, "notNull": true },
-      { "fieldName": "status", "fieldType": "String", "fieldSize": 20, "indexed": true },
-      { "fieldName": "createdAt", "fieldType": "Date" }
-    ] }
-  }
-}
-```
-
-**`"freeform": true` is required.** Without it, the provisioned table can save and compile
-but omit the per-field columns, so a later `SELECT equipmentId` throws `Unknown column` at
-render time. Set it explicitly. palsync's dataset-sync defaults omitted `freeform` to true,
-but the safest schema still spells it out.
-
 ---
 
 ## Column types
@@ -84,9 +56,8 @@ values. The commonly-used types:
 - **Date** — accepts `Date` objects from `dateUtil` (see
   `palbuilder-workflow/references/utilities.md`).
 - **DateTime** — same, with time component.
-- **Boolean** — filters and writes use the strings `"true"` / `"false"`; when reading a
-  Boolean-typed value back in workflow JS, coerce before comparing (see "Boolean-typed
-  record values" below).
+- **Boolean** — stored and compared as the strings `"true"` / `"false"` (see the boolean
+  gotcha throughout this reference).
 
 **Encrypted and files**
 - **Encrypted** — value encrypted at rest, decrypted on read.
@@ -220,7 +191,7 @@ Order of sort calls determines sort priority (first call = primary sort).
 ### Paging
 
 ```js
-filter.enablePaging(pageSize, pageNumber);   // pageNumber is 0-indexed
+filter.enablePaging(pageNumber, pageSize);   // pageNumber is 0-indexed
 ```
 
 ---
@@ -284,25 +255,6 @@ preferred throughout the codebase.
 Full DataSetRecord / DataViewRecord APIs:
 - https://secure.cloudpiston.com/cpal/cp-api/web/DataSetRecord.html
 - https://secure.cloudpiston.com/cpal/cp-api/web/DataViewRecord.html
-
-### Boolean-typed record values
-
-Dataset fields declared as type **Boolean** do not reliably compare with a plain JS string
-when read back from a record. Coerce the returned value before comparing:
-
-```js
-// Wrong — unreliable for a Boolean-typed column
-if (sticky.get("pinned") == "true") { ... }
-
-// Right — force a string comparison
-if (("" + sticky.get("pinned")) == "true") { ... }
-```
-
-This applies to read-then-compare workflow JS paths (`getRecord`, `findRecord`, copied
-DataList rows). Writes still use `record.set("pinned", "true")`, filters still use
-`addEqual("pinned", "true")`, and EL template comparisons such as `${row.pinned eq 'true'}`
-are fine. String columns that store `"true"` / `"false"` as text do not need this defensive
-coercion.
 
 For iterating a DataList, use its own count and index accessors:
 
@@ -409,8 +361,6 @@ you.
   is the #1 workflow crash cause.
 - **Booleans stored as strings** — `"true"` / `"false"`. `addEqual("col", true)` will not match
   a row where the column is the string `"true"`.
-- **Boolean-typed record reads need coercion** — compare `("" + rec.get("col")) == "true"`,
-  not `rec.get("col") == "true"`.
 - **`selectColumns` omission** — pulls every column. Fast to hit, slow to debug when it scales.
 - **`enablePaging` is 0-indexed** — page 0 is the first page.
 - **`deleteRecord` takes a String id** — use `id.toString()` to coerce.
