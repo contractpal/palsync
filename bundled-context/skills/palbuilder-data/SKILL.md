@@ -1,6 +1,6 @@
 ---
 name: palbuilder-data
-description: Use this skill whenever reading, writing, or shaping data in a CloudPiston pal — datasets, dataviews, payloads, DataMaps, DataLists, pal-level data, cache, session storage, cookies, files/attachments, or server-side HTTP calls to external services. Covers the standard read pattern (getDataSet + createFilter + selectColumns + addEqual + getRecords), the standard write pattern (createRecord + set + insertRecord + updateRecord) with find-or-create idempotency, dataset column types and indexes, analytic filters (createAnalyticFilter for aggregates/group-by/having/date-extraction), the runtime DataViewBuilder, payload composition (root data + named DataMaps + DataLists), pal.getSettings() for secure config, request.setSessionValue/setSessionData and cookies for per-user state, the storage decision (session vs. cookie vs. cache vs. dataset vs. settings), dataset naming conventions (camelCase plural, PK = singular + "Id"), and pointers to deeper references for the full API surface. Trigger when writing any dataset query, defining a schema or index, running an aggregate/group-by, building a payload, joining data in memory or at runtime, calling an external API from a workflow, storing per-user session state, or reading pal-level constants and cache values.
+description: Use for reading, writing, or shaping data in a CloudPiston pal — datasets, dataviews, payloads, DataLists, pal-level data, cache, chunks (pre-rendered/cached HTML fragments), session storage, cookies, files, or server-side HTTP calls. Covers the standard read/write patterns (createFilter, selectColumns, addEqual, getRecords, find-or-create), column types and indexes, analytic filters (aggregates, group-by, having), the runtime DataViewBuilder, payload composition, pal.getSettings(), session/cookie APIs, the storage decision (session vs. cookie vs. cache vs. dataset vs. settings), and naming conventions. Trigger for dataset queries, schema/index work, aggregates, payload building, in-memory or runtime joins, external API calls, session/cache reads, or caching pre-rendered fragment output.
 ---
 
 # CloudPiston Pal — Data Layer
@@ -18,9 +18,8 @@ teaches the data-specific patterns.
 
 ## Read [reference].md when
 
-- **`references/datasets.md`** — DataSet registration (`freeform:true`), CRUD, column types
-  (varchar/text/decimal/encrypted/file/profile id/transaction id, signed/unsigned ints),
-  indexes (compound, join-driven),
+- **`references/datasets.md`** — DataSet CRUD, column types (varchar/text/decimal/encrypted/
+  file/profile id/transaction id, signed/unsigned ints), indexes (compound, join-driven),
   deep filter API (grouping/paging/sorting), record-by-id access, typed accessors, updates,
   deletes (`deleteRecord`, `deleteRecords`, `bulkDelete`), and the explicit-cascade rule (the
   platform does not auto-cascade — you must write it).
@@ -33,9 +32,12 @@ teaches the data-specific patterns.
   DataLists; DataList shaping/joining; `pal.getData(name)` and `pal.getDataList(name)` for
   pal-level constants.
 - **`references/cache.md`** — CacheManager (`cm`), the three cache scopes (pal / enterprise /
-  cloud), and put/get/deleteItem across strings, `Data`, `DataList`, and `Payload`.
+  cloud), put/get/deleteItem across strings, `Data`, `DataList`, and `Payload`, and
+  **chunks** — pre-rendered, cached HTML fragments (`cache.createChunk`) for content like
+  blog posts or reports that's rendered once and served to many requests.
 - **`references/session.md`** — Request-based session values, session data, cookies, and
   when to pair session with cache for large or long-lived per-user state.
+- **`references/files.md`** — Attachments, images, and pal-level file storage.
 - **`references/http-client.md`** — ServiceRequest, JSONParser, JSONBuffer, Buffer for
   server-side HTTP and JSON; `pal.getSettings()` for API keys and secrets.
 
@@ -96,6 +98,11 @@ each *should* be used for.
 Full session/cookie API and cache-pairing patterns: `references/session.md`. Full cache API
 and scopes: `references/cache.md`.
 
+**Serving the same rendered HTML to many requests?** That's not a data-storage decision —
+it's a rendering one. If a fragment's *output* (not just its underlying data) is expensive or
+frequent enough to cache, look at **chunks** in `references/cache.md` rather than just
+caching the data and re-rendering every time.
+
 ---
 
 ## Dataset naming conventions
@@ -109,9 +116,6 @@ Applies to every new dataset field and column:
 - **Boolean values in String columns** are stored as the strings `"true"` / `"false"` (not
   actual booleans). Compare with `addEqual("col", "true")` — see `datasets.md` for the full
   filter API.
-- **Boolean-typed columns** also filter with `"true"` / `"false"`, but when reading a
-  record value in workflow JS, coerce before comparing: `("" + rec.get("pinned")) == "true"`.
-  See `datasets.md` for the gotcha.
 
 ---
 
@@ -349,3 +353,4 @@ Deep API for every type this skill covers:
 - JSONBuffer — https://secure.cloudpiston.com/cpal/cp-api/web/JSONBuffer.html
 - Buffer — https://secure.cloudpiston.com/cpal/cp-api/web/Buffer.html
 - CacheManager — https://secure.cloudpiston.com/cpal/cp-api/web/CacheManager.html
+- Chunk — https://secure.cloudpiston.com/cpal/cp-api/web/Chunk.html
