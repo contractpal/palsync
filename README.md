@@ -43,10 +43,11 @@ palsync upgrade --check  # report whether an update exists, without installing
 
 Why a subcommand and not a plain reinstall: `npm install -g github:<repo>` re-uses npm's **cached**
 resolution of the default branch, so a plain reinstall often silently keeps the old build. `palsync
-upgrade` installs the immutable commit SHA (`github:…#<sha>`) — a ref npm hasn't cached — so the
-update always lands, and it always tracks the latest code (no release tagging required). The upgrade
-uses npm's normal dependency install and lifecycle hooks, so new runtime dependencies are installed
-with the upgraded build. Confirm the build you ended up with:
+upgrade` installs the immutable commit SHA as a tarball (`codeload.github.com/…/<sha>`) — a ref npm
+hasn't cached — so the update always lands, and it always tracks the latest code (no release tagging
+required). The upgrade installs with lifecycle scripts **off** (so it can't be blocked by npm 11's
+`strict-allow-scripts` gate) and then fetches the Chromium browser binary itself, so a new install
+works under any npm configuration. Confirm the build you ended up with:
 
 ```sh
 palsync --version
@@ -79,6 +80,23 @@ Fix by installing with the npm tied to the bin that actually wins:
 ```
 
 Or uninstall the stale copy first (run the *winning* npm), then reinstall normally.
+
+### Install or `palsync upgrade` fails with `ESTRICTALLOWSCRIPTS` (or an npm `allow-scripts` error)
+
+npm 11 can block install scripts that aren't on an allowlist. When `strict-allow-scripts` is on it
+aborts the whole install (`ESTRICTALLOWSCRIPTS`) — not just palsync's postinstall but any transitive
+native dependency's build. `palsync upgrade` on **0.27.0 or newer** already avoids this (it installs
+with scripts off, then fetches Chromium itself). If you're on an **older** build, its upgrade can
+still hit the gate; bootstrap onto the current build by hand — install with scripts off, then fetch
+the browser explicitly:
+
+```sh
+npm install -g https://codeload.github.com/contractpal/palsync/tar.gz/refs/heads/main --ignore-scripts --include=optional
+node "$(npm root -g)/palsync/src/install/playwrightChromium.js"
+```
+
+From then on `palsync upgrade` handles it automatically. (Set `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`
+before the second command to skip the Chromium download.)
 
 ## Prerequisites
 
