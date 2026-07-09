@@ -143,6 +143,24 @@ repurpose them.
 **Declare only the globals you actually use.** A workflow that never returns ajax doesn't
 need `ajax`; a workflow that never touches cache doesn't need `cm`.
 
+### Reading request input
+
+`data.get("name")` (equivalently `request.get("name")`) returns a **single** value for a
+request parameter — form field, querystring param, etc. That's the shape you want almost
+always, including for a single checkbox or radio group.
+
+When the client sends **multiple inputs sharing the same `name`** — a group of checkboxes
+the user can multi-select, a multi-select list — `get()` only gives you one of them. Use
+`request.getParameterValues("name")` instead; it returns **all** submitted values for that
+name as an array:
+
+```js
+var selectedTags = request.getParameterValues("tag");   // array, even if only one was checked
+```
+
+If the field is single-valued, stick with `data.get()`/`request.get()` — reach for
+`getParameterValues` only when the name is genuinely repeated on the client.
+
 ---
 
 ## The action switch
