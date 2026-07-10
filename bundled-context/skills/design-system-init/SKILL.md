@@ -199,7 +199,7 @@ Define:
   data-attribute driven and needs no script beyond the one load from the page shell; there is no
   other animation library. See `references/marketing-library.md` for marketing motion recipes and
   `references/component-library.md`'s load-order note for app pals.
-- Density: page rhythm, table/list row height, card padding, mobile collapse behavior.
+- Density: map the interview answer to tokens and write the numbers into DESIGN_SYSTEM.md — compact: section gap --ds-space-5 (20px), card padding --ds-space-4; balanced (default): section gap --ds-space-6 (24px), card padding --ds-space-5; spacious: section gap --ds-space-8 (32px), card padding --ds-space-6. Express deviations from the default as PAL OVERRIDES, never hand-edits.
 - UX flow: primary path, hierarchy order, progressive disclosure, Fitts target rules, Gestalt
   grouping, and how complexity is staged.
 

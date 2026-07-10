@@ -81,6 +81,7 @@ Treat your first output as a junior draft; review it like a demanding senior des
 **Against structure**
 - Decomposed per `COMPONENTS.md`, or collapsed into a monolith?
 - Any near-duplicate components that should be one?
+- Page content sits inside the shell's `pb-main`; fragment root is `pb-section`; sibling blocks are separated by layout primitives (`pb-stack`/`pb-cluster`/grid gaps), never touching and never spaced by hand-written margins.
 - Do Gestalt grouping rules make relationships obvious: proximity for labels/errors, similarity for
   same-role controls, common regions only where needed, and clear figure-ground for overlays?
 
@@ -121,6 +122,8 @@ Apply the same vocabulary to yourself at the review gate.
 - [ ] Page shell `<head>` link/script order matches design-system-init's checklist: `spacing.css` →
       `design-system.css`, then both scripts loaded exactly once as `<script type="module">`; used
       for generic spacing/layout instead of Bootstrap.
+- [ ] Shell owns `<main id="body" class="pb-main">`; every fragment root is `pb-section`; multi-field forms wrap fields in `pb-stack` or `pb-form-grid`.
+- [ ] No undefined classes: every `class=` value in pages/fragments resolves to design-system.css, spacing.css, or COMPONENTS.md-recorded local styles.
 - [ ] Applied design-principles review: user journey, hierarchy, grouping, Fitts target sizing,
       progressive disclosure, typography, color meaning, and consistency.
 - [ ] `component-library.md` (app/console) or `marketing-library.md` (marketing sections) consulted

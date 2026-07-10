@@ -176,6 +176,7 @@ Use this before calling a UI done:
 - Simplicity: Is complexity staged instead of dumped or deleted?
 - Typography: Are there too many styles, weak line lengths, poor numeric alignment, or fake content?
 - Color: Does every color role mean something, pass contrast, and avoid being the only signal?
+- Spacing: page content sits in a container with visible gutters; unrelated blocks are ≥24px apart; every gap comes from the scale, none hand-written.
 - Consistency: Does this match the surrounding product's patterns, tone, and density?
 - Interaction: Are default/hover/focus/active/disabled/loading/error/empty states covered?
 - Accessibility: Can the screen be used by keyboard, with visible focus and reduced motion?

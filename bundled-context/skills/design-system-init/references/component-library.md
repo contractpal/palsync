@@ -40,6 +40,66 @@ Set `data-preset="indigo|emerald|amber|rose|slate-dark"` on `<html>` to recolor 
 tokens (omit for the default ink theme); `data-theme="dark"` on `<html>` switches the dark block
 (`data-pb-theme-toggle` flips it client-side and persists to `localStorage`).
 
+## Page Shell & Spacing (mandatory)
+
+Every console page shell wraps its fragments in the main container. Fragments NEVER include
+`.pb-main` themselves. The shell owns it.
+
+Navbar-only shell (matches the console-app starter):
+```html
+<body>
+    <div id="cp-root">
+        <c:fragment name="navbar" />
+        <main id="body" class="pb-main">
+            <c:fragment name="${frag}" />
+        </main>
+        <c:debug />
+    </div>
+</body>
+```
+
+Sidebar shell: see section 49 (`.pb-layout` wraps sidebar + `<main id="body" class="pb-main">`).
+
+Fragment root = `<div class="pb-section">`. It is a grid with a 24px gap. Page headers,
+toolbars, grids, and cards inside it space themselves. Without it siblings touch.
+
+Spacing primitives (use these, never hand-written margins):
+
+| Class | Gap | Use for |
+|---|---|---|
+| `.pb-section` | 24px | fragment root; rhythm between page-level blocks |
+| `.pb-stack` | 16px | vertical stack inside a card: fields, list rows |
+| `.pb-cluster` | 12px | inline row: buttons, chips, filters |
+| `.pb-grid-2` / `.pb-grid-3` | 24px | equal-width card/stat grids |
+| `.pb-form-grid` | 16/20px | two-column form layouts |
+
+`.pb-field-group` spaces only its own label→input. IF a form has more than one field, THEN wrap
+the fields in `.pb-stack` (single column) or `.pb-form-grid` (two column):
+```html
+<div class="pb-card">
+    <div class="pb-stack">
+        <div class="pb-field-group">
+            <label class="pb-label">
+                Email
+                <c:field type="text" name="email" class="pb-input ${emailErrorClass}" value="${email}" placeholder="name@example.com" />
+            </label>
+            <p class="pb-field-error" role="alert" test="${!empty(emailError)}">${emailError}</p>
+        </div>
+        <label class="pb-toggle">
+            <input type="checkbox" name="notify" checked="checked" />
+            <span class="pb-toggle-track" aria-hidden="true"></span>
+            Notify me
+        </label>
+        <div class="pb-cluster"><button class="pb-btn pb-btn-primary">Save</button></div>
+    </div>
+</div>
+```
+
+Empty states use `.pb-state`; notices use `.pb-alert`. Never use a bare styled `<p>`.
+Custom CSS (PAL OVERRIDES only) uses `--ds-space-*` tokens. Utility classes (`.p-*`, `.gap-*`,
+`.mt-*`) come from spacing.css and follow its own `--s*` scale. They are fine in markup. Never
+mix raw px values or the two scales in one rule.
+
 ## 1. Buttons
 
 One primary action per view. States (hover/focus/active/disabled) are automatic from the class.
@@ -836,7 +896,7 @@ The collapsible left rail for console app layouts (`.pb-layout` two-column grid)
             <c:a action="getDashboard" workflow="console" class="pb-nav-link ${dashboard_active}">Dashboard</c:a>
         </nav>
     </aside>
-    <main class="pb-main"><c:fragment name="${frag}" /></main>
+    <main id="body" class="pb-main"><c:fragment name="${frag}" /></main>
 </div>
 ```
 
