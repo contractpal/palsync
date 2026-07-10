@@ -25,6 +25,10 @@ async function buildContext(workspaceDir, { idleMs, log = () => {}, acquireLock 
         workspaceDir,
         lifecycle,
         persist: () => palsyncfile.write(workspaceDir, record),
+        // Session-only user control for automated/runtime verification. This intentionally
+        // resets with the MCP process so a one-off "stop testing" request never becomes a
+        // surprising permanent workspace setting.
+        testingEnabled: true,
         // Session-lifetime render-verification flag — see renderNotVerifiedReminder in mcp/tools.js.
         // false until a pal_screenshot (or pal_fetch/pal_preview+expect for web) actually shows a
         // clean render since the last push; "unavailable" once the check tool is confirmed absent.

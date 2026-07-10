@@ -84,6 +84,11 @@ function syncSection(palName, { cli = false, skillsDir = ".claude/skills" } = {}
         "",
         "The working loop:",
         "",
+        ...(cli ? [] : [
+            "**Testing:** User says stop/resume testing → call `pal_testing` with `enabled:false`/`true`.",
+            "Do not retry skipped checks or report them as passed; validate and push validation stay on.",
+            ""
+        ]),
         "1. " + T.pull + " before starting significant work. Pull is a safe sync: it preserves NEW",
         "   un-pushed files (and carries their `pal.json` entries forward), and it REFUSES — naming",
         "   the files — if it would overwrite un-pushed local edits.",

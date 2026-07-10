@@ -46,6 +46,21 @@ function refreshBaseline(record, workspaceDir, serverPaths) {
 
 function nowIso() { return new Date().toISOString(); }
 
+// A user may stop CHIP's automated testing mid-session (for example, when the pal's routes
+// require a real application login that the agent cannot complete). Keep the switch at the MCP
+// boundary, before any core tool can acquire a test lock, launch a browser, or hit the app.
+// `undefined` means enabled for backward-compatible direct tool tests and older contexts.
+function testingDisabledResult(ctx, toolName) {
+    if (!ctx || ctx.testingEnabled !== false) return null;
+    return {
+        ran: false,
+        skipped: true,
+        testingEnabled: false,
+        message: "Automated testing is OFF for this session — " + toolName + " was not run. " +
+            "Call pal_testing with enabled:true to resume automated testing."
+    };
+}
+
 // Render-verification tracking (session-lifetime, lives on ctx so it survives across tool calls).
 // ctx.renderVerified: undefined/false = not verified since the last push, true = a clean
 // pal_screenshot/pal_fetch/pal_preview(expect) confirmed it, "unavailable" = the check tool
@@ -301,6 +316,23 @@ const TOOLS = [
         }
     },
     {
+        name: "pal_testing",
+        description: "Toggle CHIP runtime/self-tests for this session. false skips pal_test/preview/fetch/screenshot/exercise/regression/SEO/tunnel; true resumes. pal_validate and push validation stay on. Resets at session end.",
+        inputShape: {
+            enabled: z.boolean().optional().describe("false stops automated runtime/self-tests now; true resumes them. Omit to report the current setting.")
+        },
+        async run(ctx, { enabled } = {}) {
+            if (typeof enabled === "boolean") ctx.testingEnabled = enabled;
+            const active = ctx.testingEnabled !== false;
+            return {
+                enabled: active,
+                message: active
+                    ? "Automated testing is ON for this session."
+                    : "Automated testing is OFF for this session. Runtime/self-test tools will be skipped until you call pal_testing with enabled:true. Offline pal_validate and push validation remain enabled."
+            };
+        }
+    },
+    {
         name: "pal_test",
         description: "Validate a workflow ON THE SERVER and return the server's validation notes. Does NOT open a browser by default; pass preview:true only when the user has stopped for human review and wants a live browser preview. The preview URL carries the user's credentials, is NEVER returned to you, and you CANNOT see the rendered page — use pal_screenshot/pal_exercise for agent-visible verification.",
         inputShape: {
@@ -309,6 +341,8 @@ const TOOLS = [
             preview: z.boolean().optional()
         },
         async run(ctx, { workflow, workflowName, preview = false } = {}) {
+            const disabled = testingDisabledResult(ctx, "pal_test");
+            if (disabled) return disabled;
             const res = await runTest(ctx.session, ctx.record.palGuid, { kind: workflow, workflowName });
             if (ctx.lifecycle) ctx.lifecycle.onActivity(); // pal_test takes the lock — re-arm idle
             if (!res.ran) {
@@ -363,6 +397,8 @@ const TOOLS = [
             askedUser: z.boolean().optional().describe("REQUIRED attestation: true means the action/workflow/payload values came from the USER in this conversation — their message specified them, or they answered your questions. NEVER set it alongside values you chose yourself.")
         },
         async run(ctx, { action, payload, payloadFile, workflow, askedUser } = {}) {
+            const disabled = testingDisabledResult(ctx, "pal_tunnel_test");
+            if (disabled) return disabled;
             // Local enumeration (last-pulled pal.json) — for name matching and for listing options.
             const { tunnels, defaultTunnel } = listTunnelWorkflows(ctx.workspaceDir);
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
@@ -469,6 +505,8 @@ const TOOLS = [
             open: z.boolean().optional().describe("Console/transaction only: open the preview in the user's browser. Default false for auto mode.")
         },
         async run(ctx, { workflow, expect, selector, maxChars, open = false } = {}) {
+            const disabled = testingDisabledResult(ctx, "pal_preview");
+            if (disabled) return disabled;
             const res = await runPreview(ctx.session, ctx.record.palGuid, ctx.record, ctx.workspaceDir, { workflow });
             if (ctx.lifecycle) ctx.lifecycle.onActivity(); // preview takes the lock — re-arm idle
             const dirtyNote = res.dirty
@@ -568,6 +606,8 @@ const TOOLS = [
             maxChars: z.number().optional().describe("Cap the returned markup to this many characters.")
         },
         async run(ctx, { path, expect, selector, maxChars } = {}) {
+            const disabled = testingDisabledResult(ctx, "pal_fetch");
+            if (disabled) return disabled;
             const res = await fetchPagePath(ctx.session, ctx.record.palGuid, path);
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             if (!res.fetched) {
@@ -643,6 +683,8 @@ const TOOLS = [
             fullPage: z.boolean().optional().describe("Capture the whole scroll height, not just the viewport.")
         },
         async run(ctx, { page, feature, viewport, fullPage } = {}) {
+            const disabled = testingDisabledResult(ctx, "pal_screenshot");
+            if (disabled) return disabled;
             const res = await runScreenshot(ctx.session, ctx.record.palGuid, { page, viewport, fullPage });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             if (!res.captured) {
@@ -745,7 +787,7 @@ const TOOLS = [
     },
     {
         name: "pal_exercise",
-        description: "Functionally EXERCISE workflow actions end-to-end and assert the persisted result in the rendered output — the check above compile (pal_test) and render (pal_screenshot): did the WRITE actually do the right thing? Acts on the LAST PUSHED version — pal_push first. Each step triggers an action, then asserts expect:[strings that MUST appear] and absent:[strings that must NOT appear] — put the OLD value in absent after an edit to catch a duplicate insert. WEB pal: steps use action+params (headless). CONSOLE/transaction pal: steps use fill (inputs by name=) + click (the action link's exact visible text) — drives the real authenticated screen. Duplicate click labels fail instead of silently clicking the first; scope repeated row/card actions with within, using a selector containing unique {{runId}} test data. Steps run in order and stop at the first failure. Use after building any create/edit/delete action, and to verify pal-loop's read-back requirement.",
+        description: "Functionally exercise actions end-to-end and assert rendered results — the proof above compile (pal_test) and render (pal_screenshot). Acts on the LAST PUSHED version; push first. Steps run in order and stop at the first failure. WEB uses action+params; CONSOLE/transaction fills inputs then clicks exact text. Scope duplicate controls with within and unique {{runId}} data. Use after create/edit/delete actions.",
         inputShape: {
             steps: z.array(z.object({
                 page: z.string().optional().describe("WEB only: page path under the site root to load first, e.g. \"equipment.html\"."),
@@ -761,6 +803,8 @@ const TOOLS = [
             viewport: z.enum(["desktop", "mobile"]).optional().describe("Browser-mode viewport (default desktop).")
         },
         async run(ctx, { steps, workflow, viewport } = {}) {
+            const disabled = testingDisabledResult(ctx, "pal_exercise");
+            if (disabled) return disabled;
             const res = await runExercise(ctx.session, ctx.record.palGuid, { steps, workflow, viewport });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             // Functional exercise proves behavior, not responsive visual quality. Only paired,
@@ -773,6 +817,8 @@ const TOOLS = [
         description: "On-page SEO audit of a WEB pal's server-rendered page (last pushed): title/meta, canonical, og/twitter, single H1, JSON-LD, img alt, robots.txt/sitemap.xml/llms.txt. Returns each problem + its fix, plus what PASSED. Use after pushing a web page; fix every ERROR. Not for console pals. Read the seo-core skill BEFORE writing heads; this verifies the result.",
         inputShape: {},
         async run(ctx) {
+            const disabled = testingDisabledResult(ctx, "pal_seo_audit");
+            if (disabled) return disabled;
             const res = await runSeoAudit(ctx.session, ctx.record.palGuid, ctx.record, ctx.workspaceDir);
             if (ctx.lifecycle) ctx.lifecycle.onActivity(); // audit takes the lock via preview — re-arm idle
             if (!res.audited) {
@@ -805,6 +851,8 @@ const TOOLS = [
         description: "Brownfield regression check against baseline/baseline.json (pal-init Step 3). FIRST compares the baseline's mapped marker to the live server — moved => STALE, stops (never verdicts against a stale baseline). Then re-runs validate / pal_test / page-H1 checks vs the baseline, separating CAUSED failures from INHERITED (known_issues) ones; eyeball_only viewports are needs-human, never auto-passed.",
         inputShape: {},
         async run(ctx) {
+            const disabled = testingDisabledResult(ctx, "pal_regression");
+            if (disabled) return disabled;
             const res = await runRegression(ctx.session, ctx.record, ctx.workspaceDir);
             if (ctx.lifecycle) ctx.lifecycle.onActivity(); // runs pal_test — takes the lock, re-arm idle
             return Object.assign(res, { message: res.summary });
