@@ -87,3 +87,44 @@ test("bundled UI starters ship the 4 canonical design-system files and never the
         fs.rmSync(ws, { recursive: true, force: true });
     }
 });
+
+test("starter design assets remain byte-identical to the canonical skill references", () => {
+    const canonical = path.join(__dirname, "..", "bundled-context", "skills", "design-system-init", "references");
+    const starters = path.join(__dirname, "..", "bundled-context", "starters");
+    for (const name of ["console-app", "web-marketing"]) {
+        for (const f of ["spacing.css", "design-system.css"]) {
+            assert.deepStrictEqual(
+                fs.readFileSync(path.join(starters, name, "styles", f)),
+                fs.readFileSync(path.join(canonical, f)),
+                name + " styles/" + f + " must match the canonical reference byte-for-byte"
+            );
+        }
+        for (const f of ["pb-ui.js", "pb-motion.js"]) {
+            assert.deepStrictEqual(
+                fs.readFileSync(path.join(starters, name, "scripts", f)),
+                fs.readFileSync(path.join(canonical, f)),
+                name + " scripts/" + f + " must match the canonical reference byte-for-byte"
+            );
+        }
+    }
+});
+
+test("web-marketing starter defaults to content-led hierarchy, not AI-slop effects", () => {
+    const ws = tempWorkspace();
+    applyTemplate(ws, "web-marketing", { palName: "T" });
+    const nav = fs.readFileSync(path.join(ws, "fragments", "navbar.html"), "utf8");
+    const home = fs.readFileSync(path.join(ws, "fragments", "home-body.html"), "utf8");
+    const css = fs.readFileSync(path.join(ws, "styles", "design-system.css"), "utf8");
+
+    assert.match(nav, /class="pb-skip-link"/, "skip link is focus-only by default");
+    assert.match(home, /pb-hero--split/);
+    assert.match(home, /pb-proof-panel/);
+    assert.match(home, /pb-editorial-split/);
+    assert.match(home, /pb-outcome-list/);
+    assert.doesNotMatch(home, /pb-hero--aurora|pb-bento|data-ticker/, "starter should not default to decorative AI-slop patterns");
+    assert.match(css, /\.pb-form-card\s*\{/);
+    assert.match(css, /\.pb-row-actions\s*\{/);
+    assert.match(css, /\.pb-skip-link\s*\{/);
+    assert.match(css, /\.pb-navbar--marketing\s*\{[^}]*top:\s*0;/s, "marketing nav is full-width/sticky, not a floating pill");
+    fs.rmSync(ws, { recursive: true, force: true });
+});

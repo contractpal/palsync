@@ -1,32 +1,52 @@
-# COMPONENTS — palsync test suite (minimal stub)
+# COMPONENTS — palsync UX benchmark recipes
 
-Every §6 layout line in a test SPEC names one of these. Nothing else may be invented.
-All classes come from the shipped `styles/design-system.css` / `styles/spacing.css` (pb-*
-system). No external CSS framework is loaded; a class that appears in markup but in no
-shipped stylesheet is a defect.
+These are approved, shipped pb-* building blocks. Compose the subset the content needs; do not
+invent class names or force every page through the same template. Every class must resolve in
+`styles/design-system.css` or `styles/spacing.css`.
 
-- **PageHeader** — `pb-cluster` row: `h1` screen title + optional right-aligned primary
-  action (`pb-btn pb-btn-primary`).
-- **DataTable** — `pb-table` inside `pb-table-wrap`; header row; one row per record; per-row
-  action links (c:a) as `pb-btn pb-btn-secondary` in the actions cell. Wrapped in a fragment
-  so it can be an ajax-target. Destructive row actions (Delete) carry `confirm=` and use
-  `pb-btn-danger`.
-- **FormCard** — `pb-card` containing a vertical form: fields are `pb-field-group`s (a
-  `pb-label` wrapping its control — `pb-input`, `pb-select`, or `pb-textarea`), two or more
-  fields wrapped in `pb-stack` or `pb-form-grid`; one `pb-btn pb-btn-primary` submit +
-  `pb-btn pb-btn-ghost` cancel.
-- **StatusBadge** — `pb-badge`; mapping: available/open = `pb-badge-success`,
-  checkedOut/completed = `pb-badge-neutral`, cancelled = `pb-badge-danger`.
-- **FilterBar** — `pb-filterbar`: one `pb-select` + one Apply `pb-btn pb-btn-secondary`
-  above a DataTable.
-- **EmptyState** — `pb-state` (`pb-state-title` + `pb-state-msg`) inside the table region:
-  exact copy per spec §4.
-- **DetailPanel** — `pb-card` of label/value rows (`pb-description-list`) for a single record.
-- **MarketingHero** — web landing `pb-hero`: one `pb-hero-title` h1, one `pb-hero-sub`
-  paragraph, one primary CTA (`pb-btn pb-btn-primary` in `pb-hero-actions`), and optional
-  secondary text/link. Uses shipped spacing utilities; no decorative imagery required.
-- **CardGrid** — responsive `pb-grid-2` / `pb-grid-3` of 2-4 simple `pb-card`s. Each card has
-  a heading and one approved body sentence from SPEC §4.
-- **ContentSection** — constrained readable text `pb-section`; left-aligned.
-- **CTASection** — short `pb-cta-band` with one primary link/button and optional support text.
-- **FooterNav** — `pb-footer` with brand text and links to every §3 marketing route.
+## Shared app/CRUD
+
+- **AppShell** — page owns `<main id="body" class="pb-main">`; feature fragment root is
+  `pb-section`. `c:debug` sits outside authored main content.
+- **PageHeader** — `pb-page-head`: `pb-title` + optional `pb-subtitle`, with one right-side
+  `pb-btn pb-btn-primary` action.
+- **DataTable** — `pb-table` inside `pb-table-wrap`; semantic header row; every `td` has
+  `data-label`; text left, numeric `pb-num`; responsive mobile record collapse.
+- **RowActions** — `pb-row-actions`. One or two frequent safe actions use secondary/ghost buttons.
+  Delete is last, `pb-btn-danger`, spatially separated, and carries the exact `confirm=` copy.
+- **StatusBadge** — `pb-badge` plus semantic variant; available/open = `pb-badge-success`,
+  checkedOut/completed = `pb-badge-neutral`, cancelled = `pb-badge-danger`. Status text remains.
+- **FormCard** — `pb-card pb-form-card` containing `pb-stack`; each field is `pb-field-group` with
+  visible top `pb-label` and `pb-input`/`pb-select`/`pb-textarea`. `pb-form-actions` holds primary
+  Save and ghost Cancel. Controls fill their bounded field group; use `pb-field-group--short` or
+  `pb-field-group--medium` when the expected answer is compact. `pb-form-grid` is allowed only for
+  short related fields.
+- **InlineError** — `pb-field-error` adjacent to its control with `role="alert"`; invalid value
+  remains visible for correction.
+- **EmptyState** — `pb-state` with `pb-state-title`, optional `pb-state-msg`, and at most one
+  relevant action. Never a bare “No data” line.
+- **Alert/Feedback** — `pb-alert` semantic variant for task feedback near the affected region.
+- **FilterBar** — `pb-filterbar`: labeled search/select controls and one secondary Apply action.
+- **DetailPanel** — `pb-detail` / `pb-description-list` for a single record.
+
+## Shared marketing
+
+- **MarketingShell** — one `<main id="main">`, focus-only `pb-skip-link`, full-width
+  `pb-navbar pb-navbar--marketing`, and `pb-footer`.
+- **MarketingHero** — `pb-hero pb-hero--split`: left `pb-stack` with eyebrow, `pb-hero-title`,
+  `pb-hero-sub`, primary + ghost CTA; right `pb-proof-panel` or approved real media. Centered hero
+  requires explicit content rationale.
+- **OutcomeList** — `pb-outcome-list` containing `pb-outcome` rows with `pb-outcome-index`,
+  `pb-outcome-title`, and `pb-outcome-desc`. Prefer this content-led hierarchy to equal cards.
+- **EditorialSplit** — `pb-marketing-section` -> `pb-marketing-inner pb-editorial-split`: concise
+  section intro beside an OutcomeList, process, comparison, or approved content.
+- **ServiceList** — an OutcomeList with approved service names/descriptions; number or letter rows
+  to support scanning. No fabricated benefits.
+- **ContentSection** — `pb-marketing-section` with readable copy in `pb-stack`; keep prose measure
+  bounded and composition distinct from the Home hero.
+- **ContactPanel** — bounded `pb-proof-panel` or `pb-card pb-form-card` with the approved contact
+  line and one clear CTA; no empty half-screen spacer.
+- **CTASection** — `pb-cta-band` on the default light surface. `pb-cta-band--strong` is allowed
+  once only when a dark focal band is intentional.
+- **FooterNav** — three-column `pb-footer-inner` (brand + two link groups) and compact
+  `pb-footer-bottom`; links cover every §3 marketing route.

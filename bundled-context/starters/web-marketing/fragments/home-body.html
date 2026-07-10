@@ -1,63 +1,69 @@
 <c:ignore xmlns:c="contractpal">
   <main id="main">
 
-    <!-- HERO: before production, replace .pb-mock-browser with a real product screenshot
-         <img> when the project has one. Do not ship missing ../Images/hero.jpg references
-         from a starter. -->
-    <section class="pb-hero pb-hero--centered pb-hero--aurora">
+    <!-- HERO: content-led split. The right side must become honest proof, workflow detail, or
+         a real product/service example. Never invent metrics, logos, testimonials, or UI. -->
+    <section class="pb-hero pb-hero--split">
       <div class="pb-hero-inner">
-        <span class="pb-hero-eyebrow" data-animate="fade-up">For your audience, in three words</span>
-        <h1 class="pb-hero-title" data-animate="fade-up" data-animate-delay="80">The one-line promise, <span class="pb-text-gradient">stated plainly.</span></h1>
-        <p class="pb-hero-sub" data-animate="fade-up" data-animate-delay="160">One supporting sentence: what it does and the outcome the visitor gets. No adjectives doing the work a fact should do.</p>
-        <div class="pb-hero-actions" data-animate="fade-up" data-animate-delay="240">
-          <a href="#contact" class="pb-btn pb-btn-primary">Get started</a>
-          <a href="#how" class="pb-btn pb-btn-secondary">See how it works</a>
+        <div class="pb-stack" data-animate="fade-up">
+          <span class="pb-hero-eyebrow">For your audience, in three words</span>
+          <h1 class="pb-hero-title">The one-line promise, stated plainly.</h1>
+          <p class="pb-hero-sub">One supporting sentence: what it does and the outcome the visitor gets. No adjectives doing the work a fact should do.</p>
+          <div class="pb-hero-actions">
+            <a href="#contact" class="pb-btn pb-btn-primary">Get started</a>
+            <a href="#how" class="pb-btn pb-btn-ghost">See how it works</a>
+          </div>
+        </div>
+
+        <aside class="pb-proof-panel" aria-label="Outcome preview" data-animate="fade-left">
+          <p class="pb-hero-eyebrow">What changes</p>
+          <div class="pb-outcome-list">
+            <div class="pb-outcome">
+              <span class="pb-outcome-index">01</span>
+              <div><h2 class="pb-outcome-title">Most important outcome</h2><p class="pb-outcome-desc">A concrete sentence explaining what becomes easier, faster, clearer, or safer.</p></div>
+            </div>
+            <div class="pb-outcome">
+              <span class="pb-outcome-index">02</span>
+              <div><h2 class="pb-outcome-title">Second outcome</h2><p class="pb-outcome-desc">A specific supporting result, not a generic benefit claim.</p></div>
+            </div>
+            <div class="pb-outcome">
+              <span class="pb-outcome-index">03</span>
+              <div><h2 class="pb-outcome-title">Third outcome</h2><p class="pb-outcome-desc">The last useful proof point. Remove it if the content does not earn three.</p></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- CONTENT: an editorial split creates hierarchy without card soup. -->
+    <section id="features" class="pb-marketing-section">
+      <div class="pb-marketing-inner pb-editorial-split">
+        <div class="pb-stack" data-animate="fade-up">
+          <span class="pb-hero-eyebrow">Why it matters</span>
+          <h2 class="pb-title">A section heading that advances the story</h2>
+          <p class="pb-subtitle">Explain the problem or approach in one short paragraph. Keep prose to a readable measure.</p>
+        </div>
+        <div id="how" class="pb-outcome-list" data-animate="fade-up">
+          <div class="pb-outcome">
+            <span class="pb-outcome-index">A</span>
+            <div><h3 class="pb-outcome-title">First step or capability</h3><p class="pb-outcome-desc">What happens and why it is useful.</p></div>
+          </div>
+          <div class="pb-outcome">
+            <span class="pb-outcome-index">B</span>
+            <div><h3 class="pb-outcome-title">Second step or capability</h3><p class="pb-outcome-desc">Keep the relationship between steps visible.</p></div>
+          </div>
+          <div class="pb-outcome">
+            <span class="pb-outcome-index">C</span>
+            <div><h3 class="pb-outcome-title">Result</h3><p class="pb-outcome-desc">End on the user's outcome and next decision.</p></div>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- FEATURES: asymmetric bento grid, not three equal columns. -->
-    <section id="features">
-      <div class="pb-main">
-        <h2 class="pb-title" data-animate="fade-up">Three things, said as outcomes</h2>
-        <p class="pb-subtitle" data-animate="fade-up" data-animate-delay="80">What you get</p>
-        <div class="pb-bento" data-animate-stagger="80">
-          <div class="pb-bento-item pb-bento-item--lg" data-animate="fade-up">
-            <h3 class="pb-card-title">The lead feature</h3>
-            <p class="pb-muted">One or two sentences on the single most valuable thing. This cell is bigger because this feature matters most; rank, do not equal-weight.</p>
-          </div>
-          <div class="pb-bento-item" data-animate="fade-up">
-            <h3 class="pb-card-title">Second feature</h3>
-            <p class="pb-muted">One sentence.</p>
-          </div>
-          <div class="pb-bento-item" data-animate="fade-up">
-            <h3 class="pb-card-title">Third feature</h3>
-            <p class="pb-muted">One sentence.</p>
-          </div>
-          <div class="pb-bento-item pb-bento-item--wide" data-animate="fade-up">
-            <h3 class="pb-card-title">Fourth feature</h3>
-            <p class="pb-muted">One or two sentences. The staggered widths give the grid rhythm.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- RHYTHM BREAK: one impact stat (design-build: one section should surprise). Replace the
-         number with a real, defensible stat; never invent one. -->
-    <section id="how">
-      <div class="pb-main">
-        <div class="pb-stats" data-animate-stagger="100">
-          <div data-animate="fade-up">
-            <p class="pb-stats-value" data-ticker="3&#215;">0</p>
-            <p class="pb-stats-label">One sentence that earns the number above. If you do not have a real stat yet, use a concrete fact instead. Never invent one.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- CTA: one primary action, one line. -->
-    <section id="contact">
-      <div class="pb-main">
+    <!-- CTA: one primary action, one reassurance line. Default treatment is light; use
+         pb-cta-band--strong only when the design direction genuinely needs a dark focal band. -->
+    <section id="contact" class="pb-marketing-section pb-marketing-section--tight">
+      <div class="pb-marketing-inner">
         <div class="pb-cta-band" data-animate="fade-up">
           <div>
             <h2 class="pb-title">The closing ask, in one line</h2>

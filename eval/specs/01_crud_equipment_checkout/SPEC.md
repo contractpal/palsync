@@ -1,14 +1,14 @@
 # SPEC — equipment_checkout (palsync test 1: CRUD / DataSet fundamentals)
 status: approved
 reality_check: pass
-spec version: 2
+spec version: 3
 mode: lite
 run mode: auto — the build agent runs all tasks end-to-end with NO human intervention. All review (visual, data, structural) happens post-build by a human evaluator. The agent must never stop to ask questions or wait for input.
 pal: equipment_checkout (console) @ <WORKSPACE — set by evaluator before run>
 push policy: free
 review cadence: end
 design system: ../DESIGN_SYSTEM.md (components: ../COMPONENTS.md) — any evaluator-supplied reference images are the primary design authority and outrank the stub; none ship with this test.
-created: 2026-07-01   approved: 2026-07-06
+created: 2026-07-01   approved: 2026-07-10
 
 ## 1. Product & audience
 Internal tool for an office manager who tracks shared equipment: laptops, projectors, and cameras.
@@ -98,12 +98,18 @@ a console workflow doing CRUD against one DataSet and rendering fragment-swapped
 
 ## 6. Layout (composition only — NO colors/fonts)
 ### Equipment list
-- PageHeader (`Equipment` + `Add equipment`) → DataTable (StatusBadge in Status column;
-  EmptyState when zero rows)
+- AppShell → PageHeader (`Equipment` + `Add equipment`) → DataTable. StatusBadge stays textual.
+  RowActions groups safe actions and separates Delete. EmptyState replaces the table body at zero
+  rows. Productive density; the page title never uses marketing/hero scale.
 ### Add/Edit form
-- PageHeader → FormCard
+- AppShell → PageHeader → bounded single-column FormCard (top labels, Name then Category then
+  Notes) → grouped form actions (Save primary, Cancel ghost/secondary).
 ### Checkout form
-- PageHeader → FormCard
+- AppShell → PageHeader → bounded single-column FormCard → grouped form actions.
+
+At mobile width the shell reflows without page-level horizontal scrolling. The table uses its
+shipped record-card collapse with `data-label`; forms remain single column. Do not hide status,
+assignee, or destructive context.
 
 ## 7. SEO
 None — console-only, nothing publicly indexable.
@@ -157,7 +163,21 @@ GLOBAL FLOOR:
 - [ ] REGRESSION: the pal-init baseline still passes and untouched UI did not shift.
 
 CONSOLE pages:
-- [ ] VISUAL (Equipment list): PageHeader `Equipment`, striped table, status badges, no emoji.
+- [ ] VISUAL hierarchy (Equipment list): compact PageHeader `Equipment` + one Add primary action;
+      responsive table; textual status badges; grouped safe row actions; Delete visually separated;
+      no emoji, raw action links, browser-default controls, or marketing-scale heading.
+- [ ] VISUAL forms: Add/Edit and Checkout use a bounded FormCard, visible top-aligned labels,
+      consistent field rhythm, controls sized within the card to their expected answers, and grouped
+      Save/Cancel actions.
+- [ ] UX states: empty list uses the exact designed EmptyState; both validation errors appear beside
+      the affected field with the entered value recoverable; destructive Delete remains explicit.
+- [ ] RESPONSIVE/A11Y: desktop and mobile `pal_screenshot` captures have `renderError:null`, loaded
+      CSS, and `designAudit.errors:0`; mobile has no page-level horizontal overflow; keyboard focus
+      and action labels are visible/understandable.
+- [ ] VISUAL rubric: focal point/task, spacing/proximity, typography hierarchy, alignment/grid,
+      action/state clarity, responsive composition, and context-specific distinctiveness average
+      at least 1.5/2; focal point, spacing, and responsive composition each score 2; no dimension
+      scores 0. Every score cites screenshot evidence.
 - [ ] Data effects: after each §5 write, a follow-up list render shows the new/changed/deleted row.
 
 HAPPY-PATH [LITE]:

@@ -154,6 +154,9 @@ GLOBAL FLOOR:
 CONSOLE pages:
 - [ ] VISUAL (Directory): H1 `Employee directory`, FilterBar, striped table, Department and Office
       columns populated by names/cities rather than ids/codes, no emoji.
+- [ ] VISUAL QUALITY: desktop + mobile captures have loaded CSS and `designAudit.errors:0`; the
+      seven-dimension rubric averages at least 1.5/2, focal point/spacing/responsive each score 2,
+      and no dimension scores 0; every score cites screenshot evidence.
 - [ ] Data effect: after saveEmployee, a follow-up directory render contains the new employee row
       with the correct department name and office city.
 

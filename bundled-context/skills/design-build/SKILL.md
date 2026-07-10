@@ -7,6 +7,42 @@ description: "Enforce an established design system while building or reviewing U
 
 Build UI that conforms to the design system, decomposes cleanly, defines its interaction states, and passes review before shipping. First-pass AI output is mediocre; quality comes from up-front architecture and end self-critique.
 
+## UI task contract — use this before the long reference material
+
+Weak models do better with a small executable contract than with vague requests to "make it
+modern." For every visible task:
+
+1. **Classify** the surface: marketing, CRUD/admin, dashboard/data, or form flow.
+2. **Brief** it in six lines before code: user; primary job; primary action; information order;
+   density; one deliberate visual idea. This can live in the task/checkpoint; do not create a new
+   artifact for a tiny edit.
+3. **Select recipes**, then build. Load `marketing-library.md` only for marketing; load
+   `component-library.md` for operational UI. Do not blend both visual profiles.
+4. **Close the loop**: implement default + applicable loading/empty/error/success states; run the
+   functional checks; capture desktop and mobile; inspect pixels plus `designAudit`; fix the three
+   highest-impact failures; capture the changed viewport again; re-run behavior after visual edits.
+5. **Keep the best checkpoint.** A functional fix can damage layout. Compare the final render to
+   the last clean render and do not ship a visual regression.
+
+Hard gates — any failure means the visible task is not done:
+- Primary journey works end to end; no runtime/render error.
+- No unintended horizontal overflow at desktop or mobile.
+- Inputs have visible associated labels; keyboard focus is visible; action targets are usable.
+- Applicable empty/error/success/destructive states are present and understandable.
+- Exactly one page-level H1 and one primary action per action group.
+- Both desktop and mobile screenshots were actually inspected; `designAudit.errors` is zero.
+
+### Archetype profile
+
+| | Marketing | CRUD/admin and data tools |
+|---|---|---|
+| First job | Communicate audience, outcome, proof, next action | Make the next operational decision/action fast |
+| Type scale | Fluid display H1, usually 48-72px desktop | Product H1, usually 28-40px; never hero scale |
+| Density | Spacious but every blank area must pace or group content | Productive; controls about 40-44px and rows about 44-52px |
+| Composition | Vary by content: split, process, proof, comparison, editorial | Header/action -> filters -> data; bounded single-column forms by default |
+| Actions | One clear CTA + quieter secondary | Save primary + Cancel secondary; destructive action separated |
+| Avoid | Floating pill nav, giant empty hero, three-card-only page, repeated dark CTA slabs | Bare controls, inline labels, raw action links, giant headings, sparse cards |
+
 ## Step 0 — Load the system
 
 - Read `DESIGN_SYSTEM.md` and `COMPONENTS.md`. If absent and the task is non-trivial, recommend `design-system-init` first — building without a system drifts to generic output. If the user proceeds anyway, infer a minimal system from existing code and state your assumptions.
@@ -71,7 +107,19 @@ Unstated states are where AI output gives itself away — implement the full app
 
 Treat your first output as a junior draft; review it like a demanding senior designer. Fix what fails, then hand off.
 
-**Render first.** Source review catches token violations but misses how it looks — where slop lives. Produce a rendered screenshot before critiquing (see Vision routing). If rendering is genuinely impossible here, say so, run the code-level checks below, and flag that visual checks were skipped rather than silently passing them.
+**Render first.** Source review catches token violations but misses how it looks — where slop lives.
+For page-level work, capture both desktop and mobile. Read `designAudit` before subjective critique;
+its overflow, label, heading, target, skip-link, and action-affordance findings are external evidence,
+not optional suggestions. Then inspect the pixels. If rendering is genuinely impossible here, say
+so, run the code-level checks below, and flag that visual checks were skipped rather than silently
+passing them.
+
+Score the render 0-2 on each dimension: primary journey/focal point, spacing/proximity,
+typography hierarchy, alignment/grid, action/state clarity, responsive composition, and
+context-specific distinctiveness. `0` = broken/unstyled, `1` = competent but visibly weak,
+`2` = polished and intentional. No zero may ship; the seven-dimension average must be at least
+1.5, and spacing/proximity, primary journey/focal point, and responsive composition must each be
+2. Name screenshot evidence for every score; ungrounded "looks good" self-critique does not count.
 
 **Against the design system**
 - Does every color, space, size, and radius come from a token? Flag any arbitrary value.
@@ -136,4 +184,6 @@ Apply the same vocabulary to yourself at the review gate.
 - [ ] All values from tokens; any new need added to the system, not hardcoded.
 - [ ] Every interactive element defines its full state set, including focus-visible and loading/error/empty where relevant.
 - [ ] Review gate run; failures fixed or explicitly justified; changes reported.
+- [ ] Desktop and mobile captures inspected; `designAudit.errors` is zero; any changed viewport
+      was re-captured after fixes and functional checks still pass.
 - [ ] Result resembles the references in feel, not just palette, and trips no anti-slop fingerprints.

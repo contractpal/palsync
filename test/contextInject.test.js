@@ -164,6 +164,20 @@ test("Codex/OpenCode/Pi docs reference .agents/skills, never .claude/skills, and
     }
 });
 
+test("generated agent docs route every visible UI task through frontend + design-build and rendered review", async () => {
+    for (const opts of [
+        { cli: false, skillsDir: ".claude/skills" },
+        { cli: false, skillsDir: ".agents/skills" },
+        { cli: true, skillsDir: ".agents/skills" },
+    ]) {
+        const doc = await ci.buildPalsyncDoc("Demo", opts);
+        assert.match(doc, /mandatory two-skill route/i);
+        assert.match(doc, /load both `palbuilder-frontend`.*`design-build`/s);
+        assert.match(doc, /render desktop and mobile/i);
+        assert.match(doc, /`designAudit`/);
+    }
+});
+
 test("exercise guidance covers the delete-absent rule in both MCP and CLI flavors", async () => {
     const mcpDoc = await ci.buildPalsyncDoc("Demo", { cli: false });
     const cliDoc = await ci.buildPalsyncDoc("Demo", { cli: true });

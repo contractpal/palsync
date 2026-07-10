@@ -1,166 +1,188 @@
 # Design Research Brief
 
-This reference translates the requested research set into rules palsync can apply inside
-Palbuilder. It is not a link dump. Use it to make decisions when `design-system-init` asks for
-foundations or `design-build` needs a tie-breaker.
+This is the evidence layer behind Palsync's design rules. It is deliberately short and routed:
+use `design-principles.md` for build-time numbers and the checklist below for research tie-breakers.
+Do not copy a source's visual skin or install its framework.
 
-## Primary Articles
+## Authority Order
 
-- Component libraries: https://www.designsystemscollective.com/the-ui-component-libraries-that-actually-save-hours-part-1-3-e9503b3d8642
-- Color, icons, typography: https://www.designsystemscollective.com/color-tools-and-icon-libraries-that-actually-work-part-2-3-f7b3dd71dd5b
-- Design systems and CSS tools: https://mohitphogat.medium.com/design-systems-and-css-tools-worth-bookmarking-part-3-3-6d12a6b9df74
-- Design fundamentals: Figma Design Basics and linked articles on hierarchy, UX, UI principles,
-  interaction design, Fitts' law, Gestalt, color theory, typography, consistency, simplicity,
-  design tokens, and skeuomorphism. Use `design-principles.md` for the actionable distilled rules.
+When guidance conflicts, use this order:
 
-## What To Borrow
+1. Palbuilder runtime and markup constraints.
+2. WCAG 2.2 and semantic HTML requirements.
+3. The user's task, content, audience, existing brand, and observed workflow.
+4. Established product patterns from public design systems.
+5. Aesthetic references and trends.
 
-### Component systems
+An attractive reference never justifies an inaccessible control, broken workflow, invented content,
+or unsupported Palbuilder implementation.
 
-- shadcn/ui, Tailwind Plus, Catalyst, v0: prefer owned code over opaque runtime dependencies.
-  Palbuilder cannot install React component packages into a pal, so copy the idea: small recipes,
-  semantic class names, variants, states, and copyable source the project owns. shadcn's current
-  coverage is the minimum competitive bar: accordion, alert/dialog, avatar, badge, breadcrumb,
-  button group, calendar/date picker, carousel, chart, checkbox, collapsible, combobox, command,
-  context/dropdown menu, data table, drawer/sheet, empty, field/input groups, hover card, kbd,
-  menubar/navigation, pagination, popover, progress, radio, resizable, scroll area, select, sidebar,
-  skeleton, slider, spinner, switch, table, tabs, textarea, toast/sonner, toggle group, tooltip, and
-  typography.
-- Headless UI and Radix: separate behavior/anatomy from styling. For Palbuilder, that means
-  documenting component states and keyboard/focus expectations even when the implementation is
-  plain XHTML plus `c:` tags.
-- MUI and Chakra: component coverage matters. A design system is not finished if it has a button
-  and card but no table, loading state, error state, modal, filters, or forms.
-- Nuxt UI and daisyUI: semantic tokens and semantic class names help agents move fast. Use
-  `--ds-primary`, `--ds-surface`, `.pb-btn`, `.pb-card`, `.pb-table`; do not scatter raw hex values
-  and one-off utilities.
-- Polaris, Atlassian, Carbon: complex product UI needs dense data patterns, permissions/actions,
-  filtering, bulk actions, activity, and data visualization rules. These matter more to console pals
-  than marketing hero polish.
-- Magic UI and Aceternity: motion and visual personality can help public/marketing surfaces, but
-  for Palbuilder they must be restrained, CSS/external-JS based, and never block core workflows.
+## What The Evidence Changes
 
-### Design fundamentals
+### Encode decisions; do not prompt for taste
 
-- UX precedes UI. Start every screen with the user state, job, entry point, first decision, primary
-  action, feedback, and next step.
-- Visual hierarchy is a priority order, not a type scale. Use content order, size, spacing, weight,
-  contrast, color, and motion to guide attention deliberately.
-- Gestalt principles are practical layout rules: proximity groups related controls, similarity
-  establishes roles, common regions frame complex groups, continuity helps scanning, and one focal
-  point can break the pattern for emphasis.
-- Fitts' law belongs in component specs: frequent and primary actions need adequate target size and
-  proximity to the user's likely path; destructive actions need separation.
-- Simplicity means staged complexity. Use progressive disclosure, drawers, accordions, details,
-  filters, and command palettes to keep the default view clear without deleting necessary power.
-- Consistency is an affordance. Same role means same placement, state, label pattern, and behavior;
-  break consistency only to solve a real user problem.
+Weak agents do better with a small contract and observable checks than with adjectives such as
+"clean," "premium," or "modern." Before styling, require: surface profile, user job, information
+priority, spacing/type tokens, component states, and target viewports. Then render and inspect the
+result. OpenAI's agent-harness reporting likewise emphasizes repository-legible constraints,
+screenshots, local app operation, and iterative review rather than asking the model to "try harder."
 
-### Color and palette workflow
+### Choose productive or expressive density first
 
-- Ask for palette/reference images first. If none, use the default palette in `SKILL.md`.
-- The default workflow is:
-  1. Generate 20-30 palette directions in a Coolors-style generator.
-  2. Pick the strongest 2-3 based on product fit, contrast potential, and distinctiveness.
-  3. Refine the chosen palette in an Adobe Color-style harmony pass.
-  4. Check contrast before committing roles: WCAG AA 4.5:1 for normal text and 3:1 for large text
-     and non-text UI indicators.
-  5. Preview on an actual interface in Realtime Colors or an equivalent mockup, not just swatches.
-  6. Export semantic CSS variables and document the derivation.
-- Use palette tools as thinking aids:
-  - Coolors and Adobe Color for exploration, image extraction, and harmony refinement.
-  - Realtime Colors for seeing text/background/primary/accent distribution on UI.
-  - Paletton when color harmony or color-vision simulation matters.
-  - Khroma when the user has taste references but no palette.
-  - ColorSpace when the user has one brand hex and needs supporting tones.
-- Commit semantic roles, not raw swatches: background, surface, text, muted text, border, primary,
-  primary text, accent, success, warning, danger, info.
-- Keep saturated colors rare. Most hierarchy should come from type, spacing, borders, and surface
-  tone.
-- Verify text contrast: normal text at least WCAG AA 4.5:1, large text at least 3:1, focus rings
-  visible against both surface and page background.
+Carbon explicitly separates productive product typography from expressive editorial/marketing
+typography. Palsync applies the same distinction:
 
-### Icons and imagery
+- **CRUD/admin/console — productive:** optimize scanning, comparison, entry, and repeated action.
+  Use modest page titles, 14-16px UI text, 40-44px standard controls, 16-24px group gaps, 24-48px
+  section gaps, wide data regions, and persistent workflow context. Tables, filters, status, and
+  recovery states outrank decorative hero treatment.
+- **Public/marketing — expressive:** optimize comprehension, trust, and one conversion path. Use
+  16-18px body text, responsive display type, 24-32px content-group gaps, 64-96px major desktop
+  section gaps, readable prose widths, meaningful media, and a clear narrative. More space is not a
+  substitute for content, proof, or hierarchy.
 
-- Prefer one SVG icon family per pal. The approved default set is Iconoir, Tabler, and Phosphor:
-  Iconoir and Tabler for crisp stroke-based product UI, Phosphor when a pal needs broader weights or
-  friendlier object metaphors.
-- Heroicons is useful as a Tailwind-aesthetic reference, but generated Palbuilder markup should still
-  inline the chosen SVG paths. Noun Project is for highly specific concepts only after checking
-  license and attribution.
-- Inline SVG in Palbuilder fragments. Do not depend on icon fonts, external sprite injection, or JS
-  replacers; AJAX fragments do not rerun page boot code automatically.
-- Reference photos should influence composition, palette temperature, density, and imagery rules,
-  not become copied brand assets.
+Do not blend the profiles accidentally. A CRUD list is not a landing page; a marketing homepage is
+not an admin dashboard with larger text.
 
-### Typography
+### Space must communicate relationships
 
-- Prefer one strong UI family and one optional display family. Most console pals should use only the
-  UI family.
-- Good UI defaults: system UI, Satoshi, General Sans, Switzer, Supreme, or other Fontshare sans
-  families selected for the brand.
-- Good display accents when the product genuinely needs editorial tone: Cabinet Grotesk, Gambetta,
-  Boska, Sentient, Newsreader, or Playfair-like Fontshare alternatives. Use sparingly.
-- Fonts must be system-stack or Fontshare. Palbuilder rejects remote page-head font resources; the
-  only web-font path is a Fontshare `@import` as the first line of
-  `design-system.css`. Do not default to Google Fonts.
-- Body text uses `rem`; spacing/radius/borders can stay in `px`.
+Carbon, GOV.UK, and USWDS all use named spacing scales. The practical lesson is consistency plus
+intent: small gaps bind label/control/help; medium gaps separate fields and related groups; large
+gaps separate sections. Palsync uses `2, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96px` and requires every
+gap to come from that scale. Parent layout owns inter-component space through `gap`; components own
+their internal padding.
 
-### CSS and motion
+The ratio matters more than a single value. A section gap should normally be at least twice its
+internal item gap. When every gap is equal, hierarchy disappears; when gaps are huge, the workflow
+fragments.
 
-- Palbuilder supports external CSS well; favor CSS custom properties and component classes over a
-  build-time framework. Tailwind/Open Props still inform the structure: tokens, scales, responsive
-  rules, and small composable classes.
-- Every generated pal should include `styles/spacing.css` as the stable spacing/layout utility
-  layer. It replaces Bootstrap for containers, rows/columns, display/flex, gaps, margin, padding,
-  width/height, and visibility helpers while keeping theme/component CSS project-specific.
-- Do not require Tailwind, UnoCSS, React, Vue, Framer Motion, or build tooling inside a pal. Translate
-  their ideas into plain CSS and Palbuilder fragments.
-- Motion defaults: 120-180ms for hover/press/focus, 180-280ms for panels/modals, 400-700ms only for
-  progress/chart changes. Respect `prefers-reduced-motion`.
-- Scripted motion policy: vanilla `pb-motion.js` (shipped verbatim, no library dependency) drives
-  every mounted effect — reveal-on-scroll, count-up stats, typewriter text, pointer tilt/spotlight,
-  scroll progress. It uses one shared `IntersectionObserver` plus CSS transform/opacity transitions,
-  is driven entirely by `data-animate`/`data-ticker`/`data-typewriter`/`data-tilt`/`data-spotlight`
-  attributes (no scripted timelines to hand-author), and auto-scans AJAX-swapped fragments via a
-  `MutationObserver`. Keep simple hover/focus states in CSS as before.
+### Hierarchy is a reading order
 
-## Design System Coverage Target
+NN/g's visual-design principles and mature public systems converge on scale, contrast, alignment,
+proximity, and consistency. Convert those into an explicit order: page purpose -> current object or
+promise -> supporting evidence/data -> primary action -> secondary actions. Establish that order
+with document structure, position, type, and space before adding color, shadows, or motion.
 
-A Palbuilder design system should be able to cover:
+### Forms are conversations, not grids of boxes
 
-- Page shells: console app frame, public page frame, modal shell, detail drawer/panel.
-- Navigation: topbar, sidebar, tabs, breadcrumbs, mobile nav, command palette, menu/overflow.
-- Actions: primary/secondary/ghost/destructive buttons, icon buttons, button groups, split actions,
-  menus, contextual row actions.
-- Forms: text, textarea, input group, select, combobox, checkbox, toggle, radio, choice cards,
-  segmented control, slider, date picker, OTP/PIN, field groups, validation, upload.
-- Data: tables, responsive record cards, data-grid affordances, filters/search, pagination, bulk
-  action bar, status chips, KPI/stat cards, progress bars/rings, charts, metrics panels, kanban.
-- States: loading skeletons, empty, error, success toast/alert, disabled, permission-denied,
-  read-only.
-- Workflow: stepper, review/approval block, activity feed, timeline, attachments, comments/messages,
-  schedule/calendar list, settings panels, onboarding checklist.
-- Content: hero/marketing section only when the pal is public-facing; no landing-page theater for
-  dense operational tools.
+GOV.UK, USWDS, and Carbon use persistent visible labels, concise hints, expected-width inputs, and
+specific recovery copy. Default to one readable column; only place short, strongly related fields
+on the same row. Placeholder text is an example, never the label. On failure, identify what went
+wrong and how to fix it next to the field; for multi-field failures, also provide an error summary.
 
-## Palbuilder Translation Rules
+### Tables preserve comparison
 
-- Component library means recipes, CSS classes, and fragments. Do not imply React/Vue imports.
-- Every recipe must be valid XHTML: self-close void elements and SVG children.
-- Use only documented `c:` tag attributes. Cross-check `palbuilder-frontend/references/c-tags.md`.
-- Keep CSS in `styles/*.css`; keep JS in `scripts/*.js`; fragments have no inline `<script>`.
+USWDS and Carbon reserve tables for structured row/column comparison. Use a caption or equivalent
+context, real column headers, row-header semantics where appropriate, predictable alignment,
+compact but operable targets, and explicit loading/empty/error states. On narrow screens, keep a
+scrollable table when cross-column comparison matters; otherwise transform records into labeled
+rows/cards without hiding critical data.
+
+### Responsive means content-led, not device-named
+
+web.dev recommends mobile-first layouts and breakpoints where the content stops working rather than
+at brand-specific device widths. WCAG reflow requires ordinary content to work without two-axis
+scrolling at 320 CSS px (with exceptions for genuinely two-dimensional content such as data tables).
+Test the reading and focus order, not just whether boxes fit.
+
+### Accessibility is part of the visual system
+
+Use WCAG 2.2 AA as the floor: 4.5:1 normal-text contrast, 3:1 large-text contrast, 3:1 meaningful
+non-text boundaries/indicators, keyboard operation, visible and unobscured focus, labels and error
+identification, reflow, and a 24x24 CSS px minimum pointer target or sufficient spacing under the
+criterion's exceptions. Palsync's house default is stronger: 40px controls for desktop workflows
+and 44px for coarse pointers, plus a clearly contrasting 2px focus ring. Never use color alone.
+
+## Source Routes
+
+Open only the route needed for the current decision:
+
+- **Normative accessibility:** [WCAG 2.2](https://www.w3.org/TR/WCAG22/) and the
+  [W3C Understanding index](https://www.w3.org/WAI/WCAG22/Understanding/) for reflow, contrast,
+  focus, target size, labels, errors, and redundant entry.
+- **Plain, resilient service UX:** [GOV.UK spacing](https://design-system.service.gov.uk/styles/spacing/),
+  [layout](https://design-system.service.gov.uk/styles/layout/),
+  [text input](https://design-system.service.gov.uk/components/text-input/),
+  [error message](https://design-system.service.gov.uk/components/error-message/), and
+  [table](https://design-system.service.gov.uk/components/table/).
+- **Accessible public patterns:** [USWDS design principles](https://designsystem.digital.gov/design-principles/),
+  [spacing units](https://designsystem.digital.gov/design-tokens/spacing-units/),
+  [form](https://designsystem.digital.gov/components/form/), and
+  [table](https://designsystem.digital.gov/components/table/).
+- **Dense product systems:** [Carbon spacing](https://carbondesignsystem.com/elements/spacing/overview/),
+  [typography](https://carbondesignsystem.com/elements/typography/overview/),
+  [form](https://carbondesignsystem.com/components/form/usage/), and
+  [data table](https://carbondesignsystem.com/components/data-table/usage/).
+- **Platform ergonomics:** [Apple HIG layout](https://developer.apple.com/design/human-interface-guidelines/layout),
+  [typography](https://developer.apple.com/design/human-interface-guidelines/typography), and
+  [accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility).
+- **Human-factors review:** [NN/g visual-design principles](https://www.nngroup.com/articles/principles-visual-design/)
+  and [usability heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/).
+- **Responsive implementation:** [web.dev responsive-design basics](https://web.dev/articles/responsive-web-design-basics)
+  and [accessible responsive design](https://web.dev/articles/accessible-responsive-design).
+- **Agent feedback loops:** [OpenAI harness engineering](https://openai.com/index/harness-engineering/),
+  [VISTA](https://arxiv.org/abs/2605.26144), and
+  [InteractWeb-Bench](https://arxiv.org/abs/2604.27419). Treat emerging benchmark papers as
+  directional evidence for render-and-verify workflows, not as UX standards.
+
+## Required Agent Loop
+
+1. **Contract:** state the user job, productive/expressive profile, content priority, primary action,
+   real data/content, target viewports, and accessibility risks.
+2. **Foundation:** select tokens and component recipes before page-specific CSS. Use real-length
+   names, dates, amounts, errors, and empty states.
+3. **First render:** capture the real Palbuilder result at 320, 768, and 1440px widths; add the
+   widest expected operational viewport when relevant.
+4. **Inspect in order:** clipping/overflow -> reading and focus order -> hierarchy -> grouping and
+   alignment -> density -> contrast/states -> decorative polish. Record concrete defects, not
+   "looks off."
+5. **Exercise:** keyboard-tab the screen and run the primary path, including validation, loading,
+   empty/error, success, and destructive confirmation where applicable. Visual fidelity and
+   functional correctness are separate checks.
+6. **Revise the system:** fix tokens, shared layout, or components first; patch one page only when
+   the exception is real. Re-render every width affected by the change.
+7. **Stop only at gates:** no unintended horizontal scroll, no overlap/clipping, clear first action,
+   consistent rhythm, complete states, operable keyboard path, and no unresolved high-severity
+   visual defect.
+
+One screenshot is evidence of an attempt, not evidence of quality. At least one inspect-and-revise
+cycle is mandatory for a new or substantially changed surface.
+
+## Anti-Slop Guardrails
+
+Reject these defaults unless product evidence and the project Do/Don't examples justify them:
+
+- giant headings on CRUD pages, tiny gray copy, or whitespace that separates labels from controls;
+- a floating pill navbar, gradient/glow blobs, glass panels, or a black rounded CTA on every site;
+- "card soup": every paragraph, stat, action, and section in an equal rounded rectangle;
+- excessive pills, excessive radii, emoji as interface icons, and shadows used instead of grouping;
+- repeated filled primary CTAs in the same viewport (a persistent nav CTA must stay quieter),
+  placeholder-only forms, and unlabeled icon actions;
+- full-width short inputs, three tiny underlined row actions, and destructive actions beside safe ones;
+- generic hero copy, invented testimonials/metrics, fake dashboards, or decorative imagery with no
+  content role;
+- fixed-height sections that clip real content, desktop-only tables, or hiding essential mobile data;
+- animation on every element, auto-playing distraction, or motion without reduced-motion handling.
+
+Aim for one coherent visual thesis and at most one distinctive motif. Modernity comes from clear
+structure, disciplined rhythm, good content, and refined states—not from stacking fashionable effects.
+
+## Palbuilder Translation
+
+- A component library means owned recipes, semantic classes, states, and fragments—not React/Vue
+  imports or build tooling. Keep `styles/spacing.css` as the stable layout utility layer.
+- Markup must be valid XHTML: self-close void elements and SVG children. Use only documented `c:`
+  attributes; cross-check `palbuilder-frontend/references/c-tags.md`.
+- Put CSS in `styles/*.css` and JS in `scripts/*.js`; fragments contain no inline `<script>`.
 - Use `c:a` for server actions and `ajax-target` updates. JS-only controls use plain `<button>`.
-- For data rows, use `c:list` with direct EL.
-- For bound form inputs, use `c:field` and the label/error pattern from the component library.
-
-## Decision Heuristics
-
-- Dense console UI: borrow from Polaris/Atlassian/Carbon. Prioritize table density, filters,
-  keyboard focus, status clarity, and compact action bars.
-- Public web/marketing UI: borrow from Tailwind Plus/Magic/Aceternity only after content is real.
-  Use visual assets, but avoid generic gradients and card-heavy hero sections.
-- CRUD/admin UI: borrow from MUI/Chakra/Nuxt for full component coverage and semantic variants.
-- Custom component behavior: borrow from Radix/Headless anatomy, then implement in Palbuilder-valid
-  markup and external JS only if required.
-- Fast prototyping: borrow daisyUI's semantic class idea, not its dependency.
+  Use `c:list` with direct EL for data rows and `c:field` with the documented label/error pattern
+  for bound inputs.
+- Inline one consistent SVG icon family. Do not depend on icon fonts, injected sprites, or a JS icon
+  replacer; AJAX fragments do not rerun page boot code automatically.
+- Fonts are system stacks or Fontshare. A Fontshare `@import`, when used, is the first line of
+  `design-system.css`; do not add remote page-head fonts. Express body/type tokens in `rem`; spacing,
+  radii, and borders may remain in `px`.
+- CSS custom properties and semantic `.pb-*` classes hold the system. Simple states stay in CSS.
+  Mounted effects use the shipped dependency-free `pb-motion.js` and its documented
+  `data-animate`/`data-ticker`/`data-typewriter`/`data-tilt`/`data-spotlight` hooks; its shared
+  observers must keep effects working after AJAX swaps. Honor `prefers-reduced-motion`.

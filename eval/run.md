@@ -3,9 +3,13 @@
 **This file is the benchmark protocol linked from `eval/specs/README.md`.** It defines variable
 pinning, the one-variable rule, per-run cost capture, and the model matrix.
 
-The DESIGN_SYSTEM stub changed to the shipped pb-* system on 2026-07-09. Scores before and after are not directly comparable.
+The benchmark entered UX contract v2 on 2026-07-10: design became scored, all UI scenarios gained
+responsive visual-quality criteria, CRUD/marketing §6 gained archetype-specific composition, and
+`pal_screenshot` gained `designAudit`.
+Scores before this epoch are not directly comparable; record `ux-v2` in new row notes.
 
-The scenarios themselves (`eval/specs/01…05`, `DESIGN_SYSTEM.md`, `COMPONENTS.md`) are frozen.
+The scenarios themselves (`eval/specs/01…05`, `DESIGN_SYSTEM.md`, `COMPONENTS.md`) are frozen at
+their recorded version/approval date.
 Do not edit spec content — a changed spec invalidates every prior row it would compare against.
 
 ---

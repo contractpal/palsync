@@ -87,6 +87,35 @@ function formatStyleStatus(status) {
     return parts.join("; ");
 }
 
+function formatDesignAudit(audit) {
+    if (!audit || !audit.inspected) return "Design audit: not inspected" + (audit && audit.error ? " (" + audit.error + ")" : "");
+    const metrics = audit.metrics || {};
+    const parts = ["Design audit: " + audit.errors + " error(s), " + audit.warnings + " warning(s)"];
+    if (typeof metrics.horizontalOverflow === "number") parts.push("overflow=" + metrics.horizontalOverflow + "px");
+    if (typeof metrics.visibleH1s === "number") parts.push("H1s=" + metrics.visibleH1s);
+    if (typeof metrics.visibleControls === "number") parts.push("controls=" + metrics.visibleControls);
+    return parts.join("; ");
+}
+
+// A page-level visual gate is only complete after every route the agent has started reviewing has
+// one clean desktop and one clean mobile capture. A later failure replaces the prior pass, so stale
+// evidence can never leave renderVerified=true. pal_push clears this map because screenshots prove
+// the last pushed version, not whatever is currently on disk.
+function recordScreenshotEvidence(ctx, { route, viewportName, clean }) {
+    const routeKey = route || "/";
+    if (!ctx.renderViewportEvidence || Array.isArray(ctx.renderViewportEvidence)) ctx.renderViewportEvidence = {};
+    if (!ctx.renderViewportEvidence[routeKey]) ctx.renderViewportEvidence[routeKey] = {};
+    ctx.renderViewportEvidence[routeKey][viewportName] = clean === true;
+
+    const incomplete = Object.keys(ctx.renderViewportEvidence).filter(key => {
+        const evidence = ctx.renderViewportEvidence[key] || {};
+        return evidence.desktop !== true || evidence.mobile !== true;
+    });
+    const complete = Object.keys(ctx.renderViewportEvidence).length > 0 && incomplete.length === 0;
+    ctx.renderVerified = complete;
+    return { complete, route: routeKey, viewportName, clean: clean === true, incomplete };
+}
+
 // Print the FULL text of every server validation note (group/object: message), not just a count —
 // a count hides content-affecting warnings (e.g. a page with no body tag that won't save).
 function formatValidation(notes) {
@@ -452,7 +481,8 @@ const TOOLS = [
                 return Object.assign(res, { message: "Cannot preview: " + res.reason + dirtyNote });
             }
             if (res.kind === "web" && res.agentVisible) {
-                ctx.renderVerified = true; // real HTML observed below, one way or another
+                // HTML proves server rendering and copy, not responsive visual quality. The
+                // desktop/mobile screenshot gate remains outstanding.
                 // Token-efficient default: verify expected strings, never return the page body.
                 if (expect && expect.length) {
                     const chk = checkExpect(res.html, expect);
@@ -543,7 +573,8 @@ const TOOLS = [
             if (!res.fetched) {
                 return Object.assign(res, { message: "Could not fetch \"" + path + "\": " + res.reason + (res.validation ? "\n" + formatValidation(res.validation) : "") });
             }
-            ctx.renderVerified = true; // real HTML observed below, one way or another
+            // A fetched body proves routing/content, not responsive visual quality. Only audited
+            // desktop/mobile screenshots satisfy the visual gate.
             // Token-efficient default: verify expected strings, never return the page body.
             if (expect && expect.length) {
                 const chk = checkExpect(res.html, expect);
@@ -604,7 +635,7 @@ const TOOLS = [
     },
     {
         name: "pal_screenshot",
-        description: "Render a pal's screen to a PNG to judge its UI/UX visually (pal-review's visual arm) AND detect runtime render errors. Acts on the LAST PUSHED version — pal_push first. Scans the rendered page for a CloudPiston runtime-error block (a workflow that compiled but THREW — bad SQL, null deref, missing column) and reports it as a FAIL: pal_test passing only proves the workflow compiles, not that it renders. WEB renders directly; CONSOLE/transaction render via authenticated replay. If auth fails, or the runtime lacks Playwright/Chromium, it returns a clean unavailable signal (review falls back to the human eyeball gate) — never a blank or fake image.",
+        description: "Render a pal screen to a PNG for visual review, detect runtime render errors, and return a browser-computed designAudit (overflow, H1/main structure, form labels/orientation, target size, bare action links, visible skip links, table headers, and spacing metrics). Acts on the LAST PUSHED version — pal_push first. For page-level UI, capture both desktop and mobile; designAudit.errors must be 0, then inspect the pixels and fix/re-render visible failures. WEB renders directly; CONSOLE/transaction use authenticated replay. Missing Playwright/auth returns an honest unavailable signal, never a fake pass.",
         inputShape: {
             page: z.string().optional().describe("Page path under the site root, e.g. \"about.html\" (WEB only). Default: home page."),
             feature: z.string().optional().describe("Human label for the feature or flow being tested. Used to name the .agent-work-history run folder."),
@@ -623,15 +654,23 @@ const TOOLS = [
             }
             // A clean capture (no renderError) is the only thing that actually proves the UI renders —
             // a renderError leaves renderVerified false so the reminder keeps firing until it's fixed.
-            if (!res.renderError && (!res.styleStatus || res.styleStatus.likelyLoaded !== false)) ctx.renderVerified = true;
+            const auditClean = res.designAudit && res.designAudit.inspected && res.designAudit.errors === 0;
+            const screenshotClean = !res.renderError && (!res.styleStatus || res.styleStatus.likelyLoaded !== false) && auditClean;
+            const visualGate = recordScreenshotEvidence(ctx, {
+                route: page || "/",
+                viewportName: res.viewportName,
+                clean: screenshotClean
+            });
             // Save the PNG to a file the harness can Read, and return MCP image content so a
             // vision-capable model sees the render inline.
             let filePath = null;
+            let auditPath = null;
             let run = null;
             const featureLabel = feature || (page ? "page-" + page : (res.kind || "pal") + "-" + res.viewportName);
             try {
                 run = createWorkHistoryRun(ctx.workspaceDir, { tool: "pal_screenshot", feature: featureLabel });
                 filePath = writeArtifactFile(run, "screenshot-" + res.viewportName + ".png", Buffer.from(res.pngBase64, "base64"));
+                auditPath = writeArtifactFile(run, "design-audit.json", JSON.stringify(res.designAudit || { inspected: false }, null, 2), "utf8");
                 writeRunMetadata(run, {
                     palGuid: ctx.record.palGuid,
                     palName: ctx.record.palName,
@@ -643,7 +682,9 @@ const TOOLS = [
                     fullPage: !!fullPage,
                     renderError: res.renderError || null,
                     styleStatus: res.styleStatus || null,
+                    designAudit: res.designAudit || null,
                     artifact: filePath ? pathMod.basename(filePath) : null,
+                    designAuditArtifact: auditPath ? pathMod.basename(auditPath) : null,
                     smallDims: res.smallDims || null
                 });
                 writeRunNotes(run, [
@@ -655,7 +696,9 @@ const TOOLS = [
                     "- Viewport: " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height,
                     "- Full page: " + (!!fullPage),
                     "- Artifact: `" + (filePath ? pathMod.basename(filePath) : "not written") + "`",
+                    "- Design audit: `" + (auditPath ? pathMod.basename(auditPath) : "not written") + "`",
                     "- " + formatStyleStatus(res.styleStatus),
+                    "- " + formatDesignAudit(res.designAudit),
                     res.renderError ? "- Runtime render error: " + res.renderError.message : "- Runtime render error: none"
                 ]);
             } catch (e) { /* best-effort */ }
@@ -668,15 +711,25 @@ const TOOLS = [
                     + (res.renderError.line ? " (approx. line " + res.renderError.line + ")" : "")
                     + "\nThis is a FAIL — pal_test passing only means the workflow COMPILES. Fix the fault, push, and screenshot again before declaring the screen done."
                 : "";
+            const auditFailures = res.designAudit && res.designAudit.findings
+                ? res.designAudit.findings.filter(f => f.severity === "error") : [];
+            const auditBlock = auditFailures.length
+                ? "\n\n⚠ DESIGN AUDIT FAILED — fix these rendered facts and re-capture this viewport:\n" +
+                    auditFailures.map(f => "  - " + f.rule + ": " + f.message +
+                        (f.samples && f.samples.length ? " [" + f.samples.join(", ") + "]" : "")).join("\n")
+                : "";
             const text = (res.kind ? res.kind.toUpperCase() : "WEB") + " screenshot captured — " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height +
                 (fullPage ? " (full page)" : "") + "\n  url=" + res.url +
                 "\n  " + formatStyleStatus(res.styleStatus) +
+                "\n  " + formatDesignAudit(res.designAudit) +
+                "\n  Visual gate: " + (visualGate.complete ? "complete" : "incomplete; clean desktop + mobile still required for " + visualGate.incomplete.join(", ")) +
                 (run ? "\n  Work-history run: " + run.dir : "") +
-                (filePath ? "\n  PNG saved to: " + filePath : "") + errBlock;
+                (filePath ? "\n  PNG saved to: " + filePath : "") +
+                (auditPath ? "\n  Design audit saved to: " + auditPath : "") + errBlock + auditBlock;
             const safe = Object.assign({}, res); delete safe.pngBase64; delete safe.jpegSmallBase64; // don't double-include the base64 blobs
             // Attach the c.debug trail (prime evidence beside a renderError) BEFORE assembling the
             // content blocks, so the debug text rides the visible text block too.
-            const out = await withServerDebug(ctx, Object.assign(safe, { pngFile: filePath, message: text }));
+            const out = await withServerDebug(ctx, Object.assign(safe, { pngFile: filePath, visualGate, message: text }));
             // Inline a downscaled JPEG so the render doesn't ride at full resolution in every
             // subsequent turn's context; the full-res PNG is still on disk at pngFile. Falls back
             // to the full PNG if the in-page re-encode failed.
@@ -709,9 +762,8 @@ const TOOLS = [
         async run(ctx, { steps, workflow, viewport } = {}) {
             const res = await runExercise(ctx.session, ctx.record.palGuid, { steps, workflow, viewport });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
-            // A passing exercise observed the real rendered output — the strongest render proof we have.
-            if (res.ran && res.pass) ctx.renderVerified = true;
-            if (!res.ran && res.available === false) ctx.renderVerified = ctx.renderVerified || "unavailable";
+            // Functional exercise proves behavior, not responsive visual quality. Only paired,
+            // audited pal_screenshot captures can satisfy the page-level render gate.
             return Object.assign({}, res, { message: formatExercise(res) });
         }
     },
@@ -775,6 +827,8 @@ const TOOLS = [
                 // The push inside sync advanced the baseline — persist it.
                 if (res.saveResult && res.saveResult.serverPaths) refreshBaseline(ctx.record, ctx.workspaceDir, res.saveResult.serverPaths);
                 await ctx.persist();
+                ctx.renderVerified = false;
+                ctx.renderViewportEvidence = {};
                 const verb = res.recreated ? "RECREATED (dropped + rebuilt, data deleted)" : "synced (created/updated, data kept)";
                 const freeformNote = (res.freeformDefaulted && res.freeformDefaulted.length)
                     ? "\nSet freeform:true on " + res.freeformDefaulted.join(", ") + " (required so the table gets real per-field columns; without it column queries throw \"Unknown column\" at runtime). This was written back to pal.json."
@@ -872,6 +926,7 @@ const TOOLS = [
                 refreshBaseline(ctx.record, ctx.workspaceDir, res.serverPaths);
                 await ctx.persist();
                 ctx.renderVerified = false; // a push can change what renders — re-verify before declaring done
+                ctx.renderViewportEvidence = {};
                 // Surface any pre-push WARNINGS even on success (errors can't reach here unless
                 // skipValidation forced past them — say so loudly).
                 const warnBlock = res.lint && res.lint.warnings > 0
@@ -973,4 +1028,5 @@ const TOOLS = [
     }
 ];
 
-module.exports = { TOOLS, overridePhrase, blockedMessage, formatExpect, formatValidation, isBenignServerNote, htmlRegionResult };
+module.exports = { TOOLS, overridePhrase, blockedMessage, formatExpect, formatValidation, isBenignServerNote,
+    htmlRegionResult, recordScreenshotEvidence };

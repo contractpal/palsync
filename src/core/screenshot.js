@@ -211,6 +211,154 @@ async function inspectStyleStatus(pg, events = { responses: [], failed: [] }) {
     };
 }
 
+// Deterministic rendered-UI checks that complement (not replace) visual judgment. These inspect
+// geometry and accessibility facts the browser actually computed, so weak/text-only models receive
+// evidence instead of being asked to self-critique from source. Keep the rules low-noise: hard
+// errors are objective WCAG/runtime failures; taste signals stay warnings for the screenshot critic.
+async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop" } = {}) {
+    try {
+        const audit = await pg.evaluate(({ kind }) => {
+            const visible = (el) => {
+                const cs = window.getComputedStyle(el);
+                const r = el.getBoundingClientRect();
+                return cs.display !== "none" && cs.visibility !== "hidden" && Number(cs.opacity) !== 0 && r.width > 0 && r.height > 0;
+            };
+            const nameOf = (el) => {
+                if (el.id) return el.tagName.toLowerCase() + "#" + el.id;
+                const cls = Array.from(el.classList || []).slice(0, 2).join(".");
+                const text = String(el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 36);
+                return el.tagName.toLowerCase() + (cls ? "." + cls : "") + (text ? " (" + text + ")" : "");
+            };
+            const hasAccessibleLabel = (el) => {
+                if (el.labels && el.labels.length) return true;
+                if (el.closest && el.closest("label")) return true;
+                if (String(el.getAttribute("aria-label") || "").trim()) return true;
+                const ids = String(el.getAttribute("aria-labelledby") || "").trim().split(/\s+/).filter(Boolean);
+                if (ids.some(id => { const n = document.getElementById(id); return n && String(n.textContent || "").trim(); })) return true;
+                return !!String(el.getAttribute("title") || "").trim();
+            };
+            const findings = [];
+            const add = (severity, rule, message, nodes) => findings.push({
+                severity, rule, message,
+                count: nodes ? nodes.length : 1,
+                samples: nodes ? nodes.slice(0, 5).map(nameOf) : []
+            });
+
+            const doc = document.documentElement;
+            const body = document.body;
+            const overflow = Math.max(0, Math.ceil(Math.max(doc.scrollWidth, body ? body.scrollWidth : 0) - doc.clientWidth));
+            if (overflow > 1) {
+                const offenders = Array.from(document.querySelectorAll("body *")).filter(el => {
+                    if (!visible(el)) return false;
+                    const r = el.getBoundingClientRect();
+                    return r.right > window.innerWidth + 1 || r.left < -1;
+                });
+                add("error", "horizontalOverflow", "Page is " + overflow + "px wider than the viewport; reflow is broken.", offenders);
+            }
+
+            const headings = Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6")).filter(visible);
+            const h1s = headings.filter(el => el.tagName === "H1");
+            if (h1s.length !== 1) add("error", "pageHeading", "Expected exactly one visible H1; found " + h1s.length + ".", h1s);
+            if (h1s.length) {
+                const fontPx = parseFloat(window.getComputedStyle(h1s[0]).fontSize) || 0;
+                const limit = kind === "web" ? 80 : 48;
+                if (fontPx > limit) add("warning", "oversizedHeading", "H1 is " + Math.round(fontPx) + "px on a " + kind + " screen; it exceeds the " + limit + "px archetype guardrail.", h1s);
+            }
+
+            const mainCount = Array.from(document.querySelectorAll("main,[role='main']")).filter(visible).length;
+            if (mainCount !== 1) add("warning", "mainLandmark", "Expected one visible main landmark; found " + mainCount + ".");
+
+            const labelable = Array.from(document.querySelectorAll("input,select,textarea")).filter(el => {
+                const t = String(el.getAttribute("type") || "").toLowerCase();
+                return visible(el) && !["hidden", "button", "submit", "reset", "image"].includes(t);
+            });
+            const unlabeled = labelable.filter(el => !hasAccessibleLabel(el));
+            if (unlabeled.length) add("error", "controlLabel", "Visible form controls need an associated visible label or accessible name.", unlabeled);
+
+            const horizontalLabels = [];
+            for (const label of Array.from(document.querySelectorAll("label")).filter(visible)) {
+                const control = label.control || label.querySelector("input,select,textarea");
+                if (!control || !visible(control)) continue;
+                const lr = label.getBoundingClientRect(), cr = control.getBoundingClientRect();
+                const sameRow = Math.abs(lr.top - cr.top) < Math.min(12, cr.height * 0.35) && cr.left > lr.left + 8;
+                if (sameRow) horizontalLabels.push(label);
+            }
+            if (horizontalLabels.length) add("warning", "horizontalFormLabels", "Operational forms should use concise labels above controls for proximity and scanning.", horizontalLabels);
+
+            const wideControls = labelable.filter(el => el.getBoundingClientRect().width > 720);
+            if (wideControls.length) add("warning", "overwideControl", "Controls wider than 720px should be bounded or sized to the expected answer.", wideControls);
+
+            const targets = Array.from(document.querySelectorAll("button,a[href],[role='button'],input[type='checkbox'],input[type='radio'],select")).filter(visible);
+            const undersized = targets.filter(el => {
+                const cs = window.getComputedStyle(el), r = el.getBoundingClientRect();
+                const inlineTextLink = el.tagName === "A" && cs.display === "inline" && !!el.closest("p,li,dd,figcaption");
+                return !inlineTextLink && (r.width < 24 || r.height < 24);
+            });
+            if (undersized.length) add("warning", "targetSize", "Non-inline action targets should contain at least a 24x24 CSS-pixel area.", undersized);
+
+            const actionWords = /^(add|create|save|cancel|edit|delete|remove|check out|check in|submit|send|email|book|get started|try again)\b/i;
+            const bareActions = Array.from(document.querySelectorAll("a[href]")).filter(el => {
+                if (!visible(el) || !actionWords.test(String(el.textContent || "").trim())) return false;
+                const cs = window.getComputedStyle(el), r = el.getBoundingClientRect();
+                const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+                const border = (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.borderRightWidth) || 0);
+                const transparent = cs.backgroundColor === "rgba(0, 0, 0, 0)" || cs.backgroundColor === "transparent";
+                return cs.display === "inline" && pad < 12 && border === 0 && transparent && r.height < 32;
+            });
+            if (bareActions.length) add("warning", "bareActionLink", "Action links render like body links; apply the documented button/action hierarchy.", bareActions);
+
+            const visibleSkipLinks = Array.from(document.querySelectorAll("a[href^='#']")).filter(el => {
+                if (!/skip.+content/i.test(String(el.textContent || "")) || !visible(el) || document.activeElement === el) return false;
+                const r = el.getBoundingClientRect();
+                return r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
+            });
+            if (visibleSkipLinks.length) add("warning", "skipLinkVisible", "Skip link is visible without keyboard focus; keep it off-canvas until focused.", visibleSkipLinks);
+
+            const badTables = Array.from(document.querySelectorAll("table")).filter(el => visible(el) && !el.querySelector("th"));
+            if (badTables.length) add("error", "tableHeaders", "Data tables need semantic header cells.", badTables);
+
+            const regions = Array.from(document.querySelectorAll("main,#body,.pb-section,section")).filter(visible);
+            let largestVerticalGap = 0;
+            for (const region of regions) {
+                const children = Array.from(region.children).filter(visible).map(el => el.getBoundingClientRect()).sort((a, b) => a.top - b.top);
+                for (let i = 1; i < children.length; i++) largestVerticalGap = Math.max(largestVerticalGap, Math.round(children[i].top - children[i - 1].bottom));
+            }
+
+            const errors = findings.filter(f => f.severity === "error").length;
+            const warnings = findings.filter(f => f.severity === "warning").length;
+            return {
+                inspected: true,
+                version: 1,
+                metrics: {
+                    viewport: { width: window.innerWidth, height: window.innerHeight },
+                    scrollWidth: Math.max(doc.scrollWidth, body ? body.scrollWidth : 0),
+                    scrollHeight: Math.max(doc.scrollHeight, body ? body.scrollHeight : 0),
+                    horizontalOverflow: overflow,
+                    visibleH1s: h1s.length,
+                    visibleControls: labelable.length,
+                    visibleTargets: targets.length,
+                    largestVerticalGap
+                },
+                errors,
+                warnings,
+                pass: errors === 0,
+                findings
+            };
+        }, { audit: "palsync-design-v1", kind });
+        return Object.assign({ viewportName }, audit);
+    } catch (e) {
+        return {
+            inspected: false,
+            viewportName,
+            errors: 0,
+            warnings: 0,
+            pass: null,
+            findings: [],
+            error: e && e.message ? e.message.split("\n")[0] : String(e)
+        };
+    }
+}
+
 // Playwright is an OPTIONAL dependency — some runtimes won't have it. require() inside try/catch
 // so a missing module degrades to a clean "unavailable" signal (pal-review falls back to the
 // human eyeball gate), never a crash.
@@ -369,6 +517,7 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
             await waitForRenderablePage(pg, base + String(page).replace(/^\/+/, ""));
         }
         const styleStatus = await inspectStyleStatus(pg, styleEvents);
+        const designAudit = await inspectDesignQuality(pg, { kind: t.kind, viewportName });
         const buf = await pg.screenshot({ fullPage: !!fullPage });
         const pngBase64 = buf.toString("base64");
         // Read the rendered text and check for a CloudPiston runtime-error block — a pal that
@@ -385,6 +534,7 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
             url: isWeb ? pg.url() : sanitizeUrl(pg.url()),
             renderError,
             styleStatus,
+            designAudit,
             pngBase64,
             jpegSmallBase64: small ? small.dataUrl.replace(/^data:image\/jpeg;base64,/, "") : null,
             smallDims: small ? { width: small.width, height: small.height } : null
@@ -405,5 +555,6 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
 
 module.exports = {
     runScreenshot, detectRenderError, sanitizeUrl, sanitizeResourceUrl, loadChromium,
-    getBrowser, releaseBrowser, downscaleToJpeg, waitForStyles, inspectStyleStatus, VIEWPORTS
+    getBrowser, releaseBrowser, downscaleToJpeg, waitForStyles, inspectStyleStatus,
+    inspectDesignQuality, VIEWPORTS
 };

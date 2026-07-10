@@ -603,6 +603,48 @@ test("destructiveConfirm — unrelated action produces no finding", () => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("canonical pb-* workspace warns on browser-default controls, headings, tables, actions, form rhythm, and visible skip link", () => {
+    const dir = tmpWorkspace({
+        "styles/design-system.css": ":root { --ds-space-1: 4px; }",
+        "fragments/screen.html": [
+            '<c:ignore xmlns:c="contractpal">',
+            '  <a href="#main">Skip to content</a>',
+            '  <h1>Equipment</h1>',
+            '  <div class="pb-field-group"><label>Name<c:field type="text" name="name" /></label></div>',
+            '  <div class="pb-field-group"><label>Notes<textarea name="notes"></textarea></label></div>',
+            '  <table><tr><th>Name</th></tr></table>',
+            '  <c:a action="saveEquipment">Save</c:a>',
+            '</c:ignore>',
+        ].join("\n"),
+    });
+    const rules = new Set(lintContracts(dir).map(f => f.rule));
+    for (const rule of ["pbControlClass", "pbHeadingClass", "pbTableClass", "pbActionAffordance", "pbFormRhythm", "pbSkipLink"]) {
+        assert.ok(rules.has(rule), "expected " + rule + " warning");
+    }
+    assert.ok(lintContracts(dir).filter(f => /^pb/.test(f.rule)).every(f => f.severity === "warn"));
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("canonical pb-* recipes produce no design-hint warnings", () => {
+    const dir = tmpWorkspace({
+        "styles/design-system.css": ":root { --ds-space-1: 4px; }",
+        "fragments/screen.html": [
+            '<c:ignore xmlns:c="contractpal">',
+            '  <a href="#main" class="pb-skip-link">Skip to content</a>',
+            '  <div class="pb-section"><h1 class="pb-title">Equipment</h1>',
+            '  <div class="pb-card pb-form-card"><div class="pb-stack">',
+            '    <div class="pb-field-group"><label>Name<c:field type="text" name="name" class="pb-input" /></label></div>',
+            '    <div class="pb-field-group"><label>Notes<textarea name="notes" class="pb-textarea"></textarea></label></div>',
+            '    <c:a action="saveEquipment" class="pb-btn pb-btn-primary">Save</c:a>',
+            '  </div></div>',
+            '  <div class="pb-table-wrap"><table class="pb-table"><tr><th>Name</th></tr></table></div></div>',
+            '</c:ignore>',
+        ].join("\n"),
+    });
+    assert.deepStrictEqual(lintContracts(dir).filter(f => /^pb/.test(f.rule)), []);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("unknownPalJsonKey — top-level typo suggests the real key", () => {
     const dir = tmpWorkspace({ "pal.json": basePalJson({ worfklows: { entry: [] } }) });
     const findings = lintPalJson(dir).filter(f => f.rule === "unknownPalJsonKey");

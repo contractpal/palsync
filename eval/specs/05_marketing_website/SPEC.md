@@ -1,14 +1,14 @@
 # SPEC — signal_ridge (palsync test 5: marketing website)
 status: approved
 reality_check: pass
-spec version: 1
+spec version: 2
 mode: lite
 run mode: auto — the build agent runs all tasks end-to-end with NO human intervention. All review (visual, SEO, routing) happens post-build by a human evaluator. The agent must never stop to ask questions or wait for input.
 pal: signal_ridge (web) @ <WORKSPACE — set by evaluator before run>
 push policy: free
 review cadence: end
 design system: ../DESIGN_SYSTEM.md (components: ../COMPONENTS.md) — any evaluator-supplied reference images are the primary design authority and outrank the stub; none ship with this test.
-created: 2026-07-06   approved: 2026-07-06
+created: 2026-07-06   approved: 2026-07-10
 
 ## 1. Product & audience
 Static marketing website for Signal Ridge, a fictional operations consulting studio for growing
@@ -40,7 +40,7 @@ verification without the distraction of datasets.
 ### Global navigation
 - Brand text: `Signal Ridge`
 - Nav labels: `Home`, `Services`, `About`, `Contact`
-- Primary CTA: `Book a planning call`
+- Persistent navigation CTA: `Book a planning call` (secondary treatment; the hero owns the first primary)
 
 ### Home
 - H1: `Field operations that stay on schedule`
@@ -48,7 +48,7 @@ verification without the distraction of datasets.
 - Hero CTA: `Book a planning call` → contact
 - Secondary CTA: `See services` → services
 - Section heading: `What gets steadier`
-- Cards:
+- Outcomes:
   - `Dispatch clarity` — `Know who is going where before the day starts.`
   - `Inventory confidence` — `See what is ready, missing, and waiting on a vendor.`
   - `Manager rhythm` — `Run one weekly meeting that catches drift early.`
@@ -56,7 +56,7 @@ verification without the distraction of datasets.
 ### Services
 - H1: `Services for teams outgrowing spreadsheets`
 - Subhead: `Simple operating systems for dispatch, inventory, and team leads.`
-- Cards:
+- Services:
   - `Workflow audit` — `A one-week review of handoffs, delays, duplicate entry, and reporting gaps.`
   - `Pilot operating board` — `A lightweight dashboard and meeting cadence your managers can use immediately.`
   - `Implementation coaching` — `Four weeks of working sessions to move the new rhythm into daily use.`
@@ -102,13 +102,23 @@ verification without the distraction of datasets.
 
 ## 6. Layout (composition only — NO colors/fonts)
 ### Home
-- MarketingHero → CardGrid (three cards) → CTASection → FooterNav
+- MarketingShell → split MarketingHero. Left: exact H1/subhead + primary/secondary CTAs. Right:
+  `What gets steadier` + OutcomeList using the three approved outcomes (ranked rows, not three equal
+  cards). Then CTASection → FooterNav. The hero and outcome proof share the first viewport at desktop.
 ### Services
-- PageHeader → CardGrid (three cards) → CTASection → FooterNav
+- PageHeader → numbered ServiceList using the three approved services → CTASection → FooterNav.
+  This is a service/editorial page, not a clone of the Home hero.
 ### About
-- PageHeader → ContentSection → CTASection → FooterNav
+- EditorialSplit: PageHeader/subhead on one side, approved body paragraph on the other →
+  CTASection → FooterNav.
 ### Contact
-- PageHeader → ContentSection → CTASection → FooterNav
+- PageHeader → compact ContactPanel containing the approved contact line + `Email Signal Ridge`
+  action → FooterNav. Do not insert a large empty spacer or repeat a second CTA band.
+
+Global navigation is a familiar full-width sticky row, not a floating pill; its persistent CTA is
+visually secondary so it does not compete with the hero primary. Skip link is hidden
+until focused. Each route has a visibly distinct composition while sharing tokens and components.
+At 320-390px every split becomes one column with no page-level horizontal overflow.
 
 ## 7. SEO
 | page | title (<=60ch) | meta desc (50-160ch) | og:image (ABSOLUTE url) | schema |
@@ -158,8 +168,21 @@ WEB pages:
 - [ ] pal_preview/pal_fetch Services contains exact H1 `Services for teams outgrowing spreadsheets`.
 - [ ] pal_preview/pal_fetch About contains exact H1 `Built for practical operators`.
 - [ ] pal_preview/pal_fetch Contact contains exact H1 `Plan the next steady week`.
-- [ ] VISUAL (Home): MarketingHero, three cards, CTA, and FooterNav render per DESIGN_SYSTEM.md
-      with no emoji and no centered-everything layout.
+- [ ] VISUAL hierarchy (Home): split MarketingHero and `What gets steadier` OutcomeList share the
+      first desktop viewport; one primary + quieter secondary CTA; H1 does not dominate the whole
+      viewport; CTA and FooterNav follow without unexplained blank bands.
+- [ ] VISUAL composition (all routes): Services uses a numbered service list, About an editorial
+      split, and Contact a compact contact panel. They do not clone one generic card/CTA template.
+- [ ] NAV/CONTENT integrity: full-width familiar nav; skip link appears only on keyboard focus;
+      no floating pill shell, emoji, invented proof, fake media, fake stats/testimonials, or repeated
+      dominant dark CTA slabs.
+- [ ] RESPONSIVE/A11Y: desktop + mobile captures for Home, Services, About, and Contact have
+      `renderError:null`, loaded CSS, and `designAudit.errors:0`; mobile has no page-level overflow,
+      focus is visible, and content/action order matches the visual hierarchy.
+- [ ] VISUAL rubric: focal point/story, spacing/proximity, typography hierarchy, alignment/grid,
+      CTA clarity, responsive composition, and context-specific distinctiveness average at least
+      1.5/2; focal point, spacing, and responsive composition each score 2; no dimension scores 0.
+      Every score cites screenshot evidence.
 
 INDEXABLE pages:
 - [ ] pal_seo_audit: 0 errors for Home, Services, About, and Contact.

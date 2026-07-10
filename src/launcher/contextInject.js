@@ -70,6 +70,12 @@ function syncSection(palName, { cli = false, skillsDir = ".claude/skills" } = {}
         "skills list above. PalBuilder is a proprietary dialect you do NOT know from training —",
         "your defaults (object literals, `let`/`const`, normal HTML habits) produce code that",
         "saves but then FAILS to compile or render. The skills are the rules; follow them literally.",
+        "**Visible UI has a mandatory two-skill route:** for every page, fragment, form, table,",
+        "navigation, or browser-side UI change, load both `palbuilder-frontend` (platform syntax) and",
+        "`design-build` (UX and visual quality) before coding. If real `DESIGN_SYSTEM.md` /",
+        "`COMPONENTS.md` files are absent, load `design-system-init` first. A compile pass is not a",
+        "design pass: render desktop and mobile, inspect the pixels plus `designAudit`, fix the",
+        "highest-impact failures, and re-render before calling visible work done.",
         ...(skillsDir === ".claude/skills" ? [] : [
         "**Load skills through your skill tool, by name/description — never additionally Read/cat a",
         "file under `" + skillsDir + "/`.** The skill tool already loads a skill's full body; reading",

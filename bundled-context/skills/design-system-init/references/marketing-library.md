@@ -13,33 +13,82 @@ its end. Load order is the same four files as every pal (`spacing.css`, `design-
 `pb-ui.js`, `pb-motion.js` as `<script type="module">`) — see `component-library.md` for the
 exact shell snippet.
 
+## Start here — choose content before effects
+
+Marketing is not a license for giant type, empty viewports, floating pills, or card soup. Before
+choosing a recipe, write the audience, outcome, proof, and next action. Then choose one composition
+that makes that story clearer:
+
+- **Split hero + proof panel** when the offer needs explanation or concrete outcomes.
+- **Editorial split + outcome list** for services, process, comparisons, and reference-free pages.
+- **Real media/mockup** only when the project actually has the asset.
+- Bento, gradients, beams, marquees, tickers, and animated text are opt-in accents, never defaults.
+
+The first viewport should show the proposition and either proof/context or the beginning of the
+next meaningful section. Never invent customers, logos, metrics, testimonials, awards, screenshots,
+or product UI to fill space.
+
 ## 1. Hero
 
-Five variants share one base class; pick one layout variant and optionally add a visual treatment.
+Five variants share one base class. Default to the split layout; add a visual treatment only when
+the design brief gives it a reason.
 ```html
-<section class="pb-hero pb-hero--split pb-hero--aurora pb-hero--beam">
+<section class="pb-hero pb-hero--split">
     <div class="pb-hero-inner">
-        <div>
-            <span class="pb-hero-eyebrow">New</span>
-            <h1 class="pb-hero-title" data-animate="fade-up">Ship pals that feel built, not bootstrapped</h1>
-            <p class="pb-hero-sub" data-animate="fade-up" data-animate-delay="80">One design system, zero CSS to write.</p>
+        <div class="pb-stack">
+            <span class="pb-hero-eyebrow">For operations teams</span>
+            <h1 class="pb-hero-title" data-animate="fade-up">Make the important work easier to run</h1>
+            <p class="pb-hero-sub" data-animate="fade-up" data-animate-delay="80">Name the concrete outcome and who gets it.</p>
             <div class="pb-hero-actions" data-animate="fade-up" data-animate-delay="160">
                 <a href="?view=start" class="pb-btn pb-btn-primary">Get started</a>
-                <a href="?view=demo" class="pb-btn pb-btn-secondary">Watch demo</a>
+                <a href="?view=details" class="pb-btn pb-btn-ghost">See the approach</a>
             </div>
         </div>
-        <div class="pb-beam"><div class="pb-mock-browser"><!-- section 11 --></div></div>
+        <aside class="pb-proof-panel" aria-label="Key outcomes">
+            <p class="pb-hero-eyebrow">What changes</p>
+            <div class="pb-outcome-list"><!-- use section 2 --></div>
+        </aside>
     </div>
 </section>
 ```
 Variants: `.pb-hero--centered` (single-column centered), `.pb-hero--split` (two-column),
 `.pb-hero--stacked` (centered copy plus wide media below), `.pb-hero--aurora` (blurred radial wash),
 and `.pb-hero--beam` (premium depth for `.pb-beam`, media, and mock children). Combine one layout
-variant with `--aurora` and/or `--beam`. JS: `data-animate` needs pb-motion.js (section 14).
+variant with `--aurora` and/or `--beam`. JS: `data-animate` needs pb-motion.js (section 15).
 
-## 2. Bento Grid
+## 2. Editorial Split And Outcome List
 
-Asymmetric feature grid with optional visual slots; four columns collapse to two at 760px.
+Use this as the default reference-free composition for services, process, proof, and comparisons.
+It creates hierarchy without wrapping every idea in an equal card.
+```html
+<section class="pb-marketing-section">
+    <div class="pb-marketing-inner pb-editorial-split">
+        <div class="pb-stack">
+            <span class="pb-hero-eyebrow">How it works</span>
+            <h2 class="pb-title">A heading that advances the story</h2>
+            <p class="pb-subtitle">One short setup paragraph at a readable measure.</p>
+        </div>
+        <div class="pb-outcome-list">
+            <div class="pb-outcome">
+                <span class="pb-outcome-index">01</span>
+                <div><h3 class="pb-outcome-title">First outcome</h3><p class="pb-outcome-desc">Specific supporting detail.</p></div>
+            </div>
+            <div class="pb-outcome">
+                <span class="pb-outcome-index">02</span>
+                <div><h3 class="pb-outcome-title">Second outcome</h3><p class="pb-outcome-desc">Specific supporting detail.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+```
+Use `.pb-proof-panel` around an outcome list only when it is a distinct proof/context region.
+Otherwise let the border rhythm group rows without another rounded rectangle.
+
+## 3. Bento Grid (rare)
+
+Asymmetric feature grid with optional visual slots; four columns collapse to two at 760px. Use
+only when the content genuinely varies in importance and has visual material. Do not use it as a
+generic “modern” substitute for an outcome list.
 ```html
 <div class="pb-bento" data-animate-stagger="80">
     <div class="pb-bento-item pb-bento-item--lg pb-bento-item--visual" data-animate="fade-up">
@@ -58,7 +107,7 @@ mobile), `.pb-bento-item--visual` reserves top space for `.pb-bento-visual`. Vis
 `.pb-bento-visual--grid`, `.pb-bento-visual--stat`, `.pb-bento-visual--bars`,
 `.pb-bento-visual--flow`.
 
-## 3. Features
+## 4. Features
 
 ```html
 <div class="pb-features">
@@ -75,7 +124,7 @@ mobile), `.pb-bento-item--visual` reserves top space for `.pb-bento-visual`. Vis
 Repeat `.pb-feature` for each capability; add `.pb-feature-list` for checked proof points. Stagger
 with `data-animate-stagger` on the `.pb-features` wrapper instead of per-item delays.
 
-## 4. Pricing
+## 5. Pricing
 
 ```html
 <div class="pb-pricing">
@@ -100,7 +149,9 @@ with `data-animate-stagger` on the `.pb-features` wrapper instead of per-item de
 Use `.pb-price-head` for title + `.pb-badge-accent`. List items in `.pb-price-feature-list` render
 as checked inclusions automatically.
 
-## 5. Testimonials
+## 6. Testimonials
+
+Use only real, approved quotes and identities. If none exist, omit the section.
 
 ```html
 <div class="pb-testimonial-grid">
@@ -115,7 +166,9 @@ as checked inclusions automatically.
 ```
 Single testimonial: drop the `-grid` wrapper and use one `.pb-testimonial` directly.
 
-## 6. Logo Cloud
+## 7. Logo Cloud
+
+Use only real, approved logos with correct licensing and alt text. If none exist, omit it.
 
 Static row, or an infinite CSS marquee for longer logo lists.
 ```html
@@ -135,7 +188,7 @@ Static row, or an infinite CSS marquee for longer logo lists.
 loops) — pure CSS, hover-pauses, no JS. Dark mode auto-inverts logo art via
 `[data-theme="dark"] .pb-logo-cloud`.
 
-## 7. CTA Band
+## 8. CTA Band
 
 ```html
 <div class="pb-cta-band">
@@ -146,8 +199,12 @@ loops) — pure CSS, hover-pauses, no JS. Dark mode auto-inverts logo art via
     <a href="?view=signup" class="pb-btn pb-btn-primary">Get started</a>
 </div>
 ```
+The default band is a light grouped surface. Add `.pb-cta-band--strong` for a dark focal band only
+when the page has not already used a dominant dark region. Repeating dark slabs flattens hierarchy.
 
-## 8. Stats With Count-Up
+## 9. Stats With Count-Up
+
+Use only defensible, approved figures. Never invent a metric to create visual interest.
 
 ```html
 <div class="pb-stats" data-animate-stagger="100">
@@ -165,9 +222,10 @@ JS: needs pb-motion.js — `data-ticker="12,400+"` count-up eases in on scroll r
 any non-numeric prefix/suffix in the attribute value (commas, `%`, `+`). Pair with `data-animate`
 on the same or a wrapping element so the two reveals land together.
 
-## 9. Marketing Navbar
+## 10. Marketing Navbar
 
-Sticky pill-shaped floating bar — distinct from the app `.pb-navbar` in `component-library.md`.
+Sticky full-width navigation with a contained inner row — familiar, compact, and distinct from the
+app `.pb-navbar` only in surface treatment.
 ```html
 <header class="pb-navbar pb-navbar--marketing">
     <div class="pb-navbar-inner">
@@ -181,13 +239,14 @@ Sticky pill-shaped floating bar — distinct from the app `.pb-navbar` in `compo
     </div>
 </header>
 ```
-`.pb-navbar--marketing` adds the floating/pill/blur treatment on top of the base `.pb-navbar`
-classes — always pair both classes, never use `--marketing` alone.
+`.pb-navbar--marketing` adds a restrained translucent surface on top of the base `.pb-navbar`
+classes — always pair both classes, never use `--marketing` alone. Put a `.pb-skip-link` before
+the header; it stays off-canvas until keyboard focus.
 
 JS: needs pb-ui.js — the burger's `data-pb-toggle="dropdown"` + `data-pb-target=".pb-navbar-links"`
 opens the links as a panel below the bar at ≤760px (outside click / Escape closes it).
 
-## 10. Marketing Footer
+## 11. Marketing Footer
 
 Same `.pb-footer` classes as the app footer (`component-library.md` section 51); marketing pages
 typically give it more columns and a newsletter or social row in `.pb-footer-bottom`.
@@ -204,7 +263,7 @@ typically give it more columns and a newsletter or social row in `.pb-footer-bot
 </footer>
 ```
 
-## 11. Mockups
+## 12. Mockups
 
 Device frames for product screenshots inside a hero or feature section.
 ```html
@@ -219,7 +278,7 @@ Device frames for product screenshots inside a hero or feature section.
 </div>
 ```
 
-## 12. Text Effects
+## 13. Text Effects (opt-in)
 
 ```html
 <h2 class="pb-hero-title pb-text-gradient">Built for speed</h2>
@@ -228,8 +287,9 @@ Device frames for product screenshots inside a hero or feature section.
 `.pb-text-gradient` is a static two-tone gradient clip (safe everywhere). `.pb-text-shine` adds a
 looping sweep highlight where `@property` is supported, with the gradient as a static fallback —
 both need no JS. Use on short headline text only, not body copy.
+Do not use either by default; a strong type-led composition usually needs neither.
 
-## 13. Beam, Glow, Spotlight, Meteors
+## 14. Beam, Glow, Spotlight, Meteors (rare opt-in)
 
 ```html
 <div class="pb-card pb-beam">Rotating gradient border.</div>
@@ -248,8 +308,9 @@ both need no JS. Use on short headline text only, not body copy.
 writes `--x`/`--y` from the pointer position) — gated to fine pointers implicitly by only
 mattering on hover. `.pb-meteors` needs one `.pb-meteor` child per streak; vary `--x` (start
 position) and `--delay` (stagger) inline per meteor, no JS required.
+Choose at most one expressive effect family for a page, and only with a brand/content rationale.
 
-## 14. Motion Recipes
+## 15. Motion Recipes
 
 Beyond the basic `data-animate` reveal (`component-library.md` section 28), marketing sections
 use the fuller pb-motion.js vocabulary:

@@ -704,7 +704,7 @@ function checkStaleVendor(rel, src, findings) {
             message: "<script src=\"" + srcAttr + "\"> references a GSAP vendor file — GSAP was dropped in favor of " +
                 "scripts/pb-motion.js (data-animate/data-ticker/data-typewriter/data-tilt/data-spotlight). Remove the " +
                 "GSAP script tag and any GSAP calls; use the pb-motion.js data attributes instead. See " +
-                "design-system-init/references/marketing-library.md section 14 (Motion Recipes)."
+                "design-system-init/references/marketing-library.md section 15 (Motion Recipes)."
         });
     });
 }
@@ -767,6 +767,86 @@ function checkFragmentBinding(markupFiles, workflowFiles, findings) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Check 11 — low-noise pb-* quality hints. These only activate when the workspace has adopted the
+// canonical design system, so legacy/custom pals are not forced into Palsync's visual vocabulary.
+// They are warnings: rendered designAudit + screenshot review is the authority, while these catch
+// the exact weak-model failure mode (browser-default controls/actions) before the first push.
+// ---------------------------------------------------------------------------------------------
+
+function checkPbQualityHints(workspaceDir, markupFiles, findings) {
+    const canonical = fs.existsSync(path.join(workspaceDir, "styles", "design-system.css")) ||
+        fs.existsSync(path.join(workspaceDir, "Styles", "design-system.css"));
+    const usedInMarkup = markupFiles.some(({ src }) => /class\s*=\s*["'][^"']*\bpb-/.test(src));
+    if (!canonical && !usedInMarkup) return;
+
+    const actionWords = /^(add|create|save|cancel|edit|delete|remove|check out|check in|submit|send|email|book|get started|try again)\b/i;
+    for (const { rel, src } of markupFiles) {
+        let fieldGroups = 0;
+        scanTags(src, (tag, pos) => {
+            const name = tag.name.toLowerCase();
+            const cls = attr(tag, "class") || "";
+            if (/(^|\s)pb-field-group(?:\s|$)/.test(cls)) fieldGroups++;
+
+            const type = String(attr(tag, "type") || "").toLowerCase();
+            const textControl = name === "textarea" || name === "select" || name === "c:select" ||
+                ((name === "input" || name === "c:field") && !["hidden", "button", "submit", "reset", "image", "checkbox", "radio", "option"].includes(type));
+            if (textControl && !/\bpb-(?:input|select|textarea)\b/.test(cls)) {
+                const expected = (name === "select" || name === "c:select") ? "pb-select" : name === "textarea" ? "pb-textarea" : "pb-input";
+                findings.push({
+                    file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "pbControlClass",
+                    message: "<" + tag.name + "> uses the canonical pb-* design system but has no ." + expected +
+                        " class, so it can render like a browser-default control. Add class=\"" + expected +
+                        "\" inside a .pb-field-group with a visible label; see component-library.md Fields."
+                });
+            }
+
+            if (name === "h1" && !/\bpb-(?:title|hero-title)\b/.test(cls)) {
+                findings.push({
+                    file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "pbHeadingClass",
+                    message: "This H1 bypasses the archetype type scale. Use .pb-title for product/CRUD screens or .pb-hero-title inside a marketing hero."
+                });
+            }
+
+            if (name === "table" && !/\bpb-table\b/.test(cls)) {
+                findings.push({
+                    file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "pbTableClass",
+                    message: "This table bypasses the responsive data-table recipe. Add .pb-table inside .pb-table-wrap and data-label on each td."
+                });
+            }
+
+            if (name === "c:a" && attr(tag, "action") != null && !/\bpb-btn\b/.test(cls)) {
+                const close = /<\/c:a\s*>/i.exec(src.slice(tag.end, tag.end + 500));
+                const body = close ? src.slice(tag.end, tag.end + close.index).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : "";
+                if (actionWords.test(body)) {
+                    findings.push({
+                        file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "pbActionAffordance",
+                        message: "Action \"" + body.slice(0, 60) + "\" has no .pb-btn variant and can render as an undifferentiated text link. Use primary/secondary/ghost/danger per action hierarchy; destructive actions come last and stay visually separate."
+                    });
+                }
+            }
+
+            if (name === "a" && /^#/.test(attr(tag, "href") || "")) {
+                const close = /<\/a\s*>/i.exec(src.slice(tag.end, tag.end + 200));
+                const body = close ? src.slice(tag.end, tag.end + close.index).replace(/<[^>]+>/g, " ").trim() : "";
+                if (/skip.+content/i.test(body) && !/\bpb-skip-link\b/.test(cls)) {
+                    findings.push({
+                        file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "pbSkipLink",
+                        message: "Skip link has no .pb-skip-link class and will be visible at rest. Add the class so it appears only on keyboard focus."
+                    });
+                }
+            }
+        });
+
+        if (fieldGroups >= 2 && !/\bpb-(?:stack|form-grid)\b/.test(src)) {
+            findings.push({
+                file: rel, line: 1, column: 0, severity: "warn", rule: "pbFormRhythm",
+                message: "This fragment has " + fieldGroups + " .pb-field-group blocks but no .pb-stack or .pb-form-grid wrapper. Related fields will have no reliable vertical rhythm; wrap them and use .pb-form-card for a bounded operational form."
+            });
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Entry point.
 // ---------------------------------------------------------------------------------------------
 
@@ -801,6 +881,8 @@ function lintContracts(workspaceDir) {
     checkParamDropped(markupFiles, workflowFiles, findings);
 
     checkFragmentBinding(markupFiles, workflowFiles, findings);
+
+    checkPbQualityHints(workspaceDir, markupFiles, findings);
 
     findings.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
     return findings;

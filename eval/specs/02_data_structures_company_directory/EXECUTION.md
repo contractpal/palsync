@@ -5,8 +5,9 @@ spec: SPEC.md (status: approved)   mode: lite
 This build runs fully autonomously. The agent executes all tasks end-to-end without stopping
 for human input. There are no mid-build gates, no "ask first" pauses, no blocker escalations.
 If the agent encounters ambiguity — especially around which data primitive to use — it proceeds
-with best judgment and documents what it chose. All review — visual, functional, and
-structure-choice scoring — happens once at the end by a human evaluator against §12.
+with best judgment and documents what it chose. Human scoring happens once at the end against §12;
+the agent's desktop/mobile render-inspect-revise, functional, and structure self-checks remain
+mandatory during the build.
 
 ## Build plan
 Dependency order (leaf-first — foundations before things that use them):
@@ -33,7 +34,7 @@ Checkpoints: after T2 (data structures exist), after T4 (joined list renders), f
 | T3 | scaffold console shell + workflow skeleton | standard | §3, §6, §10 | T1,T2 | todo | pal_validate 0 errors; pal_test console workflow VALIDATED |
 | T4 | directoryList with joined department/office read | frontier | §4, §5 list, §6, §12 | T3 | todo | render shows department names and office cities; footer uses support email; source avoids N+1 department loop; pal_test VALIDATED |
 | T5 | office filter | standard | §5 filterByOffice, §12 | T4 | todo | CED filter renders only Cedar City rows; All offices restores full list; pal_test VALIDATED |
-| T6 | employeeForm + saveEmployee validation/write | standard | §4, §5 saveEmployee, §8a | T4 | todo | valid save appears in directory; bad email returns `Enter a valid email address.` and writes no row |
+| T6 | employeeForm + saveEmployee validation/write + final visual review | standard | §4, §5 saveEmployee, §8a, §12 | T4 | todo | valid save appears in directory; bad email returns `Enter a valid email address.` and writes no row; desktop/mobile audits have 0 errors; rubric average >=1.5 with focal point/spacing/responsive =2 and no 0 |
 
 ## Checkpoints (append-only, one line per completed task)
 ## Blockers (what needs the human — be exact)

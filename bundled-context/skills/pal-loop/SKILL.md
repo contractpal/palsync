@@ -85,14 +85,20 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       condition names]` → all found. (This returns per-string found/missing, not the HTML —
       use `selector`/`maxChars` only when you truly need markup.) Then `pal_seo_audit` → 0
       errors (public pages).
-   4. CONSOLE screen: `pal_test` proves it compiles; the RENDER needs `pal_screenshot`:
+   4. **Any page-level UI task:** call `pal_screenshot` at both `desktop` and `mobile`. Both must
+      have `renderError:null`, fully loaded CSS, and `designAudit.errors:0`. Inspect both images
+      against design-build's archetype rubric; if either audit/image exposes a failure, fix the
+      three highest-impact issues, push, and re-capture the changed viewport. Re-run the task's
+      behavior check after the last visual edit. A screenshot file path without pixel critique is
+      not review evidence.
+   5. CONSOLE screen: `pal_test` proves it compiles; the RENDER needs `pal_screenshot`:
       - `captured:true` + `renderError` non-null → hard FAIL. The workflow compiled but threw
         while rendering. Fix, push, screenshot again — `pal_test` passing does NOT clear it.
       - `captured:true` + `renderError` null → judge the image against §12 VISUAL → `done`.
       - `captured:false` → do NOT guess from HTML: set `needs-human` with a Blockers entry
         prefixed `HUMAN GATE:` naming exactly what to eyeball. Continue with independent
         tasks. (Full rule: `../pal-review/references/console-render-verification.md`.)
-   5. ANY write action (create/edit/delete): `pal_exercise` — trigger the action and assert the
+   6. ANY write action (create/edit/delete): `pal_exercise` — trigger the action and assert the
       result in the rendered output. **Batch the whole flow into ONE call's `steps` array**
       (e.g. add → edit → delete is one exercise with expects per step), not one call per
       action — each extra call is a full context-window round trip. Web:
@@ -103,7 +109,7 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       — never assert empty-state copy or list ordering (other rows may exist; lists sort
       alphabetically, so a shorter list is not proof of the right row leaving). This is the
       read-back check; a failing step is a task failure.
-   6. `pal_sync_datasets` after pushing a **§8a** definition (never §8b).
+   7. `pal_sync_datasets` after pushing a **§8a** definition (never §8b).
    - `pal_preview`/`pal_fetch`/`pal_exercise`/`pal_seo_audit`/`pal_test` all act on the LAST
      PUSHED version — push before verifying.
 6. **On pass:** first confirm there are no unhandled validation warnings from the push output

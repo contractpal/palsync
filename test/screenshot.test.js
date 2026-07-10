@@ -23,6 +23,7 @@ const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1,
 let chromiumPresent = true;
 let nextEvaluate;         // (fn, args) => any | throws — simulates page.evaluate for the JPEG downscale
 let nextStylePageState;   // returned by no-arg evaluate() calls for stylesheet diagnostics
+let nextDesignAuditState; // returned by the tagged design-audit evaluate() call
 let pageListeners;
 let launchCount = 0;
 let contextCloseCount = 0;
@@ -49,6 +50,10 @@ const fakePage = {
     async screenshot() { callLog.push("screenshot"); return pngBytes; },
     async evaluate(fn, args) {
         if (args && Object.prototype.hasOwnProperty.call(args, "pngBase64")) return nextEvaluate(fn, args);
+        if (args && args.audit === "palsync-design-v1") {
+            if (nextDesignAuditState instanceof Error) throw nextDesignAuditState;
+            return nextDesignAuditState;
+        }
         if (nextStylePageState instanceof Error) throw nextStylePageState;
         return nextStylePageState;
     }
@@ -97,6 +102,15 @@ function reset() {
             backgroundColor: "rgb(247, 248, 251)",
             color: "rgb(20, 24, 33)"
         }
+    };
+    nextDesignAuditState = {
+        inspected: true,
+        version: 1,
+        metrics: { viewport: { width: 1280, height: 800 }, horizontalOverflow: 0, visibleH1s: 1 },
+        errors: 0,
+        warnings: 0,
+        pass: true,
+        findings: []
     };
     // Default: the in-page canvas re-encode succeeds, mirroring a real browser's behavior.
     nextEvaluate = (fn, args) => ({ dataUrl: "data:image/jpeg;base64,FAKESMALL", width: 800, height: 500 });
@@ -168,8 +182,47 @@ test("web pal: navigates the no-auth rawToken and returns captured:true", async 
     assert.equal(res.styleStatus.likelyLoaded, true, "loaded CSS should be reported as loaded");
     assert.equal(res.styleStatus.loaded, 1);
     assert.equal(res.styleStatus.linked, 1);
+    assert.equal(res.designAudit.inspected, true, "rendered design facts should be inspected");
+    assert.equal(res.designAudit.errors, 0);
+    assert.equal(res.designAudit.pass, true);
     assert.ok(callLog.indexOf("waitForStyles") !== -1, "must wait for stylesheet attachment");
     assert.ok(callLog.indexOf("waitForStyles") < callLog.indexOf("screenshot"), "must wait before capturing the PNG");
+});
+
+test("rendered design-audit findings ride beside the screenshot as external UI evidence", async () => {
+    reset();
+    nextRunTest = async () => ({ ran: true, validated: true, kind: "console", _previewUrl: "https://secure.cloudpiston.com/cpal/RunConsoleApp.do?cp-auth=x" });
+    landedUrl = "https://secure.cloudpiston.com/cpal/RunConsoleApp.do";
+    nextDesignAuditState = {
+        inspected: true,
+        version: 1,
+        metrics: { viewport: { width: 390, height: 844 }, horizontalOverflow: 48, visibleH1s: 1 },
+        errors: 1,
+        warnings: 1,
+        pass: false,
+        findings: [
+            { severity: "error", rule: "horizontalOverflow", message: "Page is 48px wider than the viewport.", count: 1, samples: ["table.pb-table"] },
+            { severity: "warning", rule: "bareActionLink", message: "Action links render like body links.", count: 3, samples: ["a (Edit)"] },
+        ]
+    };
+
+    const res = await runScreenshot({}, "GUID", { viewport: "mobile" });
+    assert.equal(res.captured, true);
+    assert.equal(res.designAudit.viewportName, "mobile");
+    assert.equal(res.designAudit.pass, false);
+    assert.equal(res.designAudit.findings[0].rule, "horizontalOverflow");
+});
+
+test("design-audit evaluate failure never sinks a successful screenshot", async () => {
+    reset();
+    nextRunTest = async () => ({ ran: true, validated: true, kind: "web", rawToken: "https://webpals.cloudpiston.com/site/" });
+    landedUrl = "https://webpals.cloudpiston.com/site/";
+    nextDesignAuditState = new Error("evaluate unavailable");
+
+    const res = await runScreenshot({}, "GUID", {});
+    assert.equal(res.captured, true);
+    assert.equal(res.designAudit.inspected, false);
+    assert.match(res.designAudit.error, /evaluate unavailable/);
 });
 
 test("web pal: missing/failed CSS is reported in styleStatus with sanitized URLs", async () => {

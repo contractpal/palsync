@@ -162,6 +162,9 @@ GLOBAL FLOOR:
 CONSOLE + INTEGRATION:
 - [ ] VISUAL (Bridge dashboard): H1 `Partner bridge`, action row, DetailPanel statuses, DataTable,
       and no emoji.
+- [ ] VISUAL QUALITY: desktop + mobile dashboard captures have loaded CSS and `designAudit.errors:0`;
+      the seven-dimension rubric averages at least 1.5/2, focal point/spacing/responsive each score
+      2, and no dimension scores 0; every score cites screenshot evidence.
 - [ ] syncCatalog: after action, dashboard renders `Catalog sync complete.` and rows AX-100,
       BX-200, CX-300 with source `tunnel`.
 - [ ] checkProviderHealth: after action, dashboard renders `Provider health check passed.` and

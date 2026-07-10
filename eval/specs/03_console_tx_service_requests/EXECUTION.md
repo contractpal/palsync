@@ -5,9 +5,9 @@ spec: SPEC.md (status: approved)   mode: lite
 This build runs fully autonomously. The agent executes all tasks end-to-end without stopping
 for human input. There are no mid-build gates, no "ask first" pauses, no blocker escalations.
 If the agent encounters ambiguity — especially around transaction API methods — it proceeds
-with best knowledge after checking available docs/skills and documents what it chose. All review
-— visual, functional, and transaction lifecycle — happens once at the end by a human evaluator
-against §12.
+with best knowledge after checking available docs/skills and documents what it chose. Human scoring
+happens once at the end against §12; the agent's desktop/mobile render-inspect-revise, functional,
+and transaction lifecycle self-checks remain mandatory during the build.
 
 ## Build plan
 Dependency order (leaf-first — foundations before things that use them):
@@ -32,7 +32,7 @@ Checkpoints: after T3 (console list), after T4 (transaction created), final afte
 | T3 | requestList + filterByStatus | frontier | §4, §5 list, §6 | T2 | todo | render shows H1 `Service requests`, EmptyState, status filter; pal_test VALIDATED |
 | T4 | requestForm + createRequest + transaction creation | frontier | §4, §5 createRequest, §9 | T3 | todo | valid submit creates open row and transaction; bad email/empty description show exact messages and write no row/tx |
 | T5 | tx.html + type-2 workflow + completeRequest | frontier | §4, §5 completeRequest, §10 | T4 | todo | tx submit renders `Thank you — your request is marked complete.` and console row becomes completed with note/date; pal_test both workflows VALIDATED |
-| T6 | requestDetail + cancelRequest | standard | §4, §5 viewRequest, §5 cancelRequest | T4 | todo | detail shows Transaction state; cancel flips row to cancelled and voids/cancels tx; Cancel button hidden for non-open |
+| T6 | requestDetail + cancelRequest + final visual review | standard | §4, §5 viewRequest, §5 cancelRequest, §12 | T4 | todo | detail shows Transaction state; cancel flips row to cancelled and voids/cancels tx; Cancel hidden for non-open; console/transaction desktop/mobile audits have 0 errors; rubric average >=1.5 with focal point/spacing/responsive =2 and no 0 |
 
 ## Checkpoints (append-only, one line per completed task)
 ## Blockers (what needs the human — be exact)

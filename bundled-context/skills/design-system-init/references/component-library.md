@@ -76,7 +76,7 @@ Spacing primitives (use these, never hand-written margins):
 `.pb-field-group` spaces only its own label→input. IF a form has more than one field, THEN wrap
 the fields in `.pb-stack` (single column) or `.pb-form-grid` (two column):
 ```html
-<div class="pb-card">
+<div class="pb-card pb-form-card">
     <div class="pb-stack">
         <div class="pb-field-group">
             <label class="pb-label">
@@ -90,7 +90,7 @@ the fields in `.pb-stack` (single column) or `.pb-form-grid` (two column):
             <span class="pb-toggle-track" aria-hidden="true"></span>
             Notify me
         </label>
-        <div class="pb-cluster"><button class="pb-btn pb-btn-primary">Save</button></div>
+        <div class="pb-form-actions"><button class="pb-btn pb-btn-primary">Save</button><button class="pb-btn pb-btn-ghost">Cancel</button></div>
     </div>
 </div>
 ```
@@ -99,6 +99,11 @@ Empty states use `.pb-state`; notices use `.pb-alert`. Never use a bare styled `
 Custom CSS (PAL OVERRIDES only) uses `--ds-space-*` tokens. Utility classes (`.p-*`, `.gap-*`,
 `.mt-*`) come from spacing.css and follow its own `--s*` scale. They are fine in markup. Never
 mix raw px values or the two scales in one rule.
+`.pb-form-card` bounds an operational form to 720px. Labels stay above controls.
+Controls fill their field group, not the page. Use `.pb-field-group--short` for codes/compact
+values and `.pb-field-group--medium` for names/email when the expected answer should not span the
+whole card; long text can use the full bounded width.
+`.pb-form-actions` keeps primary Save and ghost/secondary Cancel together at the end; never bare links.
 
 ## 1. Buttons
 
@@ -276,7 +281,10 @@ Dense, scannable, numeric right-aligned. Every `td` gets `data-label` for the mo
                         <span class="pb-muted">${customer.email}</span></td>
                     <td data-label="Status"><span class="pb-badge pb-badge-success">${customer.status}</span></td>
                     <td data-label="Balance" class="pb-num">${formatter.formatCurrency(customer.balance)}</td>
-                    <td data-label="Actions" class="pb-cell-center"><c:a action="editCustomer?id=${customer.customerId}" ajax-target="modalContent" class="pb-btn pb-btn-secondary">Edit</c:a></td>
+                    <td data-label="Actions"><div class="pb-row-actions">
+                        <c:a action="editCustomer?id=${customer.customerId}" ajax-target="modalContent" class="pb-btn pb-btn-secondary">Edit</c:a>
+                        <c:a action="deleteCustomer?id=${customer.customerId}" ajax-target="body" confirm="Delete this customer? This cannot be undone." class="pb-btn pb-btn-danger">Delete</c:a>
+                    </div></td>
                 </tr>
             </c:list>
         </tbody>
@@ -285,6 +293,10 @@ Dense, scannable, numeric right-aligned. Every `td` gets `data-label` for the mo
 ```
 
 Clickable row: `<c:tr action="viewCustomer?id=${customer.customerId}" ajaxTarget="body" eventType="onclick" class="pb-row-click">`.
+
+Use `.pb-row-actions`; keep one or two frequent safe actions visible and put rare actions in the
+documented overflow pattern. Destructive comes last, is separated, and carries `confirm=`. Mobile
+uses `data-label`; never hide critical status or destructive context.
 
 ## 12. Filter Bar And Search
 ```html

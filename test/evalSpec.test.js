@@ -43,6 +43,13 @@ test("injectSpec writes all 4 files flat, fills the placeholder, and rewrites re
     assert.ok(specContent.includes("https://x.test (pal: foo)"), "fillValue should be present");
     assert.ok(specContent.includes("./DESIGN_SYSTEM.md"), "relative design system path should be rewritten to ./");
     assert.ok(!specContent.includes("../DESIGN_SYSTEM.md"), "should not contain the old ../ reference");
+    const design = fs.readFileSync(path.join(ws, "DESIGN_SYSTEM.md"), "utf8");
+    const components = fs.readFileSync(path.join(ws, "COMPONENTS.md"), "utf8");
+    assert.match(design, /Visual\s+quality is a scored requirement/);
+    assert.match(design, /desktop and mobile screenshots/);
+    assert.match(design, /designAudit\.errors/);
+    assert.match(components, /pb-form-card/);
+    assert.match(components, /pb-outcome-list/);
     fs.rmSync(ws, { recursive: true, force: true });
 });
 

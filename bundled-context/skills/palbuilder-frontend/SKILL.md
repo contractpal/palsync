@@ -1,6 +1,6 @@
 ---
 name: palbuilder-frontend
-description: Use this skill whenever writing front-end code for a CloudPiston pal — pages, fragments, c: tags, XHTML markup, EL binding, modals, navigation, or browser-side JavaScript in scripts/. Covers the page shell vs fragment distinction, c:ignore fragment wrapper, EL binding syntax (${var}) and operators (empty(), !empty(), eq, ne, gt, lt, and, or, !), formatter access from EL, the most-used c: tags with pointer to the full attribute reference, fragment folder organization, modal shell integration, navigation/active-class idioms, and the ES-module main-file + modules pattern for client JS. Trigger when writing any page, fragment, modal, navigation menu, form, or client-side JS file.
+description: Use this skill whenever writing visible front-end code for a CloudPiston pal — pages, fragments, forms, tables, CRUD screens, marketing pages, c: tags, XHTML, navigation, or browser JavaScript. This is the platform-syntax half of UI work; load design-build with it for hierarchy, spacing, components, states, responsiveness, and rendered review. Covers page vs fragment structure, c:ignore, EL, documented c: tags, fragment organization, navigation, modals, and browser modules.
 ---
 
 # CloudPiston Pal — Frontend
@@ -8,6 +8,19 @@ description: Use this skill whenever writing front-end code for a CloudPiston pa
 The frontend layer is what the browser sees: pages (full HTML documents), fragments (partial
 HTML swapped into pages via AJAX), and the client-side JavaScript in `scripts/` that runs
 in the browser. Pages and fragments use CloudPiston's `c:` tag markup on top of XHTML.
+
+## Mandatory UI route
+
+This skill makes UI valid on Palbuilder; it does not by itself make UI usable or well designed.
+
+- Before changing anything visible, also load `design-build`.
+- If the project has no real `DESIGN_SYSTEM.md` and `COMPONENTS.md`, load `design-system-init`
+  first. A benchmark/test stub counts as a design brief only when it defines the archetype,
+  density, hierarchy, spacing, responsive behavior, and visual acceptance criteria.
+- Classify the surface before building: **marketing**, **CRUD/admin**, **dashboard/data**, or
+  **form flow**. Never apply marketing scale and whitespace to an operational screen.
+- A page/fragment is not done when it compiles. Capture desktop and mobile renders, inspect the
+  actual image and `designAudit`, fix failures, and re-render the changed viewport.
 
 CLAUDE.md holds the always-on rules — several apply specifically to frontend:
 - **Rule 1** — XHTML strict for element structure, but not for `<script>`/`<style>` content
