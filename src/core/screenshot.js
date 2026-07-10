@@ -219,6 +219,65 @@ function loadChromium() {
     catch (e) { return null; }
 }
 
+const BROWSER_IDLE_MS = 60_000;
+let sharedBrowserPromise = null;
+let browserIdleTimer = null;
+let activeBrowserCalls = 0;
+
+function clearBrowserIdleTimer() {
+    if (browserIdleTimer) clearTimeout(browserIdleTimer);
+    browserIdleTimer = null;
+}
+
+async function closeSharedBrowser() {
+    const pending = sharedBrowserPromise;
+    sharedBrowserPromise = null;
+    if (!pending) return;
+    try { await (await pending).close(); } catch (e) { /* best-effort idle/exit cleanup */ }
+}
+
+function scheduleBrowserIdleClose() {
+    clearBrowserIdleTimer();
+    browserIdleTimer = setTimeout(() => {
+        browserIdleTimer = null;
+        if (activeBrowserCalls > 0) {
+            scheduleBrowserIdleClose();
+            return;
+        }
+        closeSharedBrowser().catch(() => {});
+    }, BROWSER_IDLE_MS);
+    browserIdleTimer.unref();
+}
+
+async function getBrowser() {
+    clearBrowserIdleTimer();
+    const launch = () => {
+        const chromium = loadChromium();
+        if (!chromium) return Promise.reject(new Error("Playwright/Chromium is not installed"));
+        const pending = chromium.launch();
+        pending.catch(() => { if (sharedBrowserPromise === pending) sharedBrowserPromise = null; });
+        return pending;
+    };
+    if (!sharedBrowserPromise) sharedBrowserPromise = launch();
+    let browser = await sharedBrowserPromise;
+    if (typeof browser.isConnected === "function" && !browser.isConnected()) {
+        sharedBrowserPromise = launch();
+        browser = await sharedBrowserPromise;
+    }
+    activeBrowserCalls += 1;
+    return browser;
+}
+
+function releaseBrowser() {
+    activeBrowserCalls = Math.max(0, activeBrowserCalls - 1);
+    scheduleBrowserIdleClose();
+}
+
+process.once("exit", () => {
+    clearBrowserIdleTimer();
+    if (sharedBrowserPromise) sharedBrowserPromise.then(browser => browser.close()).catch(() => {});
+});
+
 // Re-encode the full-res PNG down to a small JPEG, entirely in the browser page's own JS context
 // (canvas from a data: URL we constructed — never a cross-origin resource, so it never taints).
 // Anthropic's image-token cost scales with pixel area, not just bytes, so this cuts the inline
@@ -285,14 +344,15 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
     // fallback), NOT a hard tool error, same as a missing module.
     let browser;
     try {
-        browser = await chromium.launch();
+        browser = await getBrowser();
     } catch (e) {
         return { captured: false, available: false,
                  reason: "Playwright is installed but its Chromium browser is not — visual review falls back to the human eyeball gate. Install it with: npx playwright install chromium  (" +
                      (e && e.message ? e.message.split("\n")[0] : String(e)) + ")" };
     }
+    let bctx;
     try {
-        const bctx = await browser.newContext({ viewport: vp });
+        bctx = await browser.newContext({ viewport: vp });
         const pg = await bctx.newPage();
         const styleEvents = watchStylesheetNetwork(pg);
         // The target URL activates the session and lands the render. For WEB it's the no-auth
@@ -338,11 +398,12 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
                  reason: (isWeb ? "Could not render the web page" : "Could not drive the authenticated " + t.kind + " screen") +
                      " — visual review falls back to the human eyeball gate. (" + msg + ")" };
     } finally {
-        await browser.close();
+        try { if (bctx) await bctx.close(); }
+        finally { releaseBrowser(); }
     }
 }
 
 module.exports = {
     runScreenshot, detectRenderError, sanitizeUrl, sanitizeResourceUrl, loadChromium,
-    downscaleToJpeg, waitForStyles, inspectStyleStatus, VIEWPORTS
+    getBrowser, releaseBrowser, downscaleToJpeg, waitForStyles, inspectStyleStatus, VIEWPORTS
 };

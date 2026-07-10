@@ -24,6 +24,9 @@ let chromiumPresent = true;
 let nextEvaluate;         // (fn, args) => any | throws — simulates page.evaluate for the JPEG downscale
 let nextStylePageState;   // returned by no-arg evaluate() calls for stylesheet diagnostics
 let pageListeners;
+let launchCount = 0;
+let contextCloseCount = 0;
+let browserCloseCount = 0;
 
 function emitPage(event, arg) {
     for (const fn of (pageListeners[event] || [])) fn(arg);
@@ -51,10 +54,11 @@ const fakePage = {
     }
 };
 const fakeBrowser = {
-    async newContext() { return { async newPage() { return fakePage; } }; },
-    async close() {}
+    isConnected() { return true; },
+    async newContext() { return { async newPage() { return fakePage; }, async close() { contextCloseCount += 1; } }; },
+    async close() { browserCloseCount += 1; }
 };
-const fakePlaywright = { get chromium() { return chromiumPresent ? { async launch() { return fakeBrowser; } } : null; } };
+const fakePlaywright = { get chromium() { return chromiumPresent ? { async launch() { launchCount += 1; return fakeBrowser; } } : null; } };
 
 // playwright resolves to the real install path; ./test is screenshot.js's sibling.
 stub("playwright", fakePlaywright);
@@ -70,6 +74,9 @@ function reset() {
     pageListeners = {};
     nextGoto = null;
     chromiumPresent = true;
+    launchCount = 0;
+    contextCloseCount = 0;
+    browserCloseCount = 0;
     pageText = "Equipment\nAdd equipment"; // a normal, error-free rendered page by default
     nextStylePageState = {
         links: [{
@@ -121,6 +128,12 @@ test("console pal: navigates the cp-auth'd _previewUrl, returns a sanitized url 
     const hay = JSON.stringify(res);
     assert.ok(!hay.includes(SECRET), "credential must not leak into the result");
     assert.ok(!("_previewUrl" in res), "_previewUrl must not be returned");
+
+    const res2 = await runScreenshot({}, "GUID", {});
+    assert.equal(res2.captured, true);
+    assert.equal(launchCount, 1, "two calls share one Chromium browser");
+    assert.equal(contextCloseCount, 2, "each call closes its isolated context");
+    assert.equal(browserCloseCount, 0, "shared browser stays open until idle cleanup");
 });
 
 test("console pal: auth-replay failure returns a clean captured:false (no throw, no url/cred in reason)", async () => {

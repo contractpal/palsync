@@ -18,7 +18,7 @@
 // SECURITY: console URLs are credential-bearing — results only ever carry sanitizeUrl()'d URLs.
 const { runTest } = require("./test");
 const { checkExpect } = require("./preview");
-const { detectRenderError, sanitizeUrl, loadChromium, VIEWPORTS } = require("./screenshot");
+const { detectRenderError, sanitizeUrl, loadChromium, getBrowser, releaseBrowser, VIEWPORTS } = require("./screenshot");
 
 const MAX_STEPS = 10;
 
@@ -236,14 +236,15 @@ async function exerciseByBrowser(t, steps, viewport) {
     }
     const vp = VIEWPORTS[viewport] ? VIEWPORTS[viewport] : VIEWPORTS.desktop;
     let browser;
-    try { browser = await chromium.launch(); }
+    try { browser = await getBrowser(); }
     catch (e) {
         return { ran: false, available: false,
                  reason: "Playwright is installed but its Chromium browser is not — install it with: npx playwright install chromium (" + (e && e.message ? e.message.split("\n")[0] : String(e)) + ")" };
     }
     const results = [];
+    let bctx;
     try {
-        const bctx = await browser.newContext({ viewport: vp });
+        bctx = await browser.newContext({ viewport: vp });
         const pg = await bctx.newPage();
         const acceptedDialogs = [];
         pg.on("dialog", async (dialog) => {
@@ -315,7 +316,8 @@ async function exerciseByBrowser(t, steps, viewport) {
                  reason: (isWeb ? "Could not drive the web page" : "Could not drive the authenticated " + t.kind + " screen") + " (" + msg + ")",
                  steps: results };
     } finally {
-        await browser.close();
+        try { if (bctx) await bctx.close(); }
+        finally { releaseBrowser(); }
     }
 }
 
