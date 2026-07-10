@@ -8,6 +8,10 @@ from the controller and used inline (only `dateUtil` has a conventional reserved
 - EncryptionUtil — https://secure.cloudpiston.com/cpal/cp-api/web/EncryptionUtil.html
 - Monitor — https://secure.cloudpiston.com/cpal/cp-api/web/Monitor.html
 
+Companion:
+- `references/logging.md` — `Logger` (`c.getLogger()`), a fourth cross-workflow utility with
+  its own reference given how much it differs from `c.debug`
+
 ---
 
 ## DateUtil — dates and times
