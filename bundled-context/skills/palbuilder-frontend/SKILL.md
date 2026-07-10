@@ -1,6 +1,6 @@
 ---
 name: palbuilder-frontend
-description: Use this skill whenever writing visible front-end code for a CloudPiston pal — pages, fragments, forms, tables, CRUD screens, marketing pages, c: tags, XHTML, navigation, or browser JavaScript. This is the platform-syntax half of UI work; load design-build with it for hierarchy, spacing, components, states, responsiveness, and rendered review. Covers page vs fragment structure, c:ignore, EL, documented c: tags, fragment organization, navigation, modals, and browser modules.
+description: Use this skill whenever writing front-end code for a CloudPiston pal — pages, fragments, c: tags, XHTML markup, EL binding, modals, navigation, or browser-side JavaScript in scripts/. Covers the page shell vs fragment distinction, c:ignore fragment wrapper, EL binding syntax (${var}) and operators (empty(), !empty(), eq, ne, gt, lt, and, or, !), formatter access from EL, the most-used c: tags with pointer to the full attribute reference, fragment folder organization, modal shell integration, navigation/active-class idioms, the ES-module main-file + modules pattern for client JS, c:resource for bundled third-party libraries (Bootstrap, Chart.js, D3, TinyMCE, Font Awesome), and the CPResource bundle of home-made UI libraries (lib-ui modals/toasts/alerts, lib-paging, form validation, CR datalist). Trigger when writing any page, fragment, modal, navigation menu, form, or client-side JS file.
 ---
 
 # CloudPiston Pal — Frontend
@@ -8,19 +8,6 @@ description: Use this skill whenever writing visible front-end code for a CloudP
 The frontend layer is what the browser sees: pages (full HTML documents), fragments (partial
 HTML swapped into pages via AJAX), and the client-side JavaScript in `scripts/` that runs
 in the browser. Pages and fragments use CloudPiston's `c:` tag markup on top of XHTML.
-
-## Mandatory UI route
-
-This skill makes UI valid on Palbuilder; it does not by itself make UI usable or well designed.
-
-- Before changing anything visible, also load `design-build`.
-- If the project has no real `DESIGN_SYSTEM.md` and `COMPONENTS.md`, load `design-system-init`
-  first. A benchmark/test stub counts as a design brief only when it defines the archetype,
-  density, hierarchy, spacing, responsive behavior, and visual acceptance criteria.
-- Classify the surface before building: **marketing**, **CRUD/admin**, **dashboard/data**, or
-  **form flow**. Never apply marketing scale and whitespace to an operational screen.
-- A page/fragment is not done when it compiles. Capture desktop and mobile renders, inspect the
-  actual image and `designAudit`, fix failures, and re-render the changed viewport.
 
 CLAUDE.md holds the always-on rules — several apply specifically to frontend:
 - **Rule 1** — XHTML strict for element structure, but not for `<script>`/`<style>` content
@@ -41,6 +28,11 @@ Tag reference (official): https://secure.cloudpiston.com/cpal/cp-api/console-tag
 - **`references/platform-facts.md`** — Production gotchas beyond CLAUDE.md's rules: `noscript`
   stripping, image format quirks, entity restrictions, the `c:a` `javascript:` href, why
   regex-editing markup breaks things.
+- **`references/cpresource.md`** — The platform's bundled home-made UI libraries: lib-ui
+  (modals, toasts, inline/popup alerts, loading indicator, CR datalist widget), lib-paging,
+  client-side form validation, and the fragments they depend on (`modalShell`,
+  `toastContainer`, `static/paging`). Distinct from `c:resource`, which loads third-party
+  libraries (Bootstrap, Chart.js, etc.) — full table of those in `c-tags.md`.
 
 ---
 
@@ -59,11 +51,8 @@ page without a `<body>` tag ("No body tag found, cannot save without losing cont
 <html xmlns:c="contractpal">
     <head>
         <title>Dashboard</title>
-        <link rel="STYLESHEET" type="text/css" href="../Styles/spacing.css"/>
-        <link rel="STYLESHEET" type="text/css" href="../Styles/design-system.css"/>
+        <c:resource source="bootstrap" version="5.3.5" name="bootstrap-min.css"/>
         <link rel="STYLESHEET" type="text/css" href="../Styles/main.css"/>
-        <script type="module" src="../Scripts/pb-ui.js"></script>
-        <script type="module" src="../Scripts/pb-motion.js"></script>
         <script type="module" src="../Scripts/console-main.js"></script>
     </head>
     <body>
@@ -76,17 +65,6 @@ page without a `<body>` tag ("No body tag found, cannot save without losing cont
     </body>
 </html>
 ```
-
-Use `styles/spacing.css` for Bootstrap-like spacing/layout helpers (`.container`, `.row`, `.col-*`,
-`.d-flex`, `.gap-*`, `.m-*`, `.p-*`). Do not load Bootstrap just for spacing. Only use
-`c:resource source="bootstrap"` when a legacy pal already depends on Bootstrap behavior or the spec
-explicitly requires Bootstrap components.
-
-Do not add remote page-head font resources; the server rejects them. If a pal uses Fontshare, it
-must load through the first-line `@import` in `styles/design-system.css`.
-Chart.js is the exception for charts: use the platform resource
-`<c:resource source="chartjs" version="4.0.0" name="chart.js" />` plus an opt-in local
-`scripts/pb-charts.js`.
 
 ### Fragments hold the namespace on a wrapper
 
@@ -171,7 +149,7 @@ Most-used tags:
 | `c:field` | Form inputs, especially `type="option"` inside a `<select>` |
 | `c:set` | Set a template variable (`<c:set name="activeClass" test="..." true="active" false=""/>`) |
 | `c:ignore` | Fragment wrapper (namespace declaration only) |
-| `c:resource` | Load a versioned platform library (Bootstrap, jQuery, etc.) |
+| `c:resource` | Load a versioned platform library (Bootstrap, jQuery, etc.) — for the platform's own bundled UI libraries (modals, toasts, paging, validation) see `references/cpresource.md` instead |
 | `c:upload` | File upload widget (`allow` is required — keyword like `"image"`, not MIME) |
 | `c:download` | File-download link |
 | `c:debug` | Debug panel in dev; place inside `#cp-root` |
@@ -247,7 +225,9 @@ buttons are plain `<button onclick="hideModal()">`; action buttons are `c:a`:
 ```
 
 - **`showModal(path)`** / **`hideModal()`** come from the `cloudpiston/ui/v5/lib-ui`
-  include (or equivalent for older Bootstrap versions).
+  include (or equivalent for older Bootstrap versions). Full function signatures, plus
+  toasts, alerts, loading indicators, form validation, paging, and the CR datalist widget
+  that ship alongside them: `references/cpresource.md`.
 - CSS class names are project-specific — match the pal's design system.
 
 ---
@@ -454,9 +434,6 @@ From the workflow: `runJS("generalUI.initDropdowns()");`
   named entity (or non-ASCII byte) triggers a validation flag. Write arrows as `-&gt;`.
 - **`c:a` renders as `javascript:` href** — any JS click-interceptor MUST guard
   `a.protocol !== "http:" && a.protocol !== "https:"` or it silently breaks every `c:a`.
-- **`c:a` navigation does not reliably update `window.location`** — if JS needs current
-  filter/query state after `c:a` navigation, pass server-rendered state into the function
-  instead of reading `window.location.search`.
 - **Never edit markup or CSS with regex.** Read the region and hand-edit — regex surgery
   has repeatedly caused orphan closing tags and corrupted stylesheets.
 
