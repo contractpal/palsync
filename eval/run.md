@@ -5,6 +5,8 @@ scenarios, the shared files, and the Run A / Run B idea — all still true. This
 measurement layer: variable pinning, the one-variable rule, per-run cost capture, and the model
 matrix. Where the two disagree, this file wins.
 
+The DESIGN_SYSTEM stub changed to the shipped pb-* system on 2026-07-09. Scores before and after are not directly comparable.
+
 The scenarios themselves (`eval/specs/01…05`, `DESIGN_SYSTEM.md`, `COMPONENTS.md`) are frozen.
 Do not edit spec content — a changed spec invalidates every prior row it would compare against.
 
