@@ -8,6 +8,27 @@ const fs = require("node:fs");
 const usage = require("../src/core/usage");
 const { tmpWorkspace } = require("./helpers");
 
+test("recordToolCall batches calls and flushes the legacy usage file shape", () => {
+    const ws = tmpWorkspace();
+    usage.recordToolCall(ws, "pal_status", 7);
+    usage.recordToolCall(ws, "pal_status", 5);
+    usage.recordToolCall(ws, "pal_validate", 11);
+
+    assert.equal(fs.existsSync(`${ws}/${usage.USAGE_FILE}`), false);
+    usage.formatCost(ws, []);
+
+    const tally = JSON.parse(fs.readFileSync(`${ws}/${usage.USAGE_FILE}`, "utf8"));
+    assert.deepEqual(Object.keys(tally).sort(), ["pid", "startedAt", "tools", "totalBytes", "totalCalls", "updatedAt"]);
+    assert.equal(tally.pid, process.pid);
+    assert.equal(tally.totalCalls, 3);
+    assert.equal(tally.totalBytes, 23);
+    assert.deepEqual(tally.tools, {
+        pal_status: { calls: 2, bytes: 12 },
+        pal_validate: { calls: 1, bytes: 11 },
+    });
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
 test("injectedContext stays under the soft threshold for a real workspace", () => {
     const ws = tmpWorkspace({ "CLAUDE.palsync.md": "small doc" });
     const out = usage.injectedContext(ws, []);

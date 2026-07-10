@@ -14,6 +14,8 @@ const fs = require("fs");
 const path = require("path");
 
 const USAGE_FILE = ".palsync.usage.json";
+const tallies = new Map();
+const flushTimers = new Map();
 
 // Soft threshold for palsync's OWN injected block (CLAUDE.palsync.md + skill descriptions + tool
 // defs). Not a hard limit — palsync can't see the model's actual context window — just a "this
@@ -28,6 +30,40 @@ function readJson(p) {
     catch (e) { return null; }
 }
 
+function tallyFor(workspaceDir) {
+    if (tallies.has(workspaceDir)) return tallies.get(workspaceDir);
+    let u = readJson(usagePath(workspaceDir));
+    if (!u || u.pid !== process.pid) {
+        u = { pid: process.pid, startedAt: new Date().toISOString(), totalCalls: 0, totalBytes: 0, tools: {} };
+    }
+    tallies.set(workspaceDir, u);
+    return u;
+}
+
+function flush(workspaceDir) {
+    try {
+        const timer = flushTimers.get(workspaceDir);
+        if (timer) clearTimeout(timer);
+        flushTimers.delete(workspaceDir);
+        const u = tallies.get(workspaceDir);
+        if (u) fs.writeFileSync(usagePath(workspaceDir), JSON.stringify(u, null, 2));
+    } catch (e) { /* never let metering break a tool call */ }
+}
+
+function scheduleFlush(workspaceDir) {
+    if (flushTimers.has(workspaceDir)) return;
+    const timer = setTimeout(() => {
+        flushTimers.delete(workspaceDir);
+        flush(workspaceDir);
+    }, 1000);
+    timer.unref();
+    flushTimers.set(workspaceDir, timer);
+}
+
+process.once("exit", () => {
+    for (const workspaceDir of tallies.keys()) flush(workspaceDir);
+});
+
 // Byte size of a result returned to the agent's context: text content + any image payloads.
 function contentBytes(content) {
     if (!Array.isArray(content)) return 0;
@@ -40,11 +76,7 @@ function contentBytes(content) {
 // break a tool call, so every failure is swallowed. pid mismatch (or missing file) => new session.
 function recordToolCall(workspaceDir, toolName, bytes) {
     try {
-        const p = usagePath(workspaceDir);
-        let u = readJson(p);
-        if (!u || u.pid !== process.pid) {
-            u = { pid: process.pid, startedAt: new Date().toISOString(), totalCalls: 0, totalBytes: 0, tools: {} };
-        }
+        const u = tallyFor(workspaceDir);
         const t = u.tools[toolName] || { calls: 0, bytes: 0 };
         t.calls += 1;
         t.bytes += bytes || 0;
@@ -52,7 +84,7 @@ function recordToolCall(workspaceDir, toolName, bytes) {
         u.totalCalls += 1;
         u.totalBytes += bytes || 0;
         u.updatedAt = new Date().toISOString();
-        fs.writeFileSync(p, JSON.stringify(u, null, 2));
+        scheduleFlush(workspaceDir);
     } catch (e) { /* never let metering break a tool call */ }
 }
 
@@ -106,7 +138,8 @@ function fmtBytes(n) {
 
 // Render the cost report. Always labels the numbers as palsync's OWN context contribution.
 function formatCost(workspaceDir, tools) {
-    const u = readJson(usagePath(workspaceDir));
+    flush(workspaceDir);
+    const u = tallies.get(workspaceDir) || readJson(usagePath(workspaceDir));
     const inj = injectedContext(workspaceDir, tools);
     const L = [];
     L.push("palsync context contribution — " + workspaceDir);
