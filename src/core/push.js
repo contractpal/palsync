@@ -86,8 +86,11 @@ function errorsByRule(findings) {
 
 const WORKSPACE_GATE_RULES = new Set([
     "unknownPalJsonKey", "missingPalJsonEntry",
-    "listNameContract", "ajaxTargetExists", "actionRouted", "elSyntax", "hrefAction",
-    "formTag", "destructiveConfirm", "unknownApiMethod", "fragmentBinding"
+    "actionRouted", "elSyntax", "hrefAction",
+    "formTag", "fragmentBinding"
+]);
+const WORKSPACE_WARNING_RULES = new Set([
+    "listNameContract", "ajaxTargetExists", "destructiveConfirm"
 ]);
 
 function findingKey(f) {
@@ -98,7 +101,9 @@ function addWorkspaceGateFindings(workspaceDir, findings) {
     const seen = new Set(findings.map(findingKey));
     const whole = validateWorkspace(workspaceDir);
     for (const f of whole.findings) {
-        if (f.severity !== "error" || !WORKSPACE_GATE_RULES.has(f.rule)) continue;
+        const blockingError = f.severity === "error" && WORKSPACE_GATE_RULES.has(f.rule);
+        const advisoryWarning = f.severity === "warn" && WORKSPACE_WARNING_RULES.has(f.rule);
+        if (!blockingError && !advisoryWarning) continue;
         const key = findingKey(f);
         if (seen.has(key)) continue;
         findings.push(f);

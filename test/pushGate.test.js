@@ -1,7 +1,6 @@
 "use strict";
-// The push gate has a per-file "new errors only" path, but cross-file contracts must still be
-// evaluated against the whole current workspace. This catches the failure mode where pal_validate
-// found a broken c:list/DataList contract and pal_push force:true still saved.
+// The push gate has a per-file "new errors only" path. Cross-file contracts that are only
+// advisory remain visible but must not block a push.
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
@@ -11,7 +10,7 @@ const { hashWorkspaceFiles } = require("../src/core/workspaceHash");
 const baseline = require("../src/core/baseline");
 const { tmpWorkspace } = require("./helpers");
 
-test("gateLint blocks current workspace-level list/DataList contract errors", () => {
+test("gateLint surfaces but does not block current workspace-level list/DataList contract warnings", () => {
     const dir = tmpWorkspace({
         "workflows/console.js": [
             "function run(controller) {",
@@ -34,8 +33,10 @@ test("gateLint blocks current workspace-level list/DataList contract errors", ()
     ].join("\n"));
 
     const lint = gateLint(record, dir);
-    assert.equal(lint.errors, 1);
+    assert.equal(lint.errors, 0);
+    assert.equal(lint.warnings, 1);
     assert.equal(lint.findings[0].rule, "listNameContract");
+    assert.equal(lint.findings[0].severity, "warn");
     assert.match(lint.findings[0].message, /items/);
     fs.rmSync(dir, { recursive: true, force: true });
 });

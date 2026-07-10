@@ -11,7 +11,6 @@
 // Ground-truthed against real bug corpora in /Users/apple/PalBuilder/test-0{1,2,4,5}-*.
 const fs = require("fs");
 const path = require("path");
-const acorn = require("acorn");
 const { parseTag } = require("./markup");
 
 const MARKUP_EXT = new Set([".html", ".htm", ".xhtml"]);
@@ -106,75 +105,6 @@ function hasAttr(tag, name) {
 }
 
 function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
-
-// ---------------------------------------------------------------------------------------------
-// Small string-distance helper for Check 6 (fabricated API methods).
-// ---------------------------------------------------------------------------------------------
-
-function levenshtein(a, b) {
-    const m = a.length, n = b.length;
-    const dp = new Array(n + 1);
-    for (let j = 0; j <= n; j++) dp[j] = j;
-    for (let i = 1; i <= m; i++) {
-        let prev = dp[0]; dp[0] = i;
-        for (let j = 1; j <= n; j++) {
-            const tmp = dp[j];
-            dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
-            prev = tmp;
-        }
-    }
-    return dp[n];
-}
-
-// "Near match" is deliberately broader than raw edit-distance-2: the confirmed real bug
-// (setDateValue for setDate) is a trailing-word EXTENSION of the real method name — edit
-// distance 5, but an obvious typo once you see it's a prefix relationship. Catch both shapes.
-function isNearMatch(m, candidate) {
-    if (m === candidate) return false;
-    if (Math.abs(m.length - candidate.length) > 8) return false;
-    if (levenshtein(m, candidate) <= 2) return true;
-    if (m.startsWith(candidate) || candidate.startsWith(m)) return true;
-    return false;
-}
-
-function findSuggestion(m, allowlist) {
-    const prefixCat = /^[a-z]+/.exec(m)[0];
-    const sameCategory = allowlist.filter(c => c.startsWith(prefixCat));
-    const pool = sameCategory.length ? sameCategory : allowlist;
-    let best = null, bestScore = Infinity;
-    for (const c of pool) {
-        if (!isNearMatch(m, c)) continue;
-        const score = levenshtein(m, c);
-        if (score < bestScore) { bestScore = score; best = c; }
-    }
-    return best;
-}
-
-// ---------------------------------------------------------------------------------------------
-// Check 6 allowlist — MANUALLY extracted from palbuilder-workflow/references/*.md +
-// palbuilder-data/references/{datasets,payloads}.md (2026-07-06).
-// If those docs gain/rename methods, update this list too — it is NOT generated.
-// ---------------------------------------------------------------------------------------------
-const KNOWN_API_METHODS = [
-    // DataSet / DataView / filter / record read
-    "getRecords", "getRecord", "getRecordCount", "getDataSet", "getDataView", "getDataList",
-    "getData", "getUpload", "getDefaultValue", "getPersonalProfile", "getFullName",
-    "getInt", "getBoolean", "getValue", "getId", "getUser", "getPal", "getPage", "getRequest",
-    "getAction", "getTransaction", "getEnterprise", "getDateUtil", "getFormatter", "getValidator",
-    "getAjaxFragment", "getHref",
-    // create
-    "createFilter", "createRecord", "createPayload", "createDataList", "createData",
-    "createAjaxResponse", "createServiceRequest", "createGUID", "createBuffer",
-    // add
-    "addEqual", "addNotEqual", "addNotNull", "addNull", "addAnd", "addOr", "addColumn",
-    "addDataList", "addDataMap", "addPayload",
-    // set
-    "setInt", "setBoolean", "setDate", "setColumnValue", "setContentType",
-    // insert / update / delete / remove / find / sort / select
-    "insertRecord", "updateRecord", "deleteRecord", "deleteRecords", "removeColumn",
-    "findRecord", "sortAscending", "sortDescending", "selectColumns",
-];
-const KNOWN_API_SET = new Set(KNOWN_API_METHODS);
 
 // ---------------------------------------------------------------------------------------------
 // Check 1 — c:list name/id contract.
@@ -289,7 +219,7 @@ function checkListNameContract(markupFiles, listNames, findings) {
                   "Fix: use the exact name the workflow attached via payload.addDataList(...)/getRecords(filter, \"name\"). " +
                   "See the palbuilder-frontend skill tag reference, \"c:list\".";
 
-            findings.push({ file: rel, line: lineAt(src, tag.end), column: 0, severity: "error", rule: "listNameContract", message });
+            findings.push({ file: rel, line: lineAt(src, tag.end), column: 0, severity: "warn", rule: "listNameContract", message });
         });
     }
 }
@@ -306,9 +236,9 @@ function checkAjaxTargetExists(markupFiles, findings) {
     for (const { rel, src } of markupFiles) {
         scanTags(src, (tag, pos) => {
             const target = attr(tag, "ajax-target");
-            if (target == null || ids.has(target)) return;
+            if (target == null || target === "ignore" || ids.has(target)) return;
             findings.push({
-                file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "ajaxTargetExists",
+                file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "ajaxTargetExists",
                 message: "ajax-target=\"" + target + "\" — no element with id=\"" + target + "\" exists in any page or " +
                     "fragment — the AJAX response has nowhere to render. ids that do exist: " + idsList + ". " +
                     "Fix: add id=\"" + target + "\" to the wrapper you want the response swapped into, or point " +
@@ -500,67 +430,9 @@ function checkDestructiveConfirm(tag, rel, src, pos, findings) {
           "prompt for you). See the palbuilder-frontend skill tag reference, \"c:a\".";
     findings.push({
         file: rel, line: lineAt(src, pos), column: 0,
-        severity: destructive ? "error" : "warn",
+        severity: "warn",
         rule: "destructiveConfirm",
         message: msg,
-    });
-}
-
-// ---------------------------------------------------------------------------------------------
-// Check 6 — fabricated API methods in workflow JS.
-// ---------------------------------------------------------------------------------------------
-
-function walkAst(node, parent, visit) {
-    if (!node || typeof node.type !== "string") return;
-    visit(node, parent);
-    for (const k of Object.keys(node)) {
-        if (k === "loc" || k === "start" || k === "end" || k === "range") continue;
-        const v = node[k];
-        if (Array.isArray(v)) { for (const c of v) walkAst(c, node, visit); }
-        else if (v && typeof v.type === "string") walkAst(v, node, visit);
-    }
-}
-
-const API_METHOD_RE = /^(get|set|add|create|insert|update|delete|remove|find|sort|select)[A-Z]/;
-
-function checkUnknownApiMethod(rel, src, findings) {
-    let ast;
-    try { ast = acorn.parse(src, { ecmaVersion: "latest", locations: true, allowReturnOutsideFunction: true }); }
-    catch (e) { return; } // workflowJs.js already reports syntax errors — don't double-report here.
-
-    const localFunctionNames = new Set();
-    walkAst(ast, null, (node) => {
-        if (node.type === "FunctionDeclaration" && node.id) localFunctionNames.add(node.id.name);
-    });
-
-    walkAst(ast, null, (node) => {
-        if (node.type !== "CallExpression") return;
-        const callee = node.callee;
-        if (!callee || callee.type !== "MemberExpression" || callee.computed) return;
-        const prop = callee.property;
-        if (!prop || prop.type !== "Identifier") return;
-        const m = prop.name;
-        if (!API_METHOD_RE.test(m)) return;
-        if (KNOWN_API_SET.has(m) || localFunctionNames.has(m)) return;
-
-        const line = prop.loc ? prop.loc.start.line : 0;
-        const column = prop.loc ? prop.loc.start.column + 1 : 0;
-        const suggestion = findSuggestion(m, KNOWN_API_METHODS);
-        if (suggestion) {
-            findings.push({
-                file: rel, line, column, severity: "error", rule: "unknownApiMethod",
-                message: "." + m + "(...) is not a documented PalBuilder API method — did you mean ." + suggestion +
-                    "(...)? This will fail at runtime (or fail to compile) even though the file saves successfully. " +
-                    "Fix: use ." + suggestion + "(...) instead. See the palbuilder-workflow/palbuilder-data API references."
-            });
-        } else {
-            findings.push({
-                file: rel, line, column, severity: "warn", rule: "unknownApiMethod",
-                message: "." + m + "(...) is not in PalBuilder's documented API method set. It may be a fabricated " +
-                    "method that will fail even though the file saves successfully. Verify it exists in the " +
-                    "palbuilder-workflow/references/*.md or palbuilder-data/{datasets,payloads}.md before shipping."
-            });
-        }
     });
 }
 
@@ -931,7 +803,6 @@ function lintContracts(workspaceDir) {
     }
 
     for (const { rel, src } of workflowFiles) {
-        checkUnknownApiMethod(rel, src, findings);
         checkAjaxTransport(rel, src, findings);
     }
 

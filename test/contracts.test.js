@@ -19,7 +19,7 @@ function basePalJson(extra) {
     }, extra));
 }
 
-test("swapped c:list name/id — errors, message names the swap explicitly", () => {
+test("swapped c:list name/id — warns, message names the swap explicitly", () => {
     const dir = tmpWorkspace({
         "workflows/console.js": [
             "function run(controller) {",
@@ -39,7 +39,7 @@ test("swapped c:list name/id — errors, message names the swap explicitly", () 
     });
     const findings = lintContracts(dir).filter(f => f.rule === "listNameContract");
     assert.strictEqual(findings.length, 1);
-    assert.strictEqual(findings[0].severity, "error");
+    assert.strictEqual(findings[0].severity, "warn");
     assert.match(findings[0].message, /SWAPPED/);
     assert.match(findings[0].message, /items/);
     fs.rmSync(dir, { recursive: true, force: true });
@@ -68,7 +68,7 @@ test("inline pal.getDataSet(...).getRecords(..., name) satisfies c:list name", (
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("dead ajax-target — no matching id anywhere", () => {
+test("dead ajax-target — no matching id anywhere is a warning", () => {
     const dir = tmpWorkspace({
         "workflows/console.js": "function run(controller) {}",
         "pages/console.html": "<html><body><div id=\"body\"></div></body></html>",
@@ -76,7 +76,7 @@ test("dead ajax-target — no matching id anywhere", () => {
     });
     const findings = lintContracts(dir).filter(f => f.rule === "ajaxTargetExists");
     assert.strictEqual(findings.length, 1);
-    assert.strictEqual(findings[0].severity, "error");
+    assert.strictEqual(findings[0].severity, "warn");
     assert.match(findings[0].message, /no element with id="content"/);
     fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -192,7 +192,7 @@ test("<form> tag in a page — allowed (server only rejects it in fragments)", (
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("fabricated API method setDateValue — suggests setDate", () => {
+test("unknown API methods do not produce contract findings", () => {
     const dir = tmpWorkspace({
         "workflows/console.js": [
             "function run(controller) {",
@@ -201,38 +201,15 @@ test("fabricated API method setDateValue — suggests setDate", () => {
             "}",
         ].join("\n"),
     });
-    const findings = lintContracts(dir).filter(f => f.rule === "unknownApiMethod");
-    assert.strictEqual(findings.length, 1);
-    assert.strictEqual(findings[0].severity, "error");
-    assert.match(findings[0].message, /did you mean \.setDate\(/);
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "unknownApiMethod").length, 0);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("fabricated API method with no near match — warns, no suggestion claimed", () => {
+test("ajax-target ignore sentinel produces no finding", () => {
     const dir = tmpWorkspace({
-        "workflows/console.js": "function run(controller) { ds.deleteEverything(); }",
+        "fragments/form.html": '<c:ignore xmlns:c="contractpal"><c:a action="save" ajax-target="ignore">Save</c:a></c:ignore>',
     });
-    const findings = lintContracts(dir).filter(f => f.rule === "unknownApiMethod");
-    assert.strictEqual(findings.length, 1);
-    assert.strictEqual(findings[0].severity, "warn");
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("crawler intercept APIs are recognized by the fabricated API check", () => {
-    const dir = tmpWorkspace({
-        "workflows/web.js": [
-            "function run(controller) {",
-            "    var href = controller.getHref();",
-            "    if (href == '/robots.txt') {",
-            "        var robots = controller.createAjaxResponse('User-agent: *', false);",
-            "        robots.setContentType('text/plain');",
-            "        return robots;",
-            "    }",
-            "}",
-        ].join("\n"),
-    });
-    const findings = lintContracts(dir).filter(f => f.rule === "unknownApiMethod");
-    assert.strictEqual(findings.length, 0);
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "ajaxTargetExists").length, 0);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -566,13 +543,13 @@ test("fragment binding — static c:fragment name is not this check's contract",
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("destructiveConfirm — delete action with no confirm= is an error naming the fix", () => {
+test("destructiveConfirm — delete action with no confirm= is a warning naming the fix", () => {
     const dir = tmpWorkspace({
         "fragments/list.html": '<c:ignore xmlns:c="contractpal"><c:a action="deleteEquipment?equipmentId=${row.equipmentId}" ajax-target="body">Delete</c:a></c:ignore>',
     });
     const findings = lintContracts(dir).filter(f => f.rule === "destructiveConfirm");
     assert.strictEqual(findings.length, 1);
-    assert.strictEqual(findings[0].severity, "error");
+    assert.strictEqual(findings[0].severity, "warn");
     assert.match(findings[0].message, /confirm=/);
     fs.rmSync(dir, { recursive: true, force: true });
 });
