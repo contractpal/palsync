@@ -1,9 +1,7 @@
 # eval/run.md — palsync benchmark run protocol
 
-**This file SUPERSEDES `eval/specs/README.md`.** The bundle README still describes the
-scenarios, the shared files, and the Run A / Run B idea — all still true. This file adds the
-measurement layer: variable pinning, the one-variable rule, per-run cost capture, and the model
-matrix. Where the two disagree, this file wins.
+**This file is the benchmark protocol linked from `eval/specs/README.md`.** It defines variable
+pinning, the one-variable rule, per-run cost capture, and the model matrix.
 
 The DESIGN_SYSTEM stub changed to the shipped pb-* system on 2026-07-09. Scores before and after are not directly comparable.
 
