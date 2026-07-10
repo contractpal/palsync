@@ -2,7 +2,7 @@
 
 These are approved, shipped pb-* building blocks. Compose the subset the content needs; do not
 invent class names or force every page through the same template. Every class must resolve in
-`styles/design-system.css` or `styles/spacing.css`.
+`styles/design-system.css`, `styles/spacing.css`, or the new-pal `styles/styles.css`.
 
 ## Shared app/CRUD
 

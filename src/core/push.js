@@ -233,7 +233,7 @@ function guardWorkflows(pal, serverKnown) {
 }
 
 // A pal with a web workflow (workflowType 9) is only a "Web Pal" on the server if
-// layout.webWorkflow names that workflow. palsync builds web workflows (scaffold / agent edits)
+// layout.webWorkflow names that workflow. palsync builds web workflows (agent edits)
 // WITHOUT setting that pointer, so a freshly-pushed web pal validates as "Pal is not a Web Pal".
 // If layout.webWorkflow is unset, point it at the first web workflow (workflowType 9).
 // Mutates pal.layout. Returns the registered filename, or null if nothing was changed.

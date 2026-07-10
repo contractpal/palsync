@@ -15,6 +15,8 @@ const { TOOLS } = require("../mcp/tools");
 const { readDatasetDefs, recreatePhrase } = require("../core/datasets");
 const lock = require("../core/lock");
 const contextInject = require("../launcher/contextInject");
+const { runPreview } = require("../core/preview");
+const { openUrl } = require("../platform/openUrl");
 
 // Read one line from the user (for the recreate typed-YES). Resolves to the trimmed input.
 function askLine(question) {
@@ -36,12 +38,13 @@ const USAGE = [
     "                                                               Server-validate a workflow (preview opens only with --preview)",
     "  palsync preview [--workflow console|web|transaction] [--open|--no-open] [--keep-lock] [--dir <ws>]",
     "                                                               Render the pal (opens console/transaction previews in a browser by default)",
+    "  palsync open    [--workflow console|web|transaction] [--keep-lock] [--dir <ws>]",
+    "                                                               Open the rendered pal in a real browser window (human review)",
     "  palsync screenshot [<page>] [--viewport desktop|mobile] [--full-page] [--keep-lock] [--dir <ws>]",
     "                                                               Render a WEB pal to a PNG (saves the file, prints the path)",
     "  palsync seo-audit [--keep-lock] [--dir <ws>]             On-page SEO audit of a WEB pal's rendered page",
     "  palsync exercise --steps '<json>' | --steps-file <path> [--workflow console|web|transaction] [--viewport desktop|mobile] [--keep-lock] [--dir <ws>]",
     "                                                               Exercise workflow actions end-to-end; assert expect/absent strings in the rendered result",
-    "  palsync scaffold  [--template <name>] [--list] [--dir <ws>]  Apply a starter template (offline; --list shows them)",
     "  palsync cost   [--dir <workspace>]                           palsync's own context contribution: tool calls + bytes returned + injected-block size (offline)",
     "  palsync regression [--keep-lock] [--dir <ws>]                Brownfield regression vs baseline/baseline.json (freshness -> validate/test/H1; caused vs inherited)",
     "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Mechanical reality-check of a SPEC.md (offline): placeholders, dead links, §8a types, §12 floor",
@@ -72,7 +75,7 @@ const USAGE = [
 ].join("\n");
 
 function parseFlags(argv) {
-    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, preview: false, open: undefined, skipValidation: false, datasets: undefined, recreate: false, template: undefined, list: false, viewport: undefined, fullPage: false, expect: undefined, selector: undefined, maxChars: undefined };
+    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, preview: false, open: undefined, skipValidation: false, datasets: undefined, recreate: false, viewport: undefined, fullPage: false, expect: undefined, selector: undefined, maxChars: undefined };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--force" || a === "-f") flags.force = true;
@@ -81,9 +84,6 @@ function parseFlags(argv) {
         else if (a === "--no-preview") flags.preview = false;
         else if (a === "--open") flags.open = true;
         else if (a === "--no-open") flags.open = false;
-        else if (a === "--list") flags.list = true;
-        else if (a === "--template") { flags.template = argv[++i]; if (!flags.template) throw new Error("--template requires a value"); }
-        else if (a.startsWith("--template=")) flags.template = a.slice("--template=".length);
         else if (a === "--skip-validation") flags.skipValidation = true;
         else if (a === "--recreate") flags.recreate = true;
         else if (a === "--help" || a === "-h") flags.help = true;
@@ -214,21 +214,6 @@ async function run(cmd, argv) {
         return 0;
     }
 
-    // scaffold is OFFLINE too (writes template files + pal.json entries; push ships them later).
-    if (cmd === "scaffold") {
-        const { applyTemplate, listTemplates, formatScaffoldReport } = require("../core/scaffold");
-        if (flags.list || !flags.template) {
-            const all = listTemplates();
-            console.log("Available templates:\n" + all.map(t => "  " + t.name + " — " + t.description).join("\n") +
-                "\n\nApply one with: palsync scaffold --template <name> [--dir <workspace>]");
-            return flags.template ? 1 : 0;
-        }
-        const report = applyTemplate(dir, flags.template, {});
-        console.log("palsync scaffold — " + dir + "\n");
-        console.log(formatScaffoldReport(report));
-        return 0;
-    }
-
     // spec-lint is OFFLINE: reads a SPEC.md (+ optional sibling MAP.md), no login/lock.
     if (cmd === "spec-lint") {
         const { lintSpec, formatSpecLint } = require("../core/specLint");
@@ -301,6 +286,33 @@ async function run(cmd, argv) {
         console.log(res.message);
         if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
         return res.previewed ? 0 : 1;
+    }
+
+    if (cmd === "open") {
+        const res = await runPreview(ctx.session, ctx.record.palGuid, ctx.record, ctx.workspaceDir, { workflow: flags.workflow });
+        const dirtyNote = res.dirty
+            ? "\n⚠ Un-pushed local changes detected (" + (res.dirtyFiles || []).join(", ") + "). The browser shows the last pushed version."
+            : "";
+        if (!res.previewed) {
+            const prefix = res.validated === false
+                ? "Cannot open — the pal did not validate on the server."
+                : "Cannot open preview.";
+            console.log(prefix + " " + (res.reason || "The preview could not be started.") + dirtyNote);
+            if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
+            return 1;
+        }
+        const url = res.url || res._previewUrl;
+        if (!url) {
+            console.log("Cannot open preview: the preview did not return a browser URL." + dirtyNote);
+            if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
+            return 1;
+        }
+        const opened = await openUrl(url);
+        console.log(opened.opened
+            ? "Opened the " + (res.kind || flags.workflow || "pal") + " preview in your browser." + dirtyNote
+            : "Couldn't open the preview in your browser (" + (opened.reason || "unknown error") + ")." + dirtyNote);
+        if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
+        return opened.opened ? 0 : 1;
     }
 
     if (cmd === "fetch") {

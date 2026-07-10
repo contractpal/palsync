@@ -49,7 +49,7 @@ const END = "<!-- <<< palsync managed block <<< -->";
 function syncSection(palName, { cli = false, skillsDir = ".claude/skills" } = {}) {
     const T = cli
         ? { pull: "`palsync pull`", push: "`palsync push`", validate: "`palsync validate`",
-            test: "`palsync test`", preview: "`palsync preview`", seo: "`palsync seo-audit`",
+            test: "`palsync test`", preview: "`palsync preview`", open: "`palsync open`", seo: "`palsync seo-audit`",
             merge: "`palsync merge`", status: "`palsync status`", datasets: "`palsync sync-datasets`",
             screenshot: "`palsync screenshot`", fetch: "`palsync fetch`", specLint: "`palsync spec-lint`",
             regression: "`palsync regression`", exercise: "`palsync exercise`", skip: "the `--skip-validation` flag" }
@@ -104,7 +104,7 @@ function syncSection(palName, { cli = false, skillsDir = ".claude/skills" } = {}
         "   in a file you edit don't block you; only new ones do.)",
         "4. After pushing workflow or UI changes, **offer to " + T.test + "** — it runs the SERVER's own",
         "   validation. In auto mode it does NOT open the user's browser; open a live preview only at a",
-        "   human-review stop (" + (cli ? "`palsync test --preview`" : "`pal_test` with `preview:true`") + ").",
+        "   human-review stop (" + (cli ? "`palsync test --preview` or " + T.open : "`pal_test` with `preview:true`") + ").",
         "5. **" + T.validate + " and " + T.test + " only prove the code COMPILES — not that it RENDERS.** A",
         "   workflow that validates can still THROW at runtime (bad SQL, a null, a column the table lacks)",
         "   and paint an error block instead of the UI. You MUST call **" + T.screenshot + "** after every push",
@@ -145,7 +145,7 @@ function syncSection(palName, { cli = false, skillsDir = ".claude/skills" } = {}
         "- **Never run `palsync` SYNC commands from your shell in this session** (push/pull/status/",
         "  validate/test/…) — the pal_* tools above ARE the interface, and the bare `palsync` command",
         "  opens an interactive human launcher. The ONLY shell exceptions are the OFFLINE local helpers",
-        "  with no MCP equivalent: `palsync task …`, `palsync checkpoint …`, `palsync scaffold …`",
+        "  with no MCP equivalent: `palsync task …`, `palsync checkpoint …`",
         "  (pal-loop uses them; they touch no server). And **NEVER `pkill`/`kill` anything matching",
         "  `palsync`** — that kills this session's own MCP server and every pal_* tool with it. If a",
         "  tool seems missing, ask the user; do not fall back to the CLI.",

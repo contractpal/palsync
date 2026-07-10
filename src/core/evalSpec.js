@@ -53,7 +53,7 @@ function resolveSpec(key) {
 // Copy the spec's SPEC.md + EXECUTION.md and the two shared design docs into workspaceDir (flat,
 // workspace root). SPEC.md gets its placeholder header filled in and its ../ references to the
 // shared docs rewritten to ./ (they now live alongside it, not one directory up). Never overwrites
-// an existing file — mirrors scaffold.js's non-destructive rule.
+// an existing file — preserves the workspace's non-destructive rule.
 function injectSpec(workspaceDir, spec, { fillValue } = {}) {
     const written = [], skipped = [];
 

@@ -1,7 +1,7 @@
 /* pb-charts.js - optional Chart.js adapter for showcase/demo pals.
    Chart.js is loaded by the page shell with:
    <c:resource source="chartjs" version="4.0.0" name="chart.js"/>
-   If window.Chart is absent, this file silently no-ops so starters can omit
+   If window.Chart is absent, this file silently no-ops so projects can omit
    Chart.js entirely. */
 
 function chartThemeRoot(canvas) {

@@ -38,12 +38,11 @@ spec: SPEC.md (status: approved)   mode: full | lite
 
 ## Build plan
 Dependency order (leaf-first — foundations before things that use them):
-1. Scaffold — a **standalone first task** that runs `palsync scaffold` with the matching starter
-   (`web-marketing` for a web pal, `console-app` for a console pal), then STOPS. Adapt the starter's
-   content in later tasks; never hand-generate scaffold files, and never fold scaffolding into a
-   "build the shell + workflow" task (a build agent reads that as "hand-write it" and skips the
-   starter). The starter guarantees the structure, design floor, SEO floor, and the correct `run()`
-   skeleton (the `c.getPage`/`isAjax`/`frag` response pattern) from the first push.
+1. Foundation — a **standalone first task** that hand-builds the page shell, copies the four
+   canonical files verbatim from `design-system-init/references/`, authors a readable per-project
+   `styles/styles.css`, registers all five styles/scripts entries in `pal.json`, and (for console
+   pals) establishes the `run()` skeleton from `palbuilder-workflow/references/console.md`, then
+   STOPS. Existing pals without `styles.css` are not migrated.
 2. FIRST page/screen — establishes composition (frontier tier).
 3. Remaining pages — CLONE the first's structure (cheap/standard).
 4. Datasets, then the workflows that read them (data before UI).
@@ -56,7 +55,7 @@ Checkpoints: <natural human review points — pal-loop also pauses per SPEC.md `
 
 ## Tasks
 | id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |
-| T1 | apply starter (palsync scaffold) | cheap | §3, §6 | — | todo | `palsync scaffold <console-app\|web-marketing>` applied (NOT hand-written); the four canonical files + starter shell/workflow present and registered in pal.json; pal_validate 0; pal_test workflow VALIDATED on the unchanged starter |
+| T1 | hand-build shell, canonical files, styles.css, and workflow foundation | cheap | §3, §6 | — | todo | Page shell, four canonical files copied verbatim, readable `styles/styles.css`, and (for console) the documented `run()` skeleton are present and registered in pal.json; `pal_validate` reports 0 errors and `pal_test` reports VALIDATED on the hand-built shell |
 | T2 | first page (composition) | frontier | §4, §6 | T1 | todo | validate 0; push OK; preview "<H1>" |
 | T3 | <action with logic> | standard | §5 | T1 | todo | When <input>, <result>; pal_test VALIDATED |
 

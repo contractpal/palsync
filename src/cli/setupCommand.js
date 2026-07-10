@@ -34,7 +34,6 @@ const USAGE = [
     "  --user <username>    account (default: env CP_USER, else the single keychain account)",
     "  --profile <name>     narrow by profile name (disambiguates a duplicate pal name)",
     "  --group <name>       narrow by group name",
-    "  --template <name>    apply a starter template after the pull (web-marketing, console-app; `palsync scaffold --list`)",
     "  --agent claude|codex|pi|opencode  which agent's context/MCP to write (default: claude; pi uses the CLI, no MCP)",
     "  --overwrite-local    if the workspace has un-pushed local edits, overwrite them (default: refuse)",
     "  --json               machine-readable result",
@@ -45,13 +44,12 @@ const USAGE = [
 
 function parse(argv) {
     const f = { pal: undefined, guid: undefined, dir: undefined, cloud: undefined, user: undefined,
-                profile: undefined, group: undefined, template: undefined, agent: "claude",
+                profile: undefined, group: undefined, agent: "claude",
                 overwriteLocal: false, json: false, help: false };
     const need = (i, name) => { const v = argv[i + 1]; if (v === undefined) throw new Error(name + " requires a value"); return v; };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--help" || a === "-h") f.help = true;
-        else if (a === "--template") { f.template = need(i, "--template"); i++; }
         else if (a === "--overwrite-local") f.overwriteLocal = true;
         else if (a === "--json") f.json = true;
         else if (a === "--pal") { f.pal = need(i, "--pal"); i++; }
@@ -126,15 +124,6 @@ async function run(argv) {
 
     const result = await workspace.setup({ session, cloudUrl, sel, workspaceDir, agent: flags.agent, onDrift, log });
 
-    // Optional starter template: applied AFTER the pull so it can see what the pal already has
-    // (existing files are never overwritten; workflow content fills only empty/stub slots).
-    let scaffold = null;
-    if (flags.template) {
-        const { applyTemplate, formatScaffoldReport } = require("../core/scaffold");
-        scaffold = applyTemplate(workspaceDir, flags.template, { palName: resolved.name });
-        if (!flags.json) console.log("\n" + formatScaffoldReport(scaffold));
-    }
-
     // Release the lock — no agent is launched here, so don't strand it. The MCP server re-acquires
     // it on the agent's first tool call (own-stale-reclaim).
     try { await lock.releaseByGuid(session, resolved.guid); } catch (e) { /* best-effort */ }
@@ -145,7 +134,6 @@ async function run(argv) {
             pulledFiles: result.pulledFiles, dataFiles: result.dataFiles,
             skills: result.injected && result.injected.skills, agent: flags.agent,
             mcpConfig: result.mcpConfig,
-            scaffold: scaffold ? { template: scaffold.template, created: scaffold.created, workflows: scaffold.workflows } : null
         }, null, 2));
     } else {
         console.log("\nWorkspace ready: " + workspaceDir);

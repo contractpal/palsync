@@ -1,17 +1,18 @@
 # Palbuilder Marketing Library
 
-HTML-only reference for the marketing-section classes in `styles/design-system.css` (shipped
+HTML recipe reference for the marketing-section classes in `styles/design-system.css` (shipped
 verbatim) plus the motion recipes in `scripts/pb-motion.js`. App/console components (navbar,
 sidebar, tables, forms, modal, etc.) live in `component-library.md`, not here — console pals
 should never need to load this file. Every class and `data-*` attribute below is copied directly
-from the shipped CSS/JS; nothing here is invented.
+from the shipped CSS/JS; nothing here is invented. New-pal component and reference-driven tweaks
+are authored in readable `styles/styles.css`.
 
 **XHTML is strict** (self-close voids, boolean attrs as `attr="attr"`) — see
 `component-library.md`'s opening note and `bundled-context/CLAUDE.md` for the full platform
-contract. **Never hand-edit `design-system.css`** — pal tweaks go in the `PAL OVERRIDES` block at
-its end. Load order is the same four files as every pal (`spacing.css`, `design-system.css`,
-`pb-ui.js`, `pb-motion.js` as `<script type="module">`) — see `component-library.md` for the
-exact shell snippet.
+contract. **Never hand-edit `design-system.css`** — token-only pal tweaks may go in the `PAL
+OVERRIDES` block; component/reference-driven tweaks go in new pals' `styles/styles.css`. For a new
+pal, load order is `spacing.css`, `design-system.css`, `styles.css`, `pb-ui.js`, `pb-motion.js` as
+`<script type="module">` — see `component-library.md` for the exact shell snippet.
 
 ## Start here — choose content before effects
 

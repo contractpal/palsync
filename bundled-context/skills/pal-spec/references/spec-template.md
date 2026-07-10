@@ -41,7 +41,8 @@ COMPONENTS.md component, plus the primary path, hierarchy order, target placemen
 step, and progressive disclosure notes. Brownfield (MAP.md present): new UI MUST match the
 conventions + design reality recorded in MAP.md — reuse before building; no DESIGN_SYSTEM.md yet →
 run design-system-init in EXTRACT mode against the map. Every UI page should link
-`styles/spacing.css` before the visual stylesheet; it replaces Bootstrap for spacing/layout.
+`styles/spacing.css` before `styles/design-system.css` and, for a new pal, authored
+`styles/styles.css`; it replaces Bootstrap for spacing/layout. Existing pals are not retrofitted.
 
 **§7 SEO** — publicly indexable pages only; mark which §3 rows apply (usually `web`-tagged, but a
 `console` row can qualify, e.g. a logged-out landing/login screen). title ≤60ch, meta desc
@@ -149,7 +150,8 @@ Canonical base: <https://...>
 ## 10. PalBuilder surface (the platform primitives this build touches)
 - Pages (page-shell) / Fragments (c:ignore): <which>
 - c: tags used: <c:a, c:field, c:list, c:fragment, c:if/c:when, c:set, c:resource, c:debug>
-- CSS: styles/spacing.css linked before styles/design-system.css on every page; scripts/pb-ui.js
+- CSS: styles/spacing.css linked before styles/design-system.css and (for new pals) styles/styles.css
+  on every page; scripts/pb-ui.js
   and scripts/pb-motion.js each loaded once as `<script type="module">`
 - c:resource libs: <jquery, chartjs, bootstrap/bootstrap-icons only if explicitly required —
   never Bootstrap just for spacing/layout>
@@ -169,8 +171,9 @@ Canonical base: <https://...>
 GLOBAL FLOOR (both modes):
 - [ ] pal_validate: 0 errors   - [ ] pal_test: workflow VALIDATED, 0 notes
 - [ ] every §3 nav link routes (no dead links)
-- [ ] every UI page links `../Styles/spacing.css` before `../Styles/design-system.css` and loads
-      `pb-ui.js`/`pb-motion.js` each once as `<script type="module">`; no Bootstrap is loaded
+- [ ] every new-pal UI page links `../Styles/spacing.css` before `../Styles/design-system.css` and
+      `../Styles/styles.css`, and loads `pb-ui.js`/`pb-motion.js` each once as `<script type="module">`;
+      no Bootstrap is loaded
       just for spacing/layout utilities
 - [ ] [brownfield/MAP.md present — mandatory] REGRESSION: MAP.md's Step-3 baseline still passes
       (pal_validate/pal_test at least as clean as the baseline) and untouched UI didn't visually

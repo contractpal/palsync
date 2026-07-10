@@ -34,9 +34,10 @@ never pal-loop's self-report.
   (per-string found/missing verdict, no HTML dump). Real output, not source.
 - Every §3 nav link routes to a real page — no dead links.
 - Every §12 acceptance criterion actually met — the full set, not just the global floor.
-- Every UI page links `../Styles/spacing.css` before `../Styles/design-system.css`, and loads
-  `pb-ui.js`/`pb-motion.js` each exactly once as `<script type="module">` (design-system-init's
-  checklist has the exact order); Bootstrap is not loaded merely for spacing/layout helpers.
+- Every new-pal UI page links `../Styles/spacing.css` before `../Styles/design-system.css`, then
+  `../Styles/styles.css`, and loads `pb-ui.js`/`pb-motion.js` each exactly once as
+  `<script type="module">` (design-system-init's checklist has the exact order). Existing pals
+  without `styles.css` are not retrofitted; Bootstrap is not loaded merely for spacing/layout helpers.
 - §11 NEVER list not violated; §8b consumed datasets not altered.
 - Every `done` task in EXECUTION.md traces via its `spec ref` to its SPEC.md § and that
   requirement is satisfied.
@@ -76,7 +77,7 @@ Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per 
 - IF `rg --files-without-match 'class="pb-section' fragments/` prints a fragment, THEN fail that fragment. Every fragment root uses `pb-section`.
 - IF `rg -n '<main id="body" class="pb-main">' pages/console.html` prints no match, THEN fail the shell. The shell owns `pb-main`; fragments do not. IF a shell wrapper class is absent from `styles/design-system.css`, `styles/spacing.css`, and COMPONENTS.md, THEN fail it as undefined.
 - IF `for f in fragments/*; do [ "$(rg -o 'pb-field-group' "$f" | wc -l)" -lt 2 ] || rg -q 'pb-stack|pb-form-grid' "$f" || echo "$f"; done` prints a fragment, THEN fail it. Two or more field groups require `pb-stack` or `pb-form-grid`.
-- IF `for t in $(rg -oN 'class="[^"]*"' fragments/ pages/ | sed -E 's/.*class="//; s/"$//' | tr ' ' '\n' | grep -v '\$' | sort -u); do rg -q "\\.$t\\b" styles/ || echo "$t"; done` prints a class token, THEN fail each printed token as undefined — it appears in markup but no shipped stylesheet defines it, so that element renders unstyled. Usual offenders: Bootstrap muscle-memory names (`btn`, `btn-primary`, `form-control`, `badge`, `alert-danger`) and invented pb-* names (`pb-card-header` — real name `pb-card-head`; `pb-empty-state` — real name `pb-state`). The fix is the exact pb-* class from COMPONENTS.md / `styles/design-system.css`, never a new CSS rule.
+- IF `for t in $(rg -oN 'class="[^"]*"' fragments/ pages/ | sed -E 's/.*class="//; s/"$//' | tr ' ' '\n' | grep -v '\$' | sort -u); do rg -q "\\.$t\\b" styles/ || echo "$t"; done` prints a class token, THEN fail each printed token as undefined — it appears in markup but no shipped stylesheet defines it, so that element renders unstyled. Usual offenders: Bootstrap muscle-memory names (`btn`, `btn-primary`, `form-control`, `badge`, `alert-danger`) and invented pb-* names (`pb-card-header` — real name `pb-card-head`; `pb-empty-state` — real name `pb-state`). The fix is the exact pb-* class from COMPONENTS.md / the shipped stylesheets; a new-pal override belongs in readable `styles/styles.css`.
 - IF an Actions `td` contains two or more controls without a `.pb-row-actions` wrapper, fail it.
   Button variants alone do not provide grouping or mobile wrapping. If mutually exclusive state
   transitions (such as Check out and Check in) render together for one row, fail action/state

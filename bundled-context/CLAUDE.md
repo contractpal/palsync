@@ -59,14 +59,11 @@ the spec is written.
 
 Every pal UI ships four files copied verbatim from `design-system-init/references/`:
 `styles/spacing.css`, `styles/design-system.css`, `scripts/pb-ui.js`, `scripts/pb-motion.js` —
-registered in `pal.json`. Page shell `<head>` order is `spacing.css` → `design-system.css` (pal
-tweaks append to the marked `PAL OVERRIDES` block at the end of that same file, never a separate
-stylesheet), then `pb-ui.js` and `pb-motion.js` each loaded exactly once as
-`<script type="module" src="...">`. `spacing.css` replaces Bootstrap for spacing, grid, flex, and
-gap helpers; load Bootstrap only for an explicit legacy/platform need. Recolor via
-`data-preset="indigo|emerald|amber|rose|slate-dark"` on `<html>` (omit for the default `ink`) —
-never hand-author a palette. Motion is `pb-motion.js` data attributes only; no other animation
-library.
+registered in `pal.json`. New pals register `styles/styles.css` for component tweaks; do not
+retrofit existing pals. Head order: `spacing.css` → `design-system.css` → `styles.css` for new
+pals, then `pb-ui.js`/`pb-motion.js` once as `<script type="module" src="...">`. `spacing.css`
+replaces Bootstrap spacing/layout helpers; load Bootstrap only for legacy need. Use
+the shipped `data-preset` values on `<html>`; motion is `pb-motion.js` data attributes only.
 
 ---
 

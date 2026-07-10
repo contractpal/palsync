@@ -14,13 +14,15 @@ Read before acting:
   grouping, or review criteria.
 - `references/research-brief.md` when choosing foundations or explaining design tradeoffs.
 - `references/component-library.md` when defining the component inventory or writing Palbuilder
-  examples for app/console UI. HTML-only — no CSS left to write, every class and `data-*`
-  attribute already exists in the shipped `design-system.css` / `pb-ui.js` / `pb-motion.js`.
+  examples for app/console UI. Base styling ships in `design-system.css`; recipe classes and
+  `data-*` behavior exist in the shipped `design-system.css` / `pb-ui.js` / `pb-motion.js`, while
+  per-project tweaks belong in `styles/styles.css`.
 - `references/marketing-library.md` instead, when the pal (or a page of it) is marketing-oriented:
   hero, bento, pricing, testimonials, logo cloud, CTA band, stats/ticker, mockups, text/glow
   effects. Console-only pals should never need to load this file.
-- `references/spacing.css` and `references/design-system.css` — the two stylesheets copied
-  verbatim into every pal's `styles/`.
+- `references/spacing.css` and `references/design-system.css` — the two canonical stylesheets copied
+  verbatim into every new pal's `styles/`; `styles/styles.css` is the new pal's authored override
+  surface.
 - `references/vision-routing.md` whenever reference photos/screenshots or rendered output must be
   judged visually.
 
@@ -43,9 +45,10 @@ default aesthetic choice.
 
 Honor references *within* the platform's byte-identity contract, never against it:
 - Derive palette, type feel, density, radius, and composition **from the reference**, then express
-  every reference-driven deviation by picking the closest preset and appending `--ds-*` overrides to
-  the `PAL OVERRIDES` block of `design-system.css`. Never hand-edit the canonical files, and never
-  discard what the reference asks for just to sit on a default preset.
+  every reference-driven deviation with readable overrides in the new pal's `styles/styles.css`
+  (and with a preset or `--ds-*` token override in `PAL OVERRIDES` where that is sufficient).
+  Never hand-edit the canonical files, and never discard what the reference asks for just to sit on
+  a default preset.
 - Curate for coherence and accessibility (AA contrast, semantic roles), **not** to dilute the
   reference. Curation resolves a system out of the reference's intent; it never overrules the
   reference's mood, composition, or density with a generic default.
@@ -181,15 +184,18 @@ Define:
   Tailwind-like proportions, but the generated Palbuilder output must still be inline SVG.
 - Canonical files: copy four files verbatim into the pal — `references/spacing.css` and
   `references/design-system.css` → `styles/`, `references/pb-ui.js` and `references/pb-motion.js`
-  → `scripts/`. Register all four in `pal.json`. Link order in the page shell `<head>` is
-  `spacing.css` → `design-system.css`, then both scripts loaded exactly once as
+  → `scripts/`. Register all four in `pal.json`. For a NEW pal, create a fifth authored file
+  `styles/styles.css`, register it in `pal.json`, and link it after `design-system.css`; write it
+  human-readably with comments where useful and one rule per block. Do not add or migrate it in an
+  existing pal that lacks it. Link order in the page shell `<head>` is `spacing.css` →
+  `design-system.css` → `styles.css`, then both scripts loaded exactly once as
   `<script type="module" src="...">`. `spacing.css` is the Bootstrap replacement for
   spacing/layout utilities (container widths, `.row`/`.col-*`, flex/display helpers, gaps, margin,
   padding, width/height, visibility) — do not use Bootstrap for spacing.
 - Optional charts: for showcase or chart-heavy pals only, add the platform resource
   `<c:resource source="chartjs" version="4.0.0" name="chart.js" />` and load
   `scripts/pb-charts.js` from `references/pb-charts.js`. This is opt-in and not part of the core
-  four-file byte-identity set or the starters.
+  four-file byte-identity set.
 - Radius, border, shadow, elevation: fixed by `design-system.css` tokens (`--ds-radius-*`,
   `--ds-shadow-*`) — there is nothing to author. Override a token in the `PAL OVERRIDES` block
   only if a reference genuinely requires a different value.
@@ -208,9 +214,9 @@ Define:
 Use `references/component-library.md` as the canonical Palbuilder-ready library for app/console
 components, and `references/marketing-library.md` for marketing sections (hero, bento, pricing,
 testimonials, logo cloud, CTA band, stats/ticker, mockups, text effects) — load marketing-library
-only when the pal actually has marketing pages. Both are HTML-only: every class and `data-*`
-attribute is already implemented in the shipped `design-system.css`/`pb-ui.js`/`pb-motion.js`,
-there is no component CSS left to write. In `COMPONENTS.md`, name only the components this pal
+only when the pal actually has marketing pages. Base styling ships in `design-system.css`; per-project
+tweaks and reference-driven component overrides belong in readable `styles/styles.css`. In
+`COMPONENTS.md`, name only the components this pal
 needs now plus likely shared primitives. Every component must list variants, states, tokens, and
 the Palbuilder implementation pattern.
 
@@ -273,8 +279,9 @@ Radix/Headless-style accessible states, Polaris-style dense tables, Carbon-style
 [Families, loading method, scale, weights, numeric rules.]
 ### Spacing
 [Must state that `styles/spacing.css` is present, linked before `design-system.css`, and owns the
-spacing/layout utility scale. Note any project overrides to `--space-unit`, `--container-*`, or
-`--gutter-*`.]
+spacing/layout utility scale. State that new pals link authored `styles/styles.css` after
+`design-system.css` for component/reference overrides. Note any project overrides to `--space-unit`,
+`--container-*`, or `--gutter-*`.]
 ### Radius / Border / Shadow / Motion
 [Token sets are fixed by `design-system.css` — note the chosen preset and any `PAL OVERRIDES`
 deviations, plus which `pb-motion.js` data-attributes are used and where.]
@@ -294,8 +301,9 @@ progressive disclosure, target sizing, and intentional hierarchy mechanisms.]
 
 ## Stack Mapping
 [Palbuilder XHTML/CSS mapping: `styles/spacing.css` and `styles/design-system.css` copied verbatim
-from the bundled references and linked in that order, `scripts/pb-ui.js` and `scripts/pb-motion.js`
-each loaded once from the page shell as `<script type="module">`, chosen `data-preset` (or "ink,
+from the bundled references, new pals register and link authored `styles/styles.css` immediately
+after them, and `scripts/pb-ui.js` and `scripts/pb-motion.js` each load once from the page shell as
+`<script type="module">`, chosen `data-preset` (or "ink,
 no attribute"), fragment naming, c: tag patterns, which recipes from
 references/component-library.md (and references/marketing-library.md if the pal has marketing
 pages) to use, SVG icon family, and Fontshare/system font choice.]
@@ -348,9 +356,13 @@ reality. A correction means re-check references or source files before editing t
 
 - Every pal ships four files copied verbatim from this skill's `references/`: `styles/spacing.css`,
   `styles/design-system.css`, `scripts/pb-ui.js`, `scripts/pb-motion.js` — registered in `pal.json`.
-  Never hand-author a `theme.css` or a bespoke component stylesheet; the only per-pal CSS write is
-  appending to the `PAL OVERRIDES` block at the end of `design-system.css`.
-- Page shell `<head>` link/script order: `styles/spacing.css` → `styles/design-system.css`, then
+  Every NEW pal also authors and registers `styles/styles.css`, the sanctioned per-project
+  stylesheet for reference-driven component overrides and restyling. Keep it human-readable with
+  comments where appropriate and one rule per block. Existing pals without it are not retrofitted.
+  Keep `PAL OVERRIDES` working for token-only recolors; prefer `styles.css` for component-shaped
+  changes. Never hand-edit the four canonical files.
+- Page shell `<head>` link/script order: `styles/spacing.css` → `styles/design-system.css` →
+  `styles/styles.css` for new pals, then
   `scripts/pb-ui.js` and `scripts/pb-motion.js` each exactly once as
   `<script type="module" src="../Scripts/pb-ui.js"></script>` /
   `<script type="module" src="../Scripts/pb-motion.js"></script>`. Set `data-preset="..."` on
@@ -390,9 +402,10 @@ reality. A correction means re-check references or source files before editing t
       and Palbuilder stack mapping.
 - [ ] All four canonical files are present in the pal and registered in `pal.json`:
       `styles/spacing.css`, `styles/design-system.css`, `scripts/pb-ui.js`, `scripts/pb-motion.js`.
-- [ ] Page shell `<head>` link order is `spacing.css` → `design-system.css` (pal overrides live in
-      the marked block at the end of that same file, not a separate stylesheet); `pb-ui.js` and
-      `pb-motion.js` are each loaded exactly once as `<script type="module" src="...">`.
+- [ ] For a new pal, `styles/styles.css` is present, registered, human-readable, and linked after
+      `design-system.css`; it holds reference-driven component overrides. Existing pals are not
+      retrofitted. `pb-ui.js` and `pb-motion.js` are each loaded exactly once as
+      `<script type="module" src="...">`.
 - [ ] Chosen `data-preset` is set on `<html>` (omitted entirely for `ink`).
 - [ ] No leftover scripted-animation vendor file or `<script>` reference remains anywhere in the
       pal — motion is `pb-motion.js` data attributes only, nothing else.

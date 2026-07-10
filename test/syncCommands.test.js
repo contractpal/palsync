@@ -33,4 +33,48 @@ test("USAGE documents browser-open preview default and no-open escape hatch", ()
     assert.match(USAGE, /--open\|--no-open/);
     assert.match(USAGE, /browser by default/);
     assert.match(USAGE, /--no-open/);
+    assert.match(USAGE, /palsync open/);
+    assert.doesNotMatch(USAGE, /palsync scaffold/);
+});
+
+test("open runs the core preview and opens the web raw token without printing it", async () => {
+    const calls = { opened: [], released: [] };
+    const syncPath = require.resolve("../src/cli/syncCommands");
+    const stubs = new Map([
+        [require.resolve("../src/mcp/context"), { buildContext: async () => ({
+            session: { lockInfo: { held: true } },
+            record: { palGuid: "GUID-1", palName: "Demo", cloudUrl: "https://cloud.example" },
+            workspaceDir: "/tmp/demo"
+        }) }],
+        [require.resolve("../src/mcp/tools"), { TOOLS: [] }],
+        [require.resolve("../src/core/lock"), { releaseByGuid: async (session, guid) => { calls.released.push({ session, guid }); } }],
+        [require.resolve("../src/core/preview"), { runPreview: async () => ({
+            previewed: true, kind: "web", url: "https://webpals.example/raw-token"
+        }) }],
+        [require.resolve("../src/platform/openUrl"), { openUrl: async (url) => { calls.opened.push(url); return { opened: true }; } }]
+    ]);
+    const old = new Map();
+    for (const [file, value] of stubs) {
+        old.set(file, require.cache[file]);
+        require.cache[file] = { id: file, filename: file, loaded: true, exports: value };
+    }
+    delete require.cache[syncPath];
+    const originalLog = console.log;
+    const output = [];
+    console.log = (...args) => output.push(args.join(" "));
+    try {
+        const syncCommands = require("../src/cli/syncCommands");
+        assert.equal(await syncCommands.run("open", ["--dir", "/tmp/demo", "--workflow", "web"]), 0);
+    } finally {
+        console.log = originalLog;
+        delete require.cache[syncPath];
+        for (const [file, value] of old) {
+            if (value) require.cache[file] = value;
+            else delete require.cache[file];
+        }
+    }
+    assert.deepEqual(calls.opened, ["https://webpals.example/raw-token"]);
+    assert.equal(calls.released.length, 1);
+    assert.match(output.join("\n"), /Opened the web preview in your browser/);
+    assert.doesNotMatch(output.join("\n"), /raw-token/);
 });

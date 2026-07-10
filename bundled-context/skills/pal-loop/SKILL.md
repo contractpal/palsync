@@ -58,8 +58,9 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
    `references/delegation.md` first; required protocol.**)
 3. **Mark** `in_progress`: `palsync task <id> in_progress` — write state now, not later.
 4. **Execute exactly as specced:**
-   - Scaffold task (T1): apply the matching starter via `palsync scaffold` (offline CLI
-     helper) — never hand-generate scaffold files.
+   - Foundation task (T1): hand-build the page shell, copy the four canonical files verbatim,
+     author/register the new pal's readable `styles/styles.css`, and for console pals establish
+     the `run()` skeleton from `palbuilder-workflow/references/console.md`.
    - Copy: **§4**, verbatim — these exact words ship.
    - Layout: **§6** composition, styled via **design-build** (the spec carries no colors/fonts).
    - SEO head values: **§7** (web only).

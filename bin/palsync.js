@@ -22,7 +22,7 @@ if (argv.includes("--version") || argv.includes("-v")) {
 // Subcommands: `palsync push|pull|status` — headless sync that needs NO MCP server and NO agent
 // (the recovery path when a session ends before a push, and a plain terminal workflow). They
 // skip the launcher preflight entirely: no Claude/Codex required, just .palsync.json + keychain.
-const SUBCOMMANDS = ["push", "pull", "merge", "status", "test", "preview", "fetch", "screenshot", "validate", "sync-datasets", "seo-audit", "exercise", "scaffold", "cost", "regression", "spec-lint", "task", "checkpoint"];
+const SUBCOMMANDS = ["push", "pull", "merge", "status", "test", "preview", "open", "fetch", "screenshot", "validate", "sync-datasets", "seo-audit", "exercise", "cost", "regression", "spec-lint", "task", "checkpoint"];
 // Normalize underscores so `palsync sync_datasets` runs sync-datasets instead of falling through.
 // In the test-07 run that fall-through opened the interactive launcher inside an agent's shell,
 // which hung on a prompt — and the agent's `pkill -f palsync` to unstick it killed the session's
@@ -65,7 +65,7 @@ if (argv[0] === "help" || argv.includes("--help") || argv.includes("-h")) {
         "palsync — PalBuilder + AI agents\n\n" +
         "  palsync                 launch: login → pick pal → pull+lock → inject skills → open agent\n" +
         "  palsync setup --pal \"<name>\"   headless workspace creation (no prompts; for autonomous/agent boxes)\n" +
-        "  palsync push|pull|status|test|preview|validate|sync-datasets   headless ops for a workspace (no MCP/agent needed)\n" +
+        "  palsync push|pull|status|test|preview|open|validate|sync-datasets   headless ops for a workspace (no MCP/agent needed)\n" +
         "  palsync upgrade [--check]   self-update to the latest commit on the default branch\n" +
         "  palsync --agent codex|pi|opencode   use Codex, Pi, or OpenCode instead of Claude Code (default: claude)\n" +
         "  palsync --eval [spec]   benchmark-harness mode: pick a spec, force create-pal, inject SPEC.md\n" +

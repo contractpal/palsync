@@ -144,7 +144,7 @@ palsync test     # server-side workflow validation (no browser; add --preview fo
 palsync seo-audit # on-page SEO audit of a WEB pal's rendered page
 palsync preview  # render the pal (web: prints HTML; console: opens in an interactive terminal)
 palsync sync-datasets  # provision dataset tables from pal.json (safe by default)
-palsync scaffold --template <name>  # apply a starter template (offline; --list shows them)
+palsync open      # open the rendered pal in a real browser for human review
 palsync cost     # palsync's own context contribution (offline) — see below
 ```
 
@@ -223,25 +223,13 @@ execution / reality-check material under `pal-spec/references/`, vision routing 
 `design-system-init/references/` (there is no separate `shared/` skill dir — a skill dir must carry
 a `SKILL.md` to be injected).
 
-## Template starters
+## New-pal foundation
 
-Start a new pal from a correct, designed, SEO-sound skeleton instead of a blank page:
-
-```sh
-palsync scaffold --list                              # see the available templates
-palsync setup --pal "My New Pal" --template web-marketing
-palsync scaffold --template console-app --dir <ws>   # or apply to an existing workspace
-```
-
-- **`web-marketing`** (web pal) — SEO-complete page shell (the audited head recipe), navbar/hero/
-  footer fragments, Editorial Warmth design tokens, scroll-reveal, `web.js` routing skeleton.
-- **`console-app`** (console pal) — console shell (`cp-root` + navbar + swappable `${frag}` slot),
-  dashboard fragment with stat cards and a designed empty state, `run()` workflow skeleton.
-
-Starters never overwrite existing files, substitute the pal's name into the placeholders, and pass
-`palsync validate` with zero findings out of the box. **Workflows** are created like any other file —
-the starter ships a `run()` skeleton with the right `workflowType` (derived from the pal type), and
-push provisions it.
+New pals are built from the injected skills rather than copied from a whole-project template. The
+first foundation task creates the page shell, copies the four canonical design-system files
+verbatim, authors and registers a readable `styles/styles.css`, and establishes the documented
+workflow skeleton (including the console `run()` pattern). Existing pals are not retrofitted with
+`styles.css`.
 
 ### Choosing an agent
 

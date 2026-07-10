@@ -1,10 +1,10 @@
 # Palbuilder Component Library
 
-HTML-only reference for `styles/design-system.css` (canonical, shipped verbatim from
-`design-system-init/references/design-system.css`) plus its behavior layer `scripts/pb-ui.js`
-and motion layer `scripts/pb-motion.js`. Every class and `data-*` attribute below is copied
-directly from those three shipped files — nothing here is invented. Write markup and data
-attributes only; there is no CSS left to author for these components.
+HTML recipe reference for the base styling in `styles/design-system.css` (canonical, shipped
+verbatim from `design-system-init/references/design-system.css`) plus its behavior layer
+`scripts/pb-ui.js` and motion layer `scripts/pb-motion.js`. Every class and `data-*` attribute below
+is copied directly from those three shipped files — nothing here is invented. Per-project tweaks
+and reference-driven component overrides belong in the authored `styles/styles.css` of a new pal.
 
 Marketing sections (hero, bento, pricing, testimonials, logo cloud, CTA band, stats/ticker,
 mockups, text/glow/spotlight effects) live in `marketing-library.md`, not here. Console/app
@@ -17,15 +17,16 @@ write boolean attributes as `attr="attr"` (`checked="checked"`, `hidden="hidden"
 `confirm=` on destructive actions, no `<script>` in fragments, no `fetch`/ClientPal).
 
 **Never hand-edit `design-system.css`.** Sections 1-8 of that file are re-synced verbatim from
-this skill on every design pass; any pal-specific tweak goes in the `PAL OVERRIDES` block marked
-at the very end of the file, appended below the marker comment.
+this skill on every design pass; token-only recolors may use the `PAL OVERRIDES` block, while
+component-shaped/reference-driven tweaks in a new pal belong in readable `styles/styles.css`.
 
 ## Load Order
 
-Every page shell links the same four core files, in this order, once:
+Every new-pal page shell links the canonical files plus its authored stylesheet, in this order, once:
 ```html
 <link rel="STYLESHEET" type="text/css" href="../Styles/spacing.css" />
 <link rel="STYLESHEET" type="text/css" href="../Styles/design-system.css" />
+<link rel="STYLESHEET" type="text/css" href="../Styles/styles.css" />
 <script type="module" src="../Scripts/pb-ui.js"></script>
 <script type="module" src="../Scripts/pb-motion.js"></script>
 ```
@@ -45,7 +46,7 @@ tokens (omit for the default ink theme); `data-theme="dark"` on `<html>` switche
 Every console page shell wraps its fragments in the main container. Fragments NEVER include
 `.pb-main` themselves. The shell owns it.
 
-Navbar-only shell (matches the console-app starter):
+Navbar-only shell:
 ```html
 <body>
     <div id="cp-root">
@@ -96,7 +97,8 @@ the fields in `.pb-stack` (single column) or `.pb-form-grid` (two column):
 ```
 
 Empty states use `.pb-state`; notices use `.pb-alert`. Never use a bare styled `<p>`.
-Custom CSS (PAL OVERRIDES only) uses `--ds-space-*` tokens. Utility classes (`.p-*`, `.gap-*`,
+Token-only custom CSS in `PAL OVERRIDES` uses `--ds-space-*` tokens; component-shaped custom CSS
+belongs in readable `styles/styles.css`. Utility classes (`.p-*`, `.gap-*`,
 `.mt-*`) come from spacing.css and follow its own `--s*` scale. They are fine in markup. Never
 mix raw px values or the two scales in one rule.
 `.pb-form-card` bounds an operational form to 720px. Labels stay above controls.
@@ -440,7 +442,7 @@ JS: needs pb-ui.js (already loaded) — `data-pb-modal-open="id"` calls `showMod
 
 ## 21. Charts
 
-Chart.js is opt-in for chart-heavy pals and the showcase only; it is not part of the starter four
+Chart.js is opt-in for chart-heavy pals and the showcase only; it is not part of the canonical four
 files. Load the platform-hosted resource in the page shell, then the adapter:
 ```html
 <c:resource source="chartjs" version="4.0.0" name="chart.js" />
@@ -989,8 +991,8 @@ page's scroll percentage on scroll/resize; no other markup needed.
 - Breakpoints: 1024px sidebar may narrow; 760px shell stacks and toolbars wrap; 640px tables
   collapse to `data-label` cards; coarse pointers get 44px-tall targets (already baked into the
   shipped CSS via `@media (pointer: coarse)`).
-- Values come from `--ds-*` tokens; there is no per-pal CSS to write except the `PAL OVERRIDES`
-  block at the end of `design-system.css`.
+- Values come from `--ds-*` tokens; new pals may author reference-driven component tweaks in
+  human-readable `styles/styles.css`, while token-only recolors may remain in `PAL OVERRIDES`.
 - Every interactive component keeps hover/focus-visible/active/disabled states — they come free
   with the class, don't override them.
 - Data surfaces define loading, empty, and error states (section 16).

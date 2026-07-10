@@ -53,8 +53,7 @@ place console workflows fail:
   AJAX`. Branch on `request.isAjax()`.
 - **Carry the fragment to render in the `frag` variable** and let the tail pick page vs ajax.
 
-The canonical skeleton (identical to the `console-app` scaffold starter — prefer `palsync
-scaffold console-app` over hand-writing this):
+The canonical skeleton for a hand-built console workflow is:
 
 ```js
 var c, page, payload, request, frag;

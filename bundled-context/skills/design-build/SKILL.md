@@ -46,7 +46,7 @@ Hard gates — any failure means the visible task is not done:
 ## Step 0 — Load the system
 
 - Read `DESIGN_SYSTEM.md` and `COMPONENTS.md`. If absent and the task is non-trivial, recommend `design-system-init` first — building without a system drifts to generic output. If the user proceeds anyway, infer a minimal system from existing code and state your assumptions.
-- Look at `design/refs/` if present. Read the images, not just tokens — they encode composition and restraint tokens can't. **When references exist they are the primary design authority — the inspiration above all else.** Build toward how they look and feel; where a reference and a default choice disagree, the reference wins. Honor it within the byte-identity contract below: reference-driven palette/density/radius deviations go through a preset plus `PAL OVERRIDES` tokens, never by hand-editing a canonical file or flattening the reference back to a default.
+- Look at `design/refs/` if present. Read the images, not just tokens — they encode composition and restraint tokens can't. **When references exist they are the primary design authority — the inspiration above all else.** Build toward how they look and feel; where a reference and a default choice disagree, the reference wins. Honor it within the byte-identity contract below: reference-driven appearance deviations go through readable `styles/styles.css` overrides, with a preset plus `PAL OVERRIDES` tokens where sufficient, never by hand-editing a canonical file or flattening the reference back to a default.
 - **Verify the four canonical files are byte-identical to this skill's references** (an append-only
   `PAL OVERRIDES` block at the end of `design-system.css` is the one allowed exception):
   `styles/spacing.css`, `styles/design-system.css` against
@@ -55,8 +55,8 @@ Hard gates — any failure means the visible task is not done:
   outside the overrides block means the file was hand-edited — restore it from the reference and
   move the intended change into `PAL OVERRIDES` instead.
 - Verify page shell `<head>` link/script order matches design-system-init's checklist:
-  `styles/spacing.css` → `styles/design-system.css` (pal overrides append to that same file, never
-  a separate stylesheet), then `scripts/pb-ui.js` and `scripts/pb-motion.js` each loaded exactly
+  `styles/spacing.css` → `styles/design-system.css` → `styles/styles.css` for new pals, then
+  `scripts/pb-ui.js` and `scripts/pb-motion.js` each loaded exactly
   once as `<script type="module" src="...">`. `spacing.css` is the required Bootstrap replacement
   for spacing/layout utilities; do not add Bootstrap only to get `.container`, `.row`, `.col-*`,
   margin, padding, gap, or flex helpers.
@@ -87,6 +87,10 @@ Plan structure first — one giant file is the top driver of AI-looking, unmaint
 ## Step 2 — Build to the tokens
 
 - Consume semantic tokens; never use arbitrary raw values (hex codes, off-scale spacing, one-off font sizes) when a token exists.
+- Pull the component recipe you need from the appropriate library. When a reference requires a
+  different component look, override it in the new pal's `styles/styles.css` using human-readable
+  blocks, comments where useful, and one rule per block; do not edit canonical files. Existing pals
+  without `styles.css` are not migrated.
 - If the design needs a value the system lacks, add it as a named token, don't hardcode inline — the system stays the source of truth.
 - Get hierarchy from the system's stated mechanism — often spacing and size before weight, weight before color. A new accent color for emphasis usually means the spacing is wrong.
 - Honor the stated density and layout posture. If the system says airy, generous whitespace is the design; if it says break the grid, do so deliberately — uniform even spacing reads as templated.
@@ -171,10 +175,12 @@ Apply the same vocabulary to yourself at the review gate.
       `scripts/pb-ui.js`, `scripts/pb-motion.js`) present, registered in `pal.json`, and
       byte-identical to design-system-init's references outside the `PAL OVERRIDES` block.
 - [ ] Page shell `<head>` link/script order matches design-system-init's checklist: `spacing.css` →
-      `design-system.css`, then both scripts loaded exactly once as `<script type="module">`; used
-      for generic spacing/layout instead of Bootstrap.
+      `design-system.css` → `styles.css` for new pals, then both scripts loaded exactly once as
+      `<script type="module">`; used for generic spacing/layout instead of Bootstrap. New pals have
+      `styles.css` present, registered, and human-readable; existing pals are not retrofitted.
 - [ ] Shell owns `<main id="body" class="pb-main">`; every fragment root is `pb-section`; multi-field forms wrap fields in `pb-stack` or `pb-form-grid`.
-- [ ] No undefined classes: every `class=` value in pages/fragments resolves to design-system.css, spacing.css, or COMPONENTS.md-recorded local styles.
+- [ ] No undefined classes: every `class=` value in pages/fragments resolves to design-system.css,
+      spacing.css, styles.css, or COMPONENTS.md-recorded local styles.
 - [ ] Every multi-action table cell uses `.pb-row-actions`; only actions valid for the row's current
       state render, and desktop/mobile captures show wrapping without collision or overflow.
 - [ ] Applied design-principles review: user journey, hierarchy, grouping, Fitts target sizing,
