@@ -1,6 +1,6 @@
 ---
 name: palbuilder-workflow
-description: Use this skill whenever writing server-side workflow JavaScript for a CloudPiston pal — any workflowType. Covers the run() function pattern, the reserved global variables (c, pal, page, ajax, payload, request, data, action, formatter, validator, cm, dateUtil, resp), action switch routing, the @include mechanism for library composition, response types (page, ajax, download, redirect, exitToWeb), the three-layer architecture (presentation/service/data), debug helpers (c.debug/debugData/debugList), workflow utilities (DateUtil for dates, EncryptionUtil for crypto/hashing/encoding, Monitor for timing and timeouts), and workflow-type-specific patterns (console, web, transaction packets, background jobs, webservices, tunnel, libraries). Trigger when writing any workflow .js file, adding an action handler, constructing a response, calling into a library, calling c.getEncryptionUtil / c.getMonitor / c.getDateUtil, or delegating to another workflow via switchToWorkflow.
+description: Use this skill whenever writing server-side workflow JavaScript for a CloudPiston pal — any workflowType. Covers the run() function pattern, the reserved global variables (c, pal, page, ajax, payload, request, data, action, formatter, validator, cm, dateUtil, resp), action switch routing, the @include mechanism for library composition, response types (page, ajax, download, redirect, exitToWeb), the three-layer architecture (presentation/service/data), c.debug vs. the persistent Logger (c.getLogger, Notification-backed levels), workflow utilities (DateUtil, EncryptionUtil, Monitor), and workflow-type-specific patterns (console, web, transaction packets, background jobs, webservices, tunnel, libraries). Trigger when writing any workflow .js file, adding an action handler, constructing a response, calling into a library, calling c.getEncryptionUtil / c.getMonitor / c.getDateUtil / c.getLogger, or delegating to another workflow via switchToWorkflow.
 ---
 
 # CloudPiston Pal — Workflow Layer
@@ -30,6 +30,9 @@ workflow-JS workarounds (no object literals, no `.forEach`, etc.) that apply thr
 **Cross-workflow utilities:**
 - **`references/utilities.md`** — DateUtil (dates/times), EncryptionUtil (crypto, hashing,
   encoding), Monitor (timing, timeouts). Available in every workflow type.
+- **`references/logging.md`** — `c.debug`/`debugData`/`debugList` (runtime-only, remove
+  before shipping) vs. `Logger` (`c.getLogger()` — persistent, Notification-backed, safe to
+  leave in production). Read this when deciding which to use, not just how to call one.
 
 **Per workflow type — read the matching reference for the workflow you're writing:**
 - **`references/console.md`** — `workflowType: 7`. Authenticated user, in-platform console UI.
@@ -142,24 +145,6 @@ repurpose them.
 
 **Declare only the globals you actually use.** A workflow that never returns ajax doesn't
 need `ajax`; a workflow that never touches cache doesn't need `cm`.
-
-### Reading request input
-
-`data.get("name")` (equivalently `request.get("name")`) returns a **single** value for a
-request parameter — form field, querystring param, etc. That's the shape you want almost
-always, including for a single checkbox or radio group.
-
-When the client sends **multiple inputs sharing the same `name`** — a group of checkboxes
-the user can multi-select, a multi-select list — `get()` only gives you one of them. Use
-`request.getParameterValues("name")` instead; it returns **all** submitted values for that
-name as an array:
-
-```js
-var selectedTags = request.getParameterValues("tag");   // array, even if only one was checked
-```
-
-If the field is single-valued, stick with `data.get()`/`request.get()` — reach for
-`getParameterValues` only when the name is genuinely repeated on the client.
 
 ---
 
@@ -284,17 +269,13 @@ they bypass the common tail. See `references/responses.md` for details.
 
 ---
 
-## Debug helpers
+## Debugging and logging
 
-Available during development; **remove before finishing** (CLAUDE.md anti-patterns):
-
-- `c.debug(obj)` — accepts a `String`, `Data`, `DataList`, or `Payload`. **Prefer this** over
-  the more explicit variants.
-- `c.debugData(data)` — dumps a `Data` object (single-argument, no label).
-- `c.debugList(dataList)` — dumps a `DataList` (single-argument, no label).
-
-Use these to inspect what a query or handler produced instead of guessing. Every debug call
-must be removed before the workflow ships — CLAUDE.md's checklist enforces this.
+Two distinct facilities, not interchangeable: `c.debug`/`debugData`/`debugList` are
+runtime-only and must be removed before shipping (CLAUDE.md anti-patterns); `Logger`
+(`c.getLogger()`) is persistent, viewable later in Pal Manager, and fine to leave in
+production. Full comparison, setup requirements (Logger needs a Notification configured in
+Pal Manager), log levels, and storage/limits: `references/logging.md`.
 
 ---
 
