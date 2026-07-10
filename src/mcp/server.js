@@ -46,8 +46,11 @@ function createServer(getCtx, workspaceDir) {
                     const content = (res && Array.isArray(res.content))
                         ? res.content
                         : [{ type: "text", text: res.message || JSON.stringify(res, null, 2) }];
-                    // T3: meter palsync's own context contribution (bytes returned to the agent).
-                    if (ctx && ctx.workspaceDir) usage.recordToolCall(ctx.workspaceDir, t.name, usage.contentBytes(content));
+                    // T3: meter palsync's own context contribution (bytes + est. tokens returned to the agent).
+                    if (ctx && ctx.workspaceDir) {
+                        const stats = usage.contentStats(content);
+                        usage.recordToolCall(ctx.workspaceDir, t.name, stats.bytes, stats.tokens);
+                    }
                     if (res && Array.isArray(res.content)) return { content, isError: res.isError };
                     return { content };
                 } catch (err) {

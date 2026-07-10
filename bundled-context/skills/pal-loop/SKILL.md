@@ -71,38 +71,43 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
 5. **Verify** against the success condition with tool outputs, not opinion. Offline first, so
    a bad result never reaches the server. **Batch every edit for the task first, then verify
    once — target ONE `pal_push` per task, never push per-file:**
-   1. `pal_validate` → 0 errors. Fix warnings too, or checkpoint why each warning is safe for
-      this task before marking it `done`; warnings are allowed to push but never silently ignored.
-      Never run it twice without an edit in between — same input, same output; `pal_push`
-      re-runs this validation itself as its gate.
-   2. `pal_push` (push policy `checkpoint` → ask the user first).
-   3. `pal_test` → workflow VALIDATED, 0 notes — the real server compile (console AND web).
+   1. `pal_push` directly (push policy `checkpoint` → ask the user first). Push runs the FULL
+      offline validation as its gate and refuses — with the same lint output — before anything
+      reaches the server, so a standalone `pal_validate` right before a push is a wasted turn:
+      never do it. Push must show 0 errors. Fix warnings too, or checkpoint why each warning is
+      safe for this task before marking it `done`; warnings are allowed to push but never
+      silently ignored. Standalone `pal_validate` is for diagnosis between edits only, and
+      never twice without an edit in between — same input, same output.
+   2. `pal_test` → workflow VALIDATED, 0 notes — the real server compile (console AND web).
       Always run after a workflow change. Read `messages` too (whole-test failures like
       "Pal is not a Web Pal" live there).
-   4. WEB page: `pal_fetch` or `pal_preview` with `expect:[the exact strings the success
+   3. WEB page: `pal_fetch` or `pal_preview` with `expect:[the exact strings the success
       condition names]` → all found. (This returns per-string found/missing, not the HTML —
       use `selector`/`maxChars` only when you truly need markup.) Then `pal_seo_audit` → 0
       errors (public pages).
-   5. CONSOLE screen: `pal_test` proves it compiles; the RENDER needs `pal_screenshot`:
+   4. CONSOLE screen: `pal_test` proves it compiles; the RENDER needs `pal_screenshot`:
       - `captured:true` + `renderError` non-null → hard FAIL. The workflow compiled but threw
         while rendering. Fix, push, screenshot again — `pal_test` passing does NOT clear it.
       - `captured:true` + `renderError` null → judge the image against §12 VISUAL → `done`.
       - `captured:false` → do NOT guess from HTML: set `needs-human` with a Blockers entry
         prefixed `HUMAN GATE:` naming exactly what to eyeball. Continue with independent
         tasks. (Full rule: `../pal-review/references/console-render-verification.md`.)
-   6. ANY write action (create/edit/delete): `pal_exercise` — trigger the action and assert the
-      result in the rendered output. Web: `steps:[{action, params, expect}]`. Console:
+   5. ANY write action (create/edit/delete): `pal_exercise` — trigger the action and assert the
+      result in the rendered output. **Batch the whole flow into ONE call's `steps` array**
+      (e.g. add → edit → delete is one exercise with expects per step), not one call per
+      action — each extra call is a full context-window round trip. Web:
+      `steps:[{action, params, expect}]`. Console:
       `steps:[{fill:{name:value}, click:"<exact link text>", expect:[...]}]`. After an EDIT, put
       the new value in `expect` AND the old value in `absent` — a surviving old value means the
       edit inserted a duplicate. After a DELETE, put the deleted record's name/value in `absent`
       — never assert empty-state copy or list ordering (other rows may exist; lists sort
       alphabetically, so a shorter list is not proof of the right row leaving). This is the
       read-back check; a failing step is a task failure.
-   7. `pal_sync_datasets` after pushing a **§8a** definition (never §8b).
+   6. `pal_sync_datasets` after pushing a **§8a** definition (never §8b).
    - `pal_preview`/`pal_fetch`/`pal_exercise`/`pal_seo_audit`/`pal_test` all act on the LAST
      PUSHED version — push before verifying.
-6. **On pass:** first confirm there are no unhandled `pal_validate` warnings (fixed, or each
-   one checkpointed with a concrete reason it is safe). Then `palsync task <id> done`; `palsync checkpoint "<date>, <task id>,
+6. **On pass:** first confirm there are no unhandled validation warnings from the push output
+   (fixed, or each one checkpointed with a concrete reason it is safe). Then `palsync task <id> done`; `palsync checkpoint "<date>, <task id>,
    <tool-output summary>"`; `git add -A && git commit -m "<task id>: <task name>"`; continue.
 7. **On fail:** fix and re-verify, up to TWO attempts. Still failing → `palsync task <id>
    blocked` with a Blockers entry naming what failed (exact tool output), what you tried, and

@@ -34,7 +34,8 @@ When in doubt it's not a fix — escalate.
 3. **Minimal diff, under pal-restraint.** Reuse before building, platform before library,
    touch only the lines this fix needs. Don't "improve" adjacent code.
 4. **Verify** — the step-1 reproduction must now pass:
-   - `pal_validate` → 0 errors; `pal_push`.
+   - `pal_push` → 0 errors (push runs the full offline validation as its gate — no separate
+     `pal_validate` first).
    - `pal_test` → VALIDATED, 0 notes, if a workflow changed.
    - Web fix: `pal_fetch`/`pal_preview` shows the corrected string/render.
    - Console render fix: `pal_screenshot` — `captured:true` with `renderError` null = fixed;
@@ -51,7 +52,7 @@ When in doubt it's not a fix — escalate.
 
 ## Inherited rules
 - **pal-fix is not gate-light** — it skips the full SPEC.md ceremony, not the proof ladder.
-  Use the same gates as pal-loop for the touched behavior: `pal_validate` → `pal_push` →
+  Use the same gates as pal-loop for the touched behavior: `pal_push` (validates as its gate) →
   `pal_test` when workflow code changed → render proof (`pal_fetch`/`pal_preview` or
   `pal_screenshot`) → `pal_exercise` for actions/writes → `pal_regression` or the fallback
   touched-page regression check.

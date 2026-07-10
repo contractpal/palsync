@@ -56,6 +56,13 @@ function nowIso() { return new Date().toISOString(); }
 // not just a skill doc read once at the start of a long session.
 function renderNotVerifiedReminder(ctx) {
     if (ctx.renderVerified === true || ctx.renderVerified === "unavailable") return "";
+    // Full paragraph once per session; every repeat rides the context window for the rest of
+    // the conversation, so later occurrences use the short form (same rule, fewer bytes).
+    if (ctx.renderReminderShown) {
+        return "\n\n⚠ RENDER NOT VERIFIED — pal_screenshot (or pal_fetch/pal_preview expect:[strings]" +
+            " for WEB) before declaring done; never report unobserved page content or flows as fact.";
+    }
+    ctx.renderReminderShown = true;
     return "\n\n⚠ RENDER NOT VERIFIED — this only proves the code compiles, not that it renders." +
         " Call pal_screenshot (web or console/transaction) — or for a WEB pal, pal_fetch/pal_preview with" +
         " expect:[strings] — before declaring this done. Do not report page content, saved data, or a" +

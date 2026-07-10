@@ -10,23 +10,39 @@ const { tmpWorkspace } = require("./helpers");
 
 test("recordToolCall batches calls and flushes the legacy usage file shape", () => {
     const ws = tmpWorkspace();
-    usage.recordToolCall(ws, "pal_status", 7);
-    usage.recordToolCall(ws, "pal_status", 5);
-    usage.recordToolCall(ws, "pal_validate", 11);
+    usage.recordToolCall(ws, "pal_status", 7, 2);
+    usage.recordToolCall(ws, "pal_status", 5, 2);
+    usage.recordToolCall(ws, "pal_validate", 11, 3);
 
     assert.equal(fs.existsSync(`${ws}/${usage.USAGE_FILE}`), false);
     usage.formatCost(ws, []);
 
     const tally = JSON.parse(fs.readFileSync(`${ws}/${usage.USAGE_FILE}`, "utf8"));
-    assert.deepEqual(Object.keys(tally).sort(), ["pid", "startedAt", "tools", "totalBytes", "totalCalls", "updatedAt"]);
+    assert.deepEqual(Object.keys(tally).sort(), ["pid", "startedAt", "tools", "totalBytes", "totalCalls", "totalTokens", "updatedAt"]);
     assert.equal(tally.pid, process.pid);
     assert.equal(tally.totalCalls, 3);
     assert.equal(tally.totalBytes, 23);
+    assert.equal(tally.totalTokens, 7);
     assert.deepEqual(tally.tools, {
-        pal_status: { calls: 2, bytes: 12 },
-        pal_validate: { calls: 1, bytes: 11 },
+        pal_status: { calls: 2, bytes: 12, tokens: 4 },
+        pal_validate: { calls: 1, bytes: 11, tokens: 3 },
     });
     fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("contentStats: text ≈ bytes/4, images priced by pixel area not payload bytes", () => {
+    const text = "x".repeat(400);
+    // Minimal PNG header claiming 800x500 (IHDR width/height only — enough for the parser)
+    const png = Buffer.alloc(33);
+    png.writeUInt32BE(0x89504e47, 0); png.writeUInt32BE(0x0d0a1a0a, 4);
+    png.writeUInt32BE(13, 8); png.write("IHDR", 12);
+    png.writeUInt32BE(800, 16); png.writeUInt32BE(500, 20);
+    const stats = usage.contentStats([
+        { type: "text", text },
+        { type: "image", data: png.toString("base64"), mimeType: "image/png" },
+    ]);
+    assert.equal(stats.tokens, 100 + Math.ceil((800 * 500) / 750)); // 100 text + 534 image
+    assert.ok(stats.bytes > 400);
 });
 
 test("injectedContext stays under the soft threshold for a real workspace", () => {
