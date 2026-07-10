@@ -6,6 +6,8 @@ fallback.
 
 Companion:
 - `responses.md` — the ignore ajax fallback lives at the response layer
+- `logging.md` — `c.debug` (remove before shipping) vs. `Logger` (safe to leave in
+  production) — relevant to the catch-block logging pattern below
 
 ---
 
@@ -58,7 +60,10 @@ function fetchWeather() {
   gets the full trace.
 - **Don't expose internal error text to users** — surface a user-safe message via
   `payload.set("error", ...)` and log the actual exception.
-- **Remove `c.debug` before finishing.** CLAUDE.md's checklist enforces this.
+- **Remove `c.debug` before finishing.** CLAUDE.md's checklist enforces this. If the error
+  needs to stay visible after the fact (not just while actively debugging), use
+  `c.getLogger().error(e, "context message")` instead — Logger calls are safe to leave in
+  production and persist to Pal Manager. See `logging.md`.
 
 ---
 
