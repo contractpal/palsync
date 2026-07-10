@@ -37,7 +37,11 @@ teaches the data-specific patterns.
   blog posts or reports that's rendered once and served to many requests.
 - **`references/session.md`** — Request-based session values, session data, cookies, and
   when to pair session with cache for large or long-lived per-user state.
-- **`references/files.md`** — Attachments, images, and pal-level file storage.
+- **`references/files.md`** — The File/Upload API (readFile, toData, toImage, toPdf, etc.),
+  attaching a file to a payload via `toData()` + `addDataMap`, rendering by extension,
+  `<c:upload>` for accepting files, file/CDN storage (file column types, storage providers),
+  pal-bundled attachments/images (`pal.getAttachment()`, `pal.getImage()`), and storing small
+  images as base64 directly in a text column.
 - **`references/http-client.md`** — ServiceRequest, JSONParser, JSONBuffer, Buffer for
   server-side HTTP and JSON; `pal.getSettings()` for API keys and secrets.
 
