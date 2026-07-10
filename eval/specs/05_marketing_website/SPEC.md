@@ -131,7 +131,7 @@ Omit — no datasets, dataviews, data bundles, or datalists.
 - Pages (page-shell): web.html.
 - Fragments (c:ignore): home, services, about, contact, nav, footer.
 - c: tags used: c:a, c:fragment, c:if, c:set, c:resource, c:debug.
-- c:resource libs: bootstrap 5.3.5.
+- c:resource libs: none — shipped pb-* styles/scripts only, no external CSS framework.
 - Workflows: web.js — workflowType 9 web — hub: no.
 - Data: none.
 - Jobs: none.

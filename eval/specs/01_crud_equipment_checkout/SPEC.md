@@ -134,7 +134,7 @@ None.
 - Pages (page-shell): console.html.
 - Fragments (c:ignore): equipmentList, equipmentForm, checkoutForm.
 - c: tags used: c:a, c:list, c:fragment, c:if, c:field, c:resource, c:debug.
-- c:resource libs: bootstrap 5.3.5.
+- c:resource libs: none — shipped pb-* styles/scripts only, no external CSS framework.
 - Workflows: console.js — workflowType 7 console — hub: no.
 - Data: DataSet created: equipment. DataView none. Static DataList none. Data none.
 - Jobs: none.

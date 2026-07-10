@@ -150,7 +150,7 @@ None.
 - Pages (page-shell): console.html, tx.html.
 - Fragments (c:ignore): requestList, requestForm, requestDetail.
 - c: tags used: c:a, c:list, c:fragment, c:if, c:field, c:resource, c:debug.
-- c:resource libs: bootstrap 5.3.5.
+- c:resource libs: none — shipped pb-* styles/scripts only, no external CSS framework.
 - Workflows: console.js — workflowType 7 console; tx.js — workflowType 2 transaction — hub: no.
 - Data: DataSet created: serviceRequests.
 - Jobs: none.

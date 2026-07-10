@@ -133,7 +133,7 @@ None. The provider fixture is a separate pal API, not a dataset in this workspac
 - Pages (page-shell): console.html.
 - Fragments (c:ignore): bridgeDashboard.
 - c: tags used: c:a, c:list, c:fragment, c:if, c:resource, c:debug.
-- c:resource libs: bootstrap 5.3.5.
+- c:resource libs: none — shipped pb-* styles/scripts only, no external CSS framework.
 - Workflows: console.js — workflowType 7 console; tunnel.js — workflowType 15 tunnel;
   bridgeService.js — workflowType 12 console webservice — hub: no.
 - Data: DataSet created: partnerCatalog. Settings/cache/data may hold lastSyncAt, tunnelSync,
