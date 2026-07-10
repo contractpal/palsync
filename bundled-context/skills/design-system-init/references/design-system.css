@@ -227,6 +227,7 @@ code { font-family: var(--ds-font-mono); font-size: 0.875em; background: var(--d
 
 /* 7-9. Page header, nav, tabs */
 .pb-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--ds-space-6); margin-bottom: var(--ds-space-8); }
+.pb-section > .pb-page-head, .pb-stack > .pb-page-head { margin-bottom: 0; }
 .pb-title { margin: 0; font: 750 2rem/1.08 var(--ds-font-display); }
 .pb-subtitle { margin: var(--ds-space-2) 0 0; color: var(--ds-text-muted); font-size: 0.9375rem; max-width: 62ch; }
 .pb-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--ds-space-4); padding: var(--ds-space-3); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); background: var(--ds-surface); }
