@@ -61,11 +61,6 @@ Renders as an `<a>` element that fires a server action or navigates.
 - **`onclick`** (CLAUDE.md rule 5) — use `<button onclick="fn()">` or
   `<a href="#" onclick="fn(); return false;">` for JS-only behavior
 
-**Navigation caveat:** `c:a` navigation does not reliably update `window.location`. Browser
-JS that needs current query/filter state after a `c:a` click must receive that state from
-server-rendered values instead of reading `window.location.search`. See
-`platform-facts.md`.
-
 **`test` is a universal attribute** — it conditionally renders any element, not just `c:`
 tags: `<div test="${status eq 'draft'}">...</div>` works.
 
@@ -87,6 +82,56 @@ Loads a versioned platform-hosted CSS/JS library into `<head>` by `source` + `ve
 
 **For project-local CSS/JS**, use plain `<link>` and `<script>` (with `../Styles/` and
 `../Scripts/` relative paths) — `c:resource` is only for platform-hosted libraries.
+
+### Bundled resources — available `source` / `version` / `name` combinations
+
+The platform bundles a fixed set of third-party libraries. `bootstrap` is by far the most
+common; `chartjs`, `d3`, `tinymce`, `bootstrap-icons`, and `font-awesome` cover most other
+needs. Pick a `version` deliberately — multiple major versions of the same library are
+available side by side, and mixing versions across a pal (e.g. Bootstrap 3 markup loaded
+against Bootstrap 5 JS) breaks styling and behavior.
+
+**Script resources:**
+
+| `source` | `version` | `name` |
+|---|---|---|
+| `bootstrap` | `5.3.5` | `bootstrap-bundle-min.js` |
+| `bootstrap` | `5.3.5` | `bootstrap-min.js` |
+| `bootstrap` | `4.5.3` | `bootstrap-bundle-min.js` |
+| `bootstrap` | `4.5.3` | `bootstrap-min.js` |
+| `bootstrap` | `3.3.7` | `bootstrap-min.js` |
+| `chartjs` | `4.0.0` | `chart.js` |
+| `chartjs` | `2.8.0` | `chart.js` |
+| `d3` | `7.8.5` | `d3_min.js` |
+| `d3` | `5.9.7` | `d3_min.js` |
+| `d3` | `4.2.2` | `d3_min.js` |
+| `d3` | `3.5.5` | `d3_min.js` |
+| `d3` | `3.0.0` | `d3_min.js` |
+| `tinymce` | `5.8.2` | `tinymce.min.js` |
+| `tinymce` | `4.9.11` | `tinymce.min.js` |
+| `tinymce` | `3.4.7` | `tiny_mce.js` |
+
+**Stylesheet resources:**
+
+| `source` | `version` | `name` |
+|---|---|---|
+| `bootstrap` | `5.3.5` | `bootstrap-min.css` |
+| `bootstrap` | `4.5.3` | `bootstrap-min.css` |
+| `bootstrap` | `3.3.7` | `bootstrap-min.css` |
+| `bootstrap` | `3.3.7` | `bootstrap-theme-min.css` |
+| `bootstrap-icons` | `1.11.3` | `bootstrap-icons.css` |
+| `chartjs` | `2.8.0` | `chart.css` |
+| `font-awesome` | `6.5.1` | `font-awesome-min.css` |
+| `font-awesome` | `5.14.4` | `font-awesome-min.css` |
+| `font-awesome` | `4.7.0` | `font-awesome-min.css` |
+
+`bootstrap-bundle-min.js` includes Popper (dropdowns, tooltips, etc. work without a separate
+Popper `c:resource`); plain `bootstrap-min.js` does not.
+
+**`CPResource` is a different thing** — the platform's own bundle of home-made workflow
+libraries, client scripts, and fragments (modals, toasts, paging, form validation, the CR
+datalist widget) built on top of Bootstrap. It's included via `@include` and plain
+`<script src="../Scripts/...">` tags, not `c:resource`. See `references/cpresource.md`.
 
 ---
 
