@@ -126,6 +126,16 @@ OPEN QUESTIONS (I will not invent answers):
 **Step 6 — Write EXECUTION.md.** Read `references/execution-template.md` now and follow it
 (Build Plan first, then Tasks).
 
+The **first task is always a standalone scaffold task** — `palsync scaffold console-app` (console
+pal) or `palsync scaffold web-marketing` (web pal). Give it its own row, tier `cheap`, `depends: —`,
+and a success condition that requires the command to be RUN (the four canonical files + starter
+shell/workflow present and registered; `pal_test` VALIDATED on the *unchanged* starter). Never fold
+scaffolding into a "build the shell + workflow" task — a build agent reads that as "hand-write the
+shell and workflow" and skips the starter, losing the correct `run()` skeleton (e.g. the
+`c.getPage`/`isAjax`/`frag` console response pattern the starter ships). Every task that adapts
+the shell, fragments, or workflow depends on this scaffold task (datasets are leaves and may be
+created before or alongside it).
+
 ---
 
 ## Amendments — controlled spec changes mid-build

@@ -36,6 +36,63 @@ The console-specific concerns are:
 
 ---
 
+## The console response pattern (page on first load, AJAX after)
+
+A console pal's first hit is a **non-AJAX full-page GET** (the platform opens the pal from the
+app menu); every action after that is an **AJAX fragment request** fired by a `c:a`. `run()`
+must serve both, or it throws at runtime. Get this exactly right — it's the single most common
+place console workflows fail:
+
+- **Return the page from `c.getPage("<name>")`.** NOT `pal.getPage(...)`. `c.getPage` returns
+  the runtime page (a `WorkflowReturn`) you can return from `run()`; `pal.getPage` returns the
+  design-model page and is not returnable — it fails validation with `Expected
+  WorkflowResponse, found Render` and throws `Invalid return type` at runtime. (This is the
+  console equivalent of the reserved-globals note in `../SKILL.md`.)
+- **Do NOT always return an AjaxResponse.** Returning `c.createAjaxResponse(...)` on the
+  first, non-AJAX load throws `The workflow returned an AjaxResponse but the request was not
+  AJAX`. Branch on `request.isAjax()`.
+- **Carry the fragment to render in the `frag` variable** and let the tail pick page vs ajax.
+
+The canonical skeleton (identical to the `console-app` scaffold starter — prefer `palsync
+scaffold console-app` over hand-writing this):
+
+```js
+var c, page, payload, request, frag;
+
+function run(controller) {
+    c = controller;
+    page = c.getPage("console");          // c.getPage, NOT pal.getPage
+    payload = c.createPayload();
+    request = c.getRequest();
+
+    switch (c.getAction()) {
+        case "getDashboard": getDashboard(); break;
+        default:             getDashboard(); break;   // first load lands here
+    }
+
+    if (request.isAjax()) {
+        var ajax = frag ? c.createAjaxResponse(c.getPal().getAjaxFragment(frag), true)
+                        : c.createAjaxResponse("ignore", false);
+        ajax.addPayload(payload);
+        return ajax;
+    }
+    if (frag) { payload.set("frag", frag); }   // page shell renders <c:fragment name="${frag}" />
+    page.addPayload(payload);
+    return page;
+}
+
+function getDashboard() {
+    // seed payload …
+    frag = "dashboard";
+}
+```
+
+A handler sets `frag` (and payload data); the tail renders that fragment into the page shell's
+`<c:fragment name="${frag}" />` slot on a full load, or swaps it in via AJAX otherwise. Same
+handler, both entry paths — no per-action page/ajax bookkeeping.
+
+---
+
 ## Users and Profiles
 
 Every user in a console app accesses the pal through a **profile**. Two kinds exist:

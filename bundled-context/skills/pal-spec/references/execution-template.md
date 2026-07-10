@@ -38,10 +38,12 @@ spec: SPEC.md (status: approved)   mode: full | lite
 
 ## Build plan
 Dependency order (leaf-first — foundations before things that use them):
-1. Scaffold + shared fragments (header/footer) + routing skeleton — **apply the matching starter**
-   (`web-marketing` for a web pal, `console-app` for a console pal) via `palsync scaffold`, then
-   adapt its content; never hand-generate scaffold files from scratch. The starter guarantees the
-   structure, design floor, and SEO floor from the first push.
+1. Scaffold — a **standalone first task** that runs `palsync scaffold` with the matching starter
+   (`web-marketing` for a web pal, `console-app` for a console pal), then STOPS. Adapt the starter's
+   content in later tasks; never hand-generate scaffold files, and never fold scaffolding into a
+   "build the shell + workflow" task (a build agent reads that as "hand-write it" and skips the
+   starter). The starter guarantees the structure, design floor, SEO floor, and the correct `run()`
+   skeleton (the `c.getPage`/`isAjax`/`frag` response pattern) from the first push.
 2. FIRST page/screen — establishes composition (frontier tier).
 3. Remaining pages — CLONE the first's structure (cheap/standard).
 4. Datasets, then the workflows that read them (data before UI).
@@ -54,7 +56,7 @@ Checkpoints: <natural human review points — pal-loop also pauses per SPEC.md `
 
 ## Tasks
 | id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |
-| T1 | scaffold + shared fragments | cheap | §3, §6 | — | todo | pal_validate 0 errors |
+| T1 | apply starter (palsync scaffold) | cheap | §3, §6 | — | todo | `palsync scaffold <console-app\|web-marketing>` applied (NOT hand-written); the four canonical files + starter shell/workflow present and registered in pal.json; pal_validate 0; pal_test workflow VALIDATED on the unchanged starter |
 | T2 | first page (composition) | frontier | §4, §6 | T1 | todo | validate 0; push OK; preview "<H1>" |
 | T3 | <action with logic> | standard | §5 | T1 | todo | When <input>, <result>; pal_test VALIDATED |
 

@@ -10,7 +10,7 @@ render-inspect-revise, routing, and SEO self-verification remain mandatory durin
 
 ## Build plan
 Dependency order (leaf-first — foundations before things that use them):
-1. Apply the `web-marketing` starter via `palsync scaffold`, then adapt web.html and web.js.
+1. Apply the `web-marketing` starter via `palsync scaffold` as a standalone first step; adapt its content in later tasks, never hand-write scaffold files.
 2. Build shared nav/footer fragments and routePage action.
 3. Build Home first; this establishes marketing composition.
 4. Build Services, About, and Contact with their distinct §6 compositions; never clone the Home
@@ -28,7 +28,7 @@ Checkpoints: after T3 (Home renders), after T5 (crawler files), final after T6.
 ## Tasks
 | id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |
 |---|---|---|---|---|---|---|
-| T1 | scaffold web shell + workflow skeleton | cheap | §3, §6, §10 | — | todo | pal_validate 0 errors; pal_test web workflow VALIDATED |
+| T1 | apply web-marketing starter (palsync scaffold) | cheap | §3, §6, §10 | — | todo | `palsync scaffold web-marketing` applied (NOT hand-written); web.html, nav/footer, web.js + the four canonical files (spacing.css, design-system.css, pb-ui.js, pb-motion.js) present and registered in pal.json; pal_validate 0; pal_test web workflow VALIDATED on the unchanged starter |
 | T2 | shared full-width nav/footer + routePage | standard | §3, §4 global navigation, §5 routePage | T1 | todo | focus-only skip link; familiar non-pill nav; every label routes to matching H1; pal_validate 0 |
 | T3 | Home split hero + outcome proof composition | frontier | §4 Home, §6 Home, §12 | T2 | todo | exact Home copy; `What gets steadier` outcomes share first desktop viewport; desktop + mobile screenshot audit errors 0 |
 | T4 | distinct Services/About/Contact compositions | standard | §4 Services, §4 About, §4 Contact, §6 | T3 | todo | Services numbered list, About editorial split, compact Contact panel; exact copy; no cloned generic template; pal_test VALIDATED |

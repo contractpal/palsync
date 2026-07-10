@@ -17,7 +17,7 @@ Companion references:
 
 | Type | Use for | Constructor |
 |---|---|---|
-| **Page** | Full-page load, first render, navigation | `pal.getPage("<name>")` |
+| **Page** | Full-page load, first render, navigation | `c.getPage("<name>")` |
 | **Ajax** | Fragment swap into a target div in an already-loaded page | `c.createAjaxResponse(...)` |
 | **Download** | File returned as a browser download | `c.createDownloadResponse()` |
 | **Redirect** | Send the browser elsewhere entirely | `c.redirect(url)` |
@@ -31,13 +31,18 @@ The default response for a first-load request. Pages are registered in `pal.json
 `palbuilder-core/references/pal-structure.md`).
 
 ```js
-var page = pal.getPage("dashboard");        // page name is REQUIRED
+var page = c.getPage("dashboard");          // page name is REQUIRED
 page.addPayload(payload);
 return page;
 ```
 
-**`pal.getPage(name)` always requires a name.** There is no `c.getPage(...)` and no
-"default" page — every call names a specific registered page.
+**Return the page from `c.getPage(name)`, never `pal.getPage(name)`.** They are different
+methods returning different classes: `c.getPage` (the controller) returns the runtime page —
+a `WorkflowReturn` you can `return` from `run()`. `pal.getPage` returns the *design-model*
+page (metadata only, for inspection), which is **not** a returnable response. Returning it
+fails validation with `Function run returns unexpected type. Expected WorkflowResponse, found
+Render` and throws `Invalid return type` at runtime. `c.getPage(name)` always requires a
+name — there is no "default" page.
 
 ### Attaching to a fragment slot on the page
 
@@ -255,8 +260,8 @@ first branch that fires returns.
 
 ## Common gotchas
 
-- **`pal.getPage(name)` requires a name.** No `c.getPage(...)` and no empty-string default —
-  always pass the specific registered page name.
+- **`c.getPage(name)` requires a name.** No empty-string default — always pass the specific
+  registered page name.
 - **`createDownloadResponse` with `setFragmentContent` bypasses the common tail's
   `addPayload`.** Attach the payload directly on the download object before returning it.
   `setFileContent` does not need a payload — it's file-based.
@@ -266,4 +271,8 @@ first branch that fires returns.
 - **Redirecting from an ajax handler does nothing** unless you handle it explicitly (see the
   ajax-aware redirect pattern above). Bare `c.redirect(url)` inside an ajax action is
   ignored by the browser.
-- **`c.getPage(...)` isn't real.** Any code using it needs correction to `pal.getPage(...)`.
+- **Return a page via `c.getPage(...)`, not `pal.getPage(...)`.** `pal.getPage` returns the
+  design-model page (a `PalFile`, for metadata/inspection), which is not a returnable
+  response — `return`ing it fails validation (`Expected WorkflowResponse, found Render`) and
+  throws `Invalid return type` at runtime. The controller's `c.getPage(...)` returns the
+  runtime page (a `WorkflowReturn`) that `run()` can return.

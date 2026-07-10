@@ -745,3 +745,38 @@ test("unknownPalJsonKey — a clean real-shaped manifest produces no finding", (
     assert.strictEqual(lintPalJson(dir).filter(f => f.rule === "unknownPalJsonKey").length, 0);
     fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("pageResponseSource — pal.getPage(...) as a page response is a hard error", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": [
+            "var c, pal, page;",
+            "function run(controller) {",
+            "    c = controller; pal = c.getPal();",
+            "    page = pal.getPage('console');",
+            "    page.addPayload(c.createPayload());",
+            "    return page;",
+            "}",
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "pageResponseSource");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /c\.getPage/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("pageResponseSource — c.getPage(...) is the correct source, no finding", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": [
+            "var c, page;",
+            "function run(controller) {",
+            "    c = controller;",
+            "    page = c.getPage('console');",
+            "    page.addPayload(c.createPayload());",
+            "    return page;",
+            "}",
+        ].join("\n"),
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "pageResponseSource").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});

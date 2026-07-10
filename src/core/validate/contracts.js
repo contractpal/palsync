@@ -561,6 +561,31 @@ function checkAjaxTransport(rel, src, findings) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Check 9a — page response taken from pal.getPage(...) instead of c.getPage(...).
+// pal.getPage returns the DESIGN-MODEL page (a PalFile, metadata only); it is NOT a returnable
+// workflow response. Returning it fails server validation with "Expected WorkflowResponse, found
+// Render" and throws "Invalid return type" at runtime. The controller's c.getPage(...) returns
+// the runtime page (a WorkflowReturn) that run() can return. This trap has burned entire build
+// sessions (the server errors are opaque and only surface after a push+test round trip), so flag
+// it offline. See palbuilder-workflow/references/{responses.md, console.md}.
+// ---------------------------------------------------------------------------------------------
+
+function checkPageResponseSource(rel, src, findings) {
+    const re = /\bpal\.getPage\s*\(/g;
+    let m;
+    while ((m = re.exec(src))) {
+        findings.push({
+            file: rel, line: lineAt(src, m.index), column: 0, severity: "error", rule: "pageResponseSource",
+            message: "pal.getPage(...) returns the design-model page (metadata only), NOT a returnable response. " +
+                "Returning it fails validation with \"Expected WorkflowResponse, found Render\" and throws " +
+                "\"Invalid return type\" at runtime. Fix: use c.getPage(\"<name>\") — the controller method that " +
+                "returns the runtime page (a WorkflowReturn) run() can return. See " +
+                "palbuilder-workflow/references/responses.md and console.md (console response pattern)."
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Check 10a — lingering GSAP vendor <script src> after the design-system-v2 drop-GSAP migration
 // (scripts/pb-motion.js replaces it: data-animate/data-ticker/data-typewriter/data-tilt/
 // data-spotlight). A pal's own markup should never reference a gsap bundle.
@@ -804,6 +829,7 @@ function lintContracts(workspaceDir) {
 
     for (const { rel, src } of workflowFiles) {
         checkAjaxTransport(rel, src, findings);
+        checkPageResponseSource(rel, src, findings);
     }
 
     checkParamDropped(markupFiles, workflowFiles, findings);

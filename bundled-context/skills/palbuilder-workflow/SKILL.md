@@ -73,7 +73,7 @@ var payload;
 function run(controller) {
     c = controller;
     pal = c.getPal();
-    page = pal.getPage("dashboard");                 // page name is always required
+    page = c.getPage("dashboard");                   // page name is always required; use c.getPage (NOT pal.getPage)
     request = c.getRequest();
     data = request.getData();
     action = c.getAction();
@@ -134,7 +134,7 @@ repurpose them.
 | `request` | `c.getRequest()` | The incoming request |
 | `data` | `request.getData()` | Request `Data` (form fields, querystring) |
 | `action` | `c.getAction()` | The requested action name |
-| `page` | `pal.getPage("<name>")` | The page to return; name is always required |
+| `page` | `c.getPage("<name>")` | The page to return; name is always required. Use `c.getPage`, never `pal.getPage` (that returns the design-model page, not a returnable response) |
 | `ajax` | `c.createAjaxResponse(...)` | The ajax response, when applicable |
 | `resp` | any other response | Download, redirect, `exitToWeb` |
 | `payload` | `c.createPayload()` | Main payload attached to the final response |
@@ -258,7 +258,7 @@ Every workflow returns one of these:
 
 | Response | Use for | Set by |
 |---|---|---|
-| `page` | Full page load, first render | Default; from `pal.getPage("<name>")` |
+| `page` | Full page load, first render | Default; from `c.getPage("<name>")` |
 | `ajax` | Fragment swap into a target div | `c.createAjaxResponse(...)` |
 | Download | File download to the browser | `c.createDownloadResponse()` |
 | Redirect | Send the browser elsewhere | `c.redirect(url)` (Console-only: `c.exitToWeb` for webservice integrations) |
