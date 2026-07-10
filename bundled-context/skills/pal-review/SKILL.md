@@ -57,6 +57,10 @@ proof artifact for rendered output or data effects.
   inputs, `expect` the persisted value, `absent` the pre-edit value (catches duplicate
   insert). A passing exercise is the strongest evidence class for a data-effects criterion;
   a failing one is a finding with the step output as evidence.
+- Exercise records with unique `{{runId}}` values. Repeated row/card labels must be scoped with
+  `within` to the selector containing that unique value. An ambiguous click, reliance on the first
+  matching action, or a page-wide expectation that could be satisfied by another row is NOT proof
+  of the intended record's mutation.
 - **Code trace is necessary but not sufficient for write-action PASS.** If `pal_exercise` is
   available and a §5 write action was not exercised, mark that action `NOT VERIFIED` and the
   verdict `CHANGES-NEEDED` with a fix task to run the exercise. Do not convert a plausible
@@ -73,6 +77,10 @@ Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per 
 - IF `rg -n '<main id="body" class="pb-main">' pages/console.html` prints no match, THEN fail the shell. The shell owns `pb-main`; fragments do not. IF a shell wrapper class is absent from `styles/design-system.css`, `styles/spacing.css`, and COMPONENTS.md, THEN fail it as undefined.
 - IF `for f in fragments/*; do [ "$(rg -o 'pb-field-group' "$f" | wc -l)" -lt 2 ] || rg -q 'pb-stack|pb-form-grid' "$f" || echo "$f"; done` prints a fragment, THEN fail it. Two or more field groups require `pb-stack` or `pb-form-grid`.
 - IF `for t in $(rg -oN 'class="[^"]*"' fragments/ pages/ | sed -E 's/.*class="//; s/"$//' | tr ' ' '\n' | grep -v '\$' | sort -u); do rg -q "\\.$t\\b" styles/ || echo "$t"; done` prints a class token, THEN fail each printed token as undefined — it appears in markup but no shipped stylesheet defines it, so that element renders unstyled. Usual offenders: Bootstrap muscle-memory names (`btn`, `btn-primary`, `form-control`, `badge`, `alert-danger`) and invented pb-* names (`pb-card-header` — real name `pb-card-head`; `pb-empty-state` — real name `pb-state`). The fix is the exact pb-* class from COMPONENTS.md / `styles/design-system.css`, never a new CSS rule.
+- IF an Actions `td` contains two or more controls without a `.pb-row-actions` wrapper, fail it.
+  Button variants alone do not provide grouping or mobile wrapping. If mutually exclusive state
+  transitions (such as Check out and Check in) render together for one row, fail action/state
+  clarity and require conditional rendering plus exercises of both states.
 - **`captured:true`:** first check `renderError` — non-null = hard FAIL (compiled but threw at
   render). Null → judge each screen against DESIGN_SYSTEM.md and a short UX rubric: visual
   hierarchy, primary journey, Gestalt grouping, Fitts target sizing/proximity, progressive

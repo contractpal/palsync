@@ -103,7 +103,12 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       (e.g. add → edit → delete is one exercise with expects per step), not one call per
       action — each extra call is a full context-window round trip. Web:
       `steps:[{action, params, expect}]`. Console:
-      `steps:[{fill:{name:value}, click:"<exact link text>", expect:[...]}]`. After an EDIT, put
+      `steps:[{fill:{name:value}, click:"<exact link text>", expect:[...]}]`. **Use unique
+      `{{runId}}` data for every created record and subsequent expected value.** If row/card action
+      labels repeat, `click` is intentionally ambiguous and the exercise fails; add
+      `within:'tr:has-text("Record {{runId}}")'` (or the equivalent unique card selector) so the
+      exact record is exercised. Never rely on list order or an unscoped first matching action.
+      After an EDIT, put
       the new value in `expect` AND the old value in `absent` — a surviving old value means the
       edit inserted a duplicate. After a DELETE, put the deleted record's name/value in `absent`
       — never assert empty-state copy or list ordering (other rows may exist; lists sort
@@ -206,6 +211,10 @@ Trigger: every task `done`, or every remaining task is a `blocked`/`needs-fronti
    needs new structure); resume the task cycle on exactly those tasks.
 5. **Re-review** when the fix tasks are `done`; repeat until PASS. A `needs-human` verdict
    (console eyeball gate) routes like any other `needs-human` task, not a failure.
+
+The build session may fix review findings, but it may **never convert its own fixes into PASS**.
+Every CHANGES-NEEDED cycle ends with another fresh pal-review dispatch and a new REVIEW.md verdict;
+"the exercises pass now" is task evidence, not permission to skip the independent re-review.
 
 ## Ending a session
 

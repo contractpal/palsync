@@ -70,6 +70,10 @@ function validateSteps(steps) {
         if (s.click !== undefined && (typeof s.click !== "string" || !s.click.trim())) {
             errs.push(at + " click must be the visible text (or a simple #id/.class selector) of the element to click");
         }
+        if (s.within !== undefined && (typeof s.within !== "string" || !s.within.trim())) {
+            errs.push(at + " within must be a non-empty CSS/Playwright selector");
+        }
+        if (s.within !== undefined && !s.click) errs.push(at + " has within but no click to scope");
     });
     return errs;
 }
@@ -91,9 +95,40 @@ function stepLabel(step) {
     if (step.page) bits.push("page=" + step.page);
     if (step.action) bits.push("action=" + step.action + (step.params ? "?" + new URLSearchParams(step.params).toString() : ""));
     if (step.fill) bits.push("fill{" + Object.keys(step.fill).join(",") + "}");
-    if (step.click) bits.push("click \"" + step.click + "\"");
+    if (step.click) bits.push("click " + JSON.stringify(step.click));
+    if (step.within) bits.push("within " + JSON.stringify(step.within));
     if (!bits.length) bits.push("assert-only");
     return bits.join(" ");
+}
+
+// Resolve a click deterministically. The old behavior silently clicked `.first()` whenever a
+// list contained several identical row actions (Edit / Check out / Delete), which could prove the
+// wrong record and produce a false PASS. Duplicate visible text is now an explicit test failure;
+// callers scope it with `within`, normally a row selector containing a unique {{runId}} value.
+async function resolveClickTarget(pg, step) {
+    const c = step.click.trim();
+    let scope = pg;
+    if (step.within) {
+        const scopes = pg.locator(step.within);
+        const scopeCount = await scopes.count();
+        if (scopeCount === 0) {
+            return { error: "within selector \"" + step.within + "\" matched no element" };
+        }
+        if (scopeCount > 1) {
+            return { error: "within selector \"" + step.within + "\" is ambiguous (matched " + scopeCount + " elements); include a unique {{runId}} value or a more specific selector" };
+        }
+        scope = scopes.first();
+    }
+
+    const loc = /^[#.]/.test(c) ? scope.locator(c) : scope.getByText(c, { exact: true });
+    const count = await loc.count();
+    if (count === 0) {
+        return { error: "nothing to click matching \"" + c + "\"" + (step.within ? " within \"" + step.within + "\"" : "") };
+    }
+    if (count > 1) {
+        return { error: "click \"" + c + "\" is ambiguous (matched " + count + " elements); add within with a row/card selector containing the record's unique {{runId}} value, or click a unique #id/.class selector" };
+    }
+    return { locator: loc.first() };
 }
 
 function needsBrowser(steps) {
@@ -159,7 +194,7 @@ function formatScreenHints(h) {
 // ---- the runner ------------------------------------------------------------------------------
 
 // Exercise the pal. Returns a structured result; never throws on a normal failure.
-//   steps: [{ page?, action?, params?, fill?, click?, expect?, absent? }]
+//   steps: [{ page?, action?, params?, fill?, click?, within?, expect?, absent? }]
 //   workflow: "console" | "web" | "transaction" (optional — auto-detected)
 //   viewport: "desktop" | "mobile" (browser mode only)
 // Stops at the first failing step (later steps usually depend on earlier writes).
@@ -285,13 +320,10 @@ async function exerciseByBrowser(t, steps, viewport) {
                     }
                 }
                 if (step.click) {
-                    const c = step.click.trim();
-                    const loc = /^[#.]/.test(c) ? pg.locator(c) : pg.getByText(c, { exact: true });
-                    if (await loc.count() === 0) {
-                        return fail("nothing to click matching \"" + c + "\" on the current screen (match the element's exact visible text, or use #id/.class)." + formatScreenHints(await screenHints(pg)));
-                    }
+                    const target = await resolveClickTarget(pg, step);
+                    if (target.error) return fail(target.error + "." + formatScreenHints(await screenHints(pg)));
                     const before = await screenFingerprint(pg);
-                    await loc.first().click();
+                    await target.locator.click();
                     await waitForScreenSettle(pg, before);
                 }
             } catch (e) {
@@ -343,4 +375,4 @@ function formatExercise(res) {
     return lines.join("\n");
 }
 
-module.exports = { runExercise, validateSteps, checkStep, stepLabel, needsBrowser, formatExercise, applyRunId, MAX_STEPS };
+module.exports = { runExercise, validateSteps, checkStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, MAX_STEPS };

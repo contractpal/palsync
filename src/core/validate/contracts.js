@@ -780,8 +780,27 @@ function checkPbQualityHints(workspaceDir, markupFiles, findings) {
     if (!canonical && !usedInMarkup) return;
 
     const actionWords = /^(add|create|save|cancel|edit|delete|remove|check out|check in|submit|send|email|book|get started|try again)\b/i;
+
+    // Resolve the vocabulary from the pal's real stylesheets instead of hard-coding a second
+    // component list here. This catches the common weak-model move of inventing a plausible
+    // modifier (for example `.pb-btn-sm`) that silently renders as if the class were absent.
+    const definedPbClasses = new Set();
+    for (const folder of ["styles", "Styles"]) {
+        const cssFiles = [];
+        walkFiles(path.join(workspaceDir, folder), folder, cssFiles);
+        for (const f of cssFiles) {
+            if (path.extname(f.rel).toLowerCase() !== ".css") continue;
+            const css = readUtf8(f.abs);
+            if (css == null) continue;
+            const re = /\.((?:pb-)[A-Za-z0-9_-]+)/g;
+            let m;
+            while ((m = re.exec(css))) definedPbClasses.add(m[1]);
+        }
+    }
+
     for (const { rel, src } of markupFiles) {
         let fieldGroups = 0;
+        const undefinedReported = new Set();
         scanTags(src, (tag, pos) => {
             const name = tag.name.toLowerCase();
             const cls = attr(tag, "class") || "";
@@ -835,7 +854,45 @@ function checkPbQualityHints(workspaceDir, markupFiles, findings) {
                     });
                 }
             }
+
+            for (const token of cls.split(/\s+/).filter(Boolean)) {
+                if (!definedPbClasses.size || !/^pb-[A-Za-z0-9_-]+$/.test(token) || definedPbClasses.has(token) || undefinedReported.has(token)) continue;
+                undefinedReported.add(token);
+                findings.push({
+                    file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "pbUndefinedClass",
+                    message: "." + token + " is used in markup but no workspace stylesheet defines it. Invented pb-* names do nothing at render time; use the exact class from component-library.md/design-system.css or define an approved PAL OVERRIDES component."
+                });
+            }
         });
+
+        // Table actions are a composition contract, not just a button-color contract. Without
+        // `.pb-row-actions`, several otherwise styled buttons touch, drift, and overflow during
+        // the shipped mobile table collapse. Also catch mutually exclusive state transitions
+        // rendered at the same time (the exact equipment-checkout failure this rule generalizes).
+        const actionCellRe = /<td\b[^>]*data-label\s*=\s*["']Actions["'][^>]*>[\s\S]*?<\/td\s*>/gi;
+        let cell;
+        while ((cell = actionCellRe.exec(src))) {
+            const body = cell[0];
+            const links = [...body.matchAll(/<c:a\b[^>]*>[\s\S]*?<\/c:a\s*>/gi)];
+            if (links.length >= 2 && !/\bpb-row-actions\b/.test(body)) {
+                findings.push({
+                    file: rel, line: lineAt(src, cell.index), column: 0, severity: "warn", rule: "pbRowActionGroup",
+                    message: "This Actions cell renders " + links.length + " action links without a .pb-row-actions wrapper. Wrap the links in <div class=\"pb-row-actions\"> so spacing, wrapping, destructive separation, and mobile reflow use the shipped component recipe."
+                });
+            }
+
+            const labels = links.map(m => m[0].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().toLowerCase());
+            const hasCheckout = labels.includes("check out");
+            const hasCheckin = labels.includes("check in");
+            const conditional = /<c:(?:if|choose|when)\b/i.test(body) ||
+                links.some(m => /\btest\s*=/.test(m[0]));
+            if (hasCheckout && hasCheckin && !conditional) {
+                findings.push({
+                    file: rel, line: lineAt(src, cell.index), column: 0, severity: "warn", rule: "pbConflictingStateActions",
+                    message: "\"Check out\" and \"Check in\" are both always visible for the same row. They are mutually exclusive state transitions: render only the action valid for the row's current status with c:if/c:choose or test=, then exercise both states."
+                });
+            }
+        }
 
         if (fieldGroups >= 2 && !/\bpb-(?:stack|form-grid)\b/.test(src)) {
             findings.push({

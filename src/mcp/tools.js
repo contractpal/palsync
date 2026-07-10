@@ -745,7 +745,7 @@ const TOOLS = [
     },
     {
         name: "pal_exercise",
-        description: "Functionally EXERCISE workflow actions end-to-end and assert the persisted result in the rendered output — the check above compile (pal_test) and render (pal_screenshot): did the WRITE actually do the right thing? Acts on the LAST PUSHED version — pal_push first. Each step triggers an action, then asserts expect:[strings that MUST appear] and absent:[strings that must NOT appear] — put the OLD value in absent after an edit to catch a duplicate insert. WEB pal: steps use action+params (headless). CONSOLE/transaction pal: steps use fill (inputs by name=) + click (the action link's exact visible text) — drives the real authenticated screen. Steps run in order and stop at the first failure. Use after building any create/edit/delete action, and to verify pal-loop's read-back requirement.",
+        description: "Functionally EXERCISE workflow actions end-to-end and assert the persisted result in the rendered output — the check above compile (pal_test) and render (pal_screenshot): did the WRITE actually do the right thing? Acts on the LAST PUSHED version — pal_push first. Each step triggers an action, then asserts expect:[strings that MUST appear] and absent:[strings that must NOT appear] — put the OLD value in absent after an edit to catch a duplicate insert. WEB pal: steps use action+params (headless). CONSOLE/transaction pal: steps use fill (inputs by name=) + click (the action link's exact visible text) — drives the real authenticated screen. Duplicate click labels fail instead of silently clicking the first; scope repeated row/card actions with within, using a selector containing unique {{runId}} test data. Steps run in order and stop at the first failure. Use after building any create/edit/delete action, and to verify pal-loop's read-back requirement.",
         inputShape: {
             steps: z.array(z.object({
                 page: z.string().optional().describe("WEB only: page path under the site root to load first, e.g. \"equipment.html\"."),
@@ -753,6 +753,7 @@ const TOOLS = [
                 params: z.record(z.union([z.string(), z.number()])).optional().describe("WEB only: query params sent with the action, e.g. {\"name\":\"Camera\"}."),
                 fill: z.record(z.union([z.string(), z.number()])).optional().describe("Fill inputs by their name= attribute before clicking, e.g. {\"name\":\"Camera\",\"category\":\"AV\"}."),
                 click: z.string().optional().describe("EXACT visible text of the link/button to click (a c:a Save link), or a simple #id/.class selector."),
+                within: z.string().optional().describe("Browser mode: scope click to exactly one CSS/Playwright locator, e.g. tr:has-text(\"Camera {{runId}}\"). Required when the same action text appears in multiple rows/cards."),
                 expect: z.array(z.string()).optional().describe("Strings that MUST appear in the rendered output after this step (the saved value in the list)."),
                 absent: z.array(z.string()).optional().describe("Strings that must NOT appear after this step (the pre-edit value; a stale row proves a duplicate insert).")
             })).min(1).max(10).describe("Steps run in order; the run stops at the first failing step."),

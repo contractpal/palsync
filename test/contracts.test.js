@@ -603,9 +603,9 @@ test("destructiveConfirm — unrelated action produces no finding", () => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("canonical pb-* workspace warns on browser-default controls, headings, tables, actions, form rhythm, and visible skip link", () => {
+test("canonical pb-* workspace warns on browser-default controls, headings, tables, actions, form rhythm, visible skip link, and invented classes", () => {
     const dir = tmpWorkspace({
-        "styles/design-system.css": ":root { --ds-space-1: 4px; }",
+        "styles/design-system.css": ":root { --ds-space-1: 4px; } .pb-btn {}",
         "fragments/screen.html": [
             '<c:ignore xmlns:c="contractpal">',
             '  <a href="#main">Skip to content</a>',
@@ -613,15 +613,57 @@ test("canonical pb-* workspace warns on browser-default controls, headings, tabl
             '  <div class="pb-field-group"><label>Name<c:field type="text" name="name" /></label></div>',
             '  <div class="pb-field-group"><label>Notes<textarea name="notes"></textarea></label></div>',
             '  <table><tr><th>Name</th></tr></table>',
-            '  <c:a action="saveEquipment">Save</c:a>',
+            '  <c:a action="saveEquipment" class="pb-btn pb-btn-sm">Save</c:a>',
+            '  <c:a action="cancel">Cancel</c:a>',
             '</c:ignore>',
         ].join("\n"),
     });
     const rules = new Set(lintContracts(dir).map(f => f.rule));
-    for (const rule of ["pbControlClass", "pbHeadingClass", "pbTableClass", "pbActionAffordance", "pbFormRhythm", "pbSkipLink"]) {
+    for (const rule of ["pbControlClass", "pbHeadingClass", "pbTableClass", "pbActionAffordance", "pbFormRhythm", "pbSkipLink", "pbUndefinedClass"]) {
         assert.ok(rules.has(rule), "expected " + rule + " warning");
     }
     assert.ok(lintContracts(dir).filter(f => /^pb/.test(f.rule)).every(f => f.severity === "warn"));
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("canonical pb-* workspace warns when row actions are ungrouped or conflicting", () => {
+    const dir = tmpWorkspace({
+        "styles/design-system.css": [
+            ".pb-table {}", ".pb-btn {}", ".pb-btn-secondary {}", ".pb-btn-danger {}", ".pb-row-actions {}"
+        ].join("\n"),
+        "fragments/list.html": [
+            '<c:ignore xmlns:c="contractpal">',
+            '  <table class="pb-table"><tbody><tr><td data-label="Actions">',
+            '    <c:a action="showCheckout?id=${row.id}" class="pb-btn pb-btn-secondary">Check out</c:a>',
+            '    <c:a action="checkin?id=${row.id}" class="pb-btn pb-btn-secondary">Check in</c:a>',
+            '    <c:a action="delete?id=${row.id}" confirm="Delete?" class="pb-btn pb-btn-danger">Delete</c:a>',
+            '  </td></tr></tbody></table>',
+            '</c:ignore>',
+        ].join("\n"),
+    });
+    const rules = new Set(lintContracts(dir).map(f => f.rule));
+    assert.ok(rules.has("pbRowActionGroup"));
+    assert.ok(rules.has("pbConflictingStateActions"));
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("canonical grouped and status-conditional row actions produce no row-action warnings", () => {
+    const dir = tmpWorkspace({
+        "styles/design-system.css": [
+            ".pb-table {}", ".pb-btn {}", ".pb-btn-secondary {}", ".pb-btn-danger {}", ".pb-row-actions {}"
+        ].join("\n"),
+        "fragments/list.html": [
+            '<c:ignore xmlns:c="contractpal">',
+            '  <table class="pb-table"><tbody><tr><td data-label="Actions"><div class="pb-row-actions">',
+            '    <c:a action="showCheckout?id=${row.id}" test="${row.status eq \'available\'}" class="pb-btn pb-btn-secondary">Check out</c:a>',
+            '    <c:a action="checkin?id=${row.id}" test="${row.status eq \'checkedOut\'}" class="pb-btn pb-btn-secondary">Check in</c:a>',
+            '    <c:a action="delete?id=${row.id}" confirm="Delete?" class="pb-btn pb-btn-danger">Delete</c:a>',
+            '  </div></td></tr></tbody></table>',
+            '</c:ignore>',
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir).filter(f => ["pbRowActionGroup", "pbConflictingStateActions", "pbUndefinedClass"].includes(f.rule));
+    assert.deepStrictEqual(findings, []);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 

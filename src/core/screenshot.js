@@ -307,6 +307,20 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
             });
             if (bareActions.length) add("warning", "bareActionLink", "Action links render like body links; apply the documented button/action hierarchy.", bareActions);
 
+            const actionCells = Array.from(document.querySelectorAll("td[data-label='Actions']")).filter(visible);
+            const ungroupedRowActions = actionCells.filter(cell => {
+                const actions = Array.from(cell.querySelectorAll("a[href],button,[role='button']")).filter(visible);
+                return actions.length >= 2 && !cell.querySelector(".pb-row-actions");
+            });
+            if (ungroupedRowActions.length) add("error", "rowActionGroup", "Rows with multiple actions must use .pb-row-actions so controls have intentional spacing, wrapping, destructive separation, and mobile reflow.", ungroupedRowActions);
+
+            const conflictingRowActions = actionCells.filter(cell => {
+                const labels = Array.from(cell.querySelectorAll("a[href],button,[role='button']"))
+                    .filter(visible).map(el => String(el.textContent || "").replace(/\s+/g, " ").trim().toLowerCase());
+                return labels.includes("check out") && labels.includes("check in");
+            });
+            if (conflictingRowActions.length) add("error", "conflictingRowActions", "Mutually exclusive state transitions are visible together; render only the action valid for the row's current status.", conflictingRowActions);
+
             const visibleSkipLinks = Array.from(document.querySelectorAll("a[href^='#']")).filter(el => {
                 if (!/skip.+content/i.test(String(el.textContent || "")) || !visible(el) || document.activeElement === el) return false;
                 const r = el.getBoundingClientRect();

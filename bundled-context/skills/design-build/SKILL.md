@@ -138,6 +138,9 @@ context-specific distinctiveness. `0` = broken/unstyled, `1` = competent but vis
 - Keyboard-operable? Contrast adequate for text and focus indicators?
 - Are frequent and primary actions large enough and near the user's likely path? Are destructive
   actions separated enough to avoid accidental activation?
+- In every data-table Actions cell, are multiple controls wrapped by `.pb-row-actions` (never
+  merely given button classes)? Are state transitions mutually exclusive in the rendered row —
+  for example, available shows Check out while checked-out shows Check in, never both together?
 - Is complexity staged with progressive disclosure instead of dumped on the default view or removed
   from the workflow?
 - Palbuilder-specific: no undocumented `c:` attributes, no inline scripts in fragments, no `onclick` on `c:a`, no ARIA attributes on `c:field`, and direct `${row.field}` access inside `c:list`.
@@ -172,6 +175,8 @@ Apply the same vocabulary to yourself at the review gate.
       for generic spacing/layout instead of Bootstrap.
 - [ ] Shell owns `<main id="body" class="pb-main">`; every fragment root is `pb-section`; multi-field forms wrap fields in `pb-stack` or `pb-form-grid`.
 - [ ] No undefined classes: every `class=` value in pages/fragments resolves to design-system.css, spacing.css, or COMPONENTS.md-recorded local styles.
+- [ ] Every multi-action table cell uses `.pb-row-actions`; only actions valid for the row's current
+      state render, and desktop/mobile captures show wrapping without collision or overflow.
 - [ ] Applied design-principles review: user journey, hierarchy, grouping, Fitts target sizing,
       progressive disclosure, typography, color meaning, and consistency.
 - [ ] `component-library.md` (app/console) or `marketing-library.md` (marketing sections) consulted

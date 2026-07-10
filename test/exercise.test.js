@@ -5,7 +5,7 @@
 // the report format, and the no-server invalid path of runExercise.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { runExercise, validateSteps, checkStep, stepLabel, needsBrowser, formatExercise, applyRunId, MAX_STEPS } = require("../src/core/exercise");
+const { runExercise, validateSteps, checkStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, MAX_STEPS } = require("../src/core/exercise");
 
 // ---- validateSteps ---------------------------------------------------------
 
@@ -30,6 +30,8 @@ test("validateSteps: rejects a do-nothing step, params without action, bad expec
     assert.ok(validateSteps([{ click: "Save", expect: [""] }]).some(p => /non-empty strings/.test(p)));
     assert.ok(validateSteps([{ click: "Save", expect: "Camera" }]).some(p => /non-empty strings/.test(p)));
     assert.ok(validateSteps([{ fill: { a: { nested: true } }, click: "Save" }]).some(p => /string\/number/.test(p)));
+    assert.ok(validateSteps([{ within: "tr" }]).some(p => /within but no click/.test(p)));
+    assert.ok(validateSteps([{ click: "Save", within: "" }]).some(p => /within must be/.test(p)));
 });
 
 // ---- checkStep -------------------------------------------------------------
@@ -65,7 +67,28 @@ test("needsBrowser: only fill/click force browser mode", () => {
 test("stepLabel: readable one-liners", () => {
     assert.strictEqual(stepLabel({ action: "save", params: { name: "Cam" } }), "action=save?name=Cam");
     assert.strictEqual(stepLabel({ fill: { name: "x" }, click: "Save" }), "fill{name} click \"Save\"");
+    assert.strictEqual(stepLabel({ click: "Check out", within: 'tr:has-text("Camera")' }), 'click "Check out" within "tr:has-text(\\"Camera\\")"');
     assert.strictEqual(stepLabel({ expect: ["x"] }), "assert-only");
+});
+
+test("resolveClickTarget: duplicate labels fail instead of silently clicking the first", async () => {
+    const duplicate = { async count() { return 2; }, first() { return this; } };
+    const pg = { getByText() { return duplicate; } };
+    const out = await resolveClickTarget(pg, { click: "Check out" });
+    assert.match(out.error, /ambiguous \(matched 2 elements\)/);
+    assert.match(out.error, /within/);
+});
+
+test("resolveClickTarget: within scopes a repeated action to one record", async () => {
+    let clicked = false;
+    const target = { async count() { return 1; }, first() { return this; }, async click() { clicked = true; } };
+    const scope = { getByText(text, opts) { assert.equal(text, "Check out"); assert.equal(opts.exact, true); return target; } };
+    const scopes = { async count() { return 1; }, first() { return scope; } };
+    const pg = { locator(sel) { assert.equal(sel, 'tr:has-text("Camera run123")'); return scopes; } };
+    const out = await resolveClickTarget(pg, { click: "Check out", within: 'tr:has-text("Camera run123")' });
+    assert.ok(out.locator);
+    await out.locator.click();
+    assert.equal(clicked, true);
 });
 
 test("applyRunId: substitutes {{runId}} deeply without touching the original steps", () => {
