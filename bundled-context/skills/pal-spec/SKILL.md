@@ -88,8 +88,9 @@ came from.
 - **Design handoff** — Q15 DESIGN_SYSTEM.md + COMPONENTS.md present? No → run
   design-system-init, then return here. Yes → per page, propose a layout skeleton: section
   order + which named component fills each slot + hierarchy/primary action/progressive disclosure
-  notes. Confirm every new-pal page shell will link `styles/spacing.css` → `styles/design-system.css`
-  → `styles/styles.css` and load `pb-ui.js`/`pb-motion.js` once each. No colors/fonts. Do not
+  notes. Confirm every new-pal page shell will link `styles/spacing.css` → `styles/styles.css`
+  and load `pb-ui.js`/`pb-motion.js` once each. These are the four canonical runtime files;
+  `pb-charts.js` is optional when charts are used. No colors/fonts. Do not
   retrofit `styles.css` into an existing pal that lacks it.
 - **SEO** *(usually web; a publicly indexed console landing/login page can qualify; never a
   webservice/tunnel action)* — Q16 Domain? Per §3 page: publicly indexable? Target phrase for
@@ -127,11 +128,11 @@ OPEN QUESTIONS (I will not invent answers):
 **Step 6 — Write EXECUTION.md.** Read `references/execution-template.md` now and follow it
 (Build Plan first, then Tasks).
 
-The **first task is always a standalone hand-built foundation task**. Give it its own row, tier
-`cheap`, `depends: —`, and a success condition requiring the model to create the page shell, copy
-the four canonical files verbatim from `design-system-init/references/`, author a readable
-per-project `styles/styles.css`, register all five styles/scripts entries in `pal.json`, and — for
-console pals — establish the `run()` skeleton from `palbuilder-workflow/references/console.md`.
+The **first task is always a standalone foundation task**. Give it its own row, tier `cheap`,
+`depends: —`, and a success condition requiring the model to copy matching templates and canonical
+runtime files with bash `cp` (never read-then-write), author a readable per-project
+`styles/styles.css`, register the four runtime entries in `pal.json`, and — for console pals —
+establish the `run()` skeleton from the copied template.
 The task must reach `pal_validate 0` and `pal_test` VALIDATED on that hand-built shell. Every task
 that adapts the shell, fragments, or workflow depends on this foundation task (datasets are leaves
 and may be created before or alongside it). Existing pals that lack `styles.css` are not migrated.

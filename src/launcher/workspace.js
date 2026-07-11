@@ -20,6 +20,7 @@ const palsyncfile = require("../core/palsyncfile");
 const { register } = require("../mcp/register");
 const { registerCodex } = require("../mcp/registerCodex");
 const { registerOpencode } = require("../mcp/registerOpencode");
+const registerPi = require("../mcp/registerPi");
 const { hashWorkspace, hashPaths } = require("../core/workspaceHash");
 const { diffWorkspace, describeDiff } = require("../core/localDrift");
 const { mergeWorkspace } = require("../core/merge");
@@ -187,9 +188,10 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
             log("  ⚠ `codex mcp add` failed (" + (reg.stderr || "unknown") + ") — register manually:\n      " + reg.command);
         }
     } else if (agent === "pi") {
-        // Pi has no MCP — it drives palsync through the headless CLI (palsync push|pull|status|…),
-        // which AGENTS.md tells it to use. Nothing to register.
-        log("Pi uses the palsync CLI (no MCP server) — AGENTS.md carries the sync instructions");
+        // pi-mcp auto-detects .palsync.json; a project config would double-inject the server.
+        log("checking Pi MCP extension (no project file written)");
+        reg = await registerPi.register();
+        log(reg.installed ? "  Pi MCP extension detected" : "  ⚠ Pi MCP extension not detected — " + reg.installCommand);
     } else if (agent === "opencode") {
         log("registering palsync MCP server with OpenCode (opencode.json)");
         reg = await registerOpencode(workspaceDir);

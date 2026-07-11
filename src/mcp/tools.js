@@ -303,7 +303,7 @@ const TOOLS = [
     },
     {
         name: "pal_validate",
-        description: "Check the pal's code OFFLINE (no server/network) for the mistakes that silently break in PalBuilder: invalid workflow JS for the restricted engine, and invalid c:/XHTML markup. Returns each finding's file, line, ERROR/WARNING label, and the fix. Run BEFORE pal_push (pal_push runs it too and refuses on errors).",
+        description: "Check the pal's code OFFLINE (no server/network) for the mistakes that silently break in PalBuilder: invalid workflow JS for the restricted engine, and invalid c:/XHTML markup. Returns each finding's file, line, ERROR/WARNING label, and the fix. Use for diagnosis between edits; pal_push runs the same validation as its gate and refuses on errors.",
         // Fully offline + read-only: validateWorkspace lints local files (fs/acorn only — no
         // CloudPiston call, no lock). Opt out of the ctx/login/lock lifecycle. The lifecycle guard
         // below already no-ops when ctx has no lifecycle, so the bare { workspaceDir } ctx is safe.
@@ -1076,6 +1076,36 @@ const TOOLS = [
         }
     }
 ];
+
+// MCP clients use these hints for presentation and confirmation UX. They are deliberately
+// metadata only; the tool implementations remain the authority for safety and idempotency.
+const TOOL_HINTS = {
+    pal_status: ["Report pal status", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_validate: ["Validate pal code", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_testing: ["Toggle automated testing", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_test: ["Compile workflow on server", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_tunnel_test: ["Test tunnel workflow", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_debug: ["Read server debug output", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_preview: ["Preview rendered pal", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_fetch: ["Fetch rendered web page", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_screenshot: ["Capture rendered pal screen", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_exercise: ["Exercise pal behavior", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_seo_audit: ["Audit web page SEO", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_spec_lint: ["Lint pal specification", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_regression: ["Run regression check", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_pull: ["Pull pal changes", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
+    pal_merge: ["Merge pal changes", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
+    pal_push: ["Push pal changes", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
+    pal_lock: ["Acquire pal lock", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
+    pal_unlock: ["Release pal lock", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
+    // Safe sync is additive, but recreate:true can drop every row, so the tool as a whole is
+    // destructive and clients should present a confirmation affordance.
+    pal_sync_datasets: ["Synchronize pal datasets", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }]
+};
+for (const tool of TOOLS) {
+    const hint = TOOL_HINTS[tool.name];
+    if (hint) { tool.title = hint[0]; tool.annotations = hint[1]; }
+}
 
 module.exports = { TOOLS, overridePhrase, blockedMessage, formatExpect, formatValidation, isBenignServerNote,
     htmlRegionResult, recordScreenshotEvidence };

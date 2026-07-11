@@ -17,6 +17,10 @@ Read before acting:
   examples for app/console UI. CSS recipes live in the reference-only `design-system.css`; copy
   only the tokens, base rules, and component rules this pal actually uses into `styles/styles.css`.
   Add `pb-ui.js` / `pb-motion.js` only when selected components need their behavior.
+
+When extracting from the large `design-system.css` or `component-library.md`, use targeted
+`rg -n '<selector>' <file>` searches to locate relevant line numbers, then read only those blocks.
+Never read or regex-scan either whole file into context.
 - `references/marketing-library.md` instead, when the pal (or a page of it) is marketing-oriented:
   hero, bento, pricing, testimonials, logo cloud, CTA band, stats/ticker, mockups, text/glow
   effects. Console-only pals should never need to load this file.

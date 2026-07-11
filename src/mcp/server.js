@@ -27,7 +27,7 @@ function createServer(getCtx, workspaceDir) {
     for (const t of TOOLS) {
         server.registerTool(
             t.name,
-            { description: t.description, inputSchema: t.inputShape },
+            { description: t.description, inputSchema: t.inputShape, annotations: t.annotations, title: t.title },
             async (args) => {
                 // Belt-and-suspenders: the MCP SDK already wraps handlers, but we catch here too so
                 // every tool failure is LOGGED with its tool name + full stack (the SDK swallows the

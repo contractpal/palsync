@@ -7,12 +7,12 @@ const { spawn } = require("child_process");
 const { commandOnPath } = require("../platform/commandOnPath");
 
 // `mcp` = how palsync registers its sync server for this agent: "claude" (.mcp.json),
-// "codex" (`codex mcp add`), "opencode" (opencode.json), or false (no MCP — the agent drives
-// palsync via its shell CLI). `key` is the --agent flag value.
+// "codex" (`codex mcp add`), "pi" (pi-mcp extension), "opencode" (opencode.json), or false.
+// `key` is the --agent flag value.
 const AGENTS = [
     { id: "claude-code", key: "claude", label: "Claude Code", command: "claude", args: [], mcp: "claude" },
     { id: "codex", key: "codex", label: "Codex", command: "codex", args: [], mcp: "codex" },
-    { id: "pi", key: "pi", label: "Pi", command: "pi", args: [], mcp: false },
+    { id: "pi", key: "pi", label: "Pi", command: "pi", args: [], mcp: "pi" },
     { id: "opencode", key: "opencode", label: "OpenCode", command: "opencode", args: [], mcp: "opencode" }
     // future: { id: "cline", ... }, { id: "cursor", ... }
 ];

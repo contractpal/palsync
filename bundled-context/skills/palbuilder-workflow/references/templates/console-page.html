@@ -1,0 +1,22 @@
+<html xmlns:c="contractpal">
+    <head>
+        <title>{{PAL_NAME}}</title>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <link rel="STYLESHEET" type="text/css" href="../Styles/spacing.css"/>
+        <link rel="STYLESHEET" type="text/css" href="../Styles/styles.css"/>
+        <script type="module" src="../Scripts/pb-ui.js"></script>
+        <script type="module" src="../Scripts/pb-motion.js"></script>
+    </head>
+    <body>
+        <div id="cp-root">
+            <div id="nav">
+                <c:fragment name="navbar"/>
+            </div>
+            <main id="body" class="pb-main">
+                <c:fragment name="${frag}"/>
+            </main>
+            <c:debug/>
+        </div>
+    </body>
+</html>

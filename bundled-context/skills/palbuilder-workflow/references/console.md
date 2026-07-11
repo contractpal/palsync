@@ -55,6 +55,10 @@ place console workflows fail:
 
 The canonical skeleton for a hand-built console workflow is:
 
+For a new pal, copy `templates/console-workflow.js` with bash `cp` (never read-then-write),
+replace `{{PAL_NAME}}`, and adapt the copied skeleton. The inline form below explains the pattern
+for existing pals and remains the reference for its `c.getPage`/AJAX rules.
+
 ```js
 var c, pal, page, payload, request, frag;
 

@@ -35,11 +35,11 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
 3. Not a git repo → `git init && git add -A && git commit -m "loop start"`. Commit after every
    task. **git is a LOCAL checkpoint only** — the server is the source of truth; `git
    checkout` does NOT undo a pushed change (recovery: "On fail" below). Never push this repo.
-4. **Load exactly the skills SPEC.md §9 lists, before coding.** §9 is the manifest — don't
+4. **Load exactly the skills SPEC.md §9 lists, just in time.** §9 is the manifest — don't
    guess it (it may include palbuilder-workflow, palbuilder-data, or palbuilder-realtime).
-   palbuilder-frontend and
-   design-build are always in it. pal-restraint is not a §9 skill — it's the default
-   discipline on every task.
+   Load a listed skill when the first task requiring it starts, not all before coding.
+   palbuilder-frontend and design-build still load before the first UI task. pal-restraint is
+   not a §9 skill — it's the default discipline on every task.
 5. `pal_status`. Server newer than your last pull → `pal_pull` first.
 6. **Smoke-test before picking work:** `pal_validate`, plus `pal_test` on the workflow the
    Checkpoints show as last touched — a prior session can leave the workspace broken despite
@@ -58,9 +58,11 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
    `references/delegation.md` first; required protocol.**)
 3. **Mark** `in_progress`: `palsync task <id> in_progress` — write state now, not later.
 4. **Execute exactly as specced:**
-   - Foundation task (T1): hand-build the page shell, copy the four canonical files verbatim,
-     author/register the new pal's readable `styles/styles.css`, and for console pals establish
-     the `run()` skeleton from `palbuilder-workflow/references/console.md`.
+   - Foundation task (T1): use bash `cp` to copy the matching pal-type template files and the
+     canonical runtime files (`spacing.css`, `styles.css`, `pb-ui.js`, `pb-motion.js`) — never
+     read-then-write. Replace `{{PAL_NAME}}`/`YOUR-DOMAIN` placeholders, then adapt; author
+     `styles/styles.css` from the selected design-system rules and register the four runtime files.
+     For console pals establish the `run()` skeleton from the copied template.
    - Copy: **§4**, verbatim — these exact words ship.
    - Layout: **§6** composition, styled via **design-build** (the spec carries no colors/fonts).
    - SEO head values: **§7** (web only).
@@ -79,21 +81,24 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       safe for this task before marking it `done`; warnings are allowed to push but never
       silently ignored. Standalone `pal_validate` is for diagnosis between edits only, and
       never twice without an edit in between — same input, same output.
-   2. `pal_test` → workflow VALIDATED, 0 notes — the real server compile (console AND web).
-      Always run after a workflow change. Read `messages` too (whole-test failures like
+   2. `pal_test` once per task, after that task's final push → workflow VALIDATED, 0 notes —
+      the real server compile (console AND web). Read `messages` too (whole-test failures like
       "Pal is not a Web Pal" live there).
    3. WEB page: `pal_fetch` or `pal_preview` with `expect:[the exact strings the success
       condition names]` → all found. (This returns per-string found/missing, not the HTML —
       use `selector`/`maxChars` only when you truly need markup.) Then `pal_seo_audit` → 0
       errors (public pages).
-   4. **Any page-level UI task:** call `pal_screenshot` at both `desktop` and `mobile`. Both must
+   4. **UI verification by task type:** UI-only task → one desktop `pal_screenshot`; behavior-only
+      task → one `pal_exercise`; a task changing both → one desktop screenshot and one exercise.
+      Merge same-page assertions into one exercise flow. Mobile screenshots are final-review-only
+      (pal-review owns the desktop + mobile pair), not per-task. Screenshots must
       have `renderError:null`, fully loaded CSS, and zero pal-content design-audit errors. Console
       screenshots can include platform-injected chrome outside `#cp-root`; findings such as
       `tableHeaders` on the action table or `horizontalOverflow` on the function-call timer are not
       fixable in pal code. Confirm the flagged node is outside `#cp-root` and checkpoint it explicitly;
-      never use this exception for the same finding inside pal content. Inspect both images
-      against design-build's archetype rubric; if either audit/image exposes a failure, fix the
-      three highest-impact issues, push, and re-capture the changed viewport. Re-run the task's
+      never use this exception for the same finding inside pal content. Inspect the desktop image
+      against design-build's archetype rubric; if the audit/image exposes a failure, fix the
+      three highest-impact issues, push, and re-capture. Re-run the task's
       behavior check after the last visual edit. A screenshot file path without pixel critique is
       not review evidence.
    5. CONSOLE screen: `pal_test` proves it compiles; the RENDER needs `pal_screenshot`:
@@ -103,7 +108,7 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       - `captured:false` → do NOT guess from HTML: set `needs-human` with a Blockers entry
         prefixed `HUMAN GATE:` naming exactly what to eyeball. Continue with independent
         tasks. (Full rule: `../pal-review/references/console-render-verification.md`.)
-   6. ANY write action (create/edit/delete): `pal_exercise` — trigger the action and assert the
+   6. ANY write action (create/edit/delete), when the task includes behavior changes: `pal_exercise` — trigger the action and assert the
       result in the rendered output. **Batch the whole flow into ONE call's `steps` array**
       (e.g. add → edit → delete is one exercise with expects per step), not one call per
       action — each extra call is a full context-window round trip. Web:

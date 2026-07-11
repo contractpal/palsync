@@ -34,8 +34,8 @@ never pal-loop's self-report.
   (per-string found/missing verdict, no HTML dump). Real output, not source.
 - Every §3 nav link routes to a real page — no dead links.
 - Every §12 acceptance criterion actually met — the full set, not just the global floor.
-- Every new-pal UI page links `../Styles/spacing.css` before `../Styles/design-system.css`, then
-  `../Styles/styles.css`, and loads `pb-ui.js`/`pb-motion.js` each exactly once as
+- Every new-pal UI page links `../Styles/spacing.css` before `../Styles/styles.css`, and loads
+  `pb-ui.js`/`pb-motion.js` each exactly once as
   `<script type="module">` (design-system-init's checklist has the exact order). Existing pals
   without `styles.css` are not retrofitted; Bootstrap is not loaded merely for spacing/layout helpers.
 - §11 NEVER list not violated; §8b consumed datasets not altered.
@@ -71,6 +71,8 @@ proof artifact for rendered output or data effects.
 
 ### 3. Visual / UX (capability-gated)
 Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per screen.
+- Review owns the responsive pair: capture the final pushed version at both desktop and mobile;
+  pal-loop's per-task mobile capture is intentionally deferred to this final review.
 - Capture both desktop and mobile for every page-level screen. `designAudit.errors > 0` is a hard
   visual failure; list each rule and screenshot as evidence. Audit warnings must be fixed or
   individually justified, never silently ignored.

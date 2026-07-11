@@ -21,6 +21,7 @@ const { resolveServerPalByGuid, resolveServerPalByName } = require("../core/reso
 const keychain = require("../platform/keychain");
 const workspace = require("../launcher/workspace");
 const lock = require("../core/lock");
+const registerPi = require("../mcp/registerPi");
 
 const DEFAULT_CLOUD = "https://secure.cloudpiston.com";
 
@@ -34,7 +35,7 @@ const USAGE = [
     "  --user <username>    account (default: env CP_USER, else the single keychain account)",
     "  --profile <name>     narrow by profile name (disambiguates a duplicate pal name)",
     "  --group <name>       narrow by group name",
-    "  --agent claude|codex|pi|opencode  which agent's context/MCP to write (default: claude; pi uses the CLI, no MCP)",
+    "  --agent claude|codex|pi|opencode  which agent's context/MCP to write (default: claude; pi auto-detects .palsync.json via the pi-mcp extension (nothing written; install the extension once globally))",
     "  --overwrite-local    if the workspace has un-pushed local edits, overwrite them (default: refuse)",
     "  --json               machine-readable result",
     "",
@@ -123,6 +124,15 @@ async function run(argv) {
                   pal: { guid: resolved.guid, name: resolved.name, lastModifiedDate: resolved.lastModifiedDate } };
 
     const result = await workspace.setup({ session, cloudUrl, sel, workspaceDir, agent: flags.agent, onDrift, log });
+
+    if (flags.agent === "pi") {
+        const pi = result.mcpRegistration || await registerPi.register();
+        result.mcpRegistration = pi;
+        result.mcpConfig = null;
+        if (!flags.json) log(pi.installed
+            ? "Pi MCP extension detected at " + pi.installCommand.split(" at ")[1].split(" ")[0] + ". No project file written."
+            : "Pi MCP extension not detected. " + pi.installCommand);
+    }
 
     // Release the lock — no agent is launched here, so don't strand it. The MCP server re-acquires
     // it on the agent's first tool call (own-stale-reclaim).

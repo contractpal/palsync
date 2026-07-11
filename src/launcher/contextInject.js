@@ -325,6 +325,19 @@ async function readIfExists(p) {
     catch (e) { if (e.code === "ENOENT") return null; throw e; }
 }
 
+async function filesUnder(dir, prefix) {
+    let entries;
+    try { entries = await fs.readdir(dir, { withFileTypes: true }); }
+    catch (e) { if (e.code === "ENOENT") return []; throw e; }
+    const out = [];
+    for (const ent of entries) {
+        const rel = path.join(prefix, ent.name);
+        if (ent.isDirectory()) out.push(...await filesUnder(path.join(dir, ent.name), rel));
+        else if (ent.isFile()) out.push(rel);
+    }
+    return out;
+}
+
 // Discover every skill shipped in the bundle: each subdir of bundled-context/skills/ that has a
 // SKILL.md, normalized to { name, assets } where assets are the files under its references/
 // (auto-shipped). The bundle dir is the single source of truth — no list to keep in sync with disk.
@@ -341,8 +354,7 @@ async function bundledSkills() {
         catch (e) { continue; } // a dir without SKILL.md is not a skill — skip it
         let assets = [];
         try {
-            const refs = await fs.readdir(path.join(dir, "references"), { withFileTypes: true });
-            assets = refs.filter(r => r.isFile()).map(r => path.join("references", r.name));
+            assets = await filesUnder(path.join(dir, "references"), "references");
         } catch (e) { /* no references/ — SKILL.md-only skill */ }
         out.push({ name: ent.name, assets });
     }

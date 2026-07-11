@@ -1,0 +1,33 @@
+<html xmlns:c="contractpal">
+    <head>
+        <title>${title}</title>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+        <!-- SEO head driven by the workflow payload (seo-core rules: title <=60 chars,
+             description 50-160, absolute og URLs, plain ASCII separators in titles). -->
+        <meta name="description" content="${description}"/>
+        <link rel="canonical" href="${canonical}"/>
+        <c:head name="meta" test="${!empty(meta)}"/>
+        <c:script test="${!empty(schemaText)}" inline="true" body="${schemaText}" type="application/ld+json"/>
+
+        <!-- robots.txt / sitemap.xml / llms.txt served by the workflow — no static files. -->
+
+        <link rel="STYLESHEET" type="text/css" href="../Styles/spacing.css"/>
+        <link rel="STYLESHEET" type="text/css" href="../Styles/styles.css"/>
+        <script type="module" src="../Scripts/pb-ui.js"></script>
+        <script type="module" src="../Scripts/pb-motion.js"></script>
+    </head>
+    <body>
+        <div id="cp-root">
+            <div id="navbar">
+                <c:fragment name="navbar"/>
+            </div>
+            <div id="body">
+                <c:fragment name="${mainFrag}"/>
+            </div>
+            <c:fragment name="footer"/>
+            <c:debug/>
+        </div>
+    </body>
+</html>
