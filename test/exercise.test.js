@@ -5,7 +5,7 @@
 // the report format, and the no-server invalid path of runExercise.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { runExercise, validateSteps, checkStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, MAX_STEPS } = require("../src/core/exercise");
+const { runExercise, validateSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, MAX_STEPS } = require("../src/core/exercise");
 
 // ---- validateSteps ---------------------------------------------------------
 
@@ -54,6 +54,17 @@ test("checkStep: a missing expect string fails", () => {
     const r = checkStep("<h1>Equipment</h1>", { expect: ["Camera"] });
     assert.strictEqual(r.pass, false);
     assert.strictEqual(r.expect[0].found, false);
+});
+
+test("checkBrowserStep: input value markup is diagnostic, not a visible PASS", () => {
+    const r = checkBrowserStep(
+        "Add equipment\nSave\nCancel",
+        '<input name="name" value="Camera run123"/>',
+        { expect: ["Camera run123"] }
+    );
+    assert.strictEqual(r.pass, false);
+    assert.strictEqual(r.expect[0].found, false);
+    assert.strictEqual(r.expect[0].markupOnly, true);
 });
 
 // ---- mode selection + labels ----------------------------------------------
@@ -122,22 +133,25 @@ test("runExercise: invalid steps return {invalid} without any session use", asyn
 
 // ---- formatExercise --------------------------------------------------------
 
-test("formatExercise: reports pass/fail, missing strings, surviving absents, renderError", () => {
+test("formatExercise: reports visible assertions, markup-only clues, screen hints, and renderError", () => {
     const failing = {
         ran: true, kind: "console", mode: "browser", pass: false, failedStep: 2,
         steps: [
             { step: 1, label: "fill{name} click \"Save\"", pass: true, expect: [{ string: "Camera", found: true }], absent: [] },
             { step: 2, label: "click \"Delete\"", pass: false,
-              expect: [{ string: "deleted", found: false }],
+              expect: [{ string: "deleted", found: false, markupOnly: true }],
               absent: [{ string: "Camera", absent: false }],
+              hints: { headings: ["Edit equipment"], clicks: ["Save"], ids: ["#nameInput"], fields: ["name"] },
               renderError: { message: "NullPointerException: rec is null", workflow: "equipment.js", line: "42" } }
         ]
     };
     const out = formatExercise(failing);
     assert.match(out, /FAIL at step 2/);
     assert.match(out, /✓ step 1/);
-    assert.match(out, /expect "deleted": MISSING/);
+    assert.match(out, /expect "deleted": MISSING from visible text \(present only in HTML\/form state/);
     assert.match(out, /absent "Camera": STILL PRESENT/);
+    assert.match(out, /headings: "Edit equipment"/);
+    assert.match(out, /Push again only after editing a pal file/);
     assert.match(out, /renderError: NullPointerException.*equipment\.js:42/);
     assert.match(out, /Later steps were not run/);
 

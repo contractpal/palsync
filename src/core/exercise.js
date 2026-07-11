@@ -78,8 +78,8 @@ function validateSteps(steps) {
     return errs;
 }
 
-// Assert one step's expect/absent against the rendered output. `haystack` is the rendered text
-// (browser mode: innerText + HTML; fetch mode: served HTML). Returns { pass, expect, absent }.
+// Assert one step's expect/absent against a rendered-output haystack. Fetch mode passes served
+// HTML; browser mode uses checkBrowserStep so only visible text proves behavior.
 function checkStep(haystack, step) {
     const exp = checkExpect(haystack, step.expect || []);
     const abs = (step.absent || []).map((s) => {
@@ -87,6 +87,16 @@ function checkStep(haystack, step) {
         return { string: s, absent: !found };
     });
     return { pass: exp.pass && abs.every(a => a.absent), expect: exp.results, absent: abs };
+}
+
+// Browser checks deliberately use visible text. HTML is diagnostic-only: a submitted value can
+// remain in an input's value= attribute when an action fails and leaves the form open.
+function checkBrowserStep(visibleText, html, step) {
+    const chk = checkStep(visibleText, step);
+    for (const r of chk.expect) {
+        if (!r.found && String(html || "").indexOf(r.string) !== -1) r.markupOnly = true;
+    }
+    return chk;
 }
 
 // One-line label for a step in output ("action=saveEquipment name=Camera" / "click \"Save\"").
@@ -176,15 +186,17 @@ async function screenHints(pg) {
                 compact(el.innerText || el.textContent || el.value || el.getAttribute("aria-label") || el.getAttribute("title")))).slice(0, 20);
             const ids = uniq(Array.from(document.querySelectorAll("[id]")).map(el => "#" + compact(el.id))).slice(0, 20);
             const fields = uniq(Array.from(document.querySelectorAll("input[name],textarea[name],select[name]")).map(el => compact(el.getAttribute("name")))).slice(0, 20);
-            return { clicks, ids, fields };
+            const headings = uniq(Array.from(document.querySelectorAll("h1,h2,[role='heading']")).map(el => compact(el.innerText || el.textContent))).slice(0, 10);
+            return { clicks, ids, fields, headings };
         });
     } catch (e) {
-        return { clicks: [], ids: [], fields: [] };
+        return { clicks: [], ids: [], fields: [], headings: [] };
     }
 }
 
 function formatScreenHints(h) {
     const parts = [];
+    if (h && h.headings && h.headings.length) parts.push("headings: " + h.headings.map(s => JSON.stringify(s)).join(", "));
     if (h && h.clicks && h.clicks.length) parts.push("clickable text: " + h.clicks.map(s => JSON.stringify(s)).join(", "));
     if (h && h.ids && h.ids.length) parts.push("ids: " + h.ids.join(", "));
     if (h && h.fields && h.fields.length) parts.push("fields: " + h.fields.join(", "));
@@ -334,11 +346,15 @@ async function exerciseByBrowser(t, steps, viewport) {
             try { text = await pg.innerText("body"); } catch (e) { /* keep "" */ }
             const html = await pg.content();
             const renderError = detectRenderError(text) || detectRenderError(html);
-            const chk = checkStep(text + "\n" + html, step);
+            // Browser assertions prove what the user can see, not incidental source markup.
+            // Searching HTML made a failed Save look successful whenever the submitted value
+            // survived in an input's value= attribute on the still-open form.
+            const chk = checkBrowserStep(text, html, step);
             const pass = chk.pass && !renderError;
             const dialogs = acceptedDialogs.splice(0);
+            const hints = pass ? null : await screenHints(pg);
             results.push({ step: i + 1, label: stepLabel(step), pass,
-                           expect: chk.expect, absent: chk.absent, renderError, dialogs, url: sanitizeUrl(pg.url()) });
+                           expect: chk.expect, absent: chk.absent, renderError, dialogs, hints, url: sanitizeUrl(pg.url()) });
             if (!pass) return { ran: true, kind: t.kind, mode: "browser", pass: false, failedStep: i + 1, steps: results };
         }
         return { ran: true, kind: t.kind, mode: "browser", pass: true, steps: results };
@@ -363,16 +379,18 @@ function formatExercise(res) {
         lines.push((s.pass ? "  ✓ " : "  ✗ ") + "step " + s.step + " [" + s.label + "]");
         if (s.error) lines.push("      error: " + s.error);
         for (const r of s.expect || []) {
-            lines.push("      expect " + JSON.stringify(r.string) + ": " + (r.found ? "found" : "MISSING"));
+            lines.push("      expect " + JSON.stringify(r.string) + ": " + (r.found ? "found in visible text" :
+                "MISSING from visible text" + (r.markupOnly ? " (present only in HTML/form state — this does not prove the result rendered)" : "")));
         }
         for (const r of s.absent || []) {
             lines.push("      absent " + JSON.stringify(r.string) + ": " + (r.absent ? "clean" : "STILL PRESENT — the old value survived (duplicate insert / edit didn't apply?)"));
         }
         if (s.dialogs && s.dialogs.length) lines.push("      dialog(s) accepted: " + s.dialogs.map(d => JSON.stringify(d)).join(", "));
         if (s.renderError) lines.push("      renderError: " + s.renderError.message + (s.renderError.workflow ? " (" + s.renderError.workflow + (s.renderError.line ? ":" + s.renderError.line : "") + ")" : ""));
+        if (!s.pass && s.hints) lines.push("      " + formatScreenHints(s.hints));
     }
-    if (!res.pass && res.ran) lines.push("  Later steps were not run — fix this step, push, and exercise again.");
+    if (!res.pass && res.ran) lines.push("  Later steps were not run — inspect the current screen/test targeting first. Push again only after editing a pal file.");
     return lines.join("\n");
 }
 
-module.exports = { runExercise, validateSteps, checkStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, MAX_STEPS };
+module.exports = { runExercise, validateSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, MAX_STEPS };

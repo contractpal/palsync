@@ -796,8 +796,8 @@ const TOOLS = [
                 fill: z.record(z.union([z.string(), z.number()])).optional().describe("Fill inputs by their name= attribute before clicking, e.g. {\"name\":\"Camera\",\"category\":\"AV\"}."),
                 click: z.string().optional().describe("EXACT visible text of the link/button to click (a c:a Save link), or a simple #id/.class selector."),
                 within: z.string().optional().describe("Browser mode: scope click to exactly one CSS/Playwright locator, e.g. tr:has-text(\"Camera {{runId}}\"). Required when the same action text appears in multiple rows/cards."),
-                expect: z.array(z.string()).optional().describe("Strings that MUST appear in the rendered output after this step (the saved value in the list)."),
-                absent: z.array(z.string()).optional().describe("Strings that must NOT appear after this step (the pre-edit value; a stale row proves a duplicate insert).")
+                expect: z.array(z.string()).optional().describe("Strings that MUST appear in visible rendered text after this step (for example, the saved value in the list). Hidden markup and input value= attributes do not count."),
+                absent: z.array(z.string()).optional().describe("Strings that must NOT appear in visible rendered text after this step (the pre-edit value; a stale row proves a duplicate insert).")
             })).min(1).max(10).describe("Steps run in order; the run stops at the first failing step."),
             workflow: z.enum(["console", "web", "transaction"]).optional().describe("Engine to exercise (default: auto-detected)."),
             viewport: z.enum(["desktop", "mobile"]).optional().describe("Browser-mode viewport (default desktop).")
