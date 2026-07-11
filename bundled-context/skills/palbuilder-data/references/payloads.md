@@ -232,8 +232,25 @@ Use for:
   reference tables)
 - Anything you'd otherwise hardcode into a workflow as a repeated pattern
 
-For manifest structure of these two types, see
-`palbuilder-core/references/pal-json.md`.
+For their exact pulled/exported manifest structures, see the **`data`** and **`datalists`**
+sections in `palbuilder-core/references/pal-json.md`. Those entries use
+`Data.values.entry[].string` key/value pairs and `DataList.cols` / `DataList.recs`; they do not use
+a newline-delimited `data` string or `columns` / `records`. Palsync preserves existing entries but
+does not provision new Data or DataList manifest objects via push—create a new one in PalBuilder.
+
+### ConsolePacket is shared mutable state, not pal configuration
+
+`c.getConsolePacket()` returns the one ConsolePacket associated with the Console Pal. It is **not
+per request or per user**: the platform API explicitly says every user of that Console Pal accesses
+the same packet. Treat writes as shared application state with the same authorization and
+concurrency care as any other multi-user mutation.
+
+Do not reach for `c.getConsolePacket().getData(...)` or `.getDataList(...)` to bootstrap fixed
+settings or reference rows. Those getters only retrieve objects already present in the shared
+packet; they do not define a pal-level manifest object. Use `pal.getData(...)` /
+`pal.getDataList(...)` for PalBuilder-provisioned constants, a dataset for durable business rows,
+and CacheManager only for disposable computed cache data. Use ConsolePacket only when the feature
+intentionally needs shared mutable packet state.
 
 ---
 

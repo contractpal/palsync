@@ -74,6 +74,10 @@ Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per 
 - Capture both desktop and mobile for every page-level screen. `designAudit.errors > 0` is a hard
   visual failure; list each rule and screenshot as evidence. Audit warnings must be fixed or
   individually justified, never silently ignored.
+- Console captures include platform chrome outside the pal's `#cp-root`. A `tableHeaders` finding
+  on the chrome action table or `horizontalOverflow` on its function-call timer is platform-injected,
+  not a pal defect. Exclude it only after proving the flagged node is outside `#cp-root`, and list it
+  explicitly under the evidence; the same rule inside pal content remains a hard failure.
 - IF `rg --files-without-match 'class="pb-section' fragments/` prints a fragment, THEN fail that fragment. Every fragment root uses `pb-section`.
 - IF `rg -n '<main id="body" class="pb-main">' pages/console.html` prints no match, THEN fail the shell. The shell owns `pb-main`; fragments do not. IF a shell wrapper class is absent from `styles/design-system.css`, `styles/spacing.css`, and COMPONENTS.md, THEN fail it as undefined.
 - IF `for f in fragments/*; do [ "$(rg -o 'pb-field-group' "$f" | wc -l)" -lt 2 ] || rg -q 'pb-stack|pb-form-grid' "$f" || echo "$f"; done` prints a fragment, THEN fail it. Two or more field groups require `pb-stack` or `pb-form-grid`.

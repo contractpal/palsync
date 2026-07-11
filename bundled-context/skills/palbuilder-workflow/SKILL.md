@@ -124,7 +124,8 @@ Two important properties of this shape:
 ## Reserved globals
 
 These variable names have fixed meanings. Use them only for the values described — never
-repurpose them.
+repurpose them. They are reserved names, not automatically available magic globals: you must
+still declare and assign each one you use.
 
 | Global | Value | Notes |
 |---|---|---|
@@ -143,8 +144,10 @@ repurpose them.
 | `cm` | `pal.getCacheManager()` | Pal-level cache — see `palbuilder-data/references/cache.md` |
 | `dateUtil` | `c.getDateUtil()` | Date arithmetic helpers |
 
-**Declare only the globals you actually use.** A workflow that never returns ajax doesn't
-need `ajax`; a workflow that never touches cache doesn't need `cm`.
+**Declare only the globals you actually use, and only at file scope when multiple functions need
+them.** A workflow that never returns ajax doesn't need `ajax`; a workflow that never touches
+cache doesn't need `cm`. Handler-only values such as a dataset, filter, or records list are local
+`var` declarations inside that handler, not file-scope globals.
 
 ---
 

@@ -56,10 +56,11 @@ place console workflows fail:
 The canonical skeleton for a hand-built console workflow is:
 
 ```js
-var c, page, payload, request, frag;
+var c, pal, page, payload, request, frag;
 
 function run(controller) {
     c = controller;
+    pal = c.getPal();
     page = c.getPage("console");          // c.getPage, NOT pal.getPage
     payload = c.createPayload();
     request = c.getRequest();
@@ -81,7 +82,13 @@ function run(controller) {
 }
 
 function getDashboard() {
-    // seed payload …
+    // Handler-only values are locals, declared inside the handler.
+    var ds = pal.getDataSet("equipment");
+    var filter = ds.createFilter();
+    filter.selectColumns(["equipmentId", "name"]);
+    filter.sortAscending("name");
+    var records = ds.getRecords(filter);
+    payload.addDataList(records);
     frag = "dashboard";
 }
 ```
@@ -89,6 +96,11 @@ function getDashboard() {
 A handler sets `frag` (and payload data); the tail renders that fragment into the page shell's
 `<c:fragment name="${frag}" />` slot on a full load, or swaps it in via AJAX otherwise. Same
 handler, both entry paths — no per-action page/ajax bookkeeping.
+
+`c`, `pal`, `page`, `payload`, `request`, and `frag` are file-scope because multiple functions use
+them. Add other reserved globals such as `dateUtil`, `data`, or `action` only when more than one
+function needs them, and declare and assign every one you use. Values used by one handler only —
+such as `ds`, `filter`, and `records` above — stay local to that function.
 
 ---
 

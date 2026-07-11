@@ -87,7 +87,11 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       use `selector`/`maxChars` only when you truly need markup.) Then `pal_seo_audit` → 0
       errors (public pages).
    4. **Any page-level UI task:** call `pal_screenshot` at both `desktop` and `mobile`. Both must
-      have `renderError:null`, fully loaded CSS, and `designAudit.errors:0`. Inspect both images
+      have `renderError:null`, fully loaded CSS, and zero pal-content design-audit errors. Console
+      screenshots can include platform-injected chrome outside `#cp-root`; findings such as
+      `tableHeaders` on the action table or `horizontalOverflow` on the function-call timer are not
+      fixable in pal code. Confirm the flagged node is outside `#cp-root` and checkpoint it explicitly;
+      never use this exception for the same finding inside pal content. Inspect both images
       against design-build's archetype rubric; if either audit/image exposes a failure, fix the
       three highest-impact issues, push, and re-capture the changed viewport. Re-run the task's
       behavior check after the last visual edit. A screenshot file path without pixel critique is
@@ -105,10 +109,21 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       action — each extra call is a full context-window round trip. Web:
       `steps:[{action, params, expect}]`. Console:
       `steps:[{fill:{name:value}, click:"<exact link text>", expect:[...]}]`. **Use unique
-      `{{runId}}` data for every created record and subsequent expected value.** If row/card action
+      `{{runId}}` data for every created record and subsequent expected value.** A console normally
+      opens on its default list fragment, so a create flow must click its Add/Create link before it
+      tries to fill form fields. If row/card action
       labels repeat, `click` is intentionally ambiguous and the exercise fails; add
-      `within:'tr:has-text("Record {{runId}}")'` (or the equivalent unique card selector) so the
-      exact record is exercised. Never rely on list order or an unscoped first matching action.
+      `within:'tr:has([data-label="Name"]:has-text("Record {{runId}}"))'` (or the equivalent
+      unique card-container selector) so the exact record is exercised. Bare `:has-text()` can
+      match every ancestor containing the text, not just the row. Never rely on list order or an
+      unscoped first matching action.
+
+      | After action | `expect` | `absent` |
+      |---|---|---|
+      | Create | new value | — |
+      | Edit | new value | old value |
+      | Delete | — | deleted value |
+
       After an EDIT, put
       the new value in `expect` AND the old value in `absent` — a surviving old value means the
       edit inserted a duplicate. After a DELETE, put the deleted record's name/value in `absent`

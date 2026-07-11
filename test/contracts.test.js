@@ -580,9 +580,9 @@ test("destructiveConfirm — unrelated action produces no finding", () => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("canonical pb-* workspace warns on browser-default controls, headings, tables, actions, form rhythm, visible skip link, and invented classes", () => {
+test("selective pb-* styles warn on browser-default controls, headings, tables, actions, form rhythm, visible skip link, and invented classes", () => {
     const dir = tmpWorkspace({
-        "styles/design-system.css": ":root { --ds-space-1: 4px; } .pb-btn {}",
+        "styles/styles.css": ":root { --ds-space-1: 4px; } .pb-btn {}",
         "fragments/screen.html": [
             '<c:ignore xmlns:c="contractpal">',
             '  <a href="#main">Skip to content</a>',
@@ -603,9 +603,9 @@ test("canonical pb-* workspace warns on browser-default controls, headings, tabl
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("canonical pb-* workspace warns when row actions are ungrouped or conflicting", () => {
+test("selective pb-* workspace warns when row actions are ungrouped or conflicting", () => {
     const dir = tmpWorkspace({
-        "styles/design-system.css": [
+        "styles/styles.css": [
             ".pb-table {}", ".pb-btn {}", ".pb-btn-secondary {}", ".pb-btn-danger {}", ".pb-row-actions {}"
         ].join("\n"),
         "fragments/list.html": [
@@ -624,9 +624,9 @@ test("canonical pb-* workspace warns when row actions are ungrouped or conflicti
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("canonical grouped and status-conditional row actions produce no row-action warnings", () => {
+test("selective grouped and status-conditional row actions produce no row-action warnings", () => {
     const dir = tmpWorkspace({
-        "styles/design-system.css": [
+        "styles/styles.css": [
             ".pb-table {}", ".pb-btn {}", ".pb-btn-secondary {}", ".pb-btn-danger {}", ".pb-row-actions {}"
         ].join("\n"),
         "fragments/list.html": [
@@ -644,9 +644,13 @@ test("canonical grouped and status-conditional row actions produce no row-action
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("canonical pb-* recipes produce no design-hint warnings", () => {
+test("selected pb-* recipes in styles.css produce no design-hint warnings", () => {
     const dir = tmpWorkspace({
-        "styles/design-system.css": ":root { --ds-space-1: 4px; }",
+        "styles/styles.css": [
+            ".pb-skip-link {}", ".pb-section {}", ".pb-title {}", ".pb-card {}", ".pb-form-card {}",
+            ".pb-stack {}", ".pb-field-group {}", ".pb-input {}", ".pb-textarea {}", ".pb-btn {}",
+            ".pb-btn-primary {}", ".pb-table-wrap {}", ".pb-table {}"
+        ].join("\n"),
         "fragments/screen.html": [
             '<c:ignore xmlns:c="contractpal">',
             '  <a href="#main" class="pb-skip-link">Skip to content</a>',
@@ -661,6 +665,23 @@ test("canonical pb-* recipes produce no design-hint warnings", () => {
         ].join("\n"),
     });
     assert.deepStrictEqual(lintContracts(dir).filter(f => /^pb/.test(f.rule)), []);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("design-system.css is rejected as a runtime file, page link, or manifest style", () => {
+    const dir = tmpWorkspace({
+        "styles/design-system.css": ".pb-card {}",
+        "pages/console.html": '<html><head><link rel="STYLESHEET" href="../Styles/design-system.css" /></head><body></body></html>',
+        "pal.json": basePalJson({ styles: { entry: [
+            { string: "design-system.css", Style: { filename: "design-system.css" } }
+        ] } }),
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "referenceStylesheetShipped");
+    assert.strictEqual(findings.length, 3);
+    assert.ok(findings.every(f => f.severity === "error"));
+    assert.ok(findings.some(f => f.file === "styles/design-system.css"));
+    assert.ok(findings.some(f => f.file === "pages/console.html"));
+    assert.ok(findings.some(f => f.file === "pal.json"));
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -725,6 +746,112 @@ test("unknownPalJsonKey — desktopBindings entry with the real fields produces 
         }),
     });
     assert.strictEqual(lintPalJson(dir).filter(f => f.rule === "unknownPalJsonKey").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("invalidPalJsonShape — verified Data and DataList serialized forms pass", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({
+            data: { entry: [{
+                string: "siteConfig",
+                Data: { name: "siteConfig", values: { entry: [
+                    { string: ["companyName", "Acme Rentals"] },
+                    { string: ["directoryPageSize", "25"] },
+                ] } },
+            }] },
+            datalists: { entry: [{
+                string: "offices",
+                DataList: {
+                    name: "offices",
+                    cols: { string: ["officeCode", "city"] },
+                    recs: { "string-array": [
+                        { string: ["SLC", "Salt Lake City"] },
+                        { string: ["DEN", "Denver"] },
+                    ] },
+                },
+            }] },
+        }),
+    });
+    assert.deepStrictEqual(lintPalJson(dir).filter(f => f.rule === "invalidPalJsonShape"), []);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("invalidPalJsonShape — Data rejects guessed newline data field and mismatched name", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({
+            data: { entry: [{
+                string: "siteConfig",
+                Data: { name: "settings", data: "companyName=Acme\npageSize=25" },
+            }] },
+        }),
+    });
+    const findings = lintPalJson(dir).filter(f => f.rule === "invalidPalJsonShape");
+    assert.ok(findings.some(f => /must match Data\.name/.test(f.message)));
+    assert.ok(findings.some(f => /not a serialized Data field/.test(f.message)));
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("invalidPalJsonShape — Data values are two-item key/value arrays", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({
+            data: { entry: [{
+                string: "siteConfig",
+                Data: { name: "siteConfig", values: { entry: [{ string: ["onlyKey"] }] } },
+            }] },
+        }),
+    });
+    const findings = lintPalJson(dir).filter(f => f.rule === "invalidPalJsonShape");
+    assert.strictEqual(findings.length, 1);
+    assert.match(findings[0].message, /two-item \[key, value\]/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("invalidPalJsonShape — DataList requires cols/recs serialized names and aligned rows", () => {
+    const guessed = tmpWorkspace({
+        "pal.json": basePalJson({
+            datalists: { entry: [{
+                string: "offices",
+                DataList: { name: "offices", columns: ["code", "city"], records: [] },
+            }] },
+        }),
+    });
+    const guessedFindings = lintPalJson(guessed).filter(f => f.rule === "invalidPalJsonShape");
+    assert.ok(guessedFindings.some(f => /serialized DataList field/.test(f.message)));
+    assert.ok(guessedFindings.some(f => /cols\.string must be/.test(f.message)));
+    fs.rmSync(guessed, { recursive: true, force: true });
+
+    const uneven = tmpWorkspace({
+        "pal.json": basePalJson({
+            datalists: { entry: [{
+                string: "offices",
+                DataList: {
+                    name: "offices",
+                    cols: { string: ["code", "city"] },
+                    recs: { "string-array": [{ string: ["SLC"] }] },
+                },
+            }] },
+        }),
+    });
+    const unevenFindings = lintPalJson(uneven).filter(f => f.rule === "invalidPalJsonShape");
+    assert.strictEqual(unevenFindings.length, 1);
+    assert.match(unevenFindings[0].message, /must contain 2 cell/);
+    fs.rmSync(uneven, { recursive: true, force: true });
+});
+
+test("invalidPalJsonShape — DesktopBinding requires wrapper, label, and icon", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({
+            desktopBindings: [
+                { string: "missing-wrapper" },
+                { string: "missing-fields", DesktopBinding: { name: "", icon: "" } },
+            ],
+        }),
+    });
+    const findings = lintPalJson(dir).filter(f => f.rule === "invalidPalJsonShape");
+    assert.strictEqual(findings.length, 3);
+    assert.ok(findings.some(f => /contain a DesktopBinding object/.test(f.message)));
+    assert.ok(findings.some(f => /name must be/.test(f.message)));
+    assert.ok(findings.some(f => /icon must be/.test(f.message)));
     fs.rmSync(dir, { recursive: true, force: true });
 });
 

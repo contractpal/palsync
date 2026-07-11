@@ -1,8 +1,9 @@
 # COMPONENTS — palsync UX benchmark recipes
 
-These are approved, shipped pb-* building blocks. Compose the subset the content needs; do not
-invent class names or force every page through the same template. Every class must resolve in
-`styles/design-system.css`, `styles/spacing.css`, or the new-pal `styles/styles.css`.
+These are approved pb-* recipe references. Compose the subset the content needs; do not invent
+class names or force every page through the same template. Copy only used recipe rules and their
+dependencies into `styles/styles.css`; the full `design-system.css` remains reference-only and is
+never loaded. Every class must resolve in runtime `styles/spacing.css` or `styles/styles.css`.
 
 ## Shared app/CRUD
 

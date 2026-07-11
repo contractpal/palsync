@@ -15,7 +15,8 @@ logos, customers, testimonials, metrics, awards, or other proof to fill the visu
 
 1. Classify the surface as marketing or CRUD/admin before coding.
 2. Write a six-line brief: user, job, primary action, information order, density, signature idea.
-3. Apply the matching COMPONENTS.md recipes and the four canonical pb-* files.
+3. Apply the matching COMPONENTS.md recipes, copying only used CSS recipes and dependencies into
+   the pal-owned `styles/styles.css`; never load the full `design-system.css` reference.
 4. Verify behavior, then capture desktop and mobile screenshots.
 5. Read `designAudit`, inspect the actual pixels, fix the three highest-impact failures, and
    re-capture every changed viewport. `designAudit.errors` must be zero.
@@ -24,8 +25,9 @@ logos, customers, testimonials, metrics, awards, or other proof to fill the visu
 
 ## Foundation
 
-- Stack: `spacing.css` -> `design-system.css` -> new-pal `styles.css`, then `pb-ui.js` and
-  `pb-motion.js` once each. Existing pals are not retrofitted with `styles.css`.
+- Stack: optional `spacing.css` -> pal-owned `styles/styles.css`, then only the behavior scripts
+  actually used. `design-system.css` is reference-only and must not be copied, registered, linked,
+  or loaded into the pal.
 - Shell: console page owns `<main id="body" class="pb-main">`; content fragments root in
   `pb-section`. Marketing pages use one visible main landmark and a focus-only `pb-skip-link`.
 - Spacing: use the 2/4/8/12/16/20/24/32/40/48/64/80/96 scale. Label-to-control < field-to-field <

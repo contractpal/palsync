@@ -127,8 +127,17 @@ date/number/string formatting:
 
 Full formatter method list: https://secure.cloudpiston.com/cpal/cp-api/console/Formatter.html
 
-**Not available in EL:** ternary operator, arithmetic, arbitrary method calls. For anything
-beyond `formatter.*` and the operators above, prepare the value in the workflow.
+**Not available in EL:** ternary operator, arithmetic, arbitrary method calls. For a simple
+true/false value, use `c:set` instead of a ternary; prepare more complex values in the workflow.
+
+```html
+<!-- ✗ WRONG: EL ternary is unsupported -->
+<div class="${active ? 'active' : ''}">...</div>
+
+<!-- ✓ RIGHT: c:set chooses the value first -->
+<c:set name="activeClass" test="${active eq 'true'}" true="active" false="" />
+<div class="${activeClass}">...</div>
+```
 
 ---
 

@@ -88,6 +88,10 @@ test("resolveClickTarget: duplicate labels fail instead of silently clicking the
     const out = await resolveClickTarget(pg, { click: "Check out" });
     assert.match(out.error, /ambiguous \(matched 2 elements\)/);
     assert.match(out.error, /within/);
+    assert.match(out.error, /data-label/,
+        "the error should suggest scoping a row through its identifying cell");
+    assert.match(out.error, /:has-text/,
+        "the error should include an actionable Playwright selector pattern");
 });
 
 test("resolveClickTarget: within scopes a repeated action to one record", async () => {

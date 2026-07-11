@@ -69,6 +69,11 @@ function sanitizeUrl(u) {
     catch (e) { return ""; }
 }
 
+function isLoginRedirect(u) {
+    try { return /(?:^|\/)login(?:\/|\b)|\bgetlogin\b/i.test(new URL(u).pathname); }
+    catch (e) { return false; }
+}
+
 function sanitizeResourceUrl(u) {
     try {
         const x = new URL(u);
@@ -218,6 +223,16 @@ async function inspectStyleStatus(pg, events = { responses: [], failed: [] }) {
 async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop" } = {}) {
     try {
         const audit = await pg.evaluate(({ kind }) => {
+            // Console pages are embedded in CloudPiston chrome. Audit only the pal-owned root so
+            // platform layout tables/timer bars cannot create false table/overflow failures.
+            const root = kind === "console" && document.querySelector("#cp-root")
+                ? document.querySelector("#cp-root")
+                : (document.body || document.documentElement);
+            const select = (selector) => {
+                const nodes = Array.from(root.querySelectorAll(selector));
+                if (root.matches && root.matches(selector)) nodes.unshift(root);
+                return nodes;
+            };
             const visible = (el) => {
                 const cs = window.getComputedStyle(el);
                 const r = el.getBoundingClientRect();
@@ -246,17 +261,19 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
 
             const doc = document.documentElement;
             const body = document.body;
-            const overflow = Math.max(0, Math.ceil(Math.max(doc.scrollWidth, body ? body.scrollWidth : 0) - doc.clientWidth));
+            const rootRect = root.getBoundingClientRect();
+            const rootClientWidth = Math.min(window.innerWidth, root.clientWidth || rootRect.width || window.innerWidth);
+            const overflow = Math.max(0, Math.ceil((root.scrollWidth || rootRect.width) - rootClientWidth));
             if (overflow > 1) {
-                const offenders = Array.from(document.querySelectorAll("body *")).filter(el => {
+                const offenders = select("*").filter(el => {
                     if (!visible(el)) return false;
                     const r = el.getBoundingClientRect();
-                    return r.right > window.innerWidth + 1 || r.left < -1;
+                    return r.right > Math.min(window.innerWidth, rootRect.right) + 1 || r.left < Math.max(0, rootRect.left) - 1;
                 });
                 add("error", "horizontalOverflow", "Page is " + overflow + "px wider than the viewport; reflow is broken.", offenders);
             }
 
-            const headings = Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6")).filter(visible);
+            const headings = select("h1,h2,h3,h4,h5,h6").filter(visible);
             const h1s = headings.filter(el => el.tagName === "H1");
             if (h1s.length !== 1) add("error", "pageHeading", "Expected exactly one visible H1; found " + h1s.length + ".", h1s);
             if (h1s.length) {
@@ -265,10 +282,10 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
                 if (fontPx > limit) add("warning", "oversizedHeading", "H1 is " + Math.round(fontPx) + "px on a " + kind + " screen; it exceeds the " + limit + "px archetype guardrail.", h1s);
             }
 
-            const mainCount = Array.from(document.querySelectorAll("main,[role='main']")).filter(visible).length;
+            const mainCount = select("main,[role='main']").filter(visible).length;
             if (mainCount !== 1) add("warning", "mainLandmark", "Expected one visible main landmark; found " + mainCount + ".");
 
-            const labelable = Array.from(document.querySelectorAll("input,select,textarea")).filter(el => {
+            const labelable = select("input,select,textarea").filter(el => {
                 const t = String(el.getAttribute("type") || "").toLowerCase();
                 return visible(el) && !["hidden", "button", "submit", "reset", "image"].includes(t);
             });
@@ -276,7 +293,7 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
             if (unlabeled.length) add("error", "controlLabel", "Visible form controls need an associated visible label or accessible name.", unlabeled);
 
             const horizontalLabels = [];
-            for (const label of Array.from(document.querySelectorAll("label")).filter(visible)) {
+            for (const label of select("label").filter(visible)) {
                 const control = label.control || label.querySelector("input,select,textarea");
                 if (!control || !visible(control)) continue;
                 const lr = label.getBoundingClientRect(), cr = control.getBoundingClientRect();
@@ -288,7 +305,7 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
             const wideControls = labelable.filter(el => el.getBoundingClientRect().width > 720);
             if (wideControls.length) add("warning", "overwideControl", "Controls wider than 720px should be bounded or sized to the expected answer.", wideControls);
 
-            const targets = Array.from(document.querySelectorAll("button,a[href],[role='button'],input[type='checkbox'],input[type='radio'],select")).filter(visible);
+            const targets = select("button,a[href],[role='button'],input[type='checkbox'],input[type='radio'],select").filter(visible);
             const undersized = targets.filter(el => {
                 const cs = window.getComputedStyle(el), r = el.getBoundingClientRect();
                 const inlineTextLink = el.tagName === "A" && cs.display === "inline" && !!el.closest("p,li,dd,figcaption");
@@ -297,7 +314,7 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
             if (undersized.length) add("warning", "targetSize", "Non-inline action targets should contain at least a 24x24 CSS-pixel area.", undersized);
 
             const actionWords = /^(add|create|save|cancel|edit|delete|remove|check out|check in|submit|send|email|book|get started|try again)\b/i;
-            const bareActions = Array.from(document.querySelectorAll("a[href]")).filter(el => {
+            const bareActions = select("a[href]").filter(el => {
                 if (!visible(el) || !actionWords.test(String(el.textContent || "").trim())) return false;
                 const cs = window.getComputedStyle(el), r = el.getBoundingClientRect();
                 const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
@@ -307,7 +324,7 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
             });
             if (bareActions.length) add("warning", "bareActionLink", "Action links render like body links; apply the documented button/action hierarchy.", bareActions);
 
-            const actionCells = Array.from(document.querySelectorAll("td[data-label='Actions']")).filter(visible);
+            const actionCells = select("td[data-label='Actions']").filter(visible);
             const ungroupedRowActions = actionCells.filter(cell => {
                 const actions = Array.from(cell.querySelectorAll("a[href],button,[role='button']")).filter(visible);
                 return actions.length >= 2 && !cell.querySelector(".pb-row-actions");
@@ -321,17 +338,17 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
             });
             if (conflictingRowActions.length) add("error", "conflictingRowActions", "Mutually exclusive state transitions are visible together; render only the action valid for the row's current status.", conflictingRowActions);
 
-            const visibleSkipLinks = Array.from(document.querySelectorAll("a[href^='#']")).filter(el => {
+            const visibleSkipLinks = select("a[href^='#']").filter(el => {
                 if (!/skip.+content/i.test(String(el.textContent || "")) || !visible(el) || document.activeElement === el) return false;
                 const r = el.getBoundingClientRect();
                 return r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
             });
             if (visibleSkipLinks.length) add("warning", "skipLinkVisible", "Skip link is visible without keyboard focus; keep it off-canvas until focused.", visibleSkipLinks);
 
-            const badTables = Array.from(document.querySelectorAll("table")).filter(el => visible(el) && !el.querySelector("th"));
+            const badTables = select("table").filter(el => visible(el) && !el.querySelector("th"));
             if (badTables.length) add("error", "tableHeaders", "Data tables need semantic header cells.", badTables);
 
-            const regions = Array.from(document.querySelectorAll("main,#body,.pb-section,section")).filter(visible);
+            const regions = select("main,#body,.pb-section,section").filter(visible);
             let largestVerticalGap = 0;
             for (const region of regions) {
                 const children = Array.from(region.children).filter(visible).map(el => el.getBoundingClientRect()).sort((a, b) => a.top - b.top);
@@ -342,11 +359,12 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
             const warnings = findings.filter(f => f.severity === "warning").length;
             return {
                 inspected: true,
-                version: 1,
+                version: 2,
+                scope: root === document.body ? "body" : (root.id ? "#" + root.id : root.tagName.toLowerCase()),
                 metrics: {
                     viewport: { width: window.innerWidth, height: window.innerHeight },
-                    scrollWidth: Math.max(doc.scrollWidth, body ? body.scrollWidth : 0),
-                    scrollHeight: Math.max(doc.scrollHeight, body ? body.scrollHeight : 0),
+                    scrollWidth: root.scrollWidth,
+                    scrollHeight: root.scrollHeight,
                     horizontalOverflow: overflow,
                     visibleH1s: h1s.length,
                     visibleControls: labelable.length,
@@ -530,6 +548,14 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
             const base = root.origin + "/" + (seg ? seg + "/" : "");
             await waitForRenderablePage(pg, base + String(page).replace(/^\/+/, ""));
         }
+        const landed = pg.url();
+        if (isLoginRedirect(landed)) {
+            return {
+                captured: false, available: true, kind: t.kind, authExpired: true,
+                url: sanitizeUrl(landed),
+                reason: "The preview redirected to the CloudPiston login page, so the authenticated test session expired. Re-run pal_screenshot to establish a fresh session; no UI evidence was captured."
+            };
+        }
         const styleStatus = await inspectStyleStatus(pg, styleEvents);
         const designAudit = await inspectDesignQuality(pg, { kind: t.kind, viewportName });
         const buf = await pg.screenshot({ fullPage: !!fullPage });
@@ -568,7 +594,7 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
 }
 
 module.exports = {
-    runScreenshot, detectRenderError, sanitizeUrl, sanitizeResourceUrl, loadChromium,
+    runScreenshot, detectRenderError, sanitizeUrl, sanitizeResourceUrl, isLoginRedirect, loadChromium,
     getBrowser, releaseBrowser, downscaleToJpeg, waitForStyles, inspectStyleStatus,
     inspectDesignQuality, VIEWPORTS
 };

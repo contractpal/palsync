@@ -169,6 +169,24 @@ test("console pal: auth-replay failure returns a clean captured:false (no throw,
     assert.ok(!/https?:\/\/\S*cp-auth/.test(res.reason), "reason must not echo the cp-auth URL");
 });
 
+test("console pal: login redirect is reported as authExpired with the sanitized final URL", async () => {
+    reset();
+    const SECRET = "EXPIRED_SECRET";
+    nextRunTest = async () => ({
+        ran: true, validated: true, kind: "console",
+        _previewUrl: "https://secure.cloudpiston.com/cpal/RunConsoleApp.do?cp-auth=" + SECRET
+    });
+    landedUrl = "https://secure.cloudpiston.com/login/GetConsole.do?return=cp-auth-" + SECRET;
+
+    const res = await runScreenshot({}, "GUID", {});
+    assert.equal(res.captured, false);
+    assert.equal(res.available, true);
+    assert.equal(res.authExpired, true);
+    assert.equal(res.url, "https://secure.cloudpiston.com/login/GetConsole.do");
+    assert.match(res.reason, /login page|session expired/i);
+    assert.ok(!JSON.stringify(res).includes(SECRET), "login fallback must not leak auth material");
+});
+
 test("web pal: navigates the no-auth rawToken and returns captured:true", async () => {
     reset();
     nextRunTest = async () => ({ ran: true, validated: true, kind: "web", rawToken: "https://webpals.cloudpiston.com/site/", _previewUrl: null });

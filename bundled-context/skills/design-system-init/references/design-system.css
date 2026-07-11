@@ -1,11 +1,11 @@
 @import url("https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,800,900&display=swap");
-/* design-system.css — Pal Builder canonical design system. Ships verbatim
-   into every pal. Never hand-edit sections 1-8 — append pal tweaks to the
-   PAL OVERRIDES block at the end instead, so re-syncing never clobbers them.
+/* design-system.css — REFERENCE CATALOG ONLY. Never copy, register, link, or load this whole
+   file in a pal. Select only the tokens, base rules, and component recipes the pal actually uses,
+   preserve their dependency order, and place that curated subset in the pal's styles/styles.css.
    The @import above is the ONLY sanctioned way to load a web font: the server
    rejects remote <link>/<script> in pages ("No remote files allowed") but does
    not validate style contents. Keep it as line 1 (CSS @import rules).
-   Load order: spacing.css, this file, then pb-ui.js + pb-motion.js as
+   Runtime load order: spacing.css, the pal-owned styles.css, then only the behavior scripts used as
    <script type="module"> from the page shell.
    1 Tokens, 2 Base/type, 3 Components (49 families), 4 App shell,
    5 Marketing, 6 Expressive/motion, 7 Dark theme, 8 Reduced motion/print. */

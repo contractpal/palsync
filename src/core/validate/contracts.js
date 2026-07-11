@@ -664,17 +664,16 @@ function checkFragmentBinding(markupFiles, workflowFiles, findings) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Check 11 — low-noise pb-* quality hints. These only activate when the workspace has adopted the
-// canonical design system, so legacy/custom pals are not forced into Palsync's visual vocabulary.
+// Check 11 — low-noise pb-* quality hints. These activate when markup uses the pb-* vocabulary,
+// regardless of which pal-owned stylesheet defines the selected recipes. The canonical
+// design-system.css is a reference catalog, not a runtime asset.
 // They are warnings: rendered designAudit + screenshot review is the authority, while these catch
 // the exact weak-model failure mode (browser-default controls/actions) before the first push.
 // ---------------------------------------------------------------------------------------------
 
 function checkPbQualityHints(workspaceDir, markupFiles, findings) {
-    const canonical = fs.existsSync(path.join(workspaceDir, "styles", "design-system.css")) ||
-        fs.existsSync(path.join(workspaceDir, "Styles", "design-system.css"));
     const usedInMarkup = markupFiles.some(({ src }) => /class\s*=\s*["'][^"']*\bpb-/.test(src));
-    if (!canonical && !usedInMarkup) return;
+    if (!usedInMarkup) return;
 
     const actionWords = /^(add|create|save|cancel|edit|delete|remove|check out|check in|submit|send|email|book|get started|try again)\b/i;
 
@@ -800,6 +799,53 @@ function checkPbQualityHints(workspaceDir, markupFiles, findings) {
     }
 }
 
+// design-system.css is deliberately bundled as a recipe catalog for agents to consult. Loading or
+// registering the whole file bloats small pals and couples them to dozens of unused components.
+// Runtime CSS belongs in styles.css and contains only the tokens/base/component rules the pal uses.
+function checkReferenceStylesheetNotShipped(workspaceDir, markupFiles, findings) {
+    const reportedFiles = new Set();
+    for (const folder of ["styles", "Styles"]) {
+        const abs = path.join(workspaceDir, folder, "design-system.css");
+        if (!fs.existsSync(abs)) continue;
+        let identity = abs;
+        try { const st = fs.statSync(abs); identity = st.dev + ":" + st.ino; } catch (e) { /* keep lexical path */ }
+        if (reportedFiles.has(identity)) continue; // macOS case-insensitive styles/Styles alias
+        reportedFiles.add(identity);
+        findings.push({
+            file: folder + "/design-system.css", line: 1, column: 0, severity: "error",
+            rule: "referenceStylesheetShipped",
+            message: "design-system.css is reference material, not a pal runtime asset. Remove it from the pal and copy only the tokens, base rules, and component recipes this pal actually uses into styles/styles.css (or Styles/styles.css)."
+        });
+    }
+
+    for (const { rel, src } of markupFiles) {
+        const re = /(?:href|src)\s*=\s*["'][^"']*design-system\.css(?:[?#][^"']*)?["']/ig;
+        let m;
+        while ((m = re.exec(src))) {
+            findings.push({
+                file: rel, line: lineAt(src, m.index), column: 0, severity: "error",
+                rule: "referenceStylesheetShipped",
+                message: "This page loads design-system.css, which is a reference catalog only. Link styles.css instead; it must contain the selected rules needed by this pal."
+            });
+        }
+    }
+
+    const manifestPath = path.join(workspaceDir, "pal.json");
+    let manifest = null;
+    try { manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")); } catch (e) { /* optional */ }
+    const entries = manifest && manifest.styles && Array.isArray(manifest.styles.entry)
+        ? manifest.styles.entry : [];
+    for (const entry of entries) {
+        const names = [entry && entry.string, entry && entry.Style && entry.Style.filename];
+        if (!names.some(name => /(^|\/)design-system\.css$/i.test(String(name || "")))) continue;
+        findings.push({
+            file: "pal.json", line: 1, column: 0, severity: "error",
+            rule: "referenceStylesheetShipped",
+            message: "pal.json registers design-system.css. Remove that Style entry and register styles.css containing only the selected rules the pal uses."
+        });
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Entry point.
 // ---------------------------------------------------------------------------------------------
@@ -835,6 +881,8 @@ function lintContracts(workspaceDir) {
     checkParamDropped(markupFiles, workflowFiles, findings);
 
     checkFragmentBinding(markupFiles, workflowFiles, findings);
+
+    checkReferenceStylesheetNotShipped(workspaceDir, markupFiles, findings);
 
     checkPbQualityHints(workspaceDir, markupFiles, findings);
 

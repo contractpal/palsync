@@ -125,7 +125,7 @@ async function resolveClickTarget(pg, step) {
             return { error: "within selector \"" + step.within + "\" matched no element" };
         }
         if (scopeCount > 1) {
-            return { error: "within selector \"" + step.within + "\" is ambiguous (matched " + scopeCount + " elements); include a unique {{runId}} value or a more specific selector" };
+            return { error: "within selector \"" + step.within + "\" is ambiguous (matched " + scopeCount + " elements); :has-text() can match containing ancestors. Scope through the identifying cell, for example tr:has([data-label=\"Name\"]:has-text(\"Record {{runId}}\"))" };
         }
         scope = scopes.first();
     }
@@ -136,7 +136,7 @@ async function resolveClickTarget(pg, step) {
         return { error: "nothing to click matching \"" + c + "\"" + (step.within ? " within \"" + step.within + "\"" : "") };
     }
     if (count > 1) {
-        return { error: "click \"" + c + "\" is ambiguous (matched " + count + " elements); add within with a row/card selector containing the record's unique {{runId}} value, or click a unique #id/.class selector" };
+        return { error: "click \"" + c + "\" is ambiguous (matched " + count + " elements); add within with a precise row selector such as tr:has([data-label=\"Name\"]:has-text(\"Record {{runId}}\")), use the equivalent unique card selector, or click a unique #id/.class selector" };
     }
     return { locator: loc.first() };
 }
@@ -325,7 +325,11 @@ async function exerciseByBrowser(t, steps, viewport) {
                     for (const [name, value] of Object.entries(step.fill)) {
                         const sel = "[name=" + JSON.stringify(String(name)) + "]";
                         if (await pg.locator(sel).count() === 0) {
-                            return fail("no input named \"" + name + "\" on the current screen — check the fragment's name= attributes." + formatScreenHints(await screenHints(pg)));
+                            const hints = await screenHints(pg);
+                            const hasCreateNav = (hints.clicks || []).some(label => /^(?:add|create|new)\b/i.test(label));
+                            return fail("no input named \"" + name + "\" on the current screen — " +
+                                (hasCreateNav ? "the console opened on its list view; add a first step that clicks the visible Add/Create action before filling the form." : "check the fragment's name= attributes.") +
+                                formatScreenHints(hints));
                         }
                         try { await pg.fill(sel, String(value)); }
                         catch (e) { await pg.selectOption(sel, String(value)); } // <select> fallback

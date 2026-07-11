@@ -187,7 +187,7 @@ if (rec == null) {
     rec.set("email", email);                     // .set(col, value) per field
     rec.set("firstName", firstName);
     rec.set("status", "Active");
-    rec.setDate("createDate", dateUtil.createDate());  // .setDate() for date columns
+    rec.setDate("createDate", c.getDateUtil().createDate()); // inline when used only here
     ds.insertRecord(rec);                        // insert; returns new id
 } else {
     rec.set("status", "Active");

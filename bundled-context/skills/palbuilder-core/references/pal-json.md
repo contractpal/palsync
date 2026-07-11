@@ -20,20 +20,20 @@ It is JSON, not workflow JS — normal object/array literals are fine here.
 ```
 {
   "layout":         { ...pal-level config and default workflow registrations... },
-  "documents":      [ ...Document entries... ],
-  "emails":         [ ...Email entries... ],
-  "images":         [ ...Image entries... ],
-  "pages":          [ ...Page entries... ],
-  "fragments":      [ ...Fragment entries... ],
-  "styles":         [ ...Style (CSS) entries... ],
+  "documents":      { "entry": [ ...Document entries... ] },
+  "emails":         { "entry": [ ...Email entries... ] },
+  "images":         { "entry": [ ...Image entries... ] },
+  "pages":          { "entry": [ ...Page entries... ] },
+  "fragments":      { "entry": [ ...Fragment entries... ] },
+  "styles":         { "entry": [ ...Style (CSS) entries... ] },
   "wizards":        [ ... ],
-  "workflows":      [ ...Workflow entries (server-side JS)... ],
-  "scripts":        [ ...Script entries (client-side JS)... ],
+  "workflows":      { "entry": [ ...Workflow entries (server-side JS)... ] },
+  "scripts":        { "entry": [ ...Script entries (client-side JS)... ] },
   "fonts":          [ ... ],
-  "datasets":       [ ...dataset schemas... ],
-  "dataviews":      [ ...dataview definitions... ],
-  "data":           [ ...named key/value data bundles... ],
-  "datalists":      [ ...static tabular data... ],
+  "datasets":       { "entry": [ ...dataset schemas... ] },
+  "dataviews":      { "entry": [ ...dataview definitions... ] },
+  "data":           { "entry": [ ...named key/value data bundles... ] },
+  "datalists":      { "entry": [ ...static tabular data... ] },
   "attachments":    [ ...binary attachments... ],
   "automatedScripts":     [ ... ],
   "mobileConfigurations": [ ... ],
@@ -53,6 +53,22 @@ Each entry (except in `layout` and `folders`) follows the pattern
 identifier (typically the filename) and `<Type>` matches the section (`Workflow`, `Page`,
 `Fragment`, `Document`, `Email`, `Style`, `Dataset`, `Dataview`, `Data`, `DataList`,
 `Attachment`, `Image`).
+
+### Quick reference — named entry shapes
+
+| Section | Serialized entry body | Runtime read |
+|---|---|---|
+| `datasets.entry` | `{ "string":"items", "Dataset": { "name":"items", "fields": { "DatasetField": [...] } } }` | `pal.getDataSet("items")` |
+| `dataviews.entry` | `{ "string":"directory", "Dataview": { "name":"directory", ... } }` | `pal.getDataView("directory")` |
+| `data.entry` | `{ "string":"siteConfig", "Data": { "name":"siteConfig", "values": { "entry": [...] } } }` | `pal.getData("siteConfig")` |
+| `datalists.entry` | `{ "string":"offices", "DataList": { "name":"offices", "cols": {...}, "recs": {...} } }` | `pal.getDataList("offices")` |
+| `desktopBindings` | `{ "string":"equipment", "DesktopBinding": { "name":"Equipment", "icon":"bi-box-seam" } }` | Console home-screen tile |
+
+`data`, `datalists`, and `dataviews` are PalBuilder-provisioned manifest objects. Palsync preserves
+existing entries during pull/push but does not provision new ones via push. The examples below are
+the exact serialized shapes you will see in a pulled/exported pal and may safely maintain for an
+existing object. Create a new object in PalBuilder first. Runtime DataViews are the exception:
+`pal.createDataViewBuilder(true)` constructs a view in workflow code without a manifest entry.
 
 ---
 
@@ -107,6 +123,71 @@ don't need one** — omit this section unless the spec explicitly asks for a til
 Same `{ "string", "<Type>" }` wrapper as every other section. `DesktopBinding` has exactly two
 fields worth setting: `name` (tile label) and `icon`. There is no `DesktopLabel`/`DesktopImage`/
 `consoleLabel`/`consoleImage` — those are guesses, not real fields.
+
+---
+
+## `data` — pal-level key/value data
+
+A named `Data` object stores public configuration values read with `pal.getData("name")`. It is
+not a secret store. The serialized `values.entry` collection contains one two-item `string` array
+per key/value pair:
+
+```json
+"data": {
+  "entry": [
+    {
+      "string": "siteConfig",
+      "Data": {
+        "name": "siteConfig",
+        "values": {
+          "entry": [
+            { "string": ["companyName", "Acme Rentals"] },
+            { "string": ["supportEmail", "help@acme.example"] },
+            { "string": ["directoryPageSize", "25"] }
+          ]
+        }
+      }
+    }
+  ]
+}
+```
+
+The field is `values`, not a newline-delimited `data` string. Keep the wrapper `string` and
+`Data.name` identical. See `palbuilder-data/references/payloads.md` for runtime access.
+
+---
+
+## `datalists` — pal-level static tabular data
+
+A named `DataList` stores fixed shared rows read with `pal.getDataList("name")`. The vendored
+PalBuilder contract serializes column names under `cols.string` and rows under
+`recs["string-array"][].string`:
+
+```json
+"datalists": {
+  "entry": [
+    {
+      "string": "offices",
+      "DataList": {
+        "name": "offices",
+        "cols": {
+          "string": ["officeCode", "city", "timezone"]
+        },
+        "recs": {
+          "string-array": [
+            { "string": ["SLC", "Salt Lake City", "America/Denver"] },
+            { "string": ["DEN", "Denver", "America/Denver"] }
+          ]
+        }
+      }
+    }
+  ]
+}
+```
+
+Every row must have exactly one cell per column. The serialized fields are `cols` and `recs`, not
+the tempting guesses `columns`, `records`, or `fields`. Keep the wrapper `string` and
+`DataList.name` identical.
 
 **Every entry in `layout` that names a workflow file is a *default* registration** — the
 platform's fallback for that workflow type. Other workflow files of the same type can exist and

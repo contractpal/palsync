@@ -46,26 +46,23 @@ Hard gates — any failure means the visible task is not done:
 ## Step 0 — Load the system
 
 - Read `DESIGN_SYSTEM.md` and `COMPONENTS.md`. If absent and the task is non-trivial, recommend `design-system-init` first — building without a system drifts to generic output. If the user proceeds anyway, infer a minimal system from existing code and state your assumptions.
-- Look at `design/refs/` if present. Read the images, not just tokens — they encode composition and restraint tokens can't. **When references exist they are the primary design authority — the inspiration above all else.** Build toward how they look and feel; where a reference and a default choice disagree, the reference wins. Honor it within the byte-identity contract below: reference-driven appearance deviations go through readable `styles/styles.css` overrides, with a preset plus `PAL OVERRIDES` tokens where sufficient, never by hand-editing a canonical file or flattening the reference back to a default.
-- **Verify the four canonical files are byte-identical to this skill's references** (an append-only
-  `PAL OVERRIDES` block at the end of `design-system.css` is the one allowed exception):
-  `styles/spacing.css`, `styles/design-system.css` against
-  `../design-system-init/references/{spacing.css,design-system.css}`, and `scripts/pb-ui.js`,
-  `scripts/pb-motion.js` against `../design-system-init/references/{pb-ui.js,pb-motion.js}`. A diff
-  outside the overrides block means the file was hand-edited — restore it from the reference and
-  move the intended change into `PAL OVERRIDES` instead.
+- Look at `design/refs/` if present. Read the images, not just tokens — they encode composition and restraint tokens can't. **When references exist they are the primary design authority — the inspiration above all else.** Build toward how they look and feel; where a reference and a default choice disagree, the reference wins. Express the result in the pal-owned `styles/styles.css`, never by loading the reference catalog or flattening the reference back to a default.
+    - **Audit the CSS selection.** `design-system.css` is a reference-only parts catalog, not a
+      runtime file. The pal must not contain, register, link, or load it. Its
+      `styles/styles.css` must contain only dependency-complete tokens/base/component rules with real
+      consumers in current markup. Remove unused presets, dark-theme blocks, and component families.
+      Copy only the needed rules and dependencies; never copy unused components "just in case."
 - Verify page shell `<head>` link/script order matches design-system-init's checklist:
-  `styles/spacing.css` → `styles/design-system.css` → `styles/styles.css` for new pals, then
-  `scripts/pb-ui.js` and `scripts/pb-motion.js` each loaded exactly
-  once as `<script type="module" src="...">`. `spacing.css` is the required Bootstrap replacement
+  optional `styles/spacing.css` → `styles/styles.css`, then only the used behavior scripts, each
+  loaded exactly once as `<script type="module" src="...">`. `spacing.css` is the Bootstrap replacement
   for spacing/layout utilities; do not add Bootstrap only to get `.container`, `.row`, `.col-*`,
   margin, padding, gap, or flex helpers.
-- Fontshare loads through the `@import` at the top of `design-system.css`; never add remote
-  page-head font resources.
+- Fontshare loads through an `@import` at the top of `styles.css`; never add remote page-head font
+  resources or copy a font import the pal does not use.
 - For non-trivial UI, read `../design-system-init/references/design-principles.md` before building
   or reviewing. It is the practical checklist for hierarchy, UX flow, Gestalt grouping, Fitts target
   sizing, typography, color meaning, consistency, and simplicity.
-- For Palbuilder UI, read `../design-system-init/references/component-library.md` before implementing any non-trivial app/console component, or `../design-system-init/references/marketing-library.md` for marketing sections (hero, bento, pricing, testimonials, logo cloud, CTA, stats, mockups). Both are HTML-only — every class and `data-*` attribute is already implemented in the shipped CSS/JS, there is no component CSS to write. Pair either with `palbuilder-frontend/references/c-tags.md` before using any `c:` attribute you have not verified.
+- For Palbuilder UI, read `../design-system-init/references/component-library.md` before implementing any non-trivial app/console component, or `../design-system-init/references/marketing-library.md` for marketing sections (hero, bento, pricing, testimonials, logo cloud, CTA, stats, mockups). Copy the selected recipe's CSS and dependencies from the reference catalog into `styles.css`; never copy unrelated families. Pair either with `palbuilder-frontend/references/c-tags.md` before using any `c:` attribute you have not verified.
 - Enforce the current palsync visual stack unless the project explicitly overrides it: system or Fontshare typography, inline SVG icons from one approved family (Iconoir, Tabler, or Phosphor), and `scripts/pb-motion.js` data attributes for scripted animation — no other motion library.
 - Chart.js is optional and only for chart-heavy pals: platform `<c:resource source="chartjs"
   version="4.0.0" name="chart.js" />` plus opt-in `scripts/pb-charts.js`; it is not part of the
@@ -87,10 +84,9 @@ Plan structure first — one giant file is the top driver of AI-looking, unmaint
 ## Step 2 — Build to the tokens
 
 - Consume semantic tokens; never use arbitrary raw values (hex codes, off-scale spacing, one-off font sizes) when a token exists.
-- Pull the component recipe you need from the appropriate library. When a reference requires a
-  different component look, override it in the new pal's `styles/styles.css` using human-readable
-  blocks, comments where useful, and one rule per block; do not edit canonical files. Existing pals
-  without `styles.css` are not migrated.
+- Pull the component recipe you need from the appropriate library, including only its required
+  tokens/base rules, and place it in `styles/styles.css` using human-readable blocks and comments.
+  That pal-owned file is the implementation surface; the full reference file never ships.
 - If the design needs a value the system lacks, add it as a named token, don't hardcode inline — the system stays the source of truth.
 - Get hierarchy from the system's stated mechanism — often spacing and size before weight, weight before color. A new accent color for emphasis usually means the spacing is wrong.
 - Honor the stated density and layout posture. If the system says airy, generous whitespace is the design; if it says break the grid, do so deliberately — uniform even spacing reads as templated.
@@ -117,6 +113,11 @@ its overflow, label, heading, target, skip-link, and action-affordance findings 
 not optional suggestions. Then inspect the pixels. If rendering is genuinely impossible here, say
 so, run the code-level checks below, and flag that visual checks were skipped rather than silently
 passing them.
+
+Console captures can also contain CloudPiston's platform chrome outside the pal's `#cp-root`.
+`tableHeaders` on the chrome action table and `horizontalOverflow` on its function-call timer are
+platform-injected, not repairable in pal source. Verify the flagged node is outside `#cp-root` and
+record that exception explicitly; the same rule inside `#cp-root` remains a pal failure.
 
 Score the render 0-2 on each dimension: primary journey/focal point, spacing/proximity,
 typography hierarchy, alignment/grid, action/state clarity, responsive composition, and
@@ -171,16 +172,14 @@ Apply the same vocabulary to yourself at the review gate.
 
 ## Acceptance checklist
 - [ ] DESIGN_SYSTEM.md, COMPONENTS.md, and `design/refs/` loaded before building.
-- [ ] All four canonical files (`styles/spacing.css`, `styles/design-system.css`,
-      `scripts/pb-ui.js`, `scripts/pb-motion.js`) present, registered in `pal.json`, and
-      byte-identical to design-system-init's references outside the `PAL OVERRIDES` block.
-- [ ] Page shell `<head>` link/script order matches design-system-init's checklist: `spacing.css` →
-      `design-system.css` → `styles.css` for new pals, then both scripts loaded exactly once as
-      `<script type="module">`; used for generic spacing/layout instead of Bootstrap. New pals have
-      `styles.css` present, registered, and human-readable; existing pals are not retrofitted.
+- [ ] `styles/styles.css` is present, registered, linked once, human-readable, and contains only the
+      dependency-complete tokens/base/component rules used by current markup. No runtime file,
+      manifest entry, or page link named `design-system.css` exists.
+- [ ] Optional `spacing.css`, `pb-ui.js`, and `pb-motion.js` have real consumers and are each
+      registered/loaded once; unused utilities, presets, themes, components, and scripts are absent.
 - [ ] Shell owns `<main id="body" class="pb-main">`; every fragment root is `pb-section`; multi-field forms wrap fields in `pb-stack` or `pb-form-grid`.
-- [ ] No undefined classes: every `class=` value in pages/fragments resolves to design-system.css,
-      spacing.css, styles.css, or COMPONENTS.md-recorded local styles.
+- [ ] No undefined classes: every `class=` value in pages/fragments resolves to runtime
+      `spacing.css`, `styles.css`, or COMPONENTS.md-recorded local styles.
 - [ ] Every multi-action table cell uses `.pb-row-actions`; only actions valid for the row's current
       state render, and desktop/mobile captures show wrapping without collision or overflow.
 - [ ] Applied design-principles review: user journey, hierarchy, grouping, Fitts target sizing,

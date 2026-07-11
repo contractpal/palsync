@@ -226,6 +226,17 @@ test("exercise guidance covers the delete-absent rule in both MCP and CLI flavor
     }
 });
 
+test("generated file guidance requires a fragment stub and distinguishes DataViews from tables", async () => {
+    for (const opts of [{ cli: false }, { cli: true }]) {
+        const doc = await ci.buildPalsyncDoc("Demo", Object.assign({ skillsDir: ".agents/skills" }, opts));
+        assert.match(doc, /<c:ignore xmlns:c="contractpal"><\/c:ignore>/);
+        assert.match(doc, /Fragment content is missing/);
+        assert.match(doc, /DataView is a read-only join\/read model, not a table/);
+        assert.match(doc, /provisions DataSet tables only/);
+        assert.match(doc, /DataViews\/data\/datalists stay PalBuilder-created/);
+    }
+});
+
 test("inject() threads .agents/skills into the actual OpenCode/Codex/Pi AGENTS.md on disk", async () => {
     for (const agent of ["codex", "opencode", "pi"]) {
         const ws = tmpWorkspace();

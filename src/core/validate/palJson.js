@@ -76,6 +76,145 @@ const LAYOUT_ALIASES = {
     desktopimage: null, desktoplabel: null, consoleimage: null, consolelabel: null,
 };
 
+function shapeFinding(message) {
+    return {
+        file: "pal.json", line: 1, column: 0,
+        severity: "error", rule: "invalidPalJsonShape", message,
+    };
+}
+
+function isObject(value) {
+    return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+function nonEmptyString(value) {
+    return typeof value === "string" && value.trim() !== "";
+}
+
+// `Data` and `DataList` shapes are grounded in the vendored JAXB classes and in the
+// corresponding always-array paths in lib/xmlParser.js:
+//   Data.values.entry[].string                 -> [key, value]
+//   DataList.cols.string                       -> column names
+//   DataList.recs["string-array"][].string     -> row values
+// These checks intentionally accept empty-string containers because empty XML elements are
+// represented as "" by the pull parser.
+function checkNamedManifestSection(manifest, sectionName, typeName, validateBody) {
+    const findings = [];
+    const section = manifest[sectionName];
+    if (section == null || section === "") return findings;
+    if (!isObject(section) || !Array.isArray(section.entry)) {
+        findings.push(shapeFinding("pal.json \"" + sectionName + "\" must be an object with an " +
+            "entry array: { \"entry\": [{ \"string\": \"<name>\", \"" + typeName +
+            "\": { ... } }] }."));
+        return findings;
+    }
+
+    for (let i = 0; i < section.entry.length; i++) {
+        const entry = section.entry[i];
+        const at = "pal.json " + sectionName + ".entry[" + i + "]";
+        if (!isObject(entry) || !nonEmptyString(entry.string)) {
+            findings.push(shapeFinding(at + " must be an object with a non-empty string identifier."));
+            continue;
+        }
+        const body = entry[typeName];
+        if (!isObject(body)) {
+            findings.push(shapeFinding(at + " must contain a \"" + typeName + "\" object."));
+            continue;
+        }
+        if (!nonEmptyString(body.name)) {
+            findings.push(shapeFinding(at + "." + typeName + ".name must be a non-empty string."));
+        } else if (body.name !== entry.string) {
+            findings.push(shapeFinding(at + ".string (\"" + entry.string + "\") must match " +
+                typeName + ".name (\"" + body.name + "\")."));
+        }
+        findings.push(...validateBody(body, at + "." + typeName));
+    }
+    return findings;
+}
+
+function checkDataStructures(manifest) {
+    const findings = [];
+    findings.push(...checkNamedManifestSection(manifest, "data", "Data", (data, at) => {
+        const out = [];
+        for (const key of Object.keys(data)) {
+            if (key !== "name" && key !== "values") {
+                out.push(shapeFinding(at + "." + key + " is not a serialized Data field; use " +
+                    "values.entry[].string key/value pairs."));
+            }
+        }
+        if (data.values == null || data.values === "") return out;
+        if (!isObject(data.values) || !Array.isArray(data.values.entry)) {
+            out.push(shapeFinding(at + ".values must be { \"entry\": [{ \"string\": " +
+                "[\"<key>\", \"<value>\"] }] }."));
+            return out;
+        }
+        for (let i = 0; i < data.values.entry.length; i++) {
+            const pair = data.values.entry[i];
+            if (!isObject(pair) || !Array.isArray(pair.string) || pair.string.length !== 2 ||
+                !nonEmptyString(pair.string[0])) {
+                out.push(shapeFinding(at + ".values.entry[" + i + "].string must be a two-item " +
+                    "[key, value] array with a non-empty string key."));
+            }
+        }
+        return out;
+    }));
+
+    findings.push(...checkNamedManifestSection(manifest, "datalists", "DataList", (list, at) => {
+        const out = [];
+        for (const key of Object.keys(list)) {
+            if (key !== "name" && key !== "cols" && key !== "recs") {
+                out.push(shapeFinding(at + "." + key + " is not a serialized DataList field; use " +
+                    "cols.string and recs[\"string-array\"]."));
+            }
+        }
+        const columns = isObject(list.cols) ? list.cols.string : null;
+        if (!Array.isArray(columns) || columns.length === 0 || !columns.every(nonEmptyString)) {
+            out.push(shapeFinding(at + ".cols.string must be a non-empty array of column names; " +
+                "the serialized field is \"cols\", not \"columns\"."));
+            return out;
+        }
+        if (list.recs == null || list.recs === "") return out;
+        const rows = isObject(list.recs) ? list.recs["string-array"] : null;
+        if (!Array.isArray(rows)) {
+            out.push(shapeFinding(at + ".recs must be { \"string-array\": " +
+                "[{ \"string\": [<cell>, ...] }] }."));
+            return out;
+        }
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            if (!isObject(row) || !Array.isArray(row.string) || row.string.length !== columns.length) {
+                out.push(shapeFinding(at + ".recs[\"string-array\"][" + i + "].string must contain " +
+                    columns.length + " cell(s), one for each cols.string entry."));
+            }
+        }
+        return out;
+    }));
+
+    const bindings = manifest.desktopBindings;
+    if (Array.isArray(bindings)) {
+        for (let i = 0; i < bindings.length; i++) {
+            const entry = bindings[i];
+            const at = "pal.json desktopBindings[" + i + "]";
+            if (!isObject(entry) || !nonEmptyString(entry.string)) {
+                findings.push(shapeFinding(at + " must have a non-empty string identifier."));
+                continue;
+            }
+            const binding = entry.DesktopBinding;
+            if (!isObject(binding)) {
+                findings.push(shapeFinding(at + " must contain a DesktopBinding object."));
+                continue;
+            }
+            if (!nonEmptyString(binding.name)) {
+                findings.push(shapeFinding(at + ".DesktopBinding.name must be a non-empty tile label."));
+            }
+            if (!nonEmptyString(binding.icon)) {
+                findings.push(shapeFinding(at + ".DesktopBinding.icon must be a non-empty icon identifier."));
+            }
+        }
+    }
+    return findings;
+}
+
 // Unknown top-level or layout key with a close real match → error (near-certain invention,
 // e.g. a case slip or a plausible-sounding guess). No close match → warn, never error — the
 // server's real field set is bigger than this manually-extracted list (wizards/fonts/etc. have
@@ -292,9 +431,10 @@ function lintPalJson(workspaceDir) {
     }
 
     findings.push(...checkUnknownKeys(manifest));
+    findings.push(...checkDataStructures(manifest));
     findings.push(...checkFolderRegistrations(manifest));
 
     return findings;
 }
 
-module.exports = { lintPalJson, checkUnknownKeys, checkFolderRegistrations, listFilesRecursive };
+module.exports = { lintPalJson, checkUnknownKeys, checkDataStructures, checkFolderRegistrations, listFilesRecursive };

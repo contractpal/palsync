@@ -55,6 +55,72 @@ function run(controller) {
 }
 ```
 
+### Global vs local variables
+
+File-scope globals are for controller-derived values shared across handlers. A dataset, filter,
+record, or list used by only one handler belongs inside that function. Declaring handler-only
+values at file scope can produce `Variable <name> never used`; move the `var` declaration into the
+function that uses it.
+
+```js
+// Shared by run() and handlers: file scope.
+var c;
+var pal;
+var payload;
+
+function run(controller) {
+    c = controller;
+    pal = c.getPal();
+    payload = c.createPayload();
+    listEquipment();
+}
+
+function listEquipment() {
+    // Used only here: function scope.
+    var ds = pal.getDataSet("equipment");
+    var filter = ds.createFilter();
+    filter.selectColumns(["equipmentId", "name"]);
+    var records = ds.getRecords(filter);
+    payload.addDataList(records);
+}
+```
+
+### EL operators are not workflow JS functions
+
+Template EL and workflow JavaScript are different languages. `empty()`, `!empty()`, `eq`, `ne`,
+`gt`, `lt`, `and`, and `or` belong in fragment/page `${...}` expressions only.
+
+```js
+// ✗ WRONG — empty() is template EL, not workflow JS.
+if (empty(name)) { ... }
+
+// ✓ RIGHT — workflow JS.
+if (name == null || name == "") { ... }
+```
+
+| Template EL | Workflow JS |
+|---|---|
+| `empty(value)` | `value == null || value == ""` |
+| `!empty(value)` | `value != null && value != ""` |
+| `a eq b` / `a ne b` | `a == b` / `a != b` |
+| `a gt b` / `a lt b` | `a > b` / `a < b` |
+| `a and b` / `a or b` | `a && b` / `a || b` |
+
+### Unavailable String and Array prototype methods
+
+The engine predates ES5. Do not use modern prototype helpers such as String `.trim()`,
+`.includes()`, `.startsWith()`, `.endsWith()`, `.repeat()`, or `.padStart()`, nor Array
+`.includes()`. They can compile into `Method <name> not found` errors.
+
+| Need | Don't | Confirmed-safe shape |
+|---|---|---|
+| contains text | `text.includes(part)` | `text.indexOf(part) >= 0` |
+| starts with | `text.startsWith(part)` | `text.indexOf(part) == 0` |
+| ends with | `text.endsWith(part)` | compare `text.substring(text.length - part.length)` after a length guard |
+| repeat/pad | `.repeat()` / `.padStart()` | append in a classic `for` loop or with `c.createBuffer()` |
+| trim input | `text.trim()` | validate null/empty directly; use a documented platform formatter when normalization is required |
+| array contains | `items.includes(value)` | classic indexed `for` loop |
+
 ### Object literals `{ }`
 
 Throws `Objects not supported` plus a cascading `Variable <propName> not declared` for every
@@ -277,6 +343,8 @@ under `references/http-client.md`.)
 | Pick fields | `var {a, b} = obj;` | `var a = obj.get("a"); var b = obj.get("b");` |
 | Iterate | `for (x of xs)` | `for (var i = 0; i < xs.length; i++)` |
 | Map array | `xs.map(fn)` | `for` loop building a new array |
+| Empty check | `empty(value)` | `value == null || value == ""` |
+| Contains text | `text.includes(part)` | `text.indexOf(part) >= 0` |
 | Parse JSON | `JSON.parse(s)` (returns object) | `c.createJsonParser()` |
 
 ---

@@ -315,6 +315,17 @@ webhook redelivery, user re-submits).
 
 ## Deleting
 
+**`deleteRecord` takes the primary-key id, not a record object.** This is intentionally
+asymmetric with `updateRecord(record)`, which takes the record itself.
+
+```js
+// ✗ WRONG — deleteRecord does not accept a DataSetRecord
+ds.deleteRecord(record);
+
+// ✓ RIGHT — pass the primary-key id as a String
+ds.deleteRecord(equipmentId.toString());
+```
+
 Four ways to delete, ordered from targeted to broad:
 
 ```js

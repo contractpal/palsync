@@ -1,10 +1,9 @@
 # Palbuilder Component Library
 
-HTML recipe reference for the base styling in `styles/design-system.css` (canonical, shipped
-verbatim from `design-system-init/references/design-system.css`) plus its behavior layer
-`scripts/pb-ui.js` and motion layer `scripts/pb-motion.js`. Every class and `data-*` attribute below
-is copied directly from those three shipped files — nothing here is invented. Per-project tweaks
-and reference-driven component overrides belong in the authored `styles/styles.css` of a new pal.
+HTML recipe catalog backed by `design-system-init/references/design-system.css`. That CSS file is
+reference-only: never copy, register, link, or load it wholesale. For each component the pal uses,
+copy its dependency-complete token/base/component rules into the pal-owned `styles/styles.css`.
+Include `pb-ui.js` or `pb-motion.js` only when the selected recipe uses their documented behavior.
 
 Marketing sections (hero, bento, pricing, testimonials, logo cloud, CTA band, stats/ticker,
 mockups, text/glow/spotlight effects) live in `marketing-library.md`, not here. Console/app
@@ -16,24 +15,24 @@ write boolean attributes as `attr="attr"` (`checked="checked"`, `hidden="hidden"
 `bundled-context/CLAUDE.md` golden rules for the full platform contract (`c:a` vs `onclick`,
 `confirm=` on destructive actions, no `<script>` in fragments, no `fetch`/ClientPal).
 
-**Never hand-edit `design-system.css`.** Sections 1-8 of that file are re-synced verbatim from
-this skill on every design pass; token-only recolors may use the `PAL OVERRIDES` block, while
-component-shaped/reference-driven tweaks in a new pal belong in readable `styles/styles.css`.
+**Never ship `design-system.css`.** Treat its sections as a parts catalog. Copy only used rules and
+their dependencies into readable `styles/styles.css`, then edit that pal-owned file normally.
 
 ## Load Order
 
-Every new-pal page shell links the canonical files plus its authored stylesheet, in this order, once:
+Every new-pal page shell links only the runtime files it uses, in this order, once:
 ```html
 <link rel="STYLESHEET" type="text/css" href="../Styles/spacing.css" />
-<link rel="STYLESHEET" type="text/css" href="../Styles/design-system.css" />
 <link rel="STYLESHEET" type="text/css" href="../Styles/styles.css" />
 <script type="module" src="../Scripts/pb-ui.js"></script>
 <script type="module" src="../Scripts/pb-motion.js"></script>
 ```
 
-Web fonts load from the `@import` at line 1 of `design-system.css`; do not add remote font
-resources to a page shell. Optional charts add Chart.js separately (section 21) and do not change
-the four-file byte-identity contract.
+Omit `spacing.css` and either script when the page has no consumer for it. Never add a
+`design-system.css` link.
+
+When Fontshare is selected, copy only its `@import` to line 1 of `styles.css`; do not add remote font
+resources to a page shell. Optional charts add Chart.js separately (section 21).
 
 `pb-ui.js` and `pb-motion.js` delegate every listener on `document` and re-scan AJAX-swapped
 fragments automatically (MutationObserver) — never add a per-fragment `<script>` or re-init call.

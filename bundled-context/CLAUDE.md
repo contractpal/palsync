@@ -57,13 +57,9 @@ user journey, hierarchy, tokens, components, typography, color, SVG icon policy,
 strategy; `design-build` enforces them while building. Do not treat visual work as decoration after
 the spec is written.
 
-Every pal UI ships four files copied verbatim from `design-system-init/references/`:
-`styles/spacing.css`, `styles/design-system.css`, `scripts/pb-ui.js`, `scripts/pb-motion.js` —
-registered in `pal.json`. New pals register `styles/styles.css` for component tweaks; do not
-retrofit existing pals. Head order: `spacing.css` → `design-system.css` → `styles.css` for new
-pals, then `pb-ui.js`/`pb-motion.js` once as `<script type="module" src="...">`. `spacing.css`
-replaces Bootstrap spacing/layout helpers; load Bootstrap only for legacy need. Use
-the shipped `data-preset` values on `<html>`; motion is `pb-motion.js` data attributes only.
+`design-system-init/references/design-system.css` is reference-only: never copy/register/link/load
+it wholesale. Put only used rules and dependencies in `styles/styles.css`. Add `spacing.css`,
+`pb-ui.js`, or `pb-motion.js` only when used; load them once. Remove unused presets/themes/components.
 
 ---
 
@@ -100,6 +96,8 @@ the shipped `data-preset` values on `<html>`; motion is `pb-motion.js` data attr
    is raw: write CSS/JS naturally, do NOT CDATA-wrap it, do NOT entity-escape `<`/`>`/`&` in it.
    One exception: no `${...}` template literals in inline page `<script>` — `${}` collides with
    server-side EL. Use string concat or an external `.js` file.
+   Before first push, a fragment needs `<c:ignore xmlns:c="contractpal"></c:ignore>`; an empty
+   fragment fails with `Fragment content is missing`.
 2. **Never use an undocumented `c:` attribute.** Each `c:` tag has a fixed attribute set;
    anything else throws a validation error. Check `palbuilder-frontend` before using an
    attribute you haven't used before.
