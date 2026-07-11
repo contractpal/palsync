@@ -12,6 +12,10 @@ The scenarios themselves (`eval/specs/01…05`, `DESIGN_SYSTEM.md`, `COMPONENTS.
 their recorded version/approval date.
 Do not edit spec content — a changed spec invalidates every prior row it would compare against.
 
+**Spec revision v2 (2026-07-11):** specs realigned to template-based foundation and the new
+verification discipline. Rows scored against v1 specs are not process-comparable with v2 rows;
+outcome scores (§12/scoring.md) remain comparable because acceptance criteria are unchanged.
+
 ---
 
 ## 0. Goal metric

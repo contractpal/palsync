@@ -148,7 +148,8 @@ None.
 - Sockets: none.
 
 ## 11. Constraints (Always / Ask-first / Never)
-- ALWAYS: pal_validate before every push; §4 copy ships verbatim; workflow JS stays in the
+- ALWAYS: pal_push is the validation gate (never a standalone pal_validate right before push;
+  standalone pal_validate is for diagnosis between edits); §4 copy ships verbatim; workflow JS stays in the
   restricted ES3-style subset; every destructive `c:a` carries `confirm=`.
 - AUTO MODE: the agent proceeds with best judgment on all decisions. No stopping for questions.
   If a needed API method or capability is unclear, use the most standard documented approach.

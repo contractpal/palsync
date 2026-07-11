@@ -149,7 +149,8 @@ Omit — no datasets, dataviews, data bundles, or datalists.
 - Sockets: none.
 
 ## 11. Constraints (Always / Ask-first / Never)
-- ALWAYS: pal_validate before push; §4 copy ships verbatim; every §3 nav link routes; SEO fields
+- ALWAYS: pal_push is the validation gate (never a standalone pal_validate right before push;
+  standalone pal_validate is for diagnosis between edits); §4 copy ships verbatim; every §3 nav link routes; SEO fields
   match §7; crawler files return crawler bodies, not the HTML page shell.
 - AUTO MODE: the agent proceeds with best judgment on implementation details. No stopping for
   questions.

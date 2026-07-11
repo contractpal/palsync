@@ -143,7 +143,8 @@ None. The provider fixture is a separate pal API, not a dataset in this workspac
 - Sockets: none.
 
 ## 11. Constraints (Always / Ask-first / Never)
-- ALWAYS: pal_validate before push; §4 copy ships verbatim; workflow JS stays in the restricted
+- ALWAYS: pal_push is the validation gate (never a standalone pal_validate right before push;
+  standalone pal_validate is for diagnosis between edits); §4 copy ships verbatim; workflow JS stays in the restricted
   ES3-style subset; tunnel/webservice methods are verified against skills/docs before use.
 - AUTO MODE: the agent proceeds with best judgment on exact tunnel/webservice API calls after
   reading available docs/skills. No stopping for questions.

@@ -158,7 +158,8 @@ None.
 - Sockets: none.
 
 ## 11. Constraints (Always / Ask-first / Never)
-- ALWAYS: pal_validate before push; §4 copy ships verbatim; workflow JS stays in the restricted
+- ALWAYS: pal_push is the validation gate (never a standalone pal_validate right before push;
+  standalone pal_validate is for diagnosis between edits); §4 copy ships verbatim; workflow JS stays in the restricted
   ES3-style subset; use reserved global `tx` only for the transaction object.
 - AUTO MODE: the agent proceeds with best judgment on transaction API method names after checking
   available docs/skills. No stopping for questions.

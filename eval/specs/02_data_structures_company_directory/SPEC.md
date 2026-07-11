@@ -137,7 +137,8 @@ None.
 - Sockets: none.
 
 ## 11. Constraints (Always / Ask-first / Never)
-- ALWAYS: pal_validate before push; §4 copy and §5 seed/reference/setting values ship verbatim;
+- ALWAYS: pal_push is the validation gate (never a standalone pal_validate right before push;
+  standalone pal_validate is for diagnosis between edits); §4 copy and §5 seed/reference/setting values ship verbatim;
   workflow JS stays in the restricted ES3-style subset.
 - AUTO MODE: the agent proceeds with best judgment on storage-structure choices. No stopping for
   questions. If unsure, choose the most idiomatic documented PalBuilder primitive.
