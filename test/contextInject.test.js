@@ -121,17 +121,57 @@ test("pruneSkills removes retired/owned skills, keeps user skills", async () => 
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("OpenCode pal carries only AGENTS.md + .agents skills, MCP flavor", async () => {
+test("OpenCode pal carries AGENTS.md + .agents skills + slash commands, MCP flavor", async () => {
     const ws = tmpWorkspace();
     await ci.inject(ws, { palName: "Demo", agent: "opencode" });
     assert.ok(fs.existsSync(path.join(ws, "AGENTS.md")), "OpenCode gets AGENTS.md");
     assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-workflow/SKILL.md")), "OpenCode skills at .agents/");
+    const palLoopCommand = fs.readFileSync(path.join(ws, ".opencode/commands/pal-loop.md"), "utf8");
+    assert.ok(palLoopCommand.includes(ci.OPENCODE_COMMAND_MARKER), "OpenCode /pal-loop command is palsync-managed");
+    assert.ok(palLoopCommand.includes("load `pal-loop`"), "OpenCode /pal-loop command loads the matching skill");
+    assert.ok(palLoopCommand.includes("$ARGUMENTS"), "OpenCode command forwards additional user input");
     const md = fs.readFileSync(path.join(ws, "AGENTS.md"), "utf8");
     assert.ok(md.includes("`pal_push`"), "OpenCode AGENTS.md uses the MCP tool pal_push");
     assert.ok(!md.includes("`palsync push`"), "OpenCode flavor must not use CLI subcommands");
     assert.ok(md.includes("locked for your session"), "OpenCode locks for the session like Codex, not per-command");
     assert.ok(!fs.existsSync(path.join(ws, "CLAUDE.palsync.md")), "OpenCode pal has no CLAUDE.palsync.md");
     assert.ok(!fs.existsSync(path.join(ws, ".claude/skills/palbuilder-backend")), "OpenCode pal has no .claude skills");
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("OpenCode creates a slash command for every bundled skill", async () => {
+    const ws = tmpWorkspace();
+    const skills = await ci.bundledSkills();
+    const result = await ci.inject(ws, { palName: "Demo", agent: "opencode" });
+    assert.deepStrictEqual(result.openCodeCommands.skipped, []);
+    for (const skill of skills) {
+        assert.ok(fs.existsSync(path.join(ws, ".opencode/commands", skill.name + ".md")),
+            "/" + skill.name + " command exists");
+    }
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("OpenCode command sync preserves user commands and prunes only stale managed commands", async () => {
+    const ws = tmpWorkspace({
+        ".opencode/commands/pal-loop.md": "---\ndescription: My command\n---\nDo my custom thing.\n",
+        ".opencode/commands/team-command.md": "Team-owned command\n",
+        ".opencode/commands/retired.md": ci.OPENCODE_COMMAND_MARKER + "\nold\n"
+    });
+    const result = await ci.inject(ws, { palName: "Demo", agent: "opencode" });
+    assert.ok(result.openCodeCommands.skipped.includes("pal-loop"), "colliding user command is reported and preserved");
+    assert.equal(fs.readFileSync(path.join(ws, ".opencode/commands/pal-loop.md"), "utf8").includes("My command"), true);
+    assert.ok(fs.existsSync(path.join(ws, ".opencode/commands/team-command.md")), "unrelated user command survives");
+    assert.ok(!fs.existsSync(path.join(ws, ".opencode/commands/retired.md")), "stale managed command is pruned");
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("switching away from OpenCode removes only palsync-managed slash commands", async () => {
+    const ws = tmpWorkspace({ ".opencode/commands/team-command.md": "Team-owned command\n" });
+    await ci.inject(ws, { palName: "Demo", agent: "opencode" });
+    assert.ok(fs.existsSync(path.join(ws, ".opencode/commands/pal-loop.md")));
+    await ci.inject(ws, { palName: "Demo", agent: "codex" });
+    assert.ok(!fs.existsSync(path.join(ws, ".opencode/commands/pal-loop.md")), "managed command removed");
+    assert.ok(fs.existsSync(path.join(ws, ".opencode/commands/team-command.md")), "user command preserved");
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
