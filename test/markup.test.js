@@ -17,6 +17,20 @@ test("design-system workspaces require core-control pb-* classes", () => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("non-text input types are exempt from the pb-input requirement", () => {
+    const dir = tmpWorkspace({
+        "DESIGN_SYSTEM.md": "# system",
+        "pages/index.html": "<html><body>" +
+            "<input type=\"checkbox\" name=\"notify\" />" +
+            "<input type=\"range\" name=\"threshold\" />" +
+            "<input type=\"hidden\" name=\"id\" />" +
+            "<input type=\"submit\" value=\"Go\" />" +
+            "</body></html>"
+    });
+    assert.equal(validateWorkspace(dir).findings.filter(f => f.rule === "designClassRequired").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("core-control classes remain the old clean behavior without a design system", () => {
     const dir = tmpWorkspace({
         "pages/index.html": "<html><body><button>Save</button></body></html>"

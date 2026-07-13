@@ -139,7 +139,13 @@ function lintMarkup(rel, src, opts) {
                 textarea: "pb-textarea",
                 table: "pb-table"
             }[lname];
-            if (requiredClass && !new RegExp("(^|\\s)" + requiredClass + "(?:\\s|$)").test(
+            // pb-input is the text-field recipe. Checkbox/radio/toggle/range/file/color and the
+            // button-like or hidden input types carry their own recipes (or none) — the component
+            // library ships them without pb-input, so requiring it here would be a false error.
+            const nonInputClass = lname === "input" && [
+                "hidden", "checkbox", "radio", "range", "submit", "button", "reset", "image", "file", "color"
+            ].includes((tag.attrs.find(a => a.name.toLowerCase() === "type")?.value || "").toLowerCase());
+            if (requiredClass && !nonInputClass && !new RegExp("(^|\\s)" + requiredClass + "(?:\\s|$)").test(
                 tag.attrs.find(a => a.name.toLowerCase() === "class")?.value || "")) {
                 add(lt, "error", "designClassRequired",
                     "<" + tag.name + "> is missing the required ." + requiredClass + " class while a workspace design system is present. " +
