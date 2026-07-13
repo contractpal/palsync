@@ -166,9 +166,9 @@ Most-used tags:
 Also seen in production: `c:div`, `c:get`, `c:image`, `c:button`, `c:select`. All have their
 own attribute lists in `c-tags.md`.
 
-**The `test` attribute is universal.** Almost every `c:` tag and many plain HTML elements
-accept `test="${expr}"` for conditional rendering — `<div test="${!empty(items)}">...</div>`
-works.
+`test` is reliable on `c:` tags. For conditional rendering on ordinary markup, use
+`<c:if test="${expr}">` for a block or `<c:div test="${expr}" class="...">` when the element
+needs a class; do not rely on `test=` on plain `<div>`, `<p>`, or `<span>`.
 
 ---
 

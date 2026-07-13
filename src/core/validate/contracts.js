@@ -104,6 +104,21 @@ function hasAttr(tag, name) {
     return tag.attrs.some(a => a.name.toLowerCase() === name);
 }
 
+const RESERVED_EL_WORDS = new Set(["eq", "ne", "gt", "lt", "ge", "le", "and", "or", "not", "empty", "true", "false", "null", "div", "mod", "instanceof"]);
+
+function checkReservedElName(tag, rel, src, pos, tagName, attrName, value, findings) {
+    if (value == null || !RESERVED_EL_WORDS.has(String(value).trim())) return;
+    const id = String(value).trim();
+    const isList = tagName === "c:list";
+    findings.push({
+        file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "reservedElWord",
+        message: "<" + tagName + " " + attrName + "=\"" + id + "\"> — \"" + id +
+            "\" is a reserved EL operator and cannot be a " + tagName + " " + (isList ? "id / loop variable" : "name") +
+            "; every ${" + id + ".x} becomes ambiguous. Fix: use a short non-reserved name (e, r, row, item). " +
+            "See the palbuilder-frontend skill, \"EL operators\"."
+    });
+}
+
 function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 
 // ---------------------------------------------------------------------------------------------
@@ -202,6 +217,7 @@ function checkListNameContract(markupFiles, listNames, findings) {
             if (hasAttr(tag, "list")) return; // string-split mode — different contract, not this check
             const name = attr(tag, "name");
             const id = attr(tag, "id");
+            checkReservedElName(tag, rel, src, pos, "c:list", "id", id, findings);
             if (name == null || listNames.has(name)) return;
 
             const closeMatch = /<\/c:list>/i.exec(src.slice(tag.end));
@@ -305,6 +321,37 @@ const EL_OP_MAP = [
     [/&gt;/, "gt"], [/&lt;/, "lt"], [/>/, "gt"], [/</, "lt"],
 ];
 
+const EL_ATTRS = new Set(["class", "style", "value", "test", "selected", "checked"]);
+
+function hasUnquotedQuestion(body) {
+    let quote = null;
+    for (let i = 0; i < body.length; i++) {
+        const ch = body[i];
+        if (quote) {
+            if (ch === quote && body[i - 1] !== "\\") quote = null;
+        } else if (ch === "'" || ch === '"') {
+            quote = ch;
+        } else if (ch === "?") {
+            return true;
+        }
+    }
+    return false;
+}
+
+function checkElTernary(value, label, rel, src, pos, findings) {
+    const re = /\$\{([^}]*)\}/g;
+    let match;
+    while ((match = re.exec(String(value))) !== null) {
+        if (!hasUnquotedQuestion(match[1])) continue;
+        findings.push({
+            file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "elSyntax",
+            message: label + "=\"" + value + "\" — EL has no ternary operator; the ? inside ${...} cannot be evaluated. " +
+                "Fix: use <c:set name=\"value\" test=\"${condition}\" true=\"yes\" false=\"no\"/> to pick the value first, then bind the c:set variable. " +
+                "See the palbuilder-frontend skill, \"c:set\" and \"EL operators\"."
+        });
+    }
+}
+
 function mechanicalBareFix(value) {
     let m;
     if ((m = /^([\w.]+)\.count\(\)\s*==\s*0$/.exec(value))) return "${empty " + m[1] + "}";
@@ -317,6 +364,10 @@ function mechanicalBareFix(value) {
 }
 
 function checkElSyntax(tag, rel, src, pos, findings) {
+    for (const a of tag.attrs) {
+        const attrName = a.name.toLowerCase();
+        if (EL_ATTRS.has(attrName)) checkElTernary(a.value, attrName, rel, src, pos, findings);
+    }
     const value = attr(tag, "test");
     if (value == null) return;
 
@@ -360,6 +411,27 @@ function checkElSyntax(tag, rel, src, pos, findings) {
             });
             return;
         }
+    }
+}
+
+function checkTextElTernaries(rel, src, findings) {
+    const re = /\$\{([^}]*)\}/g;
+    let match;
+    while ((match = re.exec(src)) !== null) {
+        const before = src.slice(0, match.index);
+        if (before.lastIndexOf("<") > before.lastIndexOf(">")) continue;
+        if (hasUnquotedQuestion(match[1])) checkElTernary(match[0], "text", rel, src, match.index, findings);
+    }
+}
+
+function checkReservedElNames(markupFiles, findings) {
+    for (const { rel, src } of markupFiles) {
+        scanTags(src, (tag, pos) => {
+            const tagName = tag.name.toLowerCase();
+            if (tagName === "c:set" || tagName === "c:fragment") {
+                checkReservedElName(tag, rel, src, pos, tagName, "name", attr(tag, "name"), findings);
+            }
+        });
     }
 }
 
@@ -857,6 +929,7 @@ function lintContracts(workspaceDir) {
 
     const listNames = collectListNames(workflowFiles);
     checkListNameContract(markupFiles, listNames, findings);
+    checkReservedElNames(markupFiles, findings);
 
     checkAjaxTargetExists(markupFiles, findings);
 
@@ -870,6 +943,7 @@ function lintContracts(workspaceDir) {
             checkFormTag(tag, rel, src, pos, findings);
             checkDestructiveConfirm(tag, rel, src, pos, findings);
         });
+        checkTextElTernaries(rel, src, findings);
         checkStaleVendor(rel, src, findings);
     }
 

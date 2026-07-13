@@ -69,6 +69,12 @@ const RULES = {
         msg: "Array higher-order method (.map/.filter/.forEach/.reduce) — not confirmed supported by the workflow " +
             "engine. Fix: use a classic for loop, or the DataSet/DataList API for row work. See palbuilder-core/references/es3-cheatsheet.md."
     },
+    bannedMethod: {
+        severity: "error",
+        msg: "Unsupported ES5+/ES6 String/Array method — PalBuilder's workflow engine does NOT support this method. " +
+            "Fix: use an ES3 equivalent such as indexOf/substring, or write a classic loop for the operation. " +
+            "See palbuilder-core/references/es3-cheatsheet.md (unsupported String/Array methods)."
+    },
     funcExpr: {
         severity: "warn",
         msg: "Function expression (var f = function(){}) — not confirmed supported by the workflow engine. " +
@@ -92,6 +98,7 @@ const RULES = {
 };
 
 const HOF_NAMES = new Set(["map", "filter", "forEach", "reduce", "reduceRight", "some", "every", "find", "findIndex", "flatMap"]);
+const BANNED_METHODS = new Set(["trim", "trimStart", "trimEnd", "includes", "startsWith", "endsWith", "repeat", "padStart", "padEnd"]);
 
 function finding(rel, node, ruleKey, extra) {
     const r = RULES[ruleKey];
@@ -248,9 +255,12 @@ function lintWorkflowJs(rel, source) {
                 }
                 break;
             case "CallExpression":
-                if (node.callee && node.callee.type === "MemberExpression" && !node.callee.computed &&
-                    node.callee.property && HOF_NAMES.has(node.callee.property.name)) {
-                    findings.push(finding(rel, node.callee.property, "hof", "(.'" + node.callee.property.name + "')"));
+                if (node.callee && node.callee.type === "MemberExpression" && !node.callee.computed && node.callee.property) {
+                    if (HOF_NAMES.has(node.callee.property.name)) {
+                        findings.push(finding(rel, node.callee.property, "hof", "(.'" + node.callee.property.name + "')"));
+                    } else if (BANNED_METHODS.has(node.callee.property.name)) {
+                        findings.push(finding(rel, node.callee.property, "bannedMethod", "(.'" + node.callee.property.name + "()')"));
+                    }
                 }
                 break;
             case "SwitchStatement": {

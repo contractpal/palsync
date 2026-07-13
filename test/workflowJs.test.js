@@ -112,3 +112,23 @@ test("lintWorkflowJs: helper-local declarations do not satisfy run globals", () 
     assert.equal(implicit.length, 1);
     assert.equal(implicit[0].line, 6);
 });
+
+test("lintWorkflowJs: unsupported String/Array methods are errors", () => {
+    const src = [
+        "function run(controller) {",
+        "  var name = controller.getName().trim();",
+        "  var hasName = name.includes('x');",
+        "  var first = name.indexOf('x');",
+        "  return first;",
+        "}"
+    ].join("\n");
+    const findings = lintWorkflowJs("workflows/main.js", src);
+    const banned = findings.filter(f => f.rule === "bannedMethod");
+    assert.equal(banned.length, 2);
+    assert.ok(banned.every(f => f.severity === "error"));
+});
+
+test("lintWorkflowJs: ES3 String methods remain clean", () => {
+    const src = "function run(controller) { var name = controller.getName(); return name.substring(0, name.length); }";
+    assert.equal(lintWorkflowJs("workflows/main.js", src).filter(f => f.rule === "bannedMethod").length, 0);
+});

@@ -157,6 +157,48 @@ test("EL syntax — bare test with no ${ at all", () => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("EL syntax — ternary in class is an error, while quoted ? is clean", () => {
+    const dir = tmpWorkspace({
+        "fragments/row.html": [
+            "<c:ignore xmlns:c=\"contractpal\">",
+            "  <div class=\"pb-input ${!empty(nameError) ? 'is-error' : ''}\">${label ? 'yes' : 'no'}</div>",
+            "  <p class=\"${path eq '?action=save'}\">ok</p>",
+            "</c:ignore>",
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "elSyntax");
+    assert.equal(findings.length, 2);
+    assert.ok(findings.every(f => f.severity === "error"));
+    assert.ok(findings.every(f => /no ternary/.test(f.message)));
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("reserved EL words cannot be c:list ids, c:set names, or c:fragment names", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": "function run(controller) {}",
+        "fragments/row.html": [
+            "<c:ignore xmlns:c=\"contractpal\">",
+            "  <c:list name=\"items\" id=\"eq\"><p>${eq.name}</p></c:list>",
+            "  <c:set name=\"empty\" test=\"${ok}\" true=\"x\" false=\"\" />",
+            "  <c:fragment name=\"or\" />",
+            "</c:ignore>",
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "reservedElWord");
+    assert.equal(findings.length, 3);
+    assert.ok(findings.every(f => f.severity === "error"));
+    assert.match(findings[0].message, /reserved EL operator/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("clean EL attributes and text produce no ternary findings", () => {
+    const dir = tmpWorkspace({
+        "fragments/row.html": "<c:ignore xmlns:c=\"contractpal\"><p class=\"${active}\">${name}</p></c:ignore>",
+    });
+    assert.equal(lintContracts(dir).filter(f => f.rule === "elSyntax").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("href=\"?action=...\" anti-pattern on c:a", () => {
     const dir = tmpWorkspace({
         "workflows/console.js": "function run(controller) {}",
