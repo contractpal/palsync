@@ -80,6 +80,7 @@ function lintMarkup(rel, src, opts) {
     // fragment on Major League Coatings). opts.nonParseable = Set of "fragments/<file>" rels.
     const nonParseable = (opts && opts.nonParseable) || null;
     const skipScriptChecks = !!(nonParseable && nonParseable.has(rel));
+    const designSystemPresent = !!(opts && opts.designSystemPresent);
     const findings = [];
     const lineAt = lineIndexer(src);
     const isFragment = looksLikeFragment(rel, src);
@@ -125,6 +126,28 @@ function lintMarkup(rel, src, opts) {
     function checkTag(tag, lt) {
         const lname = tag.name.toLowerCase();
 
+        if (lname === "c:debug") {
+            add(lt, "error", "debugTagShipped",
+                "<c:debug/> must not ship in a page or fragment: it renders headerless platform tables that fail designAudit tableHeaders. Remove the debug tag before pushing. See the palbuilder-frontend skill debug guidance.");
+        }
+
+        if (designSystemPresent) {
+            const requiredClass = {
+                button: "pb-btn",
+                input: "pb-input",
+                select: "pb-select",
+                textarea: "pb-textarea",
+                table: "pb-table"
+            }[lname];
+            if (requiredClass && !new RegExp("(^|\\s)" + requiredClass + "(?:\\s|$)").test(
+                tag.attrs.find(a => a.name.toLowerCase() === "class")?.value || "")) {
+                add(lt, "error", "designClassRequired",
+                    "<" + tag.name + "> is missing the required ." + requiredClass + " class while a workspace design system is present. " +
+                    "Fix: add class=\"" + requiredClass + "\" and use the corresponding component recipe from component-library.md; " +
+                    "core-control classes are validation errors, not suggestions.");
+            }
+        }
+
         // (1) HTML void element must self-close — UNLESS it is immediately closed with an
         // explicit paired end-tag (<source ...></source>), which is balanced XML and accepted
         // by the server (seen on live pals: Major League Coatings, 2026-06).
@@ -150,7 +173,9 @@ function lintMarkup(rel, src, opts) {
                         (allowed.size ? " (valid here: " + [...allowed].join(", ") + ")" : "") + ". See the palbuilder-frontend skill tag reference.");
                 }
             }
-            const req = REQUIRED[lname] || [];
+            const req = (lname === "c:list" && tag.attrs.some(a => a.name.toLowerCase() === "list"))
+                ? (REQUIRED[lname] || []).filter(r => r !== "name")
+                : (REQUIRED[lname] || []);
             for (const r of req) {
                 if (!tag.attrs.some(a => a.name.toLowerCase() === r)) {
                     add(lt, "error", "missingRequiredCAttr",

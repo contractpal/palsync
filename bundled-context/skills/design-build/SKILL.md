@@ -63,7 +63,7 @@ Hard gates — any failure means the visible task is not done:
   or reviewing. It is the practical checklist for hierarchy, UX flow, Gestalt grouping, Fitts target
   sizing, typography, color meaning, consistency, and simplicity.
 - For Palbuilder UI, read `../design-system-init/references/component-library.md` before implementing any non-trivial app/console component, or `../design-system-init/references/marketing-library.md` for marketing sections (hero, bento, pricing, testimonials, logo cloud, CTA, stats, mockups). Copy the selected recipe's CSS and dependencies from the reference catalog into `styles.css`; never copy unrelated families. Pair either with `palbuilder-frontend/references/c-tags.md` before using any `c:` attribute you have not verified.
-- Enforce the current palsync visual stack unless the project explicitly overrides it: system or Fontshare typography, inline SVG icons from one approved family (Iconoir, Tabler, or Phosphor), and `scripts/pb-motion.js` data attributes for scripted animation — no other motion library.
+- Enforce the current palsync visual stack unless the project explicitly overrides it: system or Fontshare typography, inline SVG icons from one approved family (Iconoir, Heroicons, or Phosphor), and `scripts/pb-motion.js` data attributes for scripted animation — no other motion library. Always grab the SVG version; see component-library.md Icons.
 - Chart.js is optional and only for chart-heavy pals: platform `<c:resource source="chartjs"
   version="4.0.0" name="chart.js" />` plus opt-in `scripts/pb-charts.js`; it is not part of the
   core four-file byte-identity set.
@@ -187,7 +187,7 @@ Apply the same vocabulary to yourself at the review gate.
 - [ ] `component-library.md` (app/console) or `marketing-library.md` (marketing sections) consulted
       for non-trivial UI and local reusable components recorded back into COMPONENTS.md.
 - [ ] Typography, SVG icons, and motion match the stack policy: system/Fontshare fonts, inline
-      Iconoir/Tabler/Phosphor-style SVGs, `pb-motion.js` data attributes only for scripted motion.
+      Iconoir/Heroicons/Phosphor-style SVGs, `pb-motion.js` data attributes only for scripted motion; always grab the SVG version.
 - [ ] No leftover scripted-animation vendor file or `<script>` reference remains anywhere in the
       pal's own files.
 - [ ] Decomposed into atomic units with explicit interfaces; no monolith, no near-duplicates.

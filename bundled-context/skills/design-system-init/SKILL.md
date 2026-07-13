@@ -180,9 +180,8 @@ Define:
   system fonts or Fontshare fonts. Palbuilder rejects remote page-head font resources; Fontshare
   loads only through an `@import` kept as line 1 of the pal's `styles.css`. Copy that import from
   the reference only when the chosen Fontshare family is used. Do not default to Google Fonts.
-- Iconography: always inline SVG, never icon fonts or JS icon replacers. Default to Iconoir, Tabler,
-  or Phosphor; use one family per pal unless a single domain icon is missing. Heroicons can inform
-  Tailwind-like proportions, but the generated Palbuilder output must still be inline SVG.
+- Iconography: always grab the SVG version; never use icon fonts or JS icon replacers. Use one family
+  per pal from Iconoir (default), Heroicons, or Phosphor; see component-library.md Icons.
 - Runtime files: create one authored `styles/styles.css`, register it in `pal.json`, and link it
   once. Use `references/design-system.css` only to select the smallest dependency-complete set of
   tokens, base rules, and component recipes used by the pal. Never create/register/link a runtime
@@ -373,8 +372,8 @@ reality. A correction means re-check references or source files before editing t
 - Use `c:field` for bound inputs, but do not put ARIA attributes on `c:field`; pair it with a
   wrapping `<label>` and sibling `role="alert"` message.
 - Inline SVG icons are allowed; self-close SVG children and use one icon family.
-- Icon fonts and JS icon replacement libraries are not allowed. Use inline SVG from Iconoir, Tabler,
-  or Phosphor unless the user explicitly chooses another SVG family.
+- Icon fonts and JS icon replacement libraries are not allowed. Always grab the SVG export and use
+  inline SVG from Iconoir, Heroicons, or Phosphor; see component-library.md Icons.
 - Use system fonts or Fontshare fonts. Do not introduce a Google Fonts dependency by default.
 - Load Fontshare only through an `@import` at the top of `styles.css`; never add remote page-head
   font resources or copy unused font imports.

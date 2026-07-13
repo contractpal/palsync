@@ -180,7 +180,7 @@ CONSOLE + TRANSACTION pages:
 - [ ] VISUAL (Customer completion): H1 `Confirm your service request`, request description,
       resolution note field, and submit button render on tx.html.
 - [ ] VISUAL QUALITY: desktop + mobile captures of console and transaction surfaces have loaded CSS
-      and `designAudit.errors:0`; the seven-dimension rubric averages at least 1.5/2, focal point/
+      and `designAudit.errors:0`; console exception evidence must quote each audit sample ancestry (`[inside #cp-root]` or `[OUTSIDE #cp-root]`), and scope `#cp-root` cannot claim the platform-chrome exception; the seven-dimension rubric averages at least 1.5/2, focal point/
       spacing/responsive each score 2, and no dimension scores 0; every score cites screenshot evidence.
 - [ ] Data effects: every write is confirmed by a follow-up read in requestList/requestDetail.
 

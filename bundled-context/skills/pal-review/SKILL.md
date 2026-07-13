@@ -34,9 +34,8 @@ never pal-loop's self-report.
   (per-string found/missing verdict, no HTML dump). Real output, not source.
 - Every §3 nav link routes to a real page — no dead links.
 - Every §12 acceptance criterion actually met — the full set, not just the global floor.
-- Every new-pal UI page links `../Styles/spacing.css` before `../Styles/styles.css`, and loads
-  `pb-ui.js`/`pb-motion.js` each exactly once as
-  `<script type="module">` (design-system-init's checklist has the exact order). Existing pals
+- Every new-pal UI page links `../Styles/spacing.css` before `../Styles/styles.css` when used, and
+  loads each behavior script exactly once only when current markup consumes it. Existing pals
   without `styles.css` are not retrofitted; Bootstrap is not loaded merely for spacing/layout helpers.
 - §11 NEVER list not violated; §8b consumed datasets not altered.
 - Every `done` task in EXECUTION.md traces via its `spec ref` to its SPEC.md § and that
@@ -66,6 +65,11 @@ proof artifact for rendered output or data effects.
   available and a §5 write action was not exercised, mark that action `NOT VERIFIED` and the
   verdict `CHANGES-NEEDED` with a fix task to run the exercise. Do not convert a plausible
   file:line trace into a data-effects pass.
+
+Common exercise-authoring mistakes: duplicate-text clicks need `within`; an input `value` is not
+visible text; CSS `text-transform` means assert source casing; deleted records need `absent` plus
+empty-state copy; console workflows use fill/click, not web action/page steps; split flows longer
+than 10 steps into separate exercises.
 - Copy on-brand per BRAND_VOICE / DESIGN_SYSTEM intent, not just present?
 - §6 layout matches the composition the spec described?
 

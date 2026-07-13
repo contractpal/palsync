@@ -8,6 +8,10 @@ capture it, the one-variable rule (§2), and the model matrix (§5). Score each 
 **v2** in notes. v1/v2 rows are not process-comparable, but their §12 outcome scores remain
 comparable because acceptance criteria are unchanged.
 
+v2 validation also blocks shipped `c:debug`, missing static fragments, and missing core-control
+`pb-*` classes when a design system is present; console audit exceptions require quoted sample
+ancestry evidence.
+
 **A row is invalid for comparison unless every pinned-variable column is filled** (date,
 scenario, harness, model, palsync SHA, orch skills, palbuilder skills). Leave a cost column blank
 only if the harness genuinely does not report it (tokens) — never guess.

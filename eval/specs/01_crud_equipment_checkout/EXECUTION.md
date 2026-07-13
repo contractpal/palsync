@@ -10,11 +10,12 @@ render-inspect-revise loop and functional self-verification remain mandatory dur
 mobile capture belongs to final review.
 
 ## Build plan
+Before the first UI task, load `design-build` and checkpoint its six-line design brief; use approved inline SVG icons from `component-library.md` → Icons; validation rules include `debugTagShipped`, `designClassRequired`, and `missingFragment`.
 Dependency order (leaf-first — foundations before things that use them):
 1. Create the `equipment` dataset in pal.json and provision it with the dataset-sync step.
 2. Foundation as a standalone first step: use bash `cp` (never read-then-write) to copy the
    console templates from `palbuilder-workflow/references/templates/` (`console-workflow.js` and
-   `console-page.html`) plus canonical runtime files `spacing.css`, `pb-ui.js`, and `pb-motion.js`
+   `console-page.html`) plus shell/styles and only behavior scripts with real consumers
    from `design-system-init/references/`; replace `{{PAL_NAME}}`, author readable
    `styles/styles.css`, and register the four runtime entries in `pal.json`, then adapt.
 3. Build the list action + equipmentList fragment first; this establishes the console composition.
@@ -34,7 +35,7 @@ Checkpoints: after T3 (list renders), after T5 (core checkout flow), final after
 | id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |
 |---|---|---|---|---|---|---|
 | T1 | create and sync equipment dataset | cheap | §8a, §10 | — | todo | pal_validate 0 errors; pal_sync_datasets provisions equipment with freeform:true and all §8a fields |
-| T2 | foundation shell, canonical runtime files, styles.css, and run skeleton | cheap | §3, §6, §10, §11 | T1 | todo | Console page shell, navbar, matching templates copied with bash `cp`, four canonical runtime files present and registered in pal.json, readable `styles.css`; pal_validate 0; pal_test console workflow VALIDATED |
+| T2 | foundation shell, styles.css, and run skeleton | cheap | §3, §6, §10, §11 | T1 | todo | Console page shell, navbar, matching templates copied with bash `cp`, shell/styles plus only runtime scripts with real consumers present and registered in pal.json, readable `styles.css`; pal_validate 0; pal_test console workflow VALIDATED |
 | T3 | list action + designed equipmentList fragment | frontier | §4, §5 list, §6, §12 | T2 | todo | list renders compact PageHeader, designed EmptyState/table, badges and grouped actions; desktop screenshot audit errors 0; pal_test VALIDATED |
 | T4 | bounded equipmentForm + saveEquipment insert/update/validation | standard | §4, §5 saveEquipment, §8a | T3 | todo | top-labeled bounded form + grouped actions; valid save returns row; empty name returns adjacent `Name is required.`; desktop screenshot audit errors 0; pal_test VALIDATED |
 | T5 | bounded checkoutForm + checkout/checkin actions | standard | §4, §5 checkoutEquipment, §5 checkinEquipment | T4 | todo | top-labeled bounded form; checkout shows checkedOut + assignee; adjacent empty-assignee message; checkin returns available; desktop screenshot audit errors 0; pal_test VALIDATED |

@@ -213,6 +213,7 @@ function formatCost(workspaceDir, tools) {
     L.push(inj.overSoftThreshold
         ? "  ABOVE SOFT THRESHOLD (" + fmtBytes(SOFT_THRESHOLD_BYTES) + ") — consider trimming a skill description or a tool description."
         : "  within soft threshold (" + fmtBytes(SOFT_THRESHOLD_BYTES) + ")");
+    L.push("Model-token spend is not visible to palsync — get it from your harness/provider dashboard.");
     return L.join("\n");
 }
 

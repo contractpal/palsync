@@ -242,7 +242,15 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
                 if (el.id) return el.tagName.toLowerCase() + "#" + el.id;
                 const cls = Array.from(el.classList || []).slice(0, 2).join(".");
                 const text = String(el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 36);
-                return el.tagName.toLowerCase() + (cls ? "." + cls : "") + (text ? " (" + text + ")" : "");
+                const base = el.tagName.toLowerCase() + (cls ? "." + cls : "") + (text ? " (" + text + ")" : "");
+                if (kind !== "console") return base;
+                let node = el;
+                let insideRoot = false;
+                while (node) {
+                    if (node.id === "cp-root") { insideRoot = true; break; }
+                    node = node.parentElement;
+                }
+                return base + (insideRoot ? " [inside #cp-root]" : " [OUTSIDE #cp-root]");
             };
             const hasAccessibleLabel = (el) => {
                 if (el.labels && el.labels.length) return true;
@@ -361,6 +369,7 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
                 inspected: true,
                 version: 2,
                 scope: root === document.body ? "body" : (root.id ? "#" + root.id : root.tagName.toLowerCase()),
+                notes: root.id === "cp-root" ? ["audit scoped to #cp-root — platform-chrome exception cannot apply to these findings"] : [],
                 metrics: {
                     viewport: { width: window.innerWidth, height: window.innerHeight },
                     scrollWidth: root.scrollWidth,

@@ -59,9 +59,9 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
 3. **Mark** `in_progress`: `palsync task <id> in_progress` — write state now, not later.
 4. **Execute exactly as specced:**
    - Foundation task (T1): use bash `cp` to copy the matching pal-type template files and the
-     canonical runtime files (`spacing.css`, `styles.css`, `pb-ui.js`, `pb-motion.js`) — never
-     read-then-write. Replace `{{PAL_NAME}}`/`YOUR-DOMAIN` placeholders, then adapt; author
-     `styles/styles.css` from the selected design-system rules and register the four runtime files.
+     runtime shell/styles plus ONLY the behavior scripts with real consumers in current markup;
+     add a script later when a task introduces its consumer. Replace `{{PAL_NAME}}`/`YOUR-DOMAIN`
+     placeholders, then adapt; author `styles/styles.css` from selected design-system rules.
      For console pals establish the `run()` skeleton from the copied template.
    - Copy: **§4**, verbatim — these exact words ship.
    - Layout: **§6** composition, styled via **design-build** (the spec carries no colors/fonts).
@@ -95,8 +95,9 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       have `renderError:null`, fully loaded CSS, and zero pal-content design-audit errors. Console
       screenshots can include platform-injected chrome outside `#cp-root`; findings such as
       `tableHeaders` on the action table or `horizontalOverflow` on the function-call timer are not
-      fixable in pal code. Confirm the flagged node is outside `#cp-root` and checkpoint it explicitly;
-      never use this exception for the same finding inside pal content. Inspect the desktop image
+      fixable in pal code. Claim the exception only when samples say `OUTSIDE #cp-root` or scope is
+      not `#cp-root`, and quote that sample string in the checkpoint; never use it inside pal content.
+      Inspect the desktop image
       against design-build's archetype rubric; if the audit/image exposes a failure, fix the
       three highest-impact issues, push, and re-capture. Re-run the task's
       behavior check after the last visual edit. A screenshot file path without pixel critique is
@@ -180,6 +181,14 @@ Runs at each review-cadence pause and always at the build-completion handoff —
   criterion per primary action; don't manufacture full-mode rigor.
 
 ## Hard rules
+
+- Before the first UI task, load `design-build` and checkpoint its six-line design brief; no UI markup/CSS before that brief exists.
+- The design checkpoint names one signature idea that makes this pal non-generic; at T-final apply the existing “no zeroes” rubric rule.
+- No vision → no rubric score: route per `vision-routing.md` or set a `HUMAN GATE` blocker.
+- A pal-review dispatch failure (missing key or unavailable subagent) is a `HUMAN GATE`; a build-session PASS is invalid.
+- Before `done`, re-read the success condition verbatim and cite tool output for every clause; a failing or unrun gate is not done.
+- One commit per completed task; change task state and checkpoints through the palsync task/checkpoint CLI, not ad-hoc notes.
+- Every validation warning is fixed or explicitly waived with a one-line checkpoint reason; silent carry-over violates the loop.
 
 - **Build is NOT complete until every workflow touched this build returns `pal_test`
   VALIDATED (0 notes) AND pal-review has returned PASS.** `pal_validate` alone is offline;

@@ -62,7 +62,9 @@ test("injectedContext flags overSoftThreshold once the block exceeds it", () => 
 
 test("formatCost prints the threshold flag line matching overSoftThreshold", () => {
     const under = tmpWorkspace({ "CLAUDE.palsync.md": "small doc" });
-    assert.match(usage.formatCost(under, []), /within soft threshold/);
+    const report = usage.formatCost(under, []);
+    assert.match(report, /within soft threshold/);
+    assert.match(report, /Model-token spend is not visible to palsync/);
 
     const over = tmpWorkspace({ "CLAUDE.palsync.md": "x".repeat(usage.SOFT_THRESHOLD_BYTES + 1) });
     assert.match(usage.formatCost(over, []), /ABOVE SOFT THRESHOLD/);

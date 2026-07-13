@@ -214,10 +214,10 @@ function checkListNameContract(markupFiles, listNames, findings) {
     for (const { rel, src } of markupFiles) {
         scanTags(src, (tag, pos) => {
             if (tag.name.toLowerCase() !== "c:list") return;
-            if (hasAttr(tag, "list")) return; // string-split mode — different contract, not this check
             const name = attr(tag, "name");
             const id = attr(tag, "id");
             checkReservedElName(tag, rel, src, pos, "c:list", "id", id, findings);
+            if (hasAttr(tag, "list")) return; // string-split mode — different contract, not this check
             if (name == null || listNames.has(name)) return;
 
             const closeMatch = /<\/c:list>/i.exec(src.slice(tag.end));
@@ -735,6 +735,26 @@ function checkFragmentBinding(markupFiles, workflowFiles, findings) {
     }
 }
 
+// Static c:fragment names are extensionless paths into the shipped fragments/ tree. Dynamic
+// names are handled by checkFragmentBinding because their target is supplied through payload.
+function checkStaticFragmentExists(markupFiles, findings) {
+    const shipped = new Set(markupFiles.map(({ rel }) => rel.replace(/\.(?:html?|xhtml)$/i, "")));
+    for (const { rel, src } of markupFiles) {
+        scanTags(src, (tag, pos) => {
+            if (tag.name.toLowerCase() !== "c:fragment") return;
+            const name = attr(tag, "name");
+            if (name == null || /^\$\{\s*[\w]+\s*\}$/.test(name)) return;
+            const target = "fragments/" + String(name).replace(/^\/+|\/+$/g, "");
+            if (shipped.has(target)) return;
+            findings.push({
+                file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "missingFragment",
+                message: "<c:fragment name=\"" + name + "\"/> references " + target + ".html, but that static fragment is not shipped. " +
+                    "Fix: add fragments/" + name + ".html (or change name= to an existing fragment path). See the palbuilder-frontend skill, \"c:fragment\"."
+            });
+        });
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Check 11 — low-noise pb-* quality hints. These activate when markup uses the pb-* vocabulary,
 // regardless of which pal-owned stylesheet defines the selected recipes. The canonical
@@ -918,6 +938,39 @@ function checkReferenceStylesheetNotShipped(workspaceDir, markupFiles, findings)
     }
 }
 
+// A pal-owned stylesheet must consume the design-system catalog, not quietly replace its
+// control recipes with bespoke selectors or raw palette values.
+function checkDesignSystemBypass(workspaceDir, findings) {
+    const hasDesignSystem = fs.existsSync(path.join(workspaceDir, "DESIGN_SYSTEM.md")) ||
+        fs.existsSync(path.join(workspaceDir, "styles", "design-system.css")) ||
+        fs.existsSync(path.join(workspaceDir, "Styles", "design-system.css"));
+    if (!hasDesignSystem) return;
+    const reported = new Set();
+    for (const folder of ["styles", "Styles"]) {
+        const files = [];
+        walkFiles(path.join(workspaceDir, folder), folder, files);
+        for (const f of files) {
+            if (path.extname(f.rel).toLowerCase() !== ".css" || /(^|\/)design-system\.css$/i.test(f.rel)) continue;
+            const css = readUtf8(f.abs);
+            if (css == null) continue;
+            const coreSelector = /(?:^|[}\s])(?:button|input\s*\[|select\b|textarea\b|\.pb-(?:btn|input|select|textarea|table))[^{}]*\{/im.test(css);
+            const controlBlock = /(?:button|input\s*\[|select\b|textarea\b|\.pb-(?:btn|input|select|textarea|table))[^{}]*\{[^}]*#[0-9a-f]{3,8}\b/i.test(css);
+            let identity = f.abs;
+            try {
+                const st = fs.statSync(f.abs);
+                identity = st.dev + ":" + st.ino;
+            } catch (e) { /* keep lexical path */ }
+            if ((coreSelector || controlBlock) && !reported.has(identity)) {
+                reported.add(identity);
+                findings.push({
+                    file: f.rel, line: 1, column: 0, severity: "warn", rule: "designSystemBypass",
+                    message: f.rel + " redefines core control styling alongside the workspace design system. Prefer the selected component recipes and semantic tokens from design-build; remove bespoke control selectors/raw hex palette values or record an explicit override in the design brief."
+                });
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Entry point.
 // ---------------------------------------------------------------------------------------------
@@ -956,7 +1009,11 @@ function lintContracts(workspaceDir) {
 
     checkFragmentBinding(markupFiles, workflowFiles, findings);
 
+    checkStaticFragmentExists(markupFiles, findings);
+
     checkReferenceStylesheetNotShipped(workspaceDir, markupFiles, findings);
+
+    checkDesignSystemBypass(workspaceDir, findings);
 
     checkPbQualityHints(workspaceDir, markupFiles, findings);
 

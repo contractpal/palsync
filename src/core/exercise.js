@@ -68,7 +68,7 @@ function validateSteps(steps) {
             }
         }
         if (s.click !== undefined && (typeof s.click !== "string" || !s.click.trim())) {
-            errs.push(at + " click must be the visible text (or a simple #id/.class selector) of the element to click");
+            errs.push(at + " click must be the visible text (or a simple #id/.class selector) of the element to click; if text appears more than once, scope it with within");
         }
         if (s.within !== undefined && (typeof s.within !== "string" || !s.within.trim())) {
             errs.push(at + " within must be a non-empty CSS/Playwright selector");
@@ -384,7 +384,7 @@ function formatExercise(res) {
         if (s.error) lines.push("      error: " + s.error);
         for (const r of s.expect || []) {
             lines.push("      expect " + JSON.stringify(r.string) + ": " + (r.found ? "found in visible text" :
-                "MISSING from visible text" + (r.markupOnly ? " (present only in HTML/form state — this does not prove the result rendered)" : "")));
+                "MISSING from visible text" + (r.markupOnly ? " (string exists only in markup (e.g. input value attribute) — expect visible rendered text instead)" : "")));
         }
         for (const r of s.absent || []) {
             lines.push("      absent " + JSON.stringify(r.string) + ": " + (r.absent ? "clean" : "STILL PRESENT — the old value survived (duplicate insert / edit didn't apply?)"));

@@ -89,8 +89,9 @@ came from.
   design-system-init, then return here. Yes → per page, propose a layout skeleton: section
   order + which named component fills each slot + hierarchy/primary action/progressive disclosure
   notes. Confirm every new-pal page shell will link `styles/spacing.css` → `styles/styles.css`
-  and load `pb-ui.js`/`pb-motion.js` once each. These are the four canonical runtime files;
-  `pb-charts.js` is optional when charts are used. No colors/fonts. Do not
+  when used and load each behavior script once only when current markup consumes it. `pb-charts.js`
+  is optional when charts are used. Use the approved inline SVG icon guidance in
+  `design-system-init/references/component-library.md`. No colors/fonts. Do not
   retrofit `styles.css` into an existing pal that lacks it.
 - **SEO** *(usually web; a publicly indexed console landing/login page can qualify; never a
   webservice/tunnel action)* — Q16 Domain? Per §3 page: publicly indexable? Target phrase for

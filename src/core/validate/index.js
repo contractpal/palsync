@@ -51,6 +51,12 @@ function readUtf8(abs) {
     try { return fs.readFileSync(abs, "utf8"); } catch (e) { return null; }
 }
 
+function hasDesignSystem(workspaceDir) {
+    return fs.existsSync(path.join(workspaceDir, "DESIGN_SYSTEM.md")) ||
+        fs.existsSync(path.join(workspaceDir, "styles", "design-system.css")) ||
+        fs.existsSync(path.join(workspaceDir, "Styles", "design-system.css"));
+}
+
 // Lint a workspace. Returns { findings, errors, warnings, filesChecked, scope }.
 //   opts.only — optional Set of POSIX rel paths; when given, ONLY those files are linted (used
 //   by the pre-push gate to check just the files THIS push changes, so a pal with pre-existing
@@ -59,6 +65,7 @@ function readUtf8(abs) {
 function validateWorkspace(workspaceDir, { only = null } = {}) {
     const findings = [];
     const nonParseable = nonParseableSet(workspaceDir);
+    const designSystemPresent = hasDesignSystem(workspaceDir);
     let filesChecked = 0;
     const inScope = (rel) => !only || only.has(rel);
 
@@ -82,7 +89,7 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
             const src = readUtf8(f.abs);
             if (src == null) continue;
             filesChecked++;
-            findings.push(...lintMarkup(f.rel, src, { nonParseable }));
+            findings.push(...lintMarkup(f.rel, src, { nonParseable, designSystemPresent }));
         }
     }
 

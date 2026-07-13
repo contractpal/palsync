@@ -34,6 +34,10 @@ test("validateSteps: rejects a do-nothing step, params without action, bad expec
     assert.ok(validateSteps([{ click: "Save", within: "" }]).some(p => /within must be/.test(p)));
 });
 
+test("validateSteps: invalid click guidance points to within scoping", () => {
+    assert.ok(validateSteps([{ click: "" }]).some(p => /if text appears more than once.*within/.test(p)));
+});
+
 // ---- checkStep -------------------------------------------------------------
 
 test("checkStep: expect found + absent clean passes", () => {
@@ -152,7 +156,7 @@ test("formatExercise: reports visible assertions, markup-only clues, screen hint
     const out = formatExercise(failing);
     assert.match(out, /FAIL at step 2/);
     assert.match(out, /✓ step 1/);
-    assert.match(out, /expect "deleted": MISSING from visible text \(present only in HTML\/form state/);
+    assert.match(out, /expect "deleted": MISSING from visible text \(string exists only in markup \(e\.g\. input value attribute\)/);
     assert.match(out, /absent "Camera": STILL PRESENT/);
     assert.match(out, /headings: "Edit equipment"/);
     assert.match(out, /Push again only after editing a pal file/);

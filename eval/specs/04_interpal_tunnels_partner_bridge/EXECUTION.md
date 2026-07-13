@@ -10,11 +10,12 @@ the end against §12; the agent's desktop render-inspect-revise and functional/i
 self-checks remain mandatory during the build; mobile capture belongs to final review.
 
 ## Build plan
+Before the first UI task, load `design-build` and checkpoint its six-line design brief; use approved inline SVG icons from `component-library.md` → Icons; validation rules include `debugTagShipped`, `designClassRequired`, and `missingFragment`.
 Dependency order (leaf-first — foundations before things that use them):
 1. Create and sync partnerCatalog dataset.
 2. Foundation as a standalone first step: use bash `cp` (never read-then-write) to copy the
    console templates from `palbuilder-workflow/references/templates/` (`console-workflow.js` and
-   `console-page.html`) plus canonical runtime files `spacing.css`, `pb-ui.js`, and `pb-motion.js`
+   `console-page.html`) plus shell/styles and only behavior scripts with real consumers
    from `design-system-init/references/`; replace `{{PAL_NAME}}`, author readable
    `styles/styles.css`, and register the four runtime entries in `pal.json`, then adapt.
 3. Build dashboard read + bridgeDashboard fragment.
@@ -34,7 +35,7 @@ Checkpoints: after T3 (dashboard), after T5 (both request methods), final after 
 | id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |
 |---|---|---|---|---|---|---|
 | T1 | create and sync partnerCatalog dataset | cheap | §8a, §10 | — | todo | pal_validate 0 errors; pal_sync_datasets provisions partnerCatalog with sku/availability indexes |
-| T2 | foundation shell, canonical runtime files, styles.css, and run skeleton | cheap | §3, §6, §10 | T1 | todo | Console page shell, navbar, matching templates copied with bash `cp`, four canonical runtime files present and registered in pal.json, readable `styles.css`; pal_validate 0; pal_test console workflow VALIDATED |
+| T2 | foundation shell, styles.css, and run skeleton | cheap | §3, §6, §10 | T1 | todo | Console page shell, navbar, matching templates copied with bash `cp`, shell/styles plus only runtime scripts with real consumers present and registered in pal.json, readable `styles.css`; pal_validate 0; pal_test console workflow VALIDATED |
 | T3 | bridgeDashboard read/render | frontier | §4, §5 dashboard, §6 | T2 | todo | dashboard renders H1 `Partner bridge`, DetailPanel labels, EmptyState copy; pal_test VALIDATED |
 | T4 | syncCatalog provider tunnel request + upsert | frontier | §5 syncCatalog, §9, §10 | T3 | todo | sync renders `Catalog sync complete.` and rows AX-100/BX-200/CX-300 with source `tunnel` |
 | T5 | checkProviderHealth provider webservice request | standard | §5 checkProviderHealth, §10 | T3 | todo | health action renders `Provider health check passed.` and stores providerHealth=`ok`; failure path renders `Partner integration failed.` |

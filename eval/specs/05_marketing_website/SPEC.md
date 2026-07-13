@@ -178,7 +178,7 @@ WEB pages:
       no floating pill shell, emoji, invented proof, fake media, fake stats/testimonials, or repeated
       dominant dark CTA slabs.
 - [ ] RESPONSIVE/A11Y: desktop + mobile captures for Home, Services, About, and Contact have
-      `renderError:null`, loaded CSS, and `designAudit.errors:0`; mobile has no page-level overflow,
+      `renderError:null`, loaded CSS, and `designAudit.errors:0`; console exception evidence must quote each audit sample ancestry (`[inside #cp-root]` or `[OUTSIDE #cp-root]`), and scope `#cp-root` cannot claim the platform-chrome exception; mobile has no page-level overflow,
       focus is visible, and content/action order matches the visual hierarchy.
 - [ ] VISUAL rubric: focal point/story, spacing/proximity, typography hierarchy, alignment/grid,
       CTA clarity, responsive composition, and context-specific distinctiveness average at least

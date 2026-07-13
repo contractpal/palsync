@@ -173,7 +173,7 @@ CONSOLE pages:
 - [ ] UX states: empty list uses the exact designed EmptyState; both validation errors appear beside
       the affected field with the entered value recoverable; destructive Delete remains explicit.
 - [ ] RESPONSIVE/A11Y: desktop and mobile `pal_screenshot` captures have `renderError:null`, loaded
-      CSS, and `designAudit.errors:0`; mobile has no page-level horizontal overflow; keyboard focus
+      CSS, and `designAudit.errors:0`; console exception evidence must quote each audit sample ancestry (`[inside #cp-root]` or `[OUTSIDE #cp-root]`), and scope `#cp-root` cannot claim the platform-chrome exception; mobile has no page-level horizontal overflow; keyboard focus
       and action labels are visible/understandable.
 - [ ] VISUAL rubric: focal point/task, spacing/proximity, typography hierarchy, alignment/grid,
       action/state clarity, responsive composition, and context-specific distinctiveness average

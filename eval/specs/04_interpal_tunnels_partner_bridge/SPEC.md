@@ -163,7 +163,7 @@ GLOBAL FLOOR:
 CONSOLE + INTEGRATION:
 - [ ] VISUAL (Bridge dashboard): H1 `Partner bridge`, action row, DetailPanel statuses, DataTable,
       and no emoji.
-- [ ] VISUAL QUALITY: desktop + mobile dashboard captures have loaded CSS and `designAudit.errors:0`;
+- [ ] VISUAL QUALITY: desktop + mobile dashboard captures have loaded CSS and `designAudit.errors:0`; console exception evidence must quote each audit sample ancestry (`[inside #cp-root]` or `[OUTSIDE #cp-root]`), and scope `#cp-root` cannot claim the platform-chrome exception;
       the seven-dimension rubric averages at least 1.5/2, focal point/spacing/responsive each score
       2, and no dimension scores 0; every score cites screenshot evidence.
 - [ ] syncCatalog: after action, dashboard renders `Catalog sync complete.` and rows AX-100,

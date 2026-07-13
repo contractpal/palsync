@@ -55,3 +55,19 @@ test("browser design audit executes its real DOM, geometry, and accessibility ch
         await browser.close();
     }
 });
+
+test("console audit samples identify #cp-root ancestry and scope note", async (t) => {
+    const chromium = loadChromium();
+    if (!chromium) return t.skip("Playwright is unavailable");
+    let browser;
+    try { browser = await chromium.launch({ headless: true }); }
+    catch (e) { return t.skip("Chromium runtime is unavailable: " + e.message.split("\n")[0]); }
+    try {
+        const page = await browser.newPage({ viewport: { width: 320, height: 640 } });
+        await page.setContent("<body><div id='cp-root'><main><h1>One</h1><table><tr><td>row</td></tr></table></main></div></body>");
+        const audit = await inspectDesignQuality(page, { kind: "console", viewportName: "mobile" });
+        assert.equal(audit.scope, "#cp-root");
+        assert.ok(audit.notes.some(n => /platform-chrome exception cannot apply/.test(n)));
+        assert.ok(audit.findings.some(f => f.rule === "tableHeaders" && f.samples[0].includes("[inside #cp-root]")));
+    } finally { await browser.close(); }
+});

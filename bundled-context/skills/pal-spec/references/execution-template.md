@@ -55,7 +55,7 @@ Checkpoints: <natural human review points — pal-loop also pauses per SPEC.md `
 
 ## Tasks
 | id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |
-| T1 | copy/adapt shell, canonical runtime files, styles.css, and workflow foundation | cheap | §3, §6 | — | todo | Page shell and matching templates are copied with bash `cp`, the four canonical runtime files are present and registered in pal.json, readable `styles/styles.css` and (for console) the documented `run()` skeleton are present; `pal_validate` reports 0 errors and `pal_test` reports VALIDATED on the foundation |
+| T1 | copy/adapt shell, styles.css, and workflow foundation | cheap | §3, §6 | — | todo | Page shell and matching templates are copied with bash `cp`, shell/styles plus only runtime scripts with real consumers are present and registered in pal.json, readable `styles/styles.css` and (for console) the documented `run()` skeleton are present; `pal_validate` reports 0 errors and `pal_test` reports VALIDATED on the foundation |
 | T2 | first page (composition) | frontier | §4, §6 | T1 | todo | validate 0; push OK; preview "<H1>" |
 | T3 | <action with logic> | standard | §5 | T1 | todo | When <input>, <result>; pal_test VALIDATED |
 

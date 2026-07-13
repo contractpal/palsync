@@ -4,6 +4,9 @@ HTML recipe catalog backed by `design-system-init/references/design-system.css`.
 reference-only: never copy, register, link, or load it wholesale. For each component the pal uses,
 copy its dependency-complete token/base/component rules into the pal-owned `styles/styles.css`.
 Include `pb-ui.js` or `pb-motion.js` only when the selected recipe uses their documented behavior.
+When `DESIGN_SYSTEM.md` or the reference design-system catalog is present, missing core-control
+classes (`pb-btn`, `pb-input`, `pb-select`, `pb-textarea`, `pb-table`) are `pal_validate` errors,
+not suggestions; layout-class hints remain warnings.
 
 Marketing sections (hero, bento, pricing, testimonials, logo cloud, CTA band, stats/ticker,
 mockups, text/glow/spotlight effects) live in `marketing-library.md`, not here. Console/app
@@ -122,21 +125,36 @@ One primary action per view. States (hover/focus/active/disabled) are automatic 
 Variants: `.pb-btn-primary`, `.pb-btn-secondary`, `.pb-btn-ghost`, `.pb-btn-danger`. Add
 `.is-disabled` or `disabled="disabled"` to disable.
 
-## 2. Icon Buttons And Icons
+## 2. Icons
 
-One inline SVG icon family per pal; no icon fonts, CDN icon scripts, external sprites, or image
-icons. Good libraries: Iconoir (`https://iconoir.com`), Tabler (`https://tabler.io/icons`), and
-Phosphor (`https://phosphoricons.com`).
+Use one approved family per pal: Iconoir (`https://iconoir.com`) is the default for its consistent
+stroke set and dense admin UI; Heroicons (`https://heroicons.com`) is useful when outline/solid
+state-toggle pairs are needed; Phosphor (`https://phosphoricons.com`) is useful when thin→fill
+weights must span decorative and functional icons. Use icons for row actions, status reinforcement
+alongside text, empty states, and nav items — never as the sole signal or decorative scatter.
+
+Always grab the **SVG version**: use the library site's “Copy SVG” output, never icon fonts, React or
+JS packages. Keep `viewBox`, set a hardcoded size such as `width="20" height="20"`, use
+`stroke="currentColor"` for stroke icons or `fill="currentColor"` for solid/fill icons, and add
+`aria-hidden="true"` when an adjacent text label already names the action. Color inherits through
+`currentColor`.
+
+For a handful of uses, paste the raw SVG inline (the default):
 ```html
-<button type="button" class="pb-icon-btn" aria-label="Search">
-    <svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 19a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" /><path d="m21 21-4.35-4.35" /></svg>
-</button>
+<button type="button" class="pb-icon-btn" aria-label="Search"><svg class="pb-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M10 19a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" /><path d="m21 21-4.35-4.35" /></svg></button>
 ```
 
-Decorative icons get `aria-hidden="true"`; icon-only buttons get `aria-label`. `.pb-icon-lg` for a
-20px size. Copy the SVG, strip fixed `width`, `height`, and library classes, keep `viewBox`, set
-`class="pb-icon" aria-hidden="true"`, and self-close children (`<path />`, `<circle />`,
-`<rect />`, `<line />`). Use one family per pal.
+When an icon repeats across pages, define a shared sprite in `fragments/icons.html`, load it once
+with `<c:fragment name="icons" />`, and reference it at call sites:
+```html
+<!-- fragments/icons.html -->
+<c:ignore xmlns:c="contractpal"><svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true"><symbol id="icon-search" viewBox="0 0 24 24"><path d="M10 19a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" /><path d="m21 21-4.35-4.35" /></symbol></svg></c:ignore>
+<!-- page or fragment -->
+<c:fragment name="icons" /><svg class="pb-icon" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-search" /></svg>
+```
+
+Do not use `c:resource` for icon fonts (`bootstrap-icons`, `font-awesome`), remote CDN
+`<link>`/`<script>`, JS icon replacers, or npm icon packages; the platform rejects remote resources.
 
 ## 3. Fields
 

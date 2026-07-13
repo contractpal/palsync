@@ -155,7 +155,7 @@ GLOBAL FLOOR:
 CONSOLE pages:
 - [ ] VISUAL (Directory): H1 `Employee directory`, FilterBar, striped table, Department and Office
       columns populated by names/cities rather than ids/codes, no emoji.
-- [ ] VISUAL QUALITY: desktop + mobile captures have loaded CSS and `designAudit.errors:0`; the
+- [ ] VISUAL QUALITY: desktop + mobile captures have loaded CSS and `designAudit.errors:0`; console exception evidence must quote each audit sample ancestry (`[inside #cp-root]` or `[OUTSIDE #cp-root]`), and scope `#cp-root` cannot claim the platform-chrome exception; the
       seven-dimension rubric averages at least 1.5/2, focal point/spacing/responsive each score 2,
       and no dimension scores 0; every score cites screenshot evidence.
 - [ ] Data effect: after saveEmployee, a follow-up directory render contains the new employee row

@@ -191,6 +191,18 @@ test("reserved EL words cannot be c:list ids, c:set names, or c:fragment names",
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("custom control CSS alongside the design system is a bypass warning", () => {
+    const dir = tmpWorkspace({
+        "DESIGN_SYSTEM.md": "# system",
+        "styles/design-system.css": ".pb-btn { color: var(--primary); }",
+        "styles/styles.css": "button { background: #123456; }"
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "designSystemBypass");
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].severity, "warn");
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("clean EL attributes and text produce no ternary findings", () => {
     const dir = tmpWorkspace({
         "fragments/row.html": "<c:ignore xmlns:c=\"contractpal\"><p class=\"${active}\">${name}</p></c:ignore>",
@@ -582,6 +594,36 @@ test("fragment binding — static c:fragment name is not this check's contract",
         "workflows/console.js": "function run(controller) {}",
     });
     assert.strictEqual(lintContracts(dir).filter(f => f.rule === "fragmentBinding").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("static c:fragment names must resolve to shipped fragments", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": '<html><body><c:fragment name="navbar" /></body></html>'
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "missingFragment");
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].severity, "error");
+    assert.match(findings[0].message, /fragments\/navbar\.html/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("static c:fragment resolves extensionless nested path", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": '<html><body><c:fragment name="console/navbar" /></body></html>',
+        "fragments/console/navbar.html": "<nav>Nav</nav>"
+    });
+    assert.equal(lintContracts(dir).filter(f => f.rule === "missingFragment").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("reserved EL words are checked before string-split c:list early return", () => {
+    const dir = tmpWorkspace({
+        "fragments/list.html": '<c:ignore xmlns:c="contractpal"><c:list list="${x}" id="eq">row</c:list></c:ignore>'
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "reservedElWord");
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].severity, "error");
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
