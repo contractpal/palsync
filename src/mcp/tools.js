@@ -675,17 +675,18 @@ const TOOLS = [
     },
     {
         name: "pal_screenshot",
-        description: "Render a pal screen to a PNG for visual review, detect runtime render errors, and return a browser-computed designAudit (overflow, H1/main structure, form labels/orientation, target size, bare action links, visible skip links, table headers, and spacing metrics). Acts on the LAST PUSHED version — pal_push first. For page-level UI, capture both desktop and mobile; designAudit.errors must be 0, then inspect the pixels and fix/re-render visible failures. WEB renders directly; CONSOLE/transaction use authenticated replay. Missing Playwright/auth returns an honest unavailable signal, never a fake pass.",
+        description: "Render the last-pushed pal for visual review, detect runtime errors, and return a browser-computed designAudit. Set imageless:true when only the designAudit verdict matters (re-checks after small fixes). Capture page UI at desktop and mobile; require designAudit.errors=0 and inspect pixels. WEB renders directly; CONSOLE/transaction use authenticated replay. Missing browser/auth returns unavailable, never a fake pass.",
         inputShape: {
             page: z.string().optional().describe("Page path under the site root, e.g. \"about.html\" (WEB only). Default: home page."),
             feature: z.string().optional().describe("Human label for the feature or flow being tested. Used to name the .agent-work-history run folder."),
             viewport: z.enum(["desktop", "mobile"]).optional().describe("desktop (1280x800, default) or mobile (~390x844)."),
-            fullPage: z.boolean().optional().describe("Capture the whole scroll height, not just the viewport.")
+            fullPage: z.boolean().optional().describe("Capture the whole scroll height, not just the viewport."),
+            imageless: z.boolean().optional().describe("Return the designAudit without capturing or returning image data.")
         },
-        async run(ctx, { page, feature, viewport, fullPage } = {}) {
+        async run(ctx, { page, feature, viewport, fullPage, imageless } = {}) {
             const disabled = testingDisabledResult(ctx, "pal_screenshot");
             if (disabled) return disabled;
-            const res = await runScreenshot(ctx.session, ctx.record.palGuid, { page, viewport, fullPage });
+            const res = await runScreenshot(ctx.session, ctx.record.palGuid, { page, viewport, fullPage, imageless });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             if (!res.captured) {
                 if (res.available === false) ctx.renderVerified = "unavailable"; // accepted fallback: ask the user to eyeball it
@@ -711,7 +712,7 @@ const TOOLS = [
             const featureLabel = feature || (page ? "page-" + page : (res.kind || "pal") + "-" + res.viewportName);
             try {
                 run = createWorkHistoryRun(ctx.workspaceDir, { tool: "pal_screenshot", feature: featureLabel });
-                filePath = writeArtifactFile(run, "screenshot-" + res.viewportName + ".png", Buffer.from(res.pngBase64, "base64"));
+                if (!imageless) filePath = writeArtifactFile(run, "screenshot-" + res.viewportName + ".png", Buffer.from(res.pngBase64, "base64"));
                 auditPath = writeArtifactFile(run, "design-audit.json", JSON.stringify(res.designAudit || { inspected: false }, null, 2), "utf8");
                 writeRunMetadata(run, {
                     palGuid: ctx.record.palGuid,
@@ -775,13 +776,17 @@ const TOOLS = [
             // Inline a downscaled JPEG so the render doesn't ride at full resolution in every
             // subsequent turn's context; the full-res PNG is still on disk at pngFile. Falls back
             // to the full PNG if the in-page re-encode failed.
-            const inlineImage = res.jpegSmallBase64
-                ? { type: "image", data: res.jpegSmallBase64, mimeType: "image/jpeg" }
-                : { type: "image", data: res.pngBase64, mimeType: "image/png" };
-            out.content = [
-                { type: "text", text: out.message },
-                inlineImage
-            ];
+            if (imageless) {
+                out.content = [{ type: "text", text: out.message }];
+            } else {
+                const inlineImage = res.jpegSmallBase64
+                    ? { type: "image", data: res.jpegSmallBase64, mimeType: "image/jpeg" }
+                    : { type: "image", data: res.pngBase64, mimeType: "image/png" };
+                out.content = [
+                    { type: "text", text: out.message },
+                    inlineImage
+                ];
+            }
             return out;
         }
     },

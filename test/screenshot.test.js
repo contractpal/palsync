@@ -150,6 +150,24 @@ test("console pal: navigates the cp-auth'd _previewUrl, returns a sanitized url 
     assert.equal(browserCloseCount, 0, "shared browser stays open until idle cleanup");
 });
 
+test("imageless capture returns design audit without taking or encoding a screenshot", async () => {
+    reset();
+    nextRunTest = async () => ({
+        ran: true, validated: true, kind: "console", rawToken: null,
+        _previewUrl: "https://secure.cloudpiston.com/cpal/RunConsoleApp.do?cp-auth=safe"
+    });
+    landedUrl = "https://secure.cloudpiston.com/cpal/RunConsoleApp.do";
+
+    const res = await runScreenshot({}, "GUID", { imageless: true });
+
+    assert.equal(res.captured, true);
+    assert.equal(res.designAudit.inspected, true);
+    assert.equal(res.designAudit.errors, 0);
+    assert.equal(res.pngBase64, null);
+    assert.equal(res.jpegSmallBase64, null);
+    assert.ok(!callLog.includes("screenshot"));
+});
+
 test("console pal: auth-replay failure returns a clean captured:false (no throw, no url/cred in reason)", async () => {
     reset();
     const SECRET = "LEAKME_TOKEN";

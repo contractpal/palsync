@@ -495,7 +495,7 @@ async function downscaleToJpeg(pg, pngBase64, scale = 0.625, quality = 0.6) {
 // Render a WEB pal screen and return its PNG (base64) + the resolved landing URL + viewport used.
 // Returns { captured, available, ... }. Never throws on a normal failure; `available:false` means
 // the capability itself is missing (Playwright/Chromium), distinct from a per-pal failure.
-async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
+async function runScreenshot(session, guid, { page, viewport, fullPage, imageless } = {}) {
     const chromium = loadChromium();
     if (!chromium) {
         return { captured: false, available: false,
@@ -567,14 +567,14 @@ async function runScreenshot(session, guid, { page, viewport, fullPage } = {}) {
         }
         const styleStatus = await inspectStyleStatus(pg, styleEvents);
         const designAudit = await inspectDesignQuality(pg, { kind: t.kind, viewportName });
-        const buf = await pg.screenshot({ fullPage: !!fullPage });
-        const pngBase64 = buf.toString("base64");
+        const buf = imageless ? null : await pg.screenshot({ fullPage: !!fullPage });
+        const pngBase64 = buf ? buf.toString("base64") : null;
         // Read the rendered text and check for a CloudPiston runtime-error block — a pal that
         // validated can still throw at render time. Best-effort: a failure to read text must not
         // sink the (successful) capture.
         let renderError = null;
         try { renderError = detectRenderError(await pg.innerText("body")); } catch (e) { /* ignore */ }
-        const small = await downscaleToJpeg(pg, pngBase64);
+        const small = pngBase64 ? await downscaleToJpeg(pg, pngBase64) : null;
         return {
             captured: true, available: true, kind: t.kind,
             viewport: vp, viewportName,
