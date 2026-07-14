@@ -39,6 +39,11 @@ SPEC_*
 # vendored palbuilder platform source — local contract reference only, not part of the CLI
 com/
 
+# local-only agent workspaces — eval reports, Claude plans, archived reports (never pushed)
+reports/
+plans/
+archives/
+
 # CCE (code-context-engine)
 # CCE local cache (per-machine, not for version control)
 .cce/
@@ -52,6 +57,7 @@ com/
 eval/runs/*
 !eval/runs/README.md
 CLAUDE.md
+AGENTS.md
 
 # codex agent config + unrelated generated outputs
 .codex/
