@@ -136,7 +136,7 @@ Canonical base: <https://...>
 | field relied on | type | used by (which §5 action / §6 component) |
 
 ## 9. Required skills (which palsync skills this build loads)
-- ALWAYS: palbuilder-frontend, design-build, pal-restraint
+- ALWAYS: palbuilder-frontend, design-build
 - IF server-side workflow logic, validation, routing, or responses: palbuilder-workflow
 - IF data writes/reads, payloads/DataLists, cache, files, or server-side HTTP: palbuilder-data
 - IF background jobs, long-running work, realtime, server push, or progress UI: palbuilder-realtime

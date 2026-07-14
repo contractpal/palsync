@@ -41,7 +41,7 @@ A brief with an empty slot is invalid. Do not dispatch it.
    - `pal.json` entry required for every new file
    - Existing CSS classes only — never invent class names
    - Touch ONLY the files this task names — never the §11 NEVER-list, never a §8b consumed dataset
-   - **pal-restraint, every line:** reuse before building, a `c:`/platform tag before
+   - **Restraint ladder, every line:** reuse before building, a `c:`/platform tag before
      hand-rolled markup or JS, the minimum that works within the dialect's limits. No object
      literals in workflow JS. Don't touch, reformat, or "improve" anything outside this task's
      files — a genuinely ambiguous decision goes in the return report, not a guess.

@@ -38,8 +38,7 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
 4. **Load exactly the skills SPEC.md §9 lists, just in time.** §9 is the manifest — don't
    guess it (it may include palbuilder-workflow, palbuilder-data, or palbuilder-realtime).
    Load a listed skill when the first task requiring it starts, not all before coding.
-   palbuilder-frontend and design-build still load before the first UI task. pal-restraint is
-   not a §9 skill — it's the default discipline on every task.
+   palbuilder-frontend and design-build still load before the first UI task. The restraint ladder below is the default discipline on every task.
 5. `pal_status`. Server newer than your last pull → `pal_pull` first.
 6. **Smoke-test before picking work:** `pal_validate`, plus `pal_test` on the workflow the
    Checkpoints show as last touched — a prior session can leave the workspace broken despite
@@ -49,7 +48,7 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
 
 1. **Pick**: `palsync task list --ready` prints the first `todo` task whose `depends` are all
    `done`. None → "Ending a session" below. Read the task's `spec ref` and **re-read those
-   SPEC.md section(s) now** — the success condition derives from the requirement.
+   SPEC.md section(s) now** — the success condition derives from the requirement. Surface assumptions: name any ambiguity and reasonable interpretations; genuine uncertainty is a blocker, never permission to guess.
 2. **Tier check.** Task tier `frontier` and you're not frontier-class (test: does it need NEW
    structure, not just following the spec?) → if an advisor capability exists (e.g.
    `/advisor`), call it with full context for the plan; you still execute, verify, commit. No
@@ -69,8 +68,8 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
    - Schemas: **§8a** (CREATE). **§8b** datasets are CONSUMED, read-only — never create or
      alter one; before reading it, confirm its §8b fields exist live (`pal_status`/a read
      action) — a missing field is a blocker.
-   - Apply **pal-restraint** on every line: reuse before building, platform before library,
-     minimum that works, touch only the files this task names.
+   - Before writing, trace the touched flow and stop at the first rung that holds: (1) YAGNI — do not build it; (2) reuse an existing fragment/function/dataset/class; (3) use a supported `c:` tag or platform API; (4) use an already sanctioned capability; (5) write the minimum readable ES3-compatible solution. Touch only named files.
+   - Ladder adapted from Dietrich Gebert's ponytail; assumption discipline from Andrej Karpathy's LLM-coding-pitfalls guidance.
 5. **Verify** against the success condition with tool outputs, not opinion. Offline first, so
    a bad result never reaches the server. **Batch every edit for the task first, then verify
    once — target ONE `pal_push` per task, never push per-file:**
@@ -186,6 +185,7 @@ Runs at each review-cadence pause and always at the build-completion handoff —
 - Before `done`, re-read the success condition verbatim and cite tool output for every clause; a failing or unrun gate is not done.
 - One commit per completed task; change task state and checkpoints through the palsync task/checkpoint CLI, not ad-hoc notes.
 - Every validation warning is fixed or explicitly waived with a one-line checkpoint reason; silent carry-over violates the loop.
+- Surgical diff: every changed line traces to the task's `spec ref` or cleanup made necessary by that change. Do not reformat, refactor, or remove unrelated code.
 
 - **Build is NOT complete until every workflow touched this build returns `pal_test`
   VALIDATED (0 notes) AND pal-review has returned PASS.** `pal_validate` alone is offline;

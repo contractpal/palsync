@@ -33,7 +33,8 @@ const RETIRED_SKILLS = [
     "palbuilder-design",
     "design",
     "palbuilder-jobs-http",
-    "palbuilder-websockets"
+    "palbuilder-websockets",
+    "pal-restraint"
 ];
 
 // Every skill in the bundle loads every session — the bundle dir IS the inventory, discovered at

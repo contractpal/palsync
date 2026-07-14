@@ -31,7 +31,7 @@ When in doubt it's not a fix — escalate.
    not guess.**
 2. **Isolate.** Read only the failure path — the failing fragment/workflow, the files it
    calls, the dataset it reads. Don't survey the whole pal.
-3. **Minimal diff, under pal-restraint.** Reuse before building, platform before library,
+3. **Minimal diff, using the pal-loop restraint ladder.** Reuse before building, platform before library,
    touch only the lines this fix needs. Don't "improve" adjacent code.
 4. **Verify** — the step-1 reproduction must now pass:
    - `pal_push` → 0 errors (push runs the full offline validation as its gate — no separate

@@ -70,6 +70,8 @@ Reading `design/refs/` (Step 0) and critiquing rendered output (Step 4) require 
 
 ## Step 1 — Decompose before you build
 
+Use design restraint in order: remove only content unrelated to the user's current job; stage complexity through progressive disclosure; preserve usable target size/proximity; keep title/object/status/primary action/feedback/next step obvious; reuse local tokens and components before one-off CSS. The cleanest interface makes the next correct action easiest.
+
 Plan structure first — one giant file is the top driver of AI-looking, unmaintainable UI.
 
 - Break the target into atomic units mapped to `COMPONENTS.md`: primitives (Button, Input, Card...) → composites (form row, list item, nav) → layout shells. Units map to functions, classes, partials, or components — any stack.

@@ -150,12 +150,11 @@ the spec is written.
 
 ## Restraint — the least code that works
 
-Default discipline on every change (full version: **pal-restraint** skill):
-- Reuse before building: an existing fragment/function/CSS class/dataset beats a new one.
-- Platform before hand-rolling: a `c:` tag or `pal.*`/`c.*` method beats custom markup/JS.
-- Edit existing files over creating new ones; no abstractions "for later".
-- Touch ONLY the files the task names; don't reformat or "improve" adjacent code.
-- Never cut validation, security, accessibility, or verification to save lines.
+Default discipline on every change:
+- Surface assumptions and alternate interpretations; genuine ambiguity is a blocker, not permission to guess.
+- Read the touched flow, then stop at the first rung that holds: YAGNI → reuse existing pal code/data/styles → supported platform tag/API → already sanctioned capability → minimum readable dialect-correct code.
+- Touch only task-named files; every changed line traces to the requirement or cleanup made necessary by it. Do not reformat or improve adjacent code.
+- Never cut validation, data-loss handling, security, accessibility, UX clarity, or verification to save lines.
 
 ## Anti-patterns — refuse these
 
