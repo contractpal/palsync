@@ -52,6 +52,7 @@ test("checkStep: an absent string still present fails (the duplicate-insert catc
     const r = checkStep("<td>Camera</td><td>Camera Pro</td>", { expect: ["Camera Pro"], absent: ["Camera</td><td>"] });
     assert.strictEqual(r.pass, false);
     assert.strictEqual(r.absent[0].absent, false);
+    assert.strictEqual(r.absent[0].occurrences, 1);
 });
 
 test("checkStep: a missing expect string fails", () => {
@@ -148,7 +149,7 @@ test("formatExercise: reports visible assertions, markup-only clues, screen hint
             { step: 1, label: "fill{name} click \"Save\"", pass: true, expect: [{ string: "Camera", found: true }], absent: [] },
             { step: 2, label: "click \"Delete\"", pass: false,
               expect: [{ string: "deleted", found: false, markupOnly: true }],
-              absent: [{ string: "Camera", absent: false }],
+              absent: [{ string: "Camera", absent: false, occurrences: 2 }],
               hints: { headings: ["Edit equipment"], clicks: ["Save"], ids: ["#nameInput"], fields: ["name"] },
               renderError: { message: "NullPointerException: rec is null", workflow: "equipment.js", line: "42" } }
         ]
@@ -158,6 +159,7 @@ test("formatExercise: reports visible assertions, markup-only clues, screen hint
     assert.match(out, /✓ step 1/);
     assert.match(out, /expect "deleted": MISSING from visible text \(string exists only in markup \(e\.g\. input value attribute\)/);
     assert.match(out, /absent "Camera": STILL PRESENT/);
+    assert.match(out, /"Camera" appears 2 times on this page.*scope with `within:`.*unique \{\{runId\}\}/);
     assert.match(out, /headings: "Edit equipment"/);
     assert.match(out, /Push again only after editing a pal file/);
     assert.match(out, /renderError: NullPointerException.*equipment\.js:42/);

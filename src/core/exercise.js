@@ -83,8 +83,11 @@ function validateSteps(steps) {
 function checkStep(haystack, step) {
     const exp = checkExpect(haystack, step.expect || []);
     const abs = (step.absent || []).map((s) => {
-        const found = String(haystack || "").indexOf(s) !== -1;
-        return { string: s, absent: !found };
+        const text = String(haystack || "");
+        let occurrences = 0;
+        let from = 0;
+        while (s && (from = text.indexOf(s, from)) !== -1) { occurrences++; from += s.length; }
+        return { string: s, absent: occurrences === 0, occurrences };
     });
     return { pass: exp.pass && abs.every(a => a.absent), expect: exp.results, absent: abs };
 }
@@ -388,6 +391,7 @@ function formatExercise(res) {
         }
         for (const r of s.absent || []) {
             lines.push("      absent " + JSON.stringify(r.string) + ": " + (r.absent ? "clean" : "STILL PRESENT — the old value survived (duplicate insert / edit didn't apply?)"));
+            if (!r.absent && r.occurrences >= 1) lines.push("      hint: " + JSON.stringify(r.string) + " appears " + r.occurrences + " times on this page — on list pages scope with `within:` or assert against a unique {{runId}} value.");
         }
         if (s.dialogs && s.dialogs.length) lines.push("      dialog(s) accepted: " + s.dialogs.map(d => JSON.stringify(d)).join(", "));
         if (s.renderError) lines.push("      renderError: " + s.renderError.message + (s.renderError.workflow ? " (" + s.renderError.workflow + (s.renderError.line ? ":" + s.renderError.line : "") + ")" : ""));
