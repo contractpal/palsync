@@ -80,7 +80,7 @@ came from.
   present it, get it corrected — page by page. Q11 Claims/stats/pricing that must be exact?
   (ask; never invent; record source)
 - **Behavior** *(console/app pals, any page with logic, any Q7 action)* — Q12 Per action:
-  trigger, INPUT, VALIDATION, STATE change (which dataset/field), OUTPUT. Q13 **[FULL]**
+  trigger, INPUT, VALIDATION, STATE change (which dataset/field), OUTPUT, and the fewest high-level test seams that prove it (`pal_exercise` flow, `pal_test`, or exact expect). Q13 **[FULL]**
   Edge & error cases: empty, invalid, not-found, duplicate, auth-fail. *(LITE: note as deferred.)*
 - **Data** — Q14 Entities, fields, exact PalBuilder types? (propose schemas; confirm — types
   come from `references/palbuilder-types.md`)
@@ -106,6 +106,8 @@ ASSUMPTIONS (correct me now or I build on these):
 OPEN QUESTIONS (I will not invent answers):
 - Exact Pro-tier price — needs a real number.
 ```
+
+**LOCK done when:** the user has confirmed assumptions, open questions, and every proposed behavior seam.
 
 **Step 4 — Write SPEC.md.** Read `references/spec-template.md` now and follow it. Set
 `status: draft`. Walk the user through copy and behavior; apply corrections.

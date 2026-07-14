@@ -17,6 +17,8 @@ not a human builder gate). Note natural checkpoints; pal-loop also pauses per SP
 its requirement. `success condition` must be behavioral AND tool-checkable. `status` is one of:
 `todo | in_progress | done | blocked | needs-frontier | needs-human`.
 
+**Slices and blockers** — make tasks vertical slices (schema + workflow + fragment + verification together where feasible). `depends` names only genuine blockers, not preferred ordering; the executable frontier is every task whose blockers are done. For wide mechanical changes use expand–contract tasks instead of forcing unrelated surfaces into one slice.
+
 **Task granularity** — one task = one verify cycle. A page is a task; a workflow action is a task; a
 dataset is a task. "Build the site" is not. If the success condition can't be a tool output plus an
 exact string/state, split the task. LITE allows coarser tasks but still one verify cycle each.

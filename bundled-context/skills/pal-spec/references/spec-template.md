@@ -112,6 +112,7 @@ created: <date>   approved: <date or pending>
 ### <action / screen>
 - Trigger / Input(+types) / Validation (When <cond>, system shall <result, exact msg>) /
   Effect (dataset+field) / Output (next screen)
+- Seam: <highest-level proof: named pal_exercise flow / pal_test / exact expect>
 - [FULL] Edge cases: empty / invalid / not-found / duplicate / auth-fail → behavior each
 - [LITE] Deferred edge cases: <bullet list, not specified>
 
