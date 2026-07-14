@@ -34,9 +34,7 @@ never pal-loop's self-report.
   (per-string found/missing verdict, no HTML dump). Real output, not source.
 - Every §3 nav link routes to a real page — no dead links.
 - Every §12 acceptance criterion actually met — the full set, not just the global floor.
-- Every new-pal UI page links `../Styles/spacing.css` before `../Styles/styles.css` when used, and
-  loads each behavior script exactly once only when current markup consumes it. Existing pals
-  without `styles.css` are not retrofitted; Bootstrap is not loaded merely for spacing/layout helpers.
+- Check new-pal resource ordering against `../shared/references/css-conventions.md`; existing pals are not retrofitted unless the spec says so.
 - §11 NEVER list not violated; §8b consumed datasets not altered.
 - Every `done` task in EXECUTION.md traces via its `spec ref` to its SPEC.md § and that
   requirement is satisfied.
@@ -80,10 +78,7 @@ Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per 
 - Capture both desktop and mobile for every page-level screen. `designAudit.errors > 0` is a hard
   visual failure; list each rule and screenshot as evidence. Audit warnings must be fixed or
   individually justified, never silently ignored.
-- Console captures include platform chrome outside the pal's `#cp-root`. A `tableHeaders` finding
-  on the chrome action table or `horizontalOverflow` on its function-call timer is platform-injected,
-  not a pal defect. Exclude it only after proving the flagged node is outside `#cp-root`, and list it
-  explicitly under the evidence; the same rule inside pal content remains a hard failure.
+- Apply platform-chrome exceptions outside `#cp-root` only through `../shared/references/console-chrome-exception.md`; quote the required evidence.
 - Confirm `pal_validate` is clean for the enforced `pb-section` fragment-root and `pb-main` page-shell structural checks; review only documented exceptions.
 - IF a shell wrapper class is absent from `styles/design-system.css`, `styles/spacing.css`, and COMPONENTS.md, THEN fail it as undefined.
 - IF `for f in fragments/*; do [ "$(rg -o 'pb-field-group' "$f" | wc -l)" -lt 2 ] || rg -q 'pb-stack|pb-form-grid' "$f" || echo "$f"; done` prints a fragment, THEN fail it. Two or more field groups require `pb-stack` or `pb-form-grid`.
@@ -100,9 +95,7 @@ Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per 
   design skills flag (gradient-blob hero, pill-everything
   uniform radius, three-card-row-as-only-idea, serif-on-cream-with-sage). Report each issue with
   screenshot + fix.
-  Score 0-2 for focal point/journey, spacing/proximity, typography hierarchy, alignment/grid,
-  action/state clarity, responsive composition, and context-specific distinctiveness. `0` is a
-  finding. Every score cites visible evidence; "looks good" is not evidence.
+  Apply the complete ship gate in `../shared/references/visual-rubric.md`; every score cites visible evidence.
 - **`captured:false` / no screenshot tool / no vision:** do NOT guess from HTML — emit a
   `needs-human` eyeball gate naming each screen and what to confirm.
   (Full rule: `references/console-render-verification.md`.)

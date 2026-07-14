@@ -40,9 +40,7 @@ without specifying them. Omit for pure static pages; mandatory for anything with
 COMPONENTS.md component, plus the primary path, hierarchy order, target placement, feedback/next
 step, and progressive disclosure notes. Brownfield (MAP.md present): new UI MUST match the
 conventions + design reality recorded in MAP.md — reuse before building; no DESIGN_SYSTEM.md yet →
-run design-system-init in EXTRACT mode against the map. Every UI page should link
-`styles/spacing.css` before authored
-`styles/styles.css`; it replaces Bootstrap for spacing/layout. Existing pals are not retrofitted.
+run design-system-init in EXTRACT mode against the map. Every UI page follows `../../shared/references/css-conventions.md`. Existing pals are not retrofitted.
 
 **§7 SEO** — publicly indexable pages only; mark which §3 rows apply (usually `web`-tagged, but a
 `console` row can qualify, e.g. a logged-out landing/login screen). title ≤60ch, meta desc
@@ -150,8 +148,7 @@ Canonical base: <https://...>
 ## 10. PalBuilder surface (the platform primitives this build touches)
 - Pages (page-shell) / Fragments (c:ignore): <which>
 - c: tags used: <c:a, c:field, c:list, c:fragment, c:if/c:when, c:set, c:resource, c:debug>
-- CSS: styles/spacing.css linked before styles/styles.css when used; behavior scripts are loaded
-  once as `<script type="module">` only when current markup consumes them
+- CSS/resources: follow `../../shared/references/css-conventions.md`
 - c:resource libs: <jquery, chartjs only if explicitly required —
   never Bootstrap just for spacing/layout>
 - Workflows: <names> — workflowType <7 console / 9 web / 11 job|receiver / 12 webservice /
@@ -170,9 +167,7 @@ Canonical base: <https://...>
 GLOBAL FLOOR (both modes):
 - [ ] pal_validate: 0 errors   - [ ] pal_test: workflow VALIDATED, 0 notes
 - [ ] every §3 nav link routes (no dead links)
-- [ ] every new-pal UI page links `../Styles/spacing.css` before `../Styles/styles.css` when used,
-      and loads each behavior script once only when current markup consumes it; no Bootstrap is loaded
-      just for spacing/layout utilities
+- [ ] every new-pal UI page follows `../../shared/references/css-conventions.md`
 - [ ] [brownfield/MAP.md present — mandatory] REGRESSION: MAP.md's Step-3 baseline still passes
       (pal_validate/pal_test at least as clean as the baseline) and untouched UI didn't visually
       shift (pal_screenshot before/after the map's saved references).

@@ -22,8 +22,7 @@ MINE → INTERVIEW → LOCK ASSUMPTIONS → SPEC.md draft → REALITY CHECK → 
   spec — those live in `DESIGN_SYSTEM.md` / `COMPONENTS.md` (from **design-system-init**).
   The spec carries only per-page composition and UX flow (§6): primary path, hierarchy, and
   progressive disclosure. No DESIGN_SYSTEM.md → stop, run design-system-init first. Every
-  frontend spec should expect `styles/spacing.css` as the shared spacing/layout utility layer
-  unless the project is a non-UI service-only pal.
+  frontend specs follow `../shared/references/css-conventions.md` unless the project is a non-UI service-only pal.
 - **Never invent facts** — no made-up stats, prices, or testimonials. Record the source of
   every claim; a claim with no source is an open question.
 
@@ -88,9 +87,7 @@ came from.
 - **Design handoff** — Q15 DESIGN_SYSTEM.md + COMPONENTS.md present? No → run
   design-system-init, then return here. Yes → per page, propose a layout skeleton: section
   order + which named component fills each slot + hierarchy/primary action/progressive disclosure
-  notes. Confirm every new-pal page shell will link `styles/spacing.css` → `styles/styles.css`
-  when used and load each behavior script once only when current markup consumes it. `pb-charts.js`
-  is optional when charts are used. Use the approved inline SVG icon guidance in
+  notes. Confirm every new-pal page shell follows `../shared/references/css-conventions.md`; `pb-charts.js` is optional when charts are used. Use the approved inline SVG icon guidance in
   `design-system-init/references/component-library.md`. No colors/fonts. Do not
   retrofit `styles.css` into an existing pal that lacks it.
 - **SEO** *(usually web; a publicly indexed console landing/login page can qualify; never a

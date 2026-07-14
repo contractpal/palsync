@@ -93,10 +93,7 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       Merge same-page assertions into one exercise flow. Mobile screenshots are final-review-only
       (pal-review owns the desktop + mobile pair), not per-task. Screenshots must
       have `renderError:null`, fully loaded CSS, and zero pal-content design-audit errors. Console
-      screenshots can include platform-injected chrome outside `#cp-root`; findings such as
-      `tableHeaders` on the action table or `horizontalOverflow` on the function-call timer are not
-      fixable in pal code. Claim the exception only when samples say `OUTSIDE #cp-root` or scope is
-      not `#cp-root`, and quote that sample string in the checkpoint; never use it inside pal content.
+      screenshots can include platform-chrome outside `#cp-root`; apply only the evidence-gated exceptions in `../shared/references/console-chrome-exception.md`.
       Inspect the desktop image
       against design-build's archetype rubric; if the audit/image exposes a failure, fix the
       three highest-impact issues, push, and re-capture. Re-run the task's

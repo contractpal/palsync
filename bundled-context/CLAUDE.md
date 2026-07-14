@@ -57,9 +57,7 @@ user journey, hierarchy, tokens, components, typography, color, SVG icon policy,
 strategy; `design-build` enforces them while building. Do not treat visual work as decoration after
 the spec is written.
 
-`design-system-init/references/design-system.css` is reference-only: never copy/register/link/load
-it wholesale. Put only used rules and dependencies in `styles/styles.css`. Add `spacing.css`,
-`pb-ui.js`, or `pb-motion.js` only when used; load them once. Remove unused presets/themes/components.
+`design-system-init/references/design-system.css` is reference-only: never copy/register/link/load it wholesale. Put only used rules and dependencies in `styles/styles.css`; follow `skills/shared/references/css-conventions.md` for CSS/script ordering and casing. Remove unused presets/themes/components.
 
 ---
 

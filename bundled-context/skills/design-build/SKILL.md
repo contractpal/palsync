@@ -52,11 +52,7 @@ Hard gates — any failure means the visible task is not done:
       `styles/styles.css` must contain only dependency-complete tokens/base/component rules with real
       consumers in current markup. Remove unused presets, dark-theme blocks, and component families.
       Copy only the needed rules and dependencies; never copy unused components "just in case."
-- Verify page shell `<head>` link/script order matches design-system-init's checklist:
-  optional `styles/spacing.css` → `styles/styles.css`, then only the used behavior scripts, each
-  loaded exactly once as `<script type="module" src="...">`. `spacing.css` is the Bootstrap replacement
-  for spacing/layout utilities; do not add Bootstrap only to get `.container`, `.row`, `.col-*`,
-  margin, padding, gap, or flex helpers.
+- Verify page shell resource order against `../shared/references/css-conventions.md`: spacing before authored CSS, each used behavior script once, and no Bootstrap merely for spacing.
 - Fontshare loads through an `@import` at the top of `styles.css`; never add remote page-head font
   resources or copy a font import the pal does not use.
 - For non-trivial UI, read `../design-system-init/references/design-principles.md` before building
@@ -114,17 +110,9 @@ not optional suggestions. Then inspect the pixels. If rendering is genuinely imp
 so, run the code-level checks below, and flag that visual checks were skipped rather than silently
 passing them.
 
-Console captures can also contain CloudPiston's platform chrome outside the pal's `#cp-root`.
-`tableHeaders` on the chrome action table and `horizontalOverflow` on its function-call timer are
-platform-injected, not repairable in pal source. Verify the flagged node is outside `#cp-root` and
-record that exception explicitly; the same rule inside `#cp-root` remains a pal failure.
+For platform-chrome findings outside `#cp-root`, apply only the evidence-gated exceptions in `../shared/references/console-chrome-exception.md`.
 
-Score the render 0-2 on each dimension: primary journey/focal point, spacing/proximity,
-typography hierarchy, alignment/grid, action/state clarity, responsive composition, and
-context-specific distinctiveness. `0` = broken/unstyled, `1` = competent but visibly weak,
-`2` = polished and intentional. No zero may ship; the seven-dimension average must be at least
-1.5, and spacing/proximity, primary journey/focal point, and responsive composition must each be
-2. Name screenshot evidence for every score; ungrounded "looks good" self-critique does not count.
+Score every render with the canonical seven-dimension ship gate in `../shared/references/visual-rubric.md`; cite screenshot evidence for every score.
 
 **Against the design system**
 - Does every color, space, size, and radius come from a token? Flag any arbitrary value.
