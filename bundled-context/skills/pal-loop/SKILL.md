@@ -48,14 +48,14 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
 
 1. **Pick**: `palsync task list --ready` prints the first `todo` task whose `depends` are all
    `done`. None → "Ending a session" below. Read the task's `spec ref` and **re-read those
-   SPEC.md section(s) now** — the success condition derives from the requirement. Surface assumptions: name any ambiguity and reasonable interpretations; genuine uncertainty is a blocker, never permission to guess.
+   SPEC.md section(s) now** — the success condition derives from the requirement. Surface assumptions: name any ambiguity and reasonable interpretations; genuine uncertainty is a blocker, never permission to guess. **Done when:** one ready task and its exact requirement are identified with no hidden assumption.
 2. **Tier check.** Task tier `frontier` and you're not frontier-class (test: does it need NEW
    structure, not just following the spec?) → if an advisor capability exists (e.g.
    `/advisor`), call it with full context for the plan; you still execute, verify, commit. No
    advisor → set `needs-frontier`, checkpoint, move to the next eligible task — don't attempt
    it badly. (Orchestrators MAY dispatch tasks to sized subagents — **read
    `references/delegation.md` first; required protocol.**)
-3. **Mark** `in_progress`: `palsync task <id> in_progress` — write state now, not later.
+3. **Mark** `in_progress`: `palsync task <id> in_progress` — write state now, not later. **Done when:** disk state says `in_progress`.
 4. **Execute exactly as specced:**
    - Foundation task (T1): use bash `cp` to copy the matching pal-type template files and the
      runtime shell/styles plus ONLY the behavior scripts with real consumers in current markup;
@@ -70,7 +70,9 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
      action) — a missing field is a blocker.
    - Before writing, trace the touched flow and stop at the first rung that holds: (1) YAGNI — do not build it; (2) reuse an existing fragment/function/dataset/class; (3) use a supported `c:` tag or platform API; (4) use an already sanctioned capability; (5) write the minimum readable ES3-compatible solution. Touch only named files.
    - Ladder adapted from Dietrich Gebert's ponytail; assumption discipline from Andrej Karpathy's LLM-coding-pitfalls guidance.
-5. **Verify** against the success condition with tool outputs, not opinion. Offline first, so
+   - After a multi-block edit call, re-read the changed region before pushing when the harness does not report expected-vs-actual replacement counts. On non-Claude harnesses, keep one logical change per edit call.
+   - **Done when:** the smallest spec-traceable change is present and the changed region was re-read.
+5. **Verify** against the success condition with tool outputs, not opinion. Before UI or exercise verification, read `references/verify-ladder.md` (especially §Exercise authoring before writing steps). Offline first, so
    a bad result never reaches the server. **Batch every edit for the task first, then verify
    once — target ONE `pal_push` per task, never push per-file:**
    1. `pal_push` directly (push policy `checkpoint` → ask the user first). Push runs the FULL
@@ -97,7 +99,7 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       against design-build's archetype rubric; if the audit/image exposes a failure, fix the
       three highest-impact issues, push, and re-capture. Re-run the task's
       behavior check after the last visual edit. A screenshot file path without pixel critique is
-      not review evidence.
+      not review evidence. After a single-class/attribute fix, `pal_push`; if its server notes are clean, skip duplicate `pal_test` and re-check with `pal_screenshot imageless:true`.
    5. CONSOLE screen: `pal_test` proves it compiles; the RENDER needs `pal_screenshot`:
       - `captured:true` + `renderError` non-null → hard FAIL. The workflow compiled but threw
         while rendering. Fix, push, screenshot again — `pal_test` passing does NOT clear it.
@@ -131,10 +133,11 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       edit inserted a duplicate. After a DELETE, put the deleted record's name/value in `absent`
       — never assert empty-state copy or list ordering (other rows may exist; lists sort
       alphabetically, so a shorter list is not proof of the right row leaving). This is the
-      read-back check; a failing step is a task failure.
+      read-back check; a failing step is a task failure. Never use global `absent` for a state word (for example "available") on a multi-row list — scope with `within:`.
    7. `pal_sync_datasets` after pushing a **§8a** definition (never §8b).
    - `pal_preview`/`pal_fetch`/`pal_exercise`/`pal_seo_audit`/`pal_test` all act on the LAST
      PUSHED version — push before verifying.
+   - **Done when:** every success-condition clause has current pushed-version evidence and every warning is fixed or explicitly waived.
 6. **On pass:** first confirm there are no unhandled validation warnings from the push output
    (fixed, or each one checkpointed with a concrete reason it is safe). Then `palsync task <id> done`; `palsync checkpoint "<date>, <task id>,
    <tool-output summary>"`; `git add -A && git commit -m "<task id>: <task name>"`; continue.
