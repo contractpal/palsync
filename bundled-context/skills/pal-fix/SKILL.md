@@ -27,8 +27,7 @@ When in doubt it's not a fix — escalate.
    errors), `pal_test` (server compile), `pal_fetch`/`pal_preview` with `expect:` (web
    render), `pal_screenshot` (any render), `pal_exercise` (a behavior bug — trigger the
    action, assert the wrong result with `expect`/`absent`). State the failure in one line
-   with the tool output that shows it. **Can't reproduce → ask the user for repro steps; do
-   not guess.**
+   with the tool output that shows it. **Can't reproduce → set `needs-info`, ask the user for repro steps, and do not guess.** Before fixing, check `git log`, MAP.md, and available prior decision notes for evidence that the change is already implemented or was previously rejected; report that state instead of overwriting it.
 2. **Isolate.** Read only the failure path — the failing fragment/workflow, the files it
    calls, the dataset it reads. Don't survey the whole pal.
 3. **Minimal diff, using the pal-loop restraint ladder.** Reuse before building, platform before library,
@@ -41,8 +40,7 @@ When in doubt it's not a fix — escalate.
    - Console render fix: `pal_screenshot` — `captured:true` with `renderError` null = fixed;
      `captured:false` → `HUMAN GATE:` eyeball entry, don't claim the render fixed.
      (Full rule: `../pal-review/references/console-render-verification.md`.)
-   - Behavior fix: `pal_exercise` passes with `expect` for the new/correct value and `absent`
-     for the old/wrong value when edit/delete/replace behavior is involved.
+   - Behavior fix: retain the failing `pal_exercise` flow from step 1 as the regression check, then re-run it until it passes with `expect` for the new/correct value and `absent` for the old/wrong value when edit/delete/replace behavior is involved. Reproduce and regress at the highest available seam.
 5. **Regression check** — a fix can break what worked:
    - `baseline/` exists → run `pal_regression`; act on `caused`; never verdict against a
      stale baseline (it returns `{stale}` → refresh via pal-init Step 3).
