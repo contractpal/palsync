@@ -516,31 +516,32 @@ test("clean fixture (modeled on the passing reference pal) — zero contract fin
             "    return list();",
             "}",
         ].join("\n"),
+        "styles/styles.css": ".pb-main {} .pb-section {} .pb-btn {} .pb-btn-primary {} .pb-input {} .pb-field-group {}",
         "pages/console.html": [
             "<html xmlns:c=\"contractpal\">",
             "  <body>",
-            "    <div id=\"body\"><c:fragment name=\"${frag}\" /></div>",
+            "    <div id=\"body\" class=\"pb-main\"><c:fragment name=\"${frag}\" /></div>",
             "  </body>",
             "</html>",
         ].join("\n"),
         "fragments/equipmentList.html": [
             "<c:ignore xmlns:c=\"contractpal\">",
-            "  <c:a action=\"showForm\" ajax-target=\"body\">Add</c:a>",
+            "  <div class=\"pb-section\"><c:a action=\"showForm\" ajax-target=\"body\" class=\"pb-btn pb-btn-primary\">Add</c:a>",
             "  <c:choose>",
             "    <c:when test=\"${!empty equipment}\">",
             "      <c:list name=\"equipment\" id=\"r\">",
             "        <p>${r.name}</p>",
-            "        <c:a action=\"showForm?equipmentId=${r.equipmentId}\" ajax-target=\"body\">Edit</c:a>",
+            "        <c:a action=\"showForm?equipmentId=${r.equipmentId}\" ajax-target=\"body\" class=\"pb-btn\">Edit</c:a>",
             "      </c:list>",
             "    </c:when>",
             "    <c:otherwise><p>No equipment yet.</p></c:otherwise>",
-            "  </c:choose>",
+            "  </c:choose></div>",
             "</c:ignore>",
         ].join("\n"),
         "fragments/equipmentForm.html": [
             "<c:ignore xmlns:c=\"contractpal\">",
-            "  <input type=\"text\" name=\"name\" value=\"${name}\" />",
-            "  <c:a action=\"saveEquipment\" ajax-target=\"body\">Save</c:a>",
+            "  <div class=\"pb-section\"><label class=\"pb-field-group\">Name<input type=\"text\" name=\"name\" value=\"${name}\" class=\"pb-input\" /></label>",
+            "  <c:a action=\"saveEquipment\" ajax-target=\"body\" class=\"pb-btn pb-btn-primary\">Save</c:a></div>",
             "</c:ignore>",
         ].join("\n"),
     });
@@ -974,6 +975,39 @@ test("pageResponseSource — pal.getPage(...) as a page response is a hard error
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /c\.getPage/);
     fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("empty c:a action is an error; dynamic actions remain unchecked", () => {
+    const dir = tmpWorkspace({
+        "fragments/actions.html": '<c:ignore xmlns:c="contractpal"><div class="pb-section"><c:a action="">Cancel</c:a><c:a action="${nextAction}">Next</c:a></div></c:ignore>',
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "emptyAction");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /never routes at runtime/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("fragment root missing pb-section warns; compliant root passes", () => {
+    const missing = tmpWorkspace({ "fragments/list.html": '<c:ignore xmlns:c="contractpal"><div class="pb-card">List</div></c:ignore>' });
+    const compliant = tmpWorkspace({ "fragments/list.html": '<c:ignore xmlns:c="contractpal"><section class="pb-section console-chrome">List</section></c:ignore>' });
+    const findings = lintContracts(missing).filter(f => f.rule === "pbSection");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "warn");
+    assert.strictEqual(lintContracts(compliant).filter(f => f.rule === "pbSection").length, 0);
+    fs.rmSync(missing, { recursive: true, force: true });
+    fs.rmSync(compliant, { recursive: true, force: true });
+});
+
+test("page shell missing pb-main warns; compliant shell passes", () => {
+    const missing = tmpWorkspace({ "pages/console.html": '<html><body><main id="body"></main></body></html>' });
+    const compliant = tmpWorkspace({ "pages/console.html": '<html><body><main id="body" class="pb-main console-chrome"></main></body></html>' });
+    const findings = lintContracts(missing).filter(f => f.rule === "pbMain");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "warn");
+    assert.strictEqual(lintContracts(compliant).filter(f => f.rule === "pbMain").length, 0);
+    fs.rmSync(missing, { recursive: true, force: true });
+    fs.rmSync(compliant, { recursive: true, force: true });
 });
 
 test("pageResponseSource — c.getPage(...) is the correct source, no finding", () => {

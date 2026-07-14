@@ -293,7 +293,14 @@ function checkActionRouted(markupFiles, workflowFiles, actions, findings) {
             const raw = attr(tag, "action");
             if (raw == null) return;
             const name = raw.split("?")[0];
-            if (!name || name.includes("${")) return; // dynamic action name — can't check statically
+            if (!name) {
+                findings.push({
+                    file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "emptyAction",
+                    message: "c:a with empty action never routes at runtime; give it a real action (e.g. action=\"list\") or href"
+                });
+                return;
+            }
+            if (name.includes("${")) return; // dynamic action name — can't check statically
             if (actions.has(name)) return;
             // Conventional console/web return-to-list links often rely on the workflow default:
             // branch, which is the actual landing/list behavior. Warn on other unknown actions
@@ -972,6 +979,37 @@ function checkDesignSystemBypass(workspaceDir, findings) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Structural design-system contracts.
+// ---------------------------------------------------------------------------------------------
+
+function checkStructuralClasses(markupFiles, findings) {
+    for (const { rel, src } of markupFiles) {
+        if (rel.startsWith("pages/")) {
+            let hasPbMain = false;
+            scanTags(src, tag => {
+                const classes = attr(tag, "class");
+                if (classes && classes.split(/\s+/).includes("pb-main")) hasPbMain = true;
+            });
+            if (!hasPbMain) findings.push({
+                file: rel, line: 1, column: 0, severity: "warn", rule: "pbMain",
+                message: "Page shell is missing pb-main; the shell must own the pb-main content region."
+            });
+            continue;
+        }
+
+        let hasPbSection = false;
+        scanTags(src, tag => {
+            const classes = attr(tag, "class");
+            if (classes && classes.split(/\s+/).includes("pb-section")) hasPbSection = true;
+        });
+        if (!hasPbSection) findings.push({
+            file: rel, line: 1, column: 0, severity: "warn", rule: "pbSection",
+            message: "Fragment root is missing pb-section; every fragment root must include class pb-section."
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Entry point.
 // ---------------------------------------------------------------------------------------------
 
@@ -988,6 +1026,7 @@ function lintContracts(workspaceDir) {
 
     const actions = collectRoutedActions(workflowFiles);
     checkActionRouted(markupFiles, workflowFiles, actions, findings);
+    checkStructuralClasses(markupFiles, findings);
 
     for (const { rel, src } of markupFiles) {
         scanTags(src, (tag, pos) => {
