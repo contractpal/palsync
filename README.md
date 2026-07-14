@@ -23,40 +23,57 @@ silently clobber someone else's work.
 
 ## Install / Update
 
+### New install
+
 ```sh
-npm install -g github:contractpal/palsync
+npm install -g https://codeload.github.com/contractpal/palsync/tar.gz/refs/heads/main --ignore-scripts --include=optional
+node "$(npm root -g)/palsync/src/install/playwrightChromium.js"
 ```
 
-That command installs the global `palsync` command (plus `palsync-mcp`, which the agent launches
-automatically, and `palpush`, a headless deploy CLI). **No build step** — the OS-keychain dependency
-ships prebuilt. Runtime dependencies are installed by npm automatically, including Playwright and
-the Chromium browser binary palsync uses for `palsync screenshot` and browser-backed
-`palsync exercise` runs.
+On Windows PowerShell, the second line is:
 
-**To update, run `palsync upgrade`** — it checks the tip of the repo's default branch and, if your
-build differs, reinstalls from that exact commit:
+```powershell
+node "$(npm root -g)\palsync\src\install\playwrightChromium.js"
+```
+
+That installs the global `palsync` command (plus `palsync-mcp`, which the agent launches
+automatically, and `palpush`, a headless deploy CLI), then fetches the Chromium browser binary
+palsync uses for `palsync screenshot` and browser-backed `palsync exercise` runs. **No build step**
+— the OS-keychain dependency ships prebuilt.
+
+Why the tarball URL and not the shorter `npm install -g github:contractpal/palsync`: that shorthand
+makes npm clone the repo into a **temporary prep directory** and run palsync's postinstall **there**,
+before the package ever reaches its real install location. That inner install can fail outright —
+module resolution not fully settled yet, antivirus/file-locking on Windows, `ESTRICTALLOWSCRIPTS` on
+npm 11+ — which aborts the *entire* global install with a `git dep preparation failed` error, even
+though nothing is actually wrong with your environment. The tarball URL skips that prep step
+entirely: npm writes the package straight to its final location and lifecycle scripts run once, in
+place. It's the same mechanism `palsync upgrade` already relies on below.
+
+### Update
+
+Run `palsync upgrade` — it checks the tip of the repo's default branch and, if your build differs,
+reinstalls from that exact commit:
 
 ```sh
 palsync upgrade          # update to the latest commit (no-op if already current)
 palsync upgrade --check  # report whether an update exists, without installing
 ```
 
-Why a subcommand and not a plain reinstall: `npm install -g github:<repo>` re-uses npm's **cached**
-resolution of the default branch, so a plain reinstall often silently keeps the old build. `palsync
-upgrade` installs the immutable commit SHA as a tarball (`codeload.github.com/…/<sha>`) — a ref npm
-hasn't cached — so the update always lands, and it always tracks the latest code (no release tagging
-required). The upgrade installs with lifecycle scripts **off** (so it can't be blocked by npm 11's
-`strict-allow-scripts` gate) and then fetches the Chromium browser binary itself, so a new install
-works under any npm configuration. Confirm the build you ended up with:
+`palsync upgrade` installs the immutable commit SHA as a tarball (`codeload.github.com/…/<sha>`) — a
+ref npm hasn't cached — so the update always lands, and it always tracks the latest code (no release
+tagging required). It installs with lifecycle scripts **off** (so it can't be blocked by npm 11's
+`strict-allow-scripts` gate) and then fetches the Chromium browser binary itself. Confirm the build
+you ended up with:
 
 ```sh
 palsync --version
 ```
 
-If you ever need to force a clean reinstall by hand, `--force` bypasses npm's cache:
+If you ever need to force a clean reinstall by hand, add `--force` to bypass npm's cache:
 
 ```sh
-npm install -g github:contractpal/palsync --force
+npm install -g https://codeload.github.com/contractpal/palsync/tar.gz/refs/heads/main --ignore-scripts --include=optional --force
 ```
 
 ### `palsync --version` shows an old version after install
@@ -71,12 +88,13 @@ which -a palsync                  # any line OTHER than the first is shadowed
 cat "$(npm root -g)/palsync/package.json" | grep version   # what npm just wrote
 ```
 
-Fix by installing with the npm tied to the bin that actually wins:
+Fix by running the same **New install** command above with the npm tied to the bin that actually
+wins:
 
 ```sh
-"$(dirname "$(which palsync)")/../lib/node_modules/.bin/npm" install -g github:contractpal/palsync
+"$(dirname "$(which palsync)")/../lib/node_modules/.bin/npm" install -g https://codeload.github.com/contractpal/palsync/tar.gz/refs/heads/main --ignore-scripts --include=optional
 # or, plainly: invoke the matching npm directly, e.g.
-/opt/homebrew/bin/npm install -g github:contractpal/palsync   # for Homebrew node
+/opt/homebrew/bin/npm install -g https://codeload.github.com/contractpal/palsync/tar.gz/refs/heads/main --ignore-scripts --include=optional   # for Homebrew node
 ```
 
 Or uninstall the stale copy first (run the *winning* npm), then reinstall normally.
@@ -85,10 +103,9 @@ Or uninstall the stale copy first (run the *winning* npm), then reinstall normal
 
 npm 11 can block install scripts that aren't on an allowlist. When `strict-allow-scripts` is on it
 aborts the whole install (`ESTRICTALLOWSCRIPTS`) — not just palsync's postinstall but any transitive
-native dependency's build. `palsync upgrade` on **0.27.0 or newer** already avoids this (it installs
-with scripts off, then fetches Chromium itself). If you're on an **older** build, its upgrade can
-still hit the gate; bootstrap onto the current build by hand — install with scripts off, then fetch
-the browser explicitly:
+native dependency's build. The **New install** command above already avoids this (it installs with
+scripts off, then fetches Chromium itself), and so does `palsync upgrade` on **0.27.0 or newer**. If
+you're bootstrapping an older build by hand, run that same two-step sequence:
 
 ```sh
 npm install -g https://codeload.github.com/contractpal/palsync/tar.gz/refs/heads/main --ignore-scripts --include=optional
