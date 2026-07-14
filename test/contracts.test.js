@@ -195,11 +195,24 @@ test("custom control CSS alongside the design system is a bypass warning", () =>
     const dir = tmpWorkspace({
         "DESIGN_SYSTEM.md": "# system",
         "styles/design-system.css": ".pb-btn { color: var(--primary); }",
-        "styles/styles.css": "button { background: #123456; }"
+        "styles/custom.css": "button { background: #123456; }"
     });
     const findings = lintContracts(dir).filter(f => f.rule === "designSystemBypass");
     assert.equal(findings.length, 1);
     assert.equal(findings[0].severity, "warn");
+    assert.match(findings[0].message, /spacing\.css and styles\.css are exempt/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("design-system convention files are exempt from bypass warnings", () => {
+    const dir = tmpWorkspace({
+        "DESIGN_SYSTEM.md": "# system",
+        "styles/design-system.css": ".pb-btn { color: var(--primary); }",
+        "styles/spacing.css": "input[type=text] { padding: #123; }",
+        "styles/styles.css": "button { background: #123456; }",
+        "styles/other.css": ".feature { color: #123456; }"
+    });
+    assert.deepStrictEqual(lintContracts(dir).filter(f => f.rule === "designSystemBypass"), []);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 

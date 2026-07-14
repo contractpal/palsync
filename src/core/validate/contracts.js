@@ -957,7 +957,7 @@ function checkDesignSystemBypass(workspaceDir, findings) {
         const files = [];
         walkFiles(path.join(workspaceDir, folder), folder, files);
         for (const f of files) {
-            if (path.extname(f.rel).toLowerCase() !== ".css" || /(^|\/)design-system\.css$/i.test(f.rel)) continue;
+            if (path.extname(f.rel).toLowerCase() !== ".css" || /(^|\/)(?:design-system|spacing|styles)\.css$/i.test(f.rel)) continue;
             const css = readUtf8(f.abs);
             if (css == null) continue;
             const coreSelector = /(?:^|[}\s])(?:button|input\s*\[|select\b|textarea\b|\.pb-(?:btn|input|select|textarea|table))[^{}]*\{/im.test(css);
@@ -971,7 +971,7 @@ function checkDesignSystemBypass(workspaceDir, findings) {
                 reported.add(identity);
                 findings.push({
                     file: f.rel, line: 1, column: 0, severity: "warn", rule: "designSystemBypass",
-                    message: f.rel + " redefines core control styling alongside the workspace design system. Prefer the selected component recipes and semantic tokens from design-build; remove bespoke control selectors/raw hex palette values or record an explicit override in the design brief."
+                    message: f.rel + " redefines core control styling alongside the workspace design system. spacing.css and styles.css are exempt convention files; other stylesheets must prefer selected component recipes and semantic tokens from design-build. Remove bespoke control selectors/raw hex palette values or record an explicit override in the design brief."
                 });
             }
         }
