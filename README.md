@@ -30,11 +30,18 @@ npm install -g https://codeload.github.com/contractpal/palsync/tar.gz/refs/heads
 node "$(npm root -g)/palsync/src/install/playwrightChromium.js"
 ```
 
-On Windows PowerShell, the second line is:
+The second line uses `$(npm root -g)` to find wherever npm just installed the package — that syntax
+only works in a shell that supports command substitution (bash/zsh, and PowerShell — a prompt that
+starts with `PS `). In **Command Prompt** (`cmd.exe`, the plain `C:\Users\you>` prompt), `$(...)` is
+not substituted at all and gets passed through literally, causing a `Cannot find module
+'...\$(npm root -g)\...'` error. Use this instead:
 
-```powershell
-node "$(npm root -g)\palsync\src\install\playwrightChromium.js"
+```cmd
+for /f %i in ('npm root -g') do node "%i\palsync\src\install\playwrightChromium.js"
 ```
+
+(If you paste that same line into a `.bat` script instead of typing it directly at the prompt, double
+the `%i` to `%%i`.)
 
 That installs the global `palsync` command (plus `palsync-mcp`, which the agent launches
 automatically, and `palpush`, a headless deploy CLI), then fetches the Chromium browser binary
