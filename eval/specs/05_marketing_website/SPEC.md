@@ -1,7 +1,7 @@
 # SPEC — signal_ridge (palsync test 5: marketing website)
 status: approved
 reality_check: pass
-spec version: 2
+spec version: 3
 mode: lite
 run mode: auto — the build agent runs all tasks end-to-end with NO human intervention. All review (visual, SEO, routing) happens post-build by a human evaluator. The agent must never stop to ask questions or wait for input.
 pal: signal_ridge (web) @ <WORKSPACE — set by evaluator before run>
@@ -9,6 +9,7 @@ push policy: free
 review cadence: end
 design system: ../DESIGN_SYSTEM.md (components: ../COMPONENTS.md) — any evaluator-supplied reference images are the primary design authority and outrank the stub; none ship with this test.
 created: 2026-07-06   approved: 2026-07-10
+realigned: 2026-07-14 (v2.1 — §9 skill names only)
 
 ## 1. Product & audience
 Static marketing website for Signal Ridge, a fictional operations consulting studio for growing
@@ -133,9 +134,9 @@ Canonical base: https://signalridge.example
 Omit — no datasets, dataviews, data bundles, or datalists.
 
 ## 9. Required skills (which palsync skills this build loads)
-- ALWAYS: palbuilder-frontend, design-build, pal-restraint
+- ALWAYS: palbuilder-frontend, design-build
 - IF server-side workflow logic, validation, routing, or responses: palbuilder-workflow
-- IF any §3 page is publicly indexable (§7 non-empty): seo-core
+- IF any §3 page is publicly indexable (§7 non-empty): palbuilder-seo
 
 ## 10. PalBuilder surface (the platform primitives this build touches)
 - Pages (page-shell): web.html.

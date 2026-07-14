@@ -15,8 +15,14 @@ Do not edit spec content — a changed spec invalidates every prior row it would
 **Spec revision v2 (2026-07-11):** specs realigned to template-based foundation and the new
 verification discipline. Rows scored against v1 specs are not process-comparable with v2 rows;
 outcome scores (§12/scoring.md) remain comparable because acceptance criteria are unchanged.
-The v2 validation floor includes `debugTagShipped`, `missingFragment`, and
-`designClassRequired`; console audit exceptions must quote `[OUTSIDE #cp-root]` sample evidence.
+The v2 validation floor includes `debugTagShipped`, `missingFragment`, `designClassRequired`,
+`emptyAction`, `pbMain`, and `pbSection`; console audit exceptions must quote
+`[OUTSIDE #cp-root]` sample evidence.
+
+**Spec revision v2.1 (2026-07-14):** §9 skill lists and EXECUTION validation-rule lists
+realigned to the post-refactor skill set (pal-restraint/palbuilder-backend retired,
+seo-core renamed palbuilder-seo, emptyAction/pbMain/pbSection added to the floor).
+Process metadata only — §12 acceptance criteria unchanged, outcome scores remain comparable.
 
 ---
 
@@ -29,8 +35,8 @@ because it passed §12 — it is better because it passed §12 **at equal-or-low
 therefore records BOTH the §12 score (via `eval/scoring.md`) AND the cost block below.
 
 Two work streams are being measured independently on this same benchmark:
-- the **orchestration skills** (pal-init / pal-loop / pal-review / pal-spec / pal-restraint …) — the user's refactor;
-- the **palbuilder domain skills** (palbuilder-core / -workflow / -data / -frontend / -realtime / -email) — a teammate's rebuild.
+- the **orchestration skills** (pal-init / pal-loop / pal-review / pal-spec / pal-fix …) — the user's refactor;
+- the **palbuilder domain skills** (palbuilder-core / -workflow / -data / -frontend / -realtime / -email / -seo) — a teammate's rebuild.
 
 The whole point of the pinning rules below is to keep those two streams separable. A row that
 changed both at once measures nothing.
@@ -89,6 +95,7 @@ Fill these from the finished transcript. Record them in `eval/RESULTS.md`.
 
 **(a) Total tool calls**, counted from the transcript, split three ways:
 - **mcp** — palsync MCP tool calls (`pal_*`: pal_pull, pal_push, pal_validate, pal_test, pal_preview, pal_screenshot, pal_sync_datasets, pal_seo_audit, pal_status, pal_lock, pal_unlock, …).
+  `pal_screenshot` supports `imageless:true` for audit-only re-checks; these calls count as normal mcp tool calls.
 - **read** — file reads (Read tool, `cat`/`head`/`tail`, context_search / expand_chunk).
 - **other** — everything else (Edit, Write, Bash that isn't a read, etc.).
 

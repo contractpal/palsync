@@ -10,7 +10,8 @@ render-inspect-revise, routing, and SEO self-verification remain mandatory durin
 mobile capture belongs to final review.
 
 ## Build plan
-Before the first UI task, load `design-build` and checkpoint its six-line design brief; use approved inline SVG icons from `component-library.md` → Icons; validation rules include `debugTagShipped`, `designClassRequired`, and `missingFragment`.
+Before the first UI task, load `design-build` and checkpoint its six-line design brief; use approved inline SVG icons from `component-library.md` → Icons; validation rules include `debugTagShipped`, `designClassRequired`, `missingFragment`,
+`emptyAction`, `pbMain`, and `pbSection` (page shell owns `pb-main`; fragment root is `pb-section`).
 Dependency order (leaf-first — foundations before things that use them):
 1. Foundation as a standalone first step: use bash `cp` (never read-then-write) to copy the web
    templates from `palbuilder-workflow/references/templates/` (`web-workflow.js` and

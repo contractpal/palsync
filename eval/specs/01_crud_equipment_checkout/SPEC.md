@@ -1,7 +1,7 @@
 # SPEC — equipment_checkout (palsync test 1: CRUD / DataSet fundamentals)
 status: approved
 reality_check: pass
-spec version: 3
+spec version: 4
 mode: lite
 run mode: auto — the build agent runs all tasks end-to-end with NO human intervention. All review (visual, data, structural) happens post-build by a human evaluator. The agent must never stop to ask questions or wait for input.
 pal: equipment_checkout (console) @ <WORKSPACE — set by evaluator before run>
@@ -9,6 +9,7 @@ push policy: free
 review cadence: end
 design system: ../DESIGN_SYSTEM.md (components: ../COMPONENTS.md) — any evaluator-supplied reference images are the primary design authority and outrank the stub; none ship with this test.
 created: 2026-07-01   approved: 2026-07-10
+realigned: 2026-07-14 (v2.1 — §9 skill names only)
 
 ## 1. Product & audience
 Internal tool for an office manager who tracks shared equipment: laptops, projectors, and cameras.
@@ -132,7 +133,7 @@ Indexes: status.
 None.
 
 ## 9. Required skills (which palsync skills this build loads)
-- ALWAYS: palbuilder-frontend, design-build, pal-restraint
+- ALWAYS: palbuilder-frontend, design-build
 - IF server-side workflow logic, validation, routing, or responses: palbuilder-workflow
 - IF data writes/reads, payloads/DataLists, cache, files, or server-side HTTP: palbuilder-data
 

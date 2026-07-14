@@ -1,7 +1,7 @@
 # SPEC — company_directory (palsync test 2: data management / structure selection)
 status: approved
 reality_check: pass (1 recorded caveat — see §13)
-spec version: 2
+spec version: 3
 mode: lite
 run mode: auto — the build agent runs all tasks end-to-end with NO human intervention. All review (visual, data, structural) happens post-build by a human evaluator. The agent must never stop to ask questions or wait for input.
 pal: company_directory (console) @ <WORKSPACE — set by evaluator before run>
@@ -9,6 +9,7 @@ push policy: free
 review cadence: end
 design system: ../DESIGN_SYSTEM.md (components: ../COMPONENTS.md) — any evaluator-supplied reference images are the primary design authority and outrank the stub; none ship with this test.
 created: 2026-07-01   approved: 2026-07-06
+realigned: 2026-07-14 (v2.1 — §9 skill names only)
 
 ## 1. Product & audience
 Internal employee directory for a 60-person company. HR adds employees; staff browse the
@@ -119,7 +120,7 @@ Seed rows: Engineering, Sales, Operations, HR.
 None.
 
 ## 9. Required skills (which palsync skills this build loads)
-- ALWAYS: palbuilder-frontend, design-build, pal-restraint
+- ALWAYS: palbuilder-frontend, design-build
 - IF server-side workflow logic, validation, routing, or responses: palbuilder-workflow
 - IF data writes/reads, payloads/DataLists, cache, files, or server-side HTTP: palbuilder-data
 
