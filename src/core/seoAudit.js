@@ -116,7 +116,7 @@ function auditHtml(html, { url = "" } = {}) {
 
     // ---- structured data ----
     if (!/<script[^>]*type=["']application\/ld\+json["']/i.test(html)) {
-        add("warn", "structuredData", "No JSON-LD structured data. Schema markup earns rich results and helps AI/answer engines cite you. Fix: add a <script type=\"application/ld+json\"> block in the PAGE <head> (allowed there — only fragments reject <script>) with Organization or WebSite schema. The seo-core skill has a copy-paste recipe.");
+        add("warn", "structuredData", "No JSON-LD structured data. Schema markup earns rich results and helps AI/answer engines cite you. Fix: add a <script type=\"application/ld+json\"> block in the PAGE <head> (allowed there — only fragments reject <script>) with Organization or WebSite schema. The palbuilder-seo skill has a copy-paste recipe.");
     } else ok("structuredData", "JSON-LD present");
 
     // ---- img alt ----
@@ -132,7 +132,7 @@ function auditHtml(html, { url = "" } = {}) {
     return { findings, passed, errors, warnings, url };
 }
 
-// ---- robots.txt / sitemap.xml / llms.txt — every WEB pal needs all three (seo-core skill) ----
+// ---- robots.txt / sitemap.xml / llms.txt — every WEB pal needs all three (palbuilder-seo skill) ----
 // Both reference builds hit the same live bug: on test/stage instances every path falls through
 // to the workflow, so without an explicit intercept these files render the homepage HTML instead
 // (one pal shipped this as 305 Lighthouse parse errors). That's the #1 thing this check catches.
@@ -149,7 +149,7 @@ function looksLikeFallthroughPage(body) {
 function auditRobotsTxt(body, contentType) {
     const findings = [];
     if (looksLikeFallthroughPage(body)) {
-        findings.push({ severity: "error", rule: "robotsFallthrough", message: "robots.txt returned the homepage HTML, not plain text. On PalBuilder test/stage instances every path falls through to the workflow unless robots.txt is explicitly intercepted. Fix: handle robots.txt before the route switch in run() (see seo-core skill, Pattern A or B)." });
+        findings.push({ severity: "error", rule: "robotsFallthrough", message: "robots.txt returned the homepage HTML, not plain text. On PalBuilder test/stage instances every path falls through to the workflow unless robots.txt is explicitly intercepted. Fix: handle robots.txt before the route switch in run() (see palbuilder-seo skill, Pattern A or B)." });
         return findings;
     }
     if (contentType && !/text\/plain/i.test(contentType)) {
@@ -170,14 +170,14 @@ function auditRobotsTxt(body, contentType) {
 function auditSitemapXml(body, contentType) {
     const findings = [];
     if (looksLikeFallthroughPage(body)) {
-        findings.push({ severity: "error", rule: "sitemapFallthrough", message: "sitemap.xml returned the homepage HTML, not XML. Fix: handle sitemap.xml explicitly before the route switch in run() (see seo-core skill, Pattern A or B)." });
+        findings.push({ severity: "error", rule: "sitemapFallthrough", message: "sitemap.xml returned the homepage HTML, not XML. Fix: handle sitemap.xml explicitly before the route switch in run() (see palbuilder-seo skill, Pattern A or B)." });
         return findings;
     }
     if (contentType && !/xml/i.test(contentType)) {
         findings.push({ severity: "error", rule: "sitemapContentType", message: "sitemap.xml content-type is \"" + contentType + "\" — without application/xml (or text/xml) browsers/crawlers can render the <url>/<loc> tags as plain text instead of a sitemap. Fix: call setContentType(\"application/xml\")." });
     }
     if (!/<urlset[\s>]/i.test(body)) {
-        findings.push({ severity: "error", rule: "sitemapMissingUrlset", message: "sitemap.xml has no <urlset> root element — it isn't a valid sitemap. Fix: follow the sitemaps.org schema (see the seo-core skill)." });
+        findings.push({ severity: "error", rule: "sitemapMissingUrlset", message: "sitemap.xml has no <urlset> root element — it isn't a valid sitemap. Fix: follow the sitemaps.org schema (see the palbuilder-seo skill)." });
     }
     if (!/<loc>/i.test(body)) {
         findings.push({ severity: "error", rule: "sitemapEmpty", message: "sitemap.xml has no <url><loc> entries — it's empty. Fix: list every public page's absolute URL." });
@@ -189,8 +189,8 @@ function auditCrawlerFile(kind, label, r, required) {
     if (r.status !== 200) {
         return [{ severity: required ? "error" : "warn", rule: kind + "Missing",
             message: "/" + label + " returned HTTP " + r.status + (required
-                ? " — every WEB pal needs this file. Fix: see the seo-core skill's robots.txt/sitemap.xml section."
-                : " — optional, but recommended for AI-crawler/LLM discovery. See the seo-core skill.") }];
+                ? " — every WEB pal needs this file. Fix: see the palbuilder-seo skill's robots.txt/sitemap.xml section."
+                : " — optional, but recommended for AI-crawler/LLM discovery. See the palbuilder-seo skill.") }];
     }
     if (kind === "robots") return auditRobotsTxt(r.html, r.contentType);
     if (kind === "sitemap") return auditSitemapXml(r.html, r.contentType);

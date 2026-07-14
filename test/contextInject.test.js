@@ -19,7 +19,7 @@ test("every bundled skill injects, with its references/* assets (bundle dir = so
     const names = fs.readdirSync(bundled, { withFileTypes: true })
         .filter(e => e.isDirectory() && fs.existsSync(path.join(bundled, e.name, "SKILL.md")))
         .map(e => e.name);
-    assert.ok(names.includes("seo-core"), "seo-core is in the bundle (it must load with no opt-in flag)");
+    assert.ok(names.includes("palbuilder-seo"), "palbuilder-seo is in the bundle (it must load with no opt-in flag)");
     for (const name of names) {
         assert.ok(fs.existsSync(path.join(skillsDir, name, "SKILL.md")), name + " SKILL.md injected");
         const refsDir = path.join(bundled, name, "references");

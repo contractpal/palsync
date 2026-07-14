@@ -819,7 +819,7 @@ const TOOLS = [
     },
     {
         name: "pal_seo_audit",
-        description: "On-page SEO audit of a WEB pal's server-rendered page (last pushed): title/meta, canonical, og/twitter, single H1, JSON-LD, img alt, robots.txt/sitemap.xml/llms.txt. Returns each problem + its fix, plus what PASSED. Use after pushing a web page; fix every ERROR. Not for console pals. Read the seo-core skill BEFORE writing heads; this verifies the result.",
+        description: "On-page SEO audit of a WEB pal's server-rendered page (last pushed): title/meta, canonical, og/twitter, single H1, JSON-LD, img alt, robots.txt/sitemap.xml/llms.txt. Returns each problem + its fix, plus what PASSED. Use after pushing a web page; fix every ERROR. Not for console pals. Read the palbuilder-seo skill BEFORE writing heads; this verifies the result.",
         inputShape: {},
         async run(ctx) {
             const disabled = testingDisabledResult(ctx, "pal_seo_audit");

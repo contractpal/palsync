@@ -34,7 +34,9 @@ const RETIRED_SKILLS = [
     "design",
     "palbuilder-jobs-http",
     "palbuilder-websockets",
-    "pal-restraint"
+    "pal-restraint",
+    "palbuilder-backend",
+    "seo-core"
 ];
 
 // Every skill in the bundle loads every session — the bundle dir IS the inventory, discovered at
@@ -126,7 +128,7 @@ function syncSection(palName, { cli = false, skillsDir = ".claude/skills" } = {}
         "6. For a WEB pal page (public, crawled), also run **" + T.seo + "** after pushing — it",
         "   checks the rendered page's SEO (title/description, ABSOLUTE og: URLs, one H1, JSON-LD,",
         "   img alt text) and tells you exactly what to fix. Do not declare a public web page done",
-        "   while it reports errors. (Read the seo-core skill first when it's present.)",
+        "   while it reports errors. (Read the palbuilder-seo skill first when it's present.)",
         "",
         "**Building a whole project?** The `pal-spec` skill interviews the user and produces",
         "SPEC.md + EXECUTION.md; the `pal-loop` skill executes them task-by-task with on-disk",

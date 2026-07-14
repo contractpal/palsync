@@ -23,6 +23,8 @@ never pal-loop's self-report.
 
 ## The review arms
 
+If fresh-context reviewer dispatch fails, do not silently self-review. Put `BIAS WARNING: review ran in build context (dispatch error: <err>)` at the top of REVIEW.md and cap the verdict at CHANGES-NEEDED unless the user explicitly overrides.
+
 ### 1. Conformance (always runs)
 - **Run `pal_validate` and paste its verdict line — a review with no `pal_validate` run is
   invalid.** It mechanically checks: (a) each `c:list` `name` matches a DataList the workflow

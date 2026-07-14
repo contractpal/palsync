@@ -142,7 +142,7 @@ Canonical base: <https://...>
 - IF data writes/reads, payloads/DataLists, cache, files, or server-side HTTP: palbuilder-data
 - IF background jobs, long-running work, realtime, server push, or progress UI: palbuilder-realtime
 - IF sending email (OTP, notifications, transactional):     palbuilder-email
-- IF any §3 page is publicly indexable (§7 non-empty):      seo-core
+- IF any §3 page is publicly indexable (§7 non-empty):      palbuilder-seo
 - IF a webservice or tunnel action (Q5): palbuilder-workflow + look up the exact
   ConsoleWebServiceController/TunnelController methods in the cp-api docs before writing.
 

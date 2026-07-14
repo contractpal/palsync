@@ -1,6 +1,6 @@
 ---
 name: palbuilder-core
-description: Reference library for CloudPiston pal internals — the pal.json manifest (all fields, all 10 workflowType values, folder registration rules), the ES3-style workflow JS subset and its workarounds, and the typed-category pal structure (palType values, console vs web access modes, subfolder conventions). Other palbuilder-* skills point at this skill's references for shared content. Load this skill when you need detail beyond what CLAUDE.md provides — for example, when editing pal.json entries, checking a workflowType or palType value, registering a folder, applying an ES3 workaround, or reasoning about which context a resource belongs to.
+description: Reference for CloudPiston pal.json, workflowType/palType values, folder registration, workspace structure, and the supported ES3 subset. Load when editing manifests or checking platform structure and syntax constraints.
 ---
 
 # CloudPiston Pal — Reference Library

@@ -1,6 +1,6 @@
 ---
 name: palbuilder-data
-description: Use for reading, writing, or shaping data in a CloudPiston pal — datasets, dataviews, payloads, DataLists, pal-level data, cache, chunks (pre-rendered/cached HTML fragments), session storage, cookies, files, or server-side HTTP calls. Covers the standard read/write patterns (createFilter, selectColumns, addEqual, getRecords, find-or-create), column types and indexes, analytic filters (aggregates, group-by, having), the runtime DataViewBuilder, payload composition, pal.getSettings(), session/cookie APIs, the storage decision (session vs. cookie vs. cache vs. dataset vs. settings), and naming conventions. Trigger for dataset queries, schema/index work, aggregates, payload building, in-memory or runtime joins, external API calls, session/cache reads, or caching pre-rendered fragment output.
+description: Use for CloudPiston datasets, DataViews/DataLists, payloads, schema/index work, storage, cache/session/cookies/files, or server-side HTTP. Load before querying, mutating, joining, or choosing where pal data belongs.
 ---
 
 # CloudPiston Pal — Data Layer

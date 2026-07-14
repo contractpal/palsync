@@ -1,6 +1,6 @@
 ---
 name: palbuilder-workflow
-description: Use this skill whenever writing server-side workflow JavaScript for a CloudPiston pal — any workflowType. Covers the run() function pattern, the reserved global variables (c, pal, page, ajax, payload, request, data, action, formatter, validator, cm, dateUtil, resp), action switch routing, the @include mechanism for library composition, response types (page, ajax, download, redirect, exitToWeb), the three-layer architecture (presentation/service/data), c.debug vs. the persistent Logger (c.getLogger, Notification-backed levels), workflow utilities (DateUtil, EncryptionUtil, Monitor), and workflow-type-specific patterns (console, web, transaction packets, background jobs, webservices, tunnel, libraries). Trigger when writing any workflow .js file, adding an action handler, constructing a response, calling into a library, calling c.getEncryptionUtil / c.getMonitor / c.getDateUtil / c.getLogger, or delegating to another workflow via switchToWorkflow.
+description: Use when writing or debugging server-side CloudPiston workflow JavaScript for any workflowType: run patterns, action routing, responses, includes, utilities, logging, or workflow delegation. Load before editing workflow .js files or choosing controller APIs.
 ---
 
 # CloudPiston Pal — Workflow Layer

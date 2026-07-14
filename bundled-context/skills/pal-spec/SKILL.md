@@ -152,6 +152,6 @@ pal-loop resumes. Full protocol: `references/amendment-path.md`.
 - Build anything — **pal-loop** executes EXECUTION.md.
 - Specify visual design — DESIGN_SYSTEM.md / COMPONENTS.md own that; the spec carries §6
   layout only.
-- Re-teach platform rules — the palbuilder-* skills, design-build, and seo-core own those;
+- Re-teach platform rules — the palbuilder-* skills, design-build, and palbuilder-seo own those;
   the spec REFERENCES them via §9/§10.
 - Fix bugs — **pal-fix** handles small corrections without this ceremony.

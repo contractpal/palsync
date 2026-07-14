@@ -61,8 +61,7 @@ Renders as an `<a>` element that fires a server action or navigates.
 - **`onclick`** (CLAUDE.md rule 5) — use `<button onclick="fn()">` or
   `<a href="#" onclick="fn(); return false;">` for JS-only behavior
 
-**`test` is a universal attribute** — it conditionally renders any element, not just `c:`
-tags: `<div test="${status eq 'draft'}">...</div>` works.
+**`test` is not a universal HTML attribute.** Use `c:if` or `c:div test=`. `test=` on plain HTML elements triggers server validation notes; do not use it.
 
 ---
 
@@ -477,8 +476,7 @@ alone doesn't provide.
 
 Some attributes appear on nearly every `c:` tag:
 
-- **`test="${expr}"`** — conditional render. If the expression is false, the tag is omitted
-  entirely. Works on both `c:` tags and plain HTML elements.
+- **`test="${expr}"`** — conditional render on supported `c:` tags. Use `c:if` or `c:div test=`; plain HTML elements with `test=` trigger server validation notes.
 - **`class`** and **`style`** — standard CSS. `class` values interpolate EL:
   `class="badge ${statusClass}"`.
 - **`id`** — standard HTML id.

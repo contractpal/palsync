@@ -1,6 +1,6 @@
 ---
 name: palbuilder-realtime
-description: Use this skill whenever a CloudPiston pal needs work that outlives one request or pushes state to the browser without polling — background jobs, WebSocket connections, progress reporting, or the combination of both for live progress UIs. Covers the JobManager (pal.getJobManager().createJob), the workflowType 11 console-system job's run() shape (c.getJob() as entry), the Monitor batch-and-reschedule time-budget loop, ClientSocket minting (pal.getClientSocketManager().createClientSocket), the message receiver pattern, sendMessage from a job holding a socketId, socket broadcasting via getSockets(), the browser-side native WebSocket client, and the progress-poll fragment alternative. Trigger when writing a workflowType 11 job, calling createJob, opening a ClientSocket, writing a WebSocket receiver, or building any long-running or real-time UI.
+description: Use for CloudPiston background jobs, workflowType 11 workers, WebSockets, progress reporting, or long-running work. Load before creating a job/socket receiver or choosing between push updates and polling.
 ---
 
 # CloudPiston Pal — Realtime (Jobs & WebSockets)

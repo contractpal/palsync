@@ -1,5 +1,5 @@
 "use strict";
-// robots.txt/sitemap.xml/llms.txt audit checks — added after the seo-core skill rewrite
+// robots.txt/sitemap.xml/llms.txt audit checks — added after the palbuilder-seo skill rewrite
 // (Gifthub Web + V2-OE-Website scan) surfaced that pal_seo_audit had no coverage for these
 // files at all, even though both reference pals hit the "homepage HTML served as robots.txt"
 // bug live (test/stage instances route every path through the workflow).

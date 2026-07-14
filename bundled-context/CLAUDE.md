@@ -47,8 +47,7 @@ structure, or ES3 details.
   WebSockets, and progress UI patterns.
 - **palbuilder-email** — email templates.
 
-`palbuilder-backend` remains only as a compatibility skill for older CRUD/API examples;
-prefer `palbuilder-workflow` + `palbuilder-data` for new workflow work.
+For older CRUD/API method notes, use `palbuilder-workflow/references/legacy-api-reference.md`; new work routes through `palbuilder-workflow` + `palbuilder-data`.
 
 Skills live in `.claude/skills/<name>/SKILL.md`, depth in `references/*.md`.
 
