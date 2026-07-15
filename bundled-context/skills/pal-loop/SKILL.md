@@ -263,6 +263,9 @@ Write a session summary at the top of EXECUTION.md's Checkpoints:
 Then report, in order: what shipped (preview URL if web); what's blocked + the exact decision
 each needs; what needs a frontier model; what's at a HUMAN GATE + the exact action; what's next.
 
+For a formal QA/eval report, use the `qa-report` skill
+(`bundled-context/skills/qa-report/SKILL.md`) and its `references/report-template.md`.
+
 ## Resuming
 
 A new session resumes by reading EXECUTION.md — nothing else; trust the file over any memory

@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const usage = require("../core/usage");
 
 const HISTORY_DIR = ".agent-work-history";
 const IGNORE_ENTRY = HISTORY_DIR + "/";
@@ -92,11 +93,39 @@ function writeRunNotes(run, lines) {
     return writeArtifactFile(run, "notes.md", body, "utf8");
 }
 
+// Harness accounting hook for model-token spend. Writes a per-workspace sidecar that
+// `palsync cost` consumes (when present); palsync never estimates when it is absent.
+// Required entry fields: model, provider, tokensIn, tokensCached, tokensOut.
+// Optional: cost (numeric), currency (default "USD"), phase ("build" | "review").
+function recordSessionCost(workspaceDir, entry) {
+    if (!workspaceDir || !entry || typeof entry.model !== "string" || typeof entry.provider !== "string") return null;
+    try {
+        const filePath = path.join(workspaceDir, usage.SESSION_COST_FILE);
+        const dir = path.dirname(filePath);
+        fs.mkdirSync(dir, { recursive: true });
+        const now = new Date().toISOString();
+        let sc;
+        try { sc = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch (e) { /* start fresh */ }
+        // readSessionCost also accepts a bare array sidecar; normalize it so the append survives
+        // JSON.stringify (an expando `.entries` on an array would be dropped on serialize).
+        if (Array.isArray(sc)) sc = { entries: sc };
+        if (!sc || typeof sc !== "object") sc = {};
+        if (!Array.isArray(sc.entries)) sc.entries = [];
+        sc.entries.push(Object.assign({}, entry, { recordedAt: now }));
+        sc.updatedAt = now;
+        fs.writeFileSync(filePath, JSON.stringify(sc, null, 2) + "\n", "utf8");
+        return filePath;
+    } catch (e) {
+        return null;
+    }
+}
+
 module.exports = {
     HISTORY_DIR,
     safeSlug,
     createWorkHistoryRun,
     writeArtifactFile,
     writeRunMetadata,
-    writeRunNotes
+    writeRunNotes,
+    recordSessionCost
 };

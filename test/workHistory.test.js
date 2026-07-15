@@ -11,8 +11,10 @@ const {
     createWorkHistoryRun,
     writeArtifactFile,
     writeRunMetadata,
-    writeRunNotes
+    writeRunNotes,
+    recordSessionCost
 } = require("../src/mcp/workHistory");
+const usage = require("../src/core/usage");
 
 test("safeSlug keeps readable feature labels filesystem-safe", () => {
     assert.equal(safeSlug("Equipment / List: mobile view"), "Equipment-List-mobile-view");
@@ -46,4 +48,43 @@ test("writeArtifactFile, metadata, and notes stay inside the run folder", () => 
     assert.equal(path.dirname(notes), run.dir);
     assert.equal(JSON.parse(fs.readFileSync(metadata, "utf8")).status, 200);
     assert.match(fs.readFileSync(notes, "utf8"), /# pal_fetch/);
+});
+
+test("recordSessionCost appends to the .palsync/session-cost.json sidecar", () => {
+    const ws = tmpWorkspace();
+    const filePath = recordSessionCost(ws, {
+        model: "haiku-4.5",
+        provider: "anthropic",
+        tokensIn: 500,
+        tokensCached: 10,
+        tokensOut: 150,
+        cost: 0.003,
+        phase: "review"
+    });
+    assert.ok(filePath);
+    assert.ok(fs.existsSync(filePath));
+    const sc = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    assert.equal(sc.entries.length, 1);
+    assert.equal(sc.entries[0].model, "haiku-4.5");
+    assert.equal(sc.entries[0].phase, "review");
+
+    recordSessionCost(ws, {
+        model: "haiku-4.5",
+        provider: "anthropic",
+        tokensIn: 600,
+        tokensCached: 20,
+        tokensOut: 200,
+        cost: 0.004
+    });
+    const sc2 = JSON.parse(fs.readFileSync(path.join(ws, usage.SESSION_COST_FILE), "utf8"));
+    assert.equal(sc2.entries.length, 2);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("recordSessionCost is best-effort and returns null for invalid input", () => {
+    const ws = tmpWorkspace();
+    assert.equal(recordSessionCost(null, { model: "x", provider: "y" }), null);
+    assert.equal(recordSessionCost(ws, { provider: "y" }), null);
+    assert.equal(recordSessionCost(ws, { model: "x" }), null);
+    fs.rmSync(ws, { recursive: true, force: true });
 });

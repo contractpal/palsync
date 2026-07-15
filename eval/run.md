@@ -143,6 +143,14 @@ is A vs B on §12 pass rate first (must hold or improve), then on tokens + tool 
 
 ---
 
+## 7. Reporting the run
+
+After scoring the run with [`eval/scoring.md`](scoring.md), write the narrative report in
+`reports/` using the `qa-report` skill (`bundled-context/skills/qa-report/SKILL.md`) and its
+`references/report-template.md`. The skill fixes the filename convention and required
+sections so benchmark rows stay comparable. Follow its rules: evidence before every claim,
+disclose reviewer==builder, and never estimate unavailable cost numbers.
+
 ## Sequencing (human steps, informs how rows get produced)
 
 1. **Baseline on current `main`** before merging any orchestration change: 5 scenarios × {frontier, cheap}. These are the canonical Run A rows.

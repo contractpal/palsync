@@ -10,10 +10,15 @@
 // "this session" = the current MCP server process. The tally is keyed by the server PID, so a new
 // server (a new session) starts a fresh count without anyone having to reset it. `palsync cost`
 // reads whatever the last/current session wrote.
+//
+// When a harness writes `.palsync/session-cost.json` (model id, provider, tokens, cost, phase),
+// `palsync cost` joins that harness-reported spend into the report; when the sidecar is absent,
+// the report says so explicitly and makes no estimate.
 const fs = require("fs");
 const path = require("path");
 
 const USAGE_FILE = ".palsync.usage.json";
+const SESSION_COST_FILE = ".palsync/session-cost.json";
 const tallies = new Map();
 const flushTimers = new Map();
 
@@ -24,6 +29,7 @@ const flushTimers = new Map();
 const SOFT_THRESHOLD_BYTES = 40 * 1024;
 
 function usagePath(workspaceDir) { return path.join(workspaceDir, USAGE_FILE); }
+function sessionCostPath(workspaceDir) { return path.join(workspaceDir, SESSION_COST_FILE); }
 
 function readJson(p) {
     try { return JSON.parse(fs.readFileSync(p, "utf8")); }
@@ -179,6 +185,84 @@ function fmtBytes(n) {
     return (n / 1024).toFixed(1) + " KB";
 }
 
+function fmtNum(n) {
+    n = Number(n);
+    return Number.isFinite(n) ? n.toLocaleString() : "—";
+}
+
+function fmtMoney(n, currency) {
+    if (n == null || n === "") return "not provided"; // never estimate an absent cost as $0
+    n = Number(n);
+    if (!Number.isFinite(n)) return "not provided";
+    return "$" + n.toFixed(4) + " " + (currency || "USD");
+}
+
+// Read the optional harness-reported model spend sidecar.
+// Schema: { entries: [{ model, provider, tokensIn, tokensCached, tokensOut, cost?, currency?, phase? }] }
+// Falls back to a bare array or a single object with the same fields.
+function readSessionCost(workspaceDir) {
+    const raw = readJson(sessionCostPath(workspaceDir));
+    if (!raw) return null;
+    let entries = [];
+    if (Array.isArray(raw)) entries = raw;
+    else if (Array.isArray(raw.entries)) entries = raw.entries;
+    else if (raw && typeof raw.model === "string" && typeof raw.provider === "string") entries = [raw];
+    entries = entries.filter(e => e && typeof e.model === "string" && typeof e.provider === "string");
+    if (entries.length === 0) return null;
+    return { entries };
+}
+
+function makeAcc() { return { tokensIn: 0, tokensCached: 0, tokensOut: 0, cost: 0, hasCost: false }; }
+function addEntry(acc, e) {
+    acc.tokensIn += Number(e.tokensIn) || 0;
+    acc.tokensCached += Number(e.tokensCached) || 0;
+    acc.tokensOut += Number(e.tokensOut) || 0;
+    // Only a genuine numeric cost counts. null/""/false are "not provided" — never estimate them as $0.
+    if (e.cost != null && e.cost !== "" && Number.isFinite(Number(e.cost))) { acc.cost += Number(e.cost); acc.hasCost = true; }
+}
+
+// Buckets every entry so the printed rows always sum to the total. build/review keep their own
+// buckets; anything else (untagged or another phase) lands in "other" rather than vanishing.
+function phaseTotals(entries) {
+    const total = makeAcc();
+    const phases = {};
+    let hasNamedPhase = false;
+    for (const e of entries) {
+        addEntry(total, e);
+        const named = e.phase === "build" || e.phase === "review";
+        if (named) hasNamedPhase = true;
+        const bucket = named ? e.phase : "other";
+        addEntry((phases[bucket] = phases[bucket] || makeAcc()), e);
+    }
+    return { total, phases, hasNamedPhase };
+}
+
+function formatSessionCost(workspaceDir) {
+    const sc = readSessionCost(workspaceDir);
+    const L = [];
+    L.push("Model-token spend (harness-reported via " + SESSION_COST_FILE + "):");
+    if (!sc) {
+        L.push("  not available — sidecar absent or empty; palsync does not estimate model spend.");
+        return L;
+    }
+    const { total, phases, hasNamedPhase } = phaseTotals(sc.entries);
+    const currency = (sc.entries[0] && sc.entries[0].currency) || "USD";
+    const costRow = (label, acc) => "  " + label.padEnd(8) + " in: " + fmtNum(acc.tokensIn).padStart(8) + "   cached: " + fmtNum(acc.tokensCached).padStart(8) + "   out: " + fmtNum(acc.tokensOut).padStart(8) + "   cost: " + (acc.hasCost ? fmtMoney(acc.cost, currency) : "not provided");
+    if (hasNamedPhase) {
+        // Print every bucket present ("other" catches untagged entries) so rows sum to the total.
+        for (const phase of ["build", "review", "other"]) {
+            if (phases[phase]) L.push(costRow(phase, phases[phase]));
+        }
+    } else {
+        for (const e of sc.entries) {
+            L.push("  " + e.model + " (" + e.provider + ")");
+            L.push("    in: " + fmtNum(e.tokensIn) + "   cached: " + fmtNum(e.tokensCached) + "   out: " + fmtNum(e.tokensOut) + "   cost: " + fmtMoney(e.cost, e.currency || currency));
+        }
+    }
+    L.push(costRow("total", total));
+    return L;
+}
+
 // Render the cost report. Always labels the numbers as palsync's OWN context contribution.
 function formatCost(workspaceDir, tools) {
     flush(workspaceDir);
@@ -205,6 +289,9 @@ function formatCost(workspaceDir, tools) {
     }
     L.push("");
 
+    L.push(...formatSessionCost(workspaceDir));
+    L.push("");
+
     L.push("Injected context block (always loaded, per session):");
     L.push("  CLAUDE.palsync.md       " + fmtBytes(inj.palsyncDoc).padStart(9));
     L.push("  skill descriptions      " + fmtBytes(inj.skills.total).padStart(9) + "   (" + Object.keys(inj.skills.perSkill).length + " skills; BODIES load on demand, not counted)");
@@ -213,8 +300,7 @@ function formatCost(workspaceDir, tools) {
     L.push(inj.overSoftThreshold
         ? "  ABOVE SOFT THRESHOLD (" + fmtBytes(SOFT_THRESHOLD_BYTES) + ") — consider trimming a skill description or a tool description."
         : "  within soft threshold (" + fmtBytes(SOFT_THRESHOLD_BYTES) + ")");
-    L.push("Model-token spend is not visible to palsync — get it from your harness/provider dashboard.");
     return L.join("\n");
 }
 
-module.exports = { recordToolCall, contentBytes, contentStats, injectedContext, formatCost, skillDescription, USAGE_FILE, SOFT_THRESHOLD_BYTES };
+module.exports = { recordToolCall, contentBytes, contentStats, injectedContext, formatCost, skillDescription, readSessionCost, USAGE_FILE, SESSION_COST_FILE, SOFT_THRESHOLD_BYTES };

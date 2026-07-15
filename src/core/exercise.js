@@ -78,6 +78,110 @@ function validateSteps(steps) {
     return errs;
 }
 
+// Common words that appear as row-level status/action buttons across many lists.
+// Absent checks against these without a row scope are brittle on multi-row lists.
+const STATUS_WORDS = ["Save", "Delete", "Edit", "Check out", "Check in", "Remove", "Update", "Submit", "Cancel", "Add", "New", "Create"];
+
+// Labels that typically appear once per record in a list, so clicking them without a row scope is almost always ambiguous.
+const DUPLICATE_ACTION_LABELS = ["Edit", "Delete", "Check out", "Check in", "Remove", "Update", "View", "Details"];
+
+// Preflight misuse linter. Returns { warnings: [...], errors: [...] } without mutating the steps.
+// Warnings allow the exercise to run; errors are treated as invalid steps.
+function lintSteps(steps) {
+    const warnings = [];
+    const errors = [];
+    let runIdDeleted = false;
+
+    function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+    function findStatusWord(a) {
+        for (const w of STATUS_WORDS) {
+            // Whole-word match; multi-word entries keep word boundaries around each word.
+            const pattern = "\\b" + w.split(/\s+/).map(escapeRegExp).join("\\b\\s+\\b") + "\\b";
+            if (new RegExp(pattern, "i").test(a)) return w;
+        }
+        return null;
+    }
+    function containsNth(sel) {
+        return /\bnth=|:nth-child|:nth-of-type|:nth-last-child/i.test(sel);
+    }
+    function nthBeneathUniqueScope(sel) {
+        // A positional selector is safe when it appears after a unique row scope marker.
+        const re = /\bnth=|:nth-child|:nth-of-type|:nth-last-child/gi;
+        for (const m of sel.matchAll(re)) {
+            if (sel.slice(0, m.index).indexOf("{{runId}}") === -1) return false;
+        }
+        return true;
+    }
+    function meaningful(v) { return String(v).trim(); }
+
+    steps.forEach((s, i) => {
+        const at = "step " + (i + 1);
+
+        // 1. Global absent checks on common status words against multi-row lists.
+        if (s.absent && !s.within) {
+            for (const a of s.absent) {
+                const word = findStatusWord(a);
+                if (word) {
+                    warnings.push(at + " absent check on status word \"" + word + "\" without a row `within` is brittle on multi-row lists; scope to the specific row or assert against a unique {{runId}} value");
+                    break;
+                }
+            }
+        }
+
+        // 2. Clicks on duplicate visible labels without `within`.
+        if (s.click && !s.within) {
+            const label = s.click.trim();
+            if (DUPLICATE_ACTION_LABELS.includes(label)) {
+                errors.push(at + " click \"" + label + "\" appears in every row; scope it with a unique row selector such as tr:has([data-label=\"Name\"]:has-text(\"Record {{runId}}\"))");
+            }
+        }
+
+        // 3. Expecting a just-deleted unique value to be present.
+        // Track whether a previous step deleted a row scoped by the unique runId value.
+        // Re-adding the value (fill it or click Add/Create/Save) clears the stickiness.
+        if (s.click && /^(?:delete|remove)$/i.test(s.click.trim())) {
+            if (s.within && s.within.indexOf("{{runId}}") !== -1) runIdDeleted = true;
+        }
+        if (runIdDeleted) {
+            const readded = (s.fill && Object.values(s.fill).some(v => String(v).indexOf("{{runId}}") !== -1)) ||
+                (s.click && /^(?:add|create|new|save|submit)$/i.test(s.click.trim()));
+            if (readded) runIdDeleted = false;
+        }
+        if (runIdDeleted && s.expect) {
+            for (const e of s.expect) {
+                if (e.indexOf("{{runId}}") !== -1) {
+                    warnings.push(at + " expects a value containing {{runId}} after a delete step scoped by {{runId}}; the deleted unique value is unlikely to be present");
+                    break;
+                }
+            }
+        }
+
+        // 4. nth= used for record actions instead of unique row scope.
+        // Positional selectors are permitted beneath a unique row scope (e.g. a cell inside a row identified by {{runId}}).
+        if (s.click && containsNth(s.click)) {
+            errors.push(at + " uses an nth/positional selector for a record action; scope the action through a unique row selector instead");
+        }
+        if (s.within && containsNth(s.within) && !nthBeneathUniqueScope(s.within)) {
+            errors.push(at + " uses an nth/positional selector for a record action; scope the action through a unique row selector instead");
+        }
+
+        // 5. Expecting typed input values as visible text.
+        // If the step also clicks an action, the assertion runs after the click and the value may
+        // be rendered; only warn for fill+expect with no click, where the value is still in markup.
+        if (s.fill && s.expect && !s.click) {
+            const filled = Object.values(s.fill).map(String).map(meaningful);
+            for (const raw of s.expect) {
+                const e = meaningful(raw);
+                if (e && filled.some(v => v === e)) {
+                    warnings.push(at + " expects a value that was just typed into an input; inputs only show it in markup until a save action renders it as visible text. Assert the value in visible rendered text after the click, or use an action that exposes it.");
+                    break;
+                }
+            }
+        }
+    });
+    return { warnings, errors };
+}
+
 // Assert one step's expect/absent against a rendered-output haystack. Fetch mode passes served
 // HTML; browser mode uses checkBrowserStep so only visible text proves behavior.
 function checkStep(haystack, step) {
@@ -118,6 +222,52 @@ function stepLabel(step) {
 // list contained several identical row actions (Edit / Check out / Delete), which could prove the
 // wrong record and produce a false PASS. Duplicate visible text is now an explicit test failure;
 // callers scope it with `within`, normally a row selector containing a unique {{runId}} value.
+
+// Best-effort helper: when the click text is ambiguous, find up to 2 unique text strings in the
+// same row/card as each duplicate and suggest them as within selectors.
+async function findWithinCandidates(scope, clickText) {
+    try {
+        // Playwright calling conventions differ: Page.evaluate(fn, arg) invokes fn(arg), while
+        // Locator.evaluate(fn, arg) invokes fn(element, arg). Accept both by taking the payload as
+        // the last argument and resolving the search root from the first only when it's an element.
+        return await scope.evaluate((...args) => {
+            const text = args[args.length - 1];
+            const root = (args[0] && typeof args[0] === "object" && typeof args[0].querySelectorAll === "function")
+                ? args[0]
+                : document.body;
+            const norm = (s) => String(s || "").replace(/\s+/g, " ").trim();
+            const all = Array.from(root.querySelectorAll("*"));
+            const matches = all.filter(el => el.children.length === 0 && norm(el.textContent) === text);
+            if (matches.length < 2) return [];
+            const rows = matches.map(el => {
+                let row = el.closest("tr, li, [data-pb-row], .row, .card");
+                return row || el.parentElement;
+            });
+            const rowTexts = rows.map(r => norm(r.textContent));
+            const candidates = [];
+            for (let i = 0; i < rows.length; i++) {
+                const walker = document.createTreeWalker(rows[i], NodeFilter.SHOW_TEXT);
+                const nodeTexts = [];
+                let n;
+                while ((n = walker.nextNode())) {
+                    const t = norm(n.textContent);
+                    if (t && t !== text && t.length >= 2 && t.length <= 80) nodeTexts.push(t);
+                }
+                for (const t of nodeTexts) {
+                    const inOneRow = rowTexts.filter(rt => rt.indexOf(t) !== -1).length === 1;
+                    if (inOneRow && !candidates.includes(t)) {
+                        candidates.push(t);
+                        if (candidates.length >= 2) return candidates;
+                    }
+                }
+            }
+            return candidates;
+        }, clickText);
+    } catch (e) {
+        return [];
+    }
+}
+
 async function resolveClickTarget(pg, step) {
     const c = step.click.trim();
     let scope = pg;
@@ -139,7 +289,11 @@ async function resolveClickTarget(pg, step) {
         return { error: "nothing to click matching \"" + c + "\"" + (step.within ? " within \"" + step.within + "\"" : "") };
     }
     if (count > 1) {
-        return { error: "click \"" + c + "\" is ambiguous (matched " + count + " elements); add within with a precise row selector such as tr:has([data-label=\"Name\"]:has-text(\"Record {{runId}}\")), use the equivalent unique card selector, or click a unique #id/.class selector" };
+        const candidates = await findWithinCandidates(scope, c);
+        const candidateHint = candidates.length
+            ? " Nearby unique text suggests: " + candidates.map(t => "tr:has-text(" + JSON.stringify(t) + ")").join(", ") + "."
+            : "";
+        return { error: "click \"" + c + "\" is ambiguous (matched " + count + " elements); add within with a precise row selector such as tr:has([data-label=\"Name\"]:has-text(\"Record {{runId}}\")), use the equivalent unique card selector, or click a unique #id/.class selector." + candidateHint };
     }
     return { locator: loc.first() };
 }
@@ -215,9 +369,12 @@ function formatScreenHints(h) {
 // Stops at the first failing step (later steps usually depend on earlier writes).
 async function runExercise(session, guid, { steps, workflow, viewport } = {}) {
     const runId = makeRunId();
-    steps = applyRunId(steps, runId);
     const problems = validateSteps(steps);
-    if (problems.length) return { ran: false, invalid: true, problems, runId };
+    const lint = lintSteps(steps);
+    const allProblems = problems.concat(lint.errors);
+    if (allProblems.length) return { ran: false, invalid: true, problems: allProblems, runId, warnings: lint.warnings };
+
+    steps = applyRunId(steps, runId);
 
     const t = await runTest(session, guid, { kind: workflow });
     if (!t.ran) {
@@ -239,6 +396,7 @@ async function runExercise(session, guid, { steps, workflow, viewport } = {}) {
 
     const res = isWeb && !needsBrowser(steps) ? await exerciseByFetch(t, steps) : await exerciseByBrowser(t, steps, viewport);
     res.runId = runId;
+    res.warnings = lint.warnings;
     return res;
 }
 
@@ -378,10 +536,12 @@ async function exerciseByBrowser(t, steps, viewport) {
 
 // Human/agent-readable report. Never includes raw HTML or credential URLs.
 function formatExercise(res) {
-    if (res.invalid) return "pal_exercise: invalid steps —\n  - " + res.problems.join("\n  - ");
+    if (res.invalid) return "pal_exercise: invalid steps —\n  - " + res.problems.join("\n  - ") +
+        (res.warnings && res.warnings.length ? "\n  warnings:\n  - " + res.warnings.join("\n  - ") : "");
     if (!res.ran) return "pal_exercise did not run: " + (res.reason || res.blocked || "unknown");
     const lines = ["pal_exercise (" + res.kind + ", " + res.mode + " mode) — " + (res.pass ? "PASS" : "FAIL at step " + res.failedStep)];
     if (res.runId) lines.push("  runId: " + res.runId + " ({{runId}} placeholders in steps were replaced with this value)");
+    if (res.warnings && res.warnings.length) lines.push("  warnings:\n  - " + res.warnings.join("\n  - "));
     for (const s of res.steps || []) {
         lines.push((s.pass ? "  ✓ " : "  ✗ ") + "step " + s.step + " [" + s.label + "]");
         if (s.error) lines.push("      error: " + s.error);
@@ -401,4 +561,4 @@ function formatExercise(res) {
     return lines.join("\n");
 }
 
-module.exports = { runExercise, validateSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, MAX_STEPS };
+module.exports = { runExercise, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, MAX_STEPS };

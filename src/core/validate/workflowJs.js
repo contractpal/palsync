@@ -94,6 +94,11 @@ const RULES = {
             "PalBuilder may compile it, but only one branch can be the intended handler and reviewers have already " +
             "missed duplicate action code in passing builds. Fix: keep one case, merge any needed statements into it, " +
             "and delete the duplicate branch."
+    },
+    fragClobber: {
+        severity: "error",
+        msg: "frag clobber: the handler sets `frag` to more than one fragment before returning, so an unconditional " +
+            "follow-up render call overwrites the validation-selected fragment."
     }
 };
 
@@ -199,6 +204,103 @@ function scanImplicitGlobals(rel, node, scope, findings) {
     }
 }
 
+// Collect every distinct string literal assigned to `frag` directly inside a function body
+// (not nested inner functions). Multi-value assignments are the signature of a handler that
+// validates, sets `frag` on failure, and returns success/failure.
+function collectFragLiteralAssignments(funcNode) {
+    const literals = new Set();
+    function visit(node) {
+        if (!node || typeof node.type !== "string") return;
+        if (node.type === "FunctionDeclaration" || node.type === "FunctionExpression" || node.type === "ArrowFunctionExpression") return;
+        if (node.type === "AssignmentExpression" && node.left && node.left.type === "Identifier" && node.left.name === "frag" &&
+            node.right && node.right.type === "Literal" && typeof node.right.value === "string") {
+            literals.add(node.right.value);
+        }
+        for (const k of Object.keys(node)) {
+            if (k === "loc" || k === "start" || k === "end" || k === "range") continue;
+            const v = node[k];
+            if (Array.isArray(v)) { for (const c of v) visit(c); }
+            else if (v && typeof v.type === "string") visit(v);
+        }
+    }
+    if (funcNode.body) visit(funcNode.body);
+    return literals;
+}
+
+function flattenStatements(stmts) {
+    const out = [];
+    for (const s of stmts || []) {
+        if (s && s.type === "BlockStatement") out.push(...flattenStatements(s.body));
+        else out.push(s);
+    }
+    return out;
+}
+
+function getTopLevelCallName(stmt) {
+    if (!stmt) return null;
+    if (stmt.type === "ExpressionStatement" && stmt.expression && stmt.expression.type === "CallExpression" &&
+        stmt.expression.callee && stmt.expression.callee.type === "Identifier") {
+        return stmt.expression.callee;
+    }
+    if (stmt.type === "VariableDeclaration") {
+        for (const d of stmt.declarations || []) {
+            if (d.init && d.init.type === "CallExpression" && d.init.callee && d.init.callee.type === "Identifier") {
+                return d.init.callee;
+            }
+        }
+    }
+    if (stmt.type === "ReturnStatement" && stmt.argument && stmt.argument.type === "CallExpression" &&
+        stmt.argument.callee && stmt.argument.callee.type === "Identifier") {
+        return stmt.argument.callee;
+    }
+    return null;
+}
+
+function checkFragClobber(rel, ast, findings) {
+    const validators = new Set();
+    const fragAssigners = new Set();
+
+    walk(ast, null, null, (node) => {
+        if (node.type === "FunctionDeclaration" && node.id && node.id.name) {
+            const literals = collectFragLiteralAssignments(node);
+            const name = node.id.name;
+            if (literals.size > 1) validators.add(name);
+            if (literals.size > 0) fragAssigners.add(name);
+        }
+    });
+
+    walk(ast, null, null, (node) => {
+        if (node.type !== "SwitchStatement") return;
+        for (const c of node.cases || []) {
+            const stmts = flattenStatements(c.consequent);
+            let triggerName = null;
+            let triggerIdx = -1;
+            for (let i = 0; i < stmts.length; i++) {
+                const s = stmts[i];
+                if (s.type === "BreakStatement" || s.type === "ReturnStatement") break;
+                const callee = getTopLevelCallName(s);
+                if (callee && validators.has(callee.name)) {
+                    triggerName = callee.name;
+                    triggerIdx = i;
+                    break;
+                }
+            }
+            if (triggerIdx === -1) continue;
+            for (let j = triggerIdx + 1; j < stmts.length; j++) {
+                const s = stmts[j];
+                if (s.type === "BreakStatement" || s.type === "ReturnStatement") break;
+                const callee = getTopLevelCallName(s);
+                if (!callee) continue;
+                const name = callee.name;
+                if (name !== triggerName && fragAssigners.has(name)) {
+                    findings.push(finding(rel, callee, "fragClobber",
+                        "Wrap the follow-up render in the handler's success return: `if (" + triggerName + "()) { " + name + "(); }`."));
+                }
+            }
+        }
+    });
+}
+
 // Lint one workflow file's source. rel is the display path (e.g. "workflows/main.js").
 function lintWorkflowJs(rel, source) {
     const findings = [];
@@ -281,6 +383,9 @@ function lintWorkflowJs(rel, source) {
             default: break;
         }
     });
+
+    checkFragClobber(rel, ast, findings);
+
     // Stable order: by line, then column.
     findings.sort((a, b) => a.line - b.line || a.column - b.column);
     return findings;

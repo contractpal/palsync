@@ -36,6 +36,10 @@ function saveList() {
 **Null-guard before every dataset read.** `pal.getDataSet("x").findRecord("col", value)`
 throws if `value` is null. Cheap to check; expensive to debug.
 
+When a mutating handler selects an error fragment and returns early, its dispatch case must
+render the list only on success: `if (saveList()) { getDashboard(); }`. An unconditional
+follow-up render defeats validation by clobbering the fragment selected by the error branch.
+
 ---
 
 ## try/catch and error payloads

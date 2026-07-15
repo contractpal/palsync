@@ -20,11 +20,12 @@ function run(controller) {
         case "getDashboard":
             getDashboard();
             break;
-        // Mutating actions re-render their list after the write:
+        // Mutating actions re-render their list ONLY on success — an unconditional
+        // re-render clobbers the frag a failed-validation branch just selected:
         // case "saveItem":
-        //     saveItem();
-        //     getDashboard();
+        //     if (saveItem()) { getDashboard(); }
         //     break;
+        // (saveItem() returns true on success, false when validation re-selected the form frag)
         default:
             getDashboard();
             break;

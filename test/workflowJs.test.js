@@ -132,3 +132,83 @@ test("lintWorkflowJs: ES3 String methods remain clean", () => {
     const src = "function run(controller) { var name = controller.getName(); return name.substring(0, name.length); }";
     assert.equal(lintWorkflowJs("workflows/main.js", src).filter(f => f.rule === "bannedMethod").length, 0);
 });
+
+test("lintWorkflowJs: unconditional render call after frag-validator handler is flagged", () => {
+    const src = [
+        "function saveItem() {",
+        "  if (c.getData().get('name') === '') {",
+        "    frag = 'form';",
+        "    return false;",
+        "  }",
+        "  frag = 'list';",
+        "  return true;",
+        "}",
+        "function getDashboard() {",
+        "  frag = 'list';",
+        "}",
+        "function run(controller) {",
+        "  var action = c.getRequest().getData().get('action');",
+        "  switch (action) {",
+        "    case 'saveItem':",
+        "      saveItem();",
+        "      getDashboard();",
+        "      break;",
+        "    default:",
+        "      getDashboard();",
+        "  }",
+        "}"
+    ].join("\n");
+    const findings = lintWorkflowJs("workflows/main.js", src).filter(f => f.rule === "fragClobber");
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].severity, "error");
+    assert.equal(findings[0].line, 17);
+    assert.match(findings[0].message, /frag clobber/i);
+    assert.match(findings[0].message, /wrap the follow-up render in the handler's success return/i);
+    assert.match(findings[0].message, /if \(saveItem\(\)\) \{ getDashboard\(\); \}/);
+});
+
+test("lintWorkflowJs: conditional render call on handler success is not flagged", () => {
+    const src = [
+        "function saveItem() {",
+        "  if (c.getData().get('name') === '') {",
+        "    frag = 'form';",
+        "    return false;",
+        "  }",
+        "  frag = 'list';",
+        "  return true;",
+        "}",
+        "function getDashboard() {",
+        "  frag = 'list';",
+        "}",
+        "function run(controller) {",
+        "  var action = c.getRequest().getData().get('action');",
+        "  switch (action) {",
+        "    case 'saveItem':",
+        "      if (saveItem()) { getDashboard(); }",
+        "      break;",
+        "  }",
+        "}"
+    ].join("\n");
+    assert.equal(lintWorkflowJs("workflows/main.js", src).filter(f => f.rule === "fragClobber").length, 0);
+});
+
+test("lintWorkflowJs: handler with only one frag assignment does not trigger fragClobber", () => {
+    const src = [
+        "function saveItem() {",
+        "  frag = 'list';",
+        "  return true;",
+        "}",
+        "function getDashboard() {",
+        "  frag = 'list';",
+        "}",
+        "function run(controller) {",
+        "  switch (action) {",
+        "    case 'saveItem':",
+        "      saveItem();",
+        "      getDashboard();",
+        "      break;",
+        "  }",
+        "}"
+    ].join("\n");
+    assert.equal(lintWorkflowJs("workflows/main.js", src).filter(f => f.rule === "fragClobber").length, 0);
+});

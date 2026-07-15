@@ -5,7 +5,7 @@
 // the report format, and the no-server invalid path of runExercise.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { runExercise, validateSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, MAX_STEPS } = require("../src/core/exercise");
+const { runExercise, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, MAX_STEPS } = require("../src/core/exercise");
 
 // ---- validateSteps ---------------------------------------------------------
 
@@ -140,6 +140,14 @@ test("runExercise: invalid steps return {invalid} without any session use", asyn
     assert.ok(res.problems.length);
 });
 
+test("runExercise: lint errors short-circuit before session use", async () => {
+    // session=null — would throw if the linter didn't reject the ambiguous click first.
+    const res = await runExercise(null, "PAL-X", { steps: [{ click: "Delete" }] });
+    assert.strictEqual(res.ran, false);
+    assert.strictEqual(res.invalid, true);
+    assert.ok(res.problems.some(p => /appears in every row/.test(p)));
+});
+
 // ---- formatExercise --------------------------------------------------------
 
 test("formatExercise: reports visible assertions, markup-only clues, screen hints, and renderError", () => {
@@ -173,4 +181,218 @@ test("formatExercise: reports visible assertions, markup-only clues, screen hint
     assert.match(passing, /PASS/);
     assert.match(passing, /runId: run123/);
     assert.match(passing, /expect "Camera": found/);
+});
+
+// ---- lintSteps -------------------------------------------------------------
+
+test("lintSteps: warns on global absent status words against multi-row lists", () => {
+    const r = lintSteps([{ absent: ["Delete"], expect: ["x"] }]);
+    assert.ok(r.warnings.some(w => /absent check.*status word.*Delete.*within/.test(w)), r.warnings.join("; "));
+    assert.strictEqual(r.errors.length, 0);
+});
+
+test("lintSteps: scoped absent status word passes", () => {
+    const r = lintSteps([{ within: 'tr:has-text("Camera")', absent: ["Delete"], expect: ["x"] }]);
+    assert.strictEqual(r.warnings.length, 0);
+    assert.strictEqual(r.errors.length, 0);
+});
+
+test("lintSteps: rejects duplicate row-action clicks without within", () => {
+    const r = lintSteps([{ click: "Delete" }]);
+    assert.ok(r.errors.some(e => /Delete.*appears in every row/.test(e)), r.errors.join("; "));
+    assert.strictEqual(r.warnings.length, 0);
+});
+
+test("lintSteps: scoped duplicate row-action click passes", () => {
+    const r = lintSteps([{ click: "Delete", within: 'tr:has-text("Camera")' }]);
+    assert.strictEqual(r.errors.length, 0);
+    assert.strictEqual(r.warnings.length, 0);
+});
+
+test("lintSteps: warns when expecting a just-deleted runId value", () => {
+    const r = lintSteps([
+        { click: "Delete", within: 'tr:has-text("Camera {{runId}}")' },
+        { expect: ["Camera {{runId}}"] }
+    ]);
+    assert.ok(r.warnings.some(w => /after a delete step.*\{\{runId\}\}/.test(w)), r.warnings.join("; "));
+    assert.strictEqual(r.errors.length, 0);
+});
+
+test("lintSteps: non-runId delete scope passes", () => {
+    const r = lintSteps([
+        { click: "Delete", within: 'tr:has-text("Camera")' },
+        { expect: ["Camera {{runId}}"] }
+    ]);
+    assert.strictEqual(r.warnings.length, 0);
+    assert.strictEqual(r.errors.length, 0);
+});
+
+test("lintSteps: rejects nth selectors for record actions", () => {
+    const r = lintSteps([{ click: "Delete", within: "tr:nth-child(2)" }]);
+    assert.ok(r.errors.some(e => /nth.*positional.*unique row selector/.test(e)), r.errors.join("; "));
+});
+
+test("lintSteps: unique row selector for record action passes", () => {
+    const r = lintSteps([{ click: "Delete", within: 'tr:has-text("Camera")' }]);
+    assert.strictEqual(r.errors.length, 0);
+    assert.strictEqual(r.warnings.length, 0);
+});
+
+test("lintSteps: warns when expecting a typed value as visible text", () => {
+    const r = lintSteps([{ fill: { name: "Camera" }, expect: ["Camera"] }]);
+    assert.ok(r.warnings.some(w => /typed into an input.*visible rendered text/.test(w)), r.warnings.join("; "));
+    assert.strictEqual(r.errors.length, 0);
+});
+
+test("lintSteps: fill + save + expect passes", () => {
+    const r = lintSteps([{ fill: { name: "Camera" }, click: "Save", expect: ["Camera"] }]);
+    assert.strictEqual(r.warnings.length, 0);
+    assert.strictEqual(r.errors.length, 0);
+});
+
+// ---- lintSteps regressions (T4 false-positive fixes) -----------------------
+
+test("lintSteps: status word substring does not warn", () => {
+    const r = lintSteps([{ absent: ["Deleted"], expect: ["x"] }]);
+    assert.strictEqual(r.warnings.length, 0);
+    assert.strictEqual(r.errors.length, 0);
+});
+
+test("lintSteps: multi-word status word matched whole", () => {
+    const r = lintSteps([{ absent: ["Please Check out"], expect: ["x"] }]);
+    assert.ok(r.warnings.some(w => /status word.*Check out/.test(w)), r.warnings.join("; "));
+    assert.strictEqual(r.errors.length, 0);
+});
+
+test("lintSteps: conjugated multi-word status word does not warn", () => {
+    const r = lintSteps([{ absent: ["Checkout"], expect: ["x"] }]);
+    assert.strictEqual(r.warnings.length, 0);
+    assert.strictEqual(r.errors.length, 0);
+});
+
+test("lintSteps: allows nth selector beneath a unique row scope", () => {
+    const r = lintSteps([{ click: "Delete", within: 'tr:has-text("Camera {{runId}}") > td:nth-child(2)' }]);
+    assert.strictEqual(r.errors.length, 0);
+    assert.strictEqual(r.warnings.length, 0);
+});
+
+test("lintSteps: still rejects nth selector without unique row scope", () => {
+    const r = lintSteps([{ click: "Delete", within: 'tr:has-text("Camera") > td:nth-child(2)' }]);
+    assert.ok(r.errors.some(e => /nth.*positional.*unique row selector/.test(e)), r.errors.join("; "));
+});
+
+test("lintSteps: delete stickiness cleared by re-adding runId value", () => {
+    const r = lintSteps([
+        { click: "Delete", within: 'tr:has-text("Camera {{runId}}")' },
+        { click: "Add" },
+        { fill: { name: "Camera {{runId}}" } },
+        { expect: ["Camera {{runId}}"] }
+    ]);
+    assert.strictEqual(r.warnings.length, 0);
+    assert.strictEqual(r.errors.length, 0);
+});
+
+test("lintSteps: typed value substring does not warn", () => {
+    const r = lintSteps([{ fill: { name: "Cam" }, expect: ["Camera"] }]);
+    assert.strictEqual(r.warnings.length, 0);
+    assert.strictEqual(r.errors.length, 0);
+});
+
+test("lintSteps: typed value superstring does not warn", () => {
+    const r = lintSteps([{ fill: { name: "Camera" }, expect: ["Cam"] }]);
+    assert.strictEqual(r.warnings.length, 0);
+    assert.strictEqual(r.errors.length, 0);
+});
+
+// ---- resolveClickTarget within candidates ----------------------------------
+
+function makeMockPageWithTable() {
+    const vm = require("node:vm");
+    const tags = new Set(["tr", "li"]);
+    function makeEl(tag, text, children = []) {
+        const el = { tag, children: children.slice(), parentElement: null, textContent: "" };
+        el.closest = (selectors) => {
+            const want = new Set(selectors.split(",").map(s => s.trim().split(/[:\[]/)[0]).filter(Boolean));
+            let p = el;
+            while (p) { if (want.has(p.tag)) return p; p = p.parentElement; }
+            return p;
+        };
+        for (const c of el.children) c.parentElement = el;
+        if (text && children.length === 0) el.textContent = text;
+        else el.textContent = children.map(c => c.textContent).join(" ");
+        return el;
+    }
+    function markLeaves(el) {
+        if (el.children.length === 0) el.isText = true;
+        for (const c of el.children) markLeaves(c);
+    }
+    function all(el) { const out = [el]; for (const c of el.children) out.push(...all(c)); return out; }
+    const root = makeEl("body", "", [
+        makeEl("table", "", [
+            makeEl("tr", "", [
+                makeEl("td", "", [makeEl("span", "Camera run123")]),
+                makeEl("td", "", [makeEl("button", "Delete")])
+            ]),
+            makeEl("tr", "", [
+                makeEl("td", "", [makeEl("span", "Projector run123")]),
+                makeEl("td", "", [makeEl("button", "Delete")])
+            ])
+        ])
+    ]);
+    markLeaves(root);
+    root.querySelectorAll = () => all(root);
+    const dom = {
+        root,
+        NodeFilter: { SHOW_TEXT: 4 },
+        createTreeWalker: (r) => ({
+            nodes: (function collect(el) {
+                let arr = [];
+                if (el.isText) arr.push({ textContent: el.textContent });
+                for (const c of el.children) arr = arr.concat(collect(c));
+                return arr;
+            })(r),
+            i: 0,
+            nextNode() { return this.nodes[this.i++] || null; }
+        })
+    };
+    dom.body = root; // Page.evaluate has no element root; the callback must reach the DOM via document.body.
+    return {
+        getByText: () => ({ async count() { return 2; }, first() { return this; } }),
+        // Faithful to Playwright Page.evaluate(fn, arg): the callback receives arg as its ONLY
+        // argument (Locator.evaluate is the one that prepends the element).
+        evaluate: (fn, arg) => {
+            const ctx = {
+                clickText: arg, document: dom, NodeFilter: dom.NodeFilter,
+                Array, String, JSON, Math, RegExp, parseInt, parseFloat, isNaN, isFinite
+            };
+            return vm.runInNewContext(`(${fn.toString()})(clickText)`, ctx);
+        }
+    };
+}
+
+test("resolveClickTarget: ambiguous click suggests nearby unique within selectors", async () => {
+    const pg = makeMockPageWithTable();
+    const out = await resolveClickTarget(pg, { click: "Delete" });
+    assert.match(out.error, /ambiguous/);
+    assert.match(out.error, /tr:has-text/);
+    const hasCandidate = out.error.includes("Camera run123") || out.error.includes("Projector run123");
+    assert.ok(hasCandidate, "error should include a nearby unique text candidate: " + out.error);
+});
+
+// ---- formatExercise warnings -----------------------------------------------
+
+test("formatExercise: reports preflight warnings on passing runs", () => {
+    const out = formatExercise({ ran: true, kind: "web", mode: "fetch", pass: true, runId: "run123",
+        warnings: ["step 1 absent check on \"Delete\" is brittle on multi-row lists"],
+        steps: [{ step: 1, label: "action=list", pass: true, expect: [{ string: "x", found: true }], absent: [] }] });
+    assert.match(out, /warnings:/);
+    assert.match(out, /brittle/);
+});
+
+test("formatExercise: reports warnings alongside invalid steps", () => {
+    const out = formatExercise({ ran: false, invalid: true, problems: ["step 1 does nothing"],
+        warnings: ["step 1 absent check on \"Delete\" is brittle"] });
+    assert.match(out, /invalid steps/);
+    assert.match(out, /warnings:/);
+    assert.match(out, /brittle/);
 });
