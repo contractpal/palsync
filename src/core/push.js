@@ -12,6 +12,7 @@ const { CloudPistonAPIManager } = require("../../lib/apiManager");
 const { resolveServerPalByGuid, refreshResolvedPal } = require("./resolve");
 const { manifestPaths } = require("./pull");
 const { validateWorkspace, lintContent } = require("./validate");
+const { cachedLint } = require("./lintCache");
 const { diffWorkspace } = require("./localDrift");
 const { prunePhantomFolderRegistrations } = require("./palFolders");
 const baseline = require("./baseline");
@@ -143,7 +144,10 @@ function gateLint(record, workspaceDir) {
     const findings = [];
     for (const rel of changed) {
         let current;
-        try { current = lintContent(rel, fs.readFileSync(path.join(workspaceDir, ...rel.split("/")), "utf8")); }
+        try {
+            const content = fs.readFileSync(path.join(workspaceDir, ...rel.split("/")), "utf8");
+            current = cachedLint(workspaceDir, { rel, content, mode: "push-gate" }, () => lintContent(rel, content));
+        }
         catch (e) { continue; }
         // warnings never block but always surface
         for (const f of current) if (f.severity === "warn") findings.push(f);
@@ -154,7 +158,9 @@ function gateLint(record, workspaceDir) {
         if (baseContent == null) { findings.push(...curErr); continue; } // added / no baseline → all new
 
         // MODIFIED with a baseline: block only on the net-new errors per rule.
-        const baseCount = errorsByRule(lintContent(rel, baseContent));
+        const baseCount = errorsByRule(cachedLint(workspaceDir,
+            { rel, content: baseContent, mode: "push-gate" },
+            () => lintContent(rel, baseContent)));
         const curCount = errorsByRule(curErr);
         for (const rule of Object.keys(curCount)) {
             const introduced = curCount[rule] - (baseCount[rule] || 0);

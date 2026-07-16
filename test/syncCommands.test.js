@@ -3,7 +3,10 @@
 // no-open by default; the standalone CLI opens unless the caller explicitly opts out.
 const { test } = require("node:test");
 const assert = require("node:assert");
+const fs = require("node:fs");
 const { parseFlags, defaultPreviewOpen, USAGE } = require("../src/cli/syncCommands");
+const contextInject = require("../src/launcher/contextInject");
+const { tmpWorkspace } = require("./helpers");
 
 test("parseFlags: preview open is tri-state", () => {
     assert.equal(parseFlags([]).open, undefined);
@@ -35,6 +38,26 @@ test("USAGE documents browser-open preview default and no-open escape hatch", ()
     assert.match(USAGE, /--no-open/);
     assert.match(USAGE, /palsync open/);
     assert.doesNotMatch(USAGE, /palsync scaffold/);
+    assert.match(USAGE, /palsync context inspect\|diff/);
+});
+
+test("context inspect and diff run fully offline", async () => {
+    const ws = tmpWorkspace();
+    await contextInject.inject(ws, { palName: "Alpha", agent: "codex" });
+    await contextInject.inject(ws, { palName: "Beta", agent: "codex" });
+    const originalLog = console.log;
+    const output = [];
+    console.log = (...args) => output.push(args.join(" "));
+    try {
+        const syncCommands = require("../src/cli/syncCommands");
+        assert.equal(await syncCommands.run("context", ["inspect", "--dir", ws]), 0);
+        assert.equal(await syncCommands.run("context", ["diff", "--dir", ws]), 0);
+    } finally {
+        console.log = originalLog;
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+    assert.match(output.join("\n"), /Locally stable prefix/);
+    assert.match(output.join("\n"), /First divergent section: sync-section/);
 });
 
 test("open runs the core preview and opens the web raw token without printing it", async () => {

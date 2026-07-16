@@ -13,7 +13,6 @@
 //   "warn"  = best-practice gap; review it
 // Every finding is a full sentence with the fix — built for the least capable agent.
 const { runPreview, openInstanceSession } = require("./preview");
-const { capRepeats } = require("./findingCap");
 const fs = require("fs");
 const path = require("path");
 
@@ -241,9 +240,7 @@ function formatSeoAudit(result) {
             if (p.fetchFailed) { lines.push(p.page + ": ERROR — page did not render (HTTP " + p.status + "). Check the route in the workflow and the pal.json entry."); continue; }
             if (!p.findings.length) continue;
             lines.push(p.page + (p.noindex ? " (noindex — warnings suppressed)" : "") + ":");
-            const { shown, more } = capRepeats(p.findings, f => f.rule);
-            for (const f of shown) lines.push("   " + (f.severity === "error" ? "ERROR" : "WARNING") + " — " + f.message);
-            for (const m of more) lines.push("   …and " + m.count + " more of the same (" + m.key + ").");
+            appendGroupedFindings(lines, p.findings);
         }
         const clean = result.pages.filter(p => !p.fetchFailed && !p.findings.length).length;
         lines.push(clean + "/" + result.pageCount + " pages fully clean.");
@@ -255,11 +252,26 @@ function formatSeoAudit(result) {
     const lines = [head];
     if (errors > 0) lines.push("ERROR = materially hurts how search engines/social scrapers handle this page; fix every error.");
     lines.push(...crawlerFileLines(result.crawlerFiles));
-    const { shown, more } = capRepeats(findings, f => f.rule);
-    for (const f of shown) lines.push("   " + (f.severity === "error" ? "ERROR" : "WARNING") + " — " + f.message);
-    for (const m of more) lines.push("   …and " + m.count + " more of the same (" + m.key + ").");
+    appendGroupedFindings(lines, findings);
     if (passed.length) lines.push("Passed: " + passed.map(p => p.message).join(" · "));
     return lines.join("\n");
+}
+
+function appendGroupedFindings(lines, findings) {
+    const byRule = new Map();
+    for (const finding of findings || []) {
+        const rule = finding.rule || "unknown-rule";
+        if (!byRule.has(rule)) byRule.set(rule, []);
+        byRule.get(rule).push(finding);
+    }
+    let grouped = 0;
+    for (const [rule, values] of byRule) {
+        const severity = values.some(value => value.severity === "error") ? "ERROR" : "WARNING";
+        const messages = Array.from(new Set(values.map(value => value.message)));
+        grouped += values.length - messages.length;
+        lines.push("   " + severity + " " + rule + " (" + values.length + ") — " + messages.join(" · "));
+    }
+    if (grouped) lines.push("   " + grouped + " duplicate finding(s) grouped.");
 }
 
 // Fetch the rendered page via the preview plumbing and audit it. Web pals only.

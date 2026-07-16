@@ -120,6 +120,8 @@ palsync spec-lint       # lint SPEC.md
 palsync task            # spec-to-ship task operations
 palsync checkpoint      # spec-to-ship checkpointing
 palsync cost            # palsync's own context footprint (offline; see below)
+palsync context inspect # stable-prefix sizes and largest generated sections
+palsync context diff    # first section changed since the previous generation
 palsync setup           # non-interactive workspace creation
 palsync upgrade         # self-update from the latest commit
 ```
@@ -129,11 +131,12 @@ All take `--dir <workspace>` (default: current directory). Semantics are identic
 
 ### `palsync cost` — context observability
 
-palsync can't see the model's token billing, so `palsync cost` reports the honest proxy: its own
-footprint. **Tool calls this session** (count + bytes returned per MCP tool, recorded live in
-`.palsync.usage.json`) and the **injected context block** (instructions + always-on skill
-descriptions + tool definitions — skill bodies load on demand and aren't counted). Measured bytes,
-not estimated tokens. A 40 KB soft-threshold flag says "this has grown, go trim something."
+palsync can't see provider cache state or model billing, so `palsync cost` reports local facts:
+raw/returned response bytes, condensation ratio, largest response, duration, lint-cache hit rate,
+and the generated context manifest. `palsync context inspect|diff` explains the locally stable
+prefix and its first changed section. Provider-reported cached tokens from a harness sidecar stay
+separate from local estimates. Set `PALSYNC_NO_CACHE=1` to bypass the content-addressed per-file
+lint cache; push-gate decisions, server state, drift, locks, and runtime results are never cached.
 
 ## Sync safety
 

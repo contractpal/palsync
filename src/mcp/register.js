@@ -5,6 +5,7 @@
 // binary and an absolute script path; no shell, no OS-specific launcher.
 const fs = require("fs/promises");
 const path = require("path");
+const { writeIfChanged } = require("../core/atomicWrite");
 
 const MCP_BIN = path.resolve(__dirname, "..", "..", "bin", "palsync-mcp.js");
 
@@ -28,7 +29,8 @@ async function mergeJsonConfig(filePath, cfg, serversKey) {
     let existing = {};
     try { existing = JSON.parse(await fs.readFile(filePath, "utf8")); } catch (e) { /* none */ }
     const merged = Object.assign({}, existing, cfg, { [serversKey]: Object.assign({}, existing[serversKey], cfg[serversKey]) });
-    await fs.writeFile(filePath, JSON.stringify(merged, null, 2), "utf8");
+    const content = JSON.stringify(merged, null, 2);
+    await writeIfChanged(filePath, content);
     return merged;
 }
 

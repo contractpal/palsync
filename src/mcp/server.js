@@ -13,7 +13,9 @@ const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio
 const { TOOLS } = require("./tools");
 const { buildContext } = require("./context");
 const usage = require("../core/usage");
+const lintCache = require("../core/lintCache");
 const pkg = require("../../package.json");
+const SERVER_INSTRUCTIONS = "PalSync runtime tools act on the LAST PUSHED server version. Push local changes with pal_push before runtime tests, previews, screenshots, fetches, exercises, tunnels, or SEO audits.";
 
 // All server diagnostics go to stderr with a consistent prefix. The agent talks over stdio
 // (stdin/stdout); stderr is the ONLY safe channel for logs, and it must be LOUD — a silent
@@ -23,12 +25,19 @@ function logErr(msg) { try { process.stderr.write("[palsync-mcp] " + msg + "\n")
 function stackOf(err) { return err && err.stack ? err.stack : String(err); }
 
 function createServer(getCtx, workspaceDir) {
-    const server = new McpServer({ name: "palsync", version: pkg.version });
+    // Keep the same rule in affected tool descriptions: Pi's MCP adapter lists tools but does not
+    // surface initialize-result instructions to the model, so server instructions are additive.
+    const server = new McpServer(
+        { name: "palsync", version: pkg.version },
+        { instructions: SERVER_INSTRUCTIONS }
+    );
     for (const t of TOOLS) {
         server.registerTool(
             t.name,
             { description: t.description, inputSchema: t.inputShape, annotations: t.annotations, title: t.title },
             async (args) => {
+                const started = process.hrtime.bigint();
+                const cacheBefore = lintCache.readStats(workspaceDir);
                 // Belt-and-suspenders: the MCP SDK already wraps handlers, but we catch here too so
                 // every tool failure is LOGGED with its tool name + full stack (the SDK swallows the
                 // stack into a terse result), and the agent still gets a clean error result.
@@ -50,14 +59,29 @@ function createServer(getCtx, workspaceDir) {
                     if (ctx && ctx.workspaceDir) {
                         const stats = usage.contentStats(content);
                         usage.recordToolCall(ctx.workspaceDir, t.name, stats.bytes, stats.tokens, {
-                            successful: t.name === "pal_exercise" && res && res.ran === true && res.pass === true
+                            successful: t.name === "pal_exercise" && res && res.ran === true && res.pass === true,
+                            rawBytes: res && res._usage && res._usage.rawBytes != null ? res._usage.rawBytes : stats.bytes,
+                            returnedBytes: stats.bytes,
+                            resultCacheHits: Math.max(0, lintCache.readStats(workspaceDir).hits - cacheBefore.hits),
+                            resultCacheMisses: Math.max(0, lintCache.readStats(workspaceDir).misses - cacheBefore.misses),
+                            durationMs: Number(process.hrtime.bigint() - started) / 1e6
                         });
                     }
                     if (res && Array.isArray(res.content)) return { content, isError: res.isError };
                     return { content };
                 } catch (err) {
                     logErr("tool '" + t.name + "' failed: " + stackOf(err));
-                    return { isError: true, content: [{ type: "text", text: "palsync tool '" + t.name + "' failed: " + (err && err.message ? err.message : String(err)) }] };
+                    const content = [{ type: "text", text: "palsync tool '" + t.name + "' failed: " + (err && err.message ? err.message : String(err)) }];
+                    const stats = usage.contentStats(content);
+                    const cacheAfter = lintCache.readStats(workspaceDir);
+                    usage.recordToolCall(workspaceDir, t.name, stats.bytes, stats.tokens, {
+                        rawBytes: stats.bytes,
+                        returnedBytes: stats.bytes,
+                        resultCacheHits: Math.max(0, cacheAfter.hits - cacheBefore.hits),
+                        resultCacheMisses: Math.max(0, cacheAfter.misses - cacheBefore.misses),
+                        durationMs: Number(process.hrtime.bigint() - started) / 1e6
+                    });
+                    return { isError: true, content };
                 }
             }
         );
@@ -137,4 +161,4 @@ async function main() {
     logErr("serving for workspace " + workspaceDir);
 }
 
-module.exports = { createServer, main, installProcessGuards, TOOLS };
+module.exports = { createServer, main, installProcessGuards, TOOLS, SERVER_INSTRUCTIONS };

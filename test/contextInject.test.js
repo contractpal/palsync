@@ -6,8 +6,33 @@ const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const ci = require("../src/launcher/contextInject");
 const { tmpWorkspace } = require("./helpers");
+
+function generatedFiles(root) {
+    const out = [];
+    function walk(dir) {
+        for (const ent of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+            const abs = path.join(dir, ent.name);
+            if (ent.isDirectory()) walk(abs);
+            else out.push(path.relative(root, abs));
+        }
+    }
+    walk(root);
+    return out;
+}
+
+function fileState(root) {
+    return Object.fromEntries(generatedFiles(root).map(rel => {
+        const abs = path.join(root, rel);
+        const bytes = fs.readFileSync(abs);
+        return [rel, {
+            sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+            mtimeMs: fs.statSync(abs).mtimeMs
+        }];
+    }));
+}
 
 // Skill frontmatter is deliberately a tiny YAML subset: a flat mapping of scalar values.
 // Reject YAML's ambiguous plain-scalar `: ` sequence, which stricter agent parsers reject.
@@ -292,4 +317,31 @@ test("inject() threads .agents/skills into the actual OpenCode/Codex/Pi AGENTS.m
         assert.ok(!md.includes(".claude/skills"), agent + " AGENTS.md must not reference .claude/skills");
         fs.rmSync(ws, { recursive: true, force: true });
     }
+});
+
+test("identical injects preserve bytes, hashes, and mtimes", async () => {
+    const ws = tmpWorkspace();
+    await ci.inject(ws, { palName: "Demo", agent: "opencode" });
+    const first = fileState(ws);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    await ci.inject(ws, { palName: "Demo", agent: "opencode" });
+    assert.deepStrictEqual(fileState(ws), first);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("changing only the pal name changes only the sync manifest section", async () => {
+    const ws = tmpWorkspace();
+    await ci.inject(ws, { palName: "Alpha", agent: "codex" });
+    const first = fileState(ws);
+    await ci.inject(ws, { palName: "Beta", agent: "codex" });
+    const second = fileState(ws);
+    const changed = Object.keys(second).filter(rel => !first[rel] || second[rel].sha256 !== first[rel].sha256);
+    assert.deepStrictEqual(changed, [".palsync/context-manifest.json", ".palsync/context-manifest.prev.json", ".palsync.usage.json", "AGENTS.md"]);
+    const previous = JSON.parse(fs.readFileSync(path.join(ws, ".palsync/context-manifest.prev.json"), "utf8"));
+    const current = JSON.parse(fs.readFileSync(path.join(ws, ".palsync/context-manifest.json"), "utf8"));
+    const sectionChanges = current.sections.filter((item, index) => item.sha256 !== previous.sections[index].sha256).map(item => item.name);
+    assert.deepStrictEqual(sectionChanges, ["sync-section"]);
+    const doc = fs.readFileSync(path.join(ws, "AGENTS.md"), "utf8");
+    assert.match(doc, /This pal \(\*\*Beta\*\*\) is connected/);
+    fs.rmSync(ws, { recursive: true, force: true });
 });

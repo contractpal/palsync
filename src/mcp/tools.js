@@ -17,6 +17,7 @@ const { runRegression } = require("../core/regression");
 const { lintSpec, formatSpecLint } = require("../core/specLint");
 const { syncDatasets } = require("../core/datasets");
 const { validateWorkspace, formatValidation: formatLint } = require("../core/validate");
+const { cachedLint } = require("../core/lintCache");
 const { openUrl } = require("../platform/openUrl");
 const {
     createWorkHistoryRun,
@@ -26,6 +27,32 @@ const {
 } = require("./workHistory");
 const fs = require("fs");
 const pathMod = require("path");
+
+function fullResultArtifact(workspaceDir, tool, value, fileName = "full-result.json") {
+    const raw = JSON.stringify(value, null, 2) + "\n";
+    try {
+        const run = createWorkHistoryRun(workspaceDir, { tool, feature: "full-result" });
+        const absolute = writeArtifactFile(run, fileName, raw, "utf8");
+        return {
+            line: "Full result: " + pathMod.relative(workspaceDir, absolute).split(pathMod.sep).join("/"),
+            rawBytes: Buffer.byteLength(raw, "utf8")
+        };
+    } catch (e) {
+        return { line: "Full result: unavailable (artifact write failed)", rawBytes: Buffer.byteLength(raw, "utf8") };
+    }
+}
+
+function withFullResult(message, artifact) {
+    return message.replace(/\s+$/, "") + "\n" + artifact.line;
+}
+
+function formatPushValidationRefusal(lint) {
+    return "REFUSED: the offline code check found errors that would break in PalBuilder, so nothing was pushed.\n\n" +
+        formatLint(lint, { context: "pre-push" }) +
+        "\n\nFix the ERROR items above and push again — each finding tells you exactly how. There is no " +
+        "bypass: force:true is drift-only and cannot push past validation; these errors describe code the " +
+        "server will reject or mis-render, and a passing pal_test does not clear them.";
+}
 
 // How much rendered HTML to inline in the tool result before pointing the agent at the full
 // file. Enough to see structure + content without flooding a small model's context.
@@ -137,8 +164,16 @@ function formatValidation(notes) {
     if (!notes || !notes.length) return "No validation notes.";
     const benign = [], blocking = [];
     for (const v of notes) (isBenignServerNote(v) ? benign : blocking).push(v);
-    const fmt = (title, xs) => title + " (" + xs.length + "):\n" +
-        xs.map(v => "   - " + (v.group || "?") + "/" + (v.object || "(general)") + ": " + v.message).join("\n");
+    const fmt = (title, xs) => {
+        const grouped = new Map();
+        for (const value of xs) {
+            const text = (value.group || "?") + "/" + (value.object || "(general)") + ": " + value.message;
+            grouped.set(text, (grouped.get(text) || 0) + 1);
+        }
+        return title + " (" + xs.length + "):\n" + Array.from(grouped, ([text, count]) =>
+            "   - " + text + (count > 1 ? " (×" + count + ")" : "")).join("\n") +
+            (xs.length > grouped.size ? "\n" + (xs.length - grouped.size) + " duplicate note(s) grouped." : "");
+    };
     const parts = [];
     if (blocking.length) parts.push(fmt("Server validation notes", blocking));
     else parts.push("No blocking server validation notes.");
@@ -312,7 +347,11 @@ const TOOLS = [
         async run(ctx) {
             const lint = validateWorkspace(ctx.workspaceDir);
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
-            return Object.assign({ ran: true }, lint, { message: formatLint(lint, { context: "validate" }) });
+            const artifact = fullResultArtifact(ctx.workspaceDir, "pal_validate", lint, "validation.json");
+            return Object.assign({ ran: true }, lint, {
+                message: withFullResult(formatLint(lint, { context: "validate" }), artifact),
+                _usage: { rawBytes: artifact.rawBytes }
+            });
         }
     },
     {
@@ -377,13 +416,15 @@ const TOOLS = [
             const msgText = serverMsgs.length
                 ? "Server message(s):\n" + serverMsgs.map(m => "   - " + (m.type ? m.type + ": " : "") + m.message).join("\n") + "\n"
                 : "";
-            const message = "Tested " + ctx.record.palName + " (" + res.kind + ").\n" +
+            let message = "Tested " + ctx.record.palName + " (" + res.kind + ").\n" +
                 verdict + "\n" + msgText + formatValidation(res.validation) + "\n" + previewMsg +
                 (res.availableKinds.length > 1 ? "\n(testable engines on this pal: " + res.availableKinds.join(", ") + ")" : "") +
                 (res.validated ? renderNotVerifiedReminder(ctx) : "");
-            // Strip the credential URL before returning — defense in depth.
-            const safe = Object.assign({}, res); delete safe._previewUrl;
-            return Object.assign(safe, { message });
+            // Strip credential-bearing fields before returning or persisting — defense in depth.
+            const safe = safeTestResult(res);
+            const artifact = fullResultArtifact(ctx.workspaceDir, "pal_test", safe, "test-result.json");
+            message = withFullResult(message, artifact);
+            return Object.assign(safe, { message, _usage: { rawBytes: artifact.rawBytes } });
         }
     },
     {
@@ -833,7 +874,11 @@ const TOOLS = [
             const dirtyNote = res.dirty
                 ? "\n⚠ You have un-pushed local changes (" + (res.dirtyFiles || []).join(", ") + "). This audit reflects the LAST PUSHED version — pal_push, then audit again to check your latest edits."
                 : "";
-            return Object.assign(res, { message: formatSeoAudit(res) + dirtyNote });
+            const artifact = fullResultArtifact(ctx.workspaceDir, "pal_seo_audit", res, "seo-audit.json");
+            return Object.assign(res, {
+                message: withFullResult(formatSeoAudit(res) + dirtyNote, artifact),
+                _usage: { rawBytes: artifact.rawBytes }
+            });
         }
     },
     {
@@ -846,7 +891,13 @@ const TOOLS = [
             let text;
             try { text = fs.readFileSync(specPath, "utf8"); }
             catch (e) { return { ran: false, message: "Could not read " + specPath + ": " + (e && e.message ? e.message : e) }; }
-            const res = lintSpec(text, { workspaceDir: pathMod.dirname(specPath) });
+            const specWorkspace = pathMod.dirname(specPath);
+            const res = cachedLint(ctx.workspaceDir, {
+                rel: pathMod.relative(ctx.workspaceDir, specPath).split(pathMod.sep).join("/"),
+                content: text,
+                mode: "spec-lint",
+                context: { hasMap: fs.existsSync(pathMod.join(specWorkspace, "MAP.md")) }
+            }, () => lintSpec(text, { workspaceDir: specWorkspace }));
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             return Object.assign({ ran: true }, res, { message: formatSpecLint(res) });
         }
@@ -904,7 +955,11 @@ const TOOLS = [
                 else if (sr.refused === "drift") detail = "the server changed since your last pull — run pal_pull first (or force:true).";
                 else if (res.serverNotes && res.serverNotes.length) detail = "the server rejected the save:\n   - " + res.serverNotes.join("\n   - ");
                 else detail = sr.refused || "unknown reason";
-                return Object.assign(res, { message: "REFUSED: could not save the dataset definitions before provisioning.\n" + detail });
+                const artifact = fullResultArtifact(ctx.workspaceDir, "pal_sync_datasets", res, "dataset-sync-refusal.json");
+                return Object.assign(res, {
+                    message: withFullResult("REFUSED: could not save the dataset definitions before provisioning.\n" + detail, artifact),
+                    _usage: { rawBytes: artifact.rawBytes }
+                });
             }
             if (res.refused === "no-datasets" || res.refused === "unknown-dataset") {
                 return Object.assign(res, { message: "REFUSED: " + res.reason });
@@ -968,12 +1023,10 @@ const TOOLS = [
             const res = await push(ctx.session, ctx.record, ctx.workspaceDir, { force: !!force, overrideLock, skipValidation: !!skipValidation });
             // Pre-push lint refusal: errors found, push not attempted.
             if (res.refused === "validation") {
+                const artifact = fullResultArtifact(ctx.workspaceDir, "pal_push", res.lint, "push-lint.json");
                 return Object.assign(res, {
-                    message: "REFUSED: the offline code check found errors that would break in PalBuilder, so nothing was pushed.\n\n" +
-                        formatLint(res.lint, { context: "pre-push" }) +
-                        "\n\nFix the ERROR items above and push again — each finding tells you exactly how. There is no " +
-                        "bypass: force:true is drift-only and cannot push past validation; these errors describe code the " +
-                        "server will reject or mis-render, and a passing pal_test does not clear them."
+                    message: withFullResult(formatPushValidationRefusal(res.lint), artifact),
+                    _usage: { rawBytes: artifact.rawBytes }
                 });
             }
             if (res.pushed) {
@@ -984,36 +1037,36 @@ const TOOLS = [
                 // Surface any pre-push WARNINGS even on success (errors can't reach here unless
                 // skipValidation forced past them — say so loudly).
                 const warnBlock = res.lint && res.lint.warnings > 0
-                    ? "\n\n⚠ Code warnings (push allowed, task not done until handled):\n" + formatLint(res.lint, { context: "validate" }) +
-                      "\n\nFix these warnings, or checkpoint why each one is safe before marking the task done."
+                    ? "\n\n⚠ Code warnings (fix or explicitly checkpoint):\n" + formatLint(res.lint, { context: "validate" })
                     : "";
                 const skippedBlock = res.skippedValidation
                     ? "\n\n⚠ You pushed past " + res.lint.errors + " validation ERROR(s) with skipValidation — the pal may not compile/render in PalBuilder:\n" + formatLint(res.lint, { context: "validate" })
                     : "";
                 const webBlock = res.webRegistered
-                    ? "\n\n🌐 Registered \"" + res.webRegistered + "\" as the pal's web workflow (this makes it a Web Pal so it can render/preview). Run pal_pull to sync the registration into pal.json."
+                    ? "\n\n🌐 Web workflow registered: \"" + res.webRegistered + "\". Run pal_pull to sync pal.json."
                     : "";
                 const consoleBlock = res.consoleRegistered
-                    ? "\n\nRegistered \"" + res.consoleRegistered + "\" as the pal's console workflow. Run pal_pull to sync the registration into pal.json."
+                    ? "\n\nConsole workflow registered: \"" + res.consoleRegistered + "\". Run pal_pull to sync pal.json."
                     : "";
                 const folderBlock = res.prunedFolders && res.prunedFolders.length
-                    ? "\n\nPruned phantom PalBuilder folder registrations from the push payload:\n" +
-                      res.prunedFolders.map(f => "   - " + f.folderType + "/" + f.name + " (" + f.reason + ")").join("\n") +
-                      "\nThese are local workspace bucket names, not real PalBuilder subfolders; removing them prevents empty folders from appearing in Pal Explorer."
+                    ? "\n\nPruned phantom folder registrations:\n" +
+                      res.prunedFolders.map(f => "   - " + f.folderType + "/" + f.name + " (" + f.reason + ")").join("\n")
                     : "";
+                const artifact = fullResultArtifact(ctx.workspaceDir, "pal_push", res, "push-result.json");
                 return Object.assign(res, {
-                    message: "Pushed " + res.filesPushed + " files" + (res.forced ? " (forced past drift)" : "") +
+                    message: withFullResult("Pushed " + res.filesPushed + " files" + (res.forced ? " (forced past drift)" : "") +
                         ". save " + (res.pushed ? "OK" : "FAILED") + ". marker=" + res.newMarker + ".\n" +
                         formatValidation(res.validation) +
                         (res.skipped && res.skipped.length
-                            ? "\n⚠ Skipped — these can't be created via palsync; make them in PalBuilder:\n" +
+                            ? "\n⚠ Skipped (create in PalBuilder):\n" +
                               res.skipped.map(s => "   - " + s.type + "/" + s.file + " (" + s.reason + ")").join("\n")
                             : "") +
                         (res.strayCreatable && res.strayCreatable.length
-                            ? "\n\n🚨 WARNING: " + res.strayCreatable.length + " file(s) on disk were NOT pushed — they have no pal.json entry, so the server never receives them:\n" +
+                            ? "\n\n🚨 Not pushed: " + res.strayCreatable.length + " file(s) lack pal.json entries:\n" +
                               res.strayCreatable.map(f => "   - " + f).join("\n") +
-                              "\nFix: add a matching entry to pal.json (copy an existing entry of the same type, e.g. a Page entry for pages/, a Fragment entry for fragments/, set string+filename to the file name), then push again. Until you do, these files exist only on disk."
-                            : "") + folderBlock + skippedBlock + warnBlock + webBlock + consoleBlock + renderNotVerifiedReminder(ctx)
+                              "\nFix: add matching pal.json entries, then push again."
+                            : "") + folderBlock + skippedBlock + warnBlock + webBlock + consoleBlock + renderNotVerifiedReminder(ctx), artifact),
+                    _usage: { rawBytes: artifact.rawBytes }
                 });
             }
             if (res.refused === "drift") {
@@ -1033,10 +1086,12 @@ const TOOLS = [
             // Show the server's validation notes — this is the real reason (e.g. a tag the server
             // doesn't allow), not a generic failure.
             if (res.refused === "save-rejected") {
+                const artifact = fullResultArtifact(ctx.workspaceDir, "pal_push", res, "push-save-rejection.json");
                 return Object.assign(res, {
-                    message: "PUSH FAILED: the server rejected the save (nothing was saved). The server's reasons:\n" +
+                    message: withFullResult("PUSH FAILED: the server rejected the save (nothing was saved). The server's reasons:\n" +
                         formatValidation(res.validation) +
-                        "\n\nFix the issue(s) above in your files and push again. (These come from the PalBuilder server, not the offline check.)"
+                        "\n\nFix the issue(s) above in your files and push again. (These come from the PalBuilder server, not the offline check.)", artifact),
+                    _usage: { rawBytes: artifact.rawBytes }
                 });
             }
             return Object.assign(res, { message: "Push failed: " + (res.reason || res.refused || "unknown") });
@@ -1112,5 +1167,12 @@ for (const tool of TOOLS) {
     if (hint) { tool.title = hint[0]; tool.annotations = hint[1]; }
 }
 
+function safeTestResult(result) {
+    const safe = Object.assign({}, result);
+    delete safe._previewUrl;
+    delete safe.rawToken;
+    return safe;
+}
+
 module.exports = { TOOLS, overridePhrase, blockedMessage, formatExpect, formatValidation, isBenignServerNote,
-    htmlRegionResult, recordScreenshotEvidence };
+    htmlRegionResult, recordScreenshotEvidence, safeTestResult, formatPushValidationRefusal };

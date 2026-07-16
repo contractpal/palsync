@@ -93,6 +93,18 @@ test("gateLint baseline-diffs unknown pal.json keys instead of treating them as 
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("cache write failure cannot hide an introduced pal.json gate error", () => {
+    const dir = tmpWorkspace({ "pal.json": JSON.stringify({ layuot: {} }) });
+    const record = { fileHashes: hashWorkspaceFiles(dir).files };
+    baseline.snapshot(dir, []);
+    fs.writeFileSync(path.join(dir, ".palsync", "cache"), "blocks cache directory creation");
+    fs.writeFileSync(path.join(dir, "pal.json"), JSON.stringify({ layuot: {}, stlyes: {} }, null, 2));
+    const lint = gateLint(record, dir);
+    assert.equal(lint.errors, 1);
+    assert.equal(lint.findings[0].rule, "unknownPalJsonKey");
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("gateLint still blocks a pre-existing cross-file contract error in current form", () => {
     const dir = tmpWorkspace({
         "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="${frag}"/></body></html>',

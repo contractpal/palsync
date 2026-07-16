@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "palsyncVersion": "0.27.0",
+  "source": "plans/context-efficiency.md measured baseline",
+  "repeatedInjectWrites": "all generated files",
+  "manifestDiagnostics": false,
+  "toolSchemaSnapshot": false,
+  "lintResultCache": false,
+  "validationFailureFormatter": "one remediation block per finding",
+  "validationSuccessFormatter": "verbose success block",
+  "usageFormatVersion": 1
+}

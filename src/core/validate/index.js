@@ -18,7 +18,7 @@ const { lintMarkup } = require("./markup");
 const { lintDatasetDef } = require("./datasetDef");
 const { lintPalJson, checkUnknownKeys } = require("./palJson");
 const { lintContracts, lintFileContracts } = require("./contracts");
-const { capRepeats } = require("../findingCap");
+const { cachedLint } = require("../lintCache");
 
 const MARKUP_EXT = new Set([".html", ".htm", ".xhtml"]);
 
@@ -77,7 +77,9 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
         const src = readUtf8(f.abs);
         if (src == null) continue;
         filesChecked++;
-        findings.push(...lintWorkflowJs(f.rel, src));
+        findings.push(...cachedLint(workspaceDir,
+            { rel: f.rel, content: src, mode: "workspace-workflow" },
+            () => lintWorkflowJs(f.rel, src)));
     }
 
     // pages/** and fragments/** (markup)
@@ -89,7 +91,12 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
             const src = readUtf8(f.abs);
             if (src == null) continue;
             filesChecked++;
-            findings.push(...lintMarkup(f.rel, src, { nonParseable, designSystemPresent }));
+            findings.push(...cachedLint(workspaceDir, {
+                rel: f.rel,
+                content: src,
+                mode: "workspace-markup",
+                context: { nonParseable: nonParseable.has(f.rel), designSystemPresent }
+            }, () => lintMarkup(f.rel, src, { nonParseable, designSystemPresent })));
         }
     }
 
@@ -101,7 +108,9 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
         const src = readUtf8(f.abs);
         if (src == null) continue;
         filesChecked++;
-        findings.push(...lintDatasetDef(f.rel, src));
+        findings.push(...cachedLint(workspaceDir,
+            { rel: f.rel, content: src, mode: "workspace-dataset" },
+            () => lintDatasetDef(f.rel, src)));
     }
 
     // pal.json manifest check (Check 2 — silent-push-skip incident).
@@ -139,21 +148,33 @@ function formatValidation(result, { context = "validate" } = {}) {
           (context === "pre-push" ? " before pushing. Each finding says exactly how to fix it; a passing pal_test does not clear these." : ".")
         : "WARNING = likely unsupported / risky; fix each warning or record a checkpoint explaining why it is safe. " +
           "No errors, so a push is allowed, but a pal-loop task is not done while warnings are silently ignored.";
-    // Collapse repeats of the same message (a workflow full of the same violation shouldn't flood
-    // context): keep the first few per file+message, count the rest. Group by file for readability.
-    const { shown, more } = capRepeats(findings, f => f.file + "\t" + f.message);
-    const byFile = {};
-    for (const f of shown) (byFile[f.file] = byFile[f.file] || []).push(f);
+    // A rule's remediation is usually repeated verbatim at every location. Print each distinct
+    // remediation once while retaining every rule code and file:line occurrence.
+    const byRule = new Map();
+    for (const finding of findings) {
+        const rule = finding.rule || "unknown-rule";
+        if (!byRule.has(rule)) byRule.set(rule, []);
+        byRule.get(rule).push(finding);
+    }
     const blocks = [];
-    for (const file of Object.keys(byFile)) {
-        const lines = byFile[file].map(f =>
-            "   " + (f.severity === "error" ? "ERROR" : "WARNING") + " " + file + ":" + f.line + " — " + f.message);
+    let grouped = 0;
+    for (const [rule, ruleFindings] of byRule) {
+        const severity = ruleFindings.some(f => f.severity === "error") ? "ERROR" : "WARNING";
+        const byMessage = new Map();
+        for (const finding of ruleFindings) {
+            if (!byMessage.has(finding.message)) byMessage.set(finding.message, []);
+            byMessage.get(finding.message).push(finding);
+        }
+        grouped += ruleFindings.length - byMessage.size;
+        const lines = [severity + " " + rule + " — " + ruleFindings.length + " finding(s)"];
+        for (const [message, messageFindings] of byMessage) {
+            lines.push("   Fix: " + message);
+            lines.push("   At: " + messageFindings.map(f => f.file + ":" + f.line).join(", "));
+        }
         blocks.push(lines.join("\n"));
     }
-    const moreBlock = more.length
-        ? "\n\n" + more.map(m => "   …and " + m.count + " more of the same (" + m.key.split("\t")[0] + ": " + m.key.split("\t")[1] + ")").join("\n")
-        : "";
-    return head + "\n" + meaning + "\n\n" + blocks.join("\n\n") + moreBlock;
+    const groupedLine = grouped ? "\n" + grouped + " repeated remediation line(s) grouped; every location retained." : "";
+    return head + "\n" + meaning + "\n\n" + blocks.join("\n\n") + groupedLine;
 }
 
 // Lint a single file's CONTENT (not read from disk), dispatching by its rel path. Used by the

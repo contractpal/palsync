@@ -14,6 +14,7 @@
 // installed build so `palsync status` can flag a workspace that needs a relaunch to refresh.
 const fs = require("fs/promises");
 const path = require("path");
+const { writeIfChanged } = require("../core/atomicWrite");
 
 const BUNDLE_DIR = path.join(__dirname, "..", "..", "bundled-context");
 const VERSION = require("../../package.json").version;
@@ -274,11 +275,16 @@ function syncSection(palName, { cli = false, skillsDir = ".claude/skills" } = {}
 // templated sync-etiquette/creation/dataset rules, under one version stamp. Written byte-for-byte to
 // CLAUDE.palsync.md (and inlined into AGENTS.md for codex/pi) — regenerated wholesale every setup, so
 // the rules live in ONE place and cannot drift between two files.
-async function buildPalsyncDoc(palName, opts = {}) {
+async function buildPalsyncParts(palName, opts = {}) {
     const skillsDir = opts.skillsDir || ".claude/skills";
     let contract = (await fs.readFile(path.join(BUNDLE_DIR, "CLAUDE.md"), "utf8")).trim();
     if (skillsDir !== ".claude/skills") contract = contract.split(".claude/skills").join(skillsDir);
-    return [stampComment(), "", contract, "", "---", "", syncSection(palName, opts)].join("\n") + "\n";
+    return { stamp: stampComment(), contract, sync: syncSection(palName, opts) };
+}
+
+async function buildPalsyncDoc(palName, opts = {}) {
+    const parts = await buildPalsyncParts(palName, opts);
+    return [parts.stamp, "", parts.contract, "", "---", "", parts.sync].join("\n") + "\n";
 }
 
 // CLAUDE.md managed block (Claude): a REAL `@import` of the owned doc — must be on its own line and
@@ -319,8 +325,7 @@ function mergeManaged(existing, block) {
 }
 
 async function copyFile(src, dest) {
-    await fs.mkdir(path.dirname(dest), { recursive: true });
-    await fs.copyFile(src, dest);
+    return writeIfChanged(dest, await fs.readFile(src));
 }
 
 async function readIfExists(p) {
@@ -333,7 +338,7 @@ async function filesUnder(dir, prefix) {
     try { entries = await fs.readdir(dir, { withFileTypes: true }); }
     catch (e) { if (e.code === "ENOENT") return []; throw e; }
     const out = [];
-    for (const ent of entries) {
+    for (const ent of entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
         const rel = path.join(prefix, ent.name);
         if (ent.isDirectory()) out.push(...await filesUnder(path.join(dir, ent.name), rel));
         else if (ent.isFile()) out.push(rel);
@@ -350,7 +355,7 @@ async function bundledSkills() {
     try { entries = await fs.readdir(skillsRoot, { withFileTypes: true }); }
     catch (e) { if (e.code === "ENOENT") return []; throw e; }
     const out = [];
-    for (const ent of entries) {
+    for (const ent of entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
         if (!ent.isDirectory()) continue;
         const dir = path.join(skillsRoot, ent.name);
         try { await fs.access(path.join(dir, "SKILL.md")); }
@@ -361,7 +366,7 @@ async function bundledSkills() {
         } catch (e) { /* no references/ — SKILL.md-only skill */ }
         out.push({ name: ent.name, assets });
     }
-    return out;
+    return out.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
 }
 
 // Copy a skill set's SKILL.md (+ companion assets) into <rootDir>/skills/<name>/.
@@ -409,15 +414,14 @@ async function syncOpenCodeCommands(workspaceDir, skills) {
             skipped.push(skill.name);
             continue;
         }
-        await fs.mkdir(commandsDir, { recursive: true });
-        await fs.writeFile(dest, openCodeSkillCommand(skill.name), "utf8");
+        await writeIfChanged(dest, openCodeSkillCommand(skill.name));
         written.push(skill.name);
     }
 
     let entries = [];
     try { entries = await fs.readdir(commandsDir, { withFileTypes: true }); }
     catch (e) { if (e.code !== "ENOENT") throw e; }
-    for (const ent of entries) {
+    for (const ent of entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
         if (!ent.isFile() || path.extname(ent.name) !== ".md") continue;
         const name = path.basename(ent.name, ".md");
         if (keep.has(name)) continue;
@@ -437,7 +441,7 @@ async function cleanOpenCodeCommands(workspaceDir) {
     try { entries = await fs.readdir(commandsDir, { withFileTypes: true }); }
     catch (e) { if (e.code === "ENOENT") return []; throw e; }
     const removed = [];
-    for (const ent of entries) {
+    for (const ent of entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
         if (!ent.isFile() || path.extname(ent.name) !== ".md") continue;
         const filePath = path.join(commandsDir, ent.name);
         const contents = await readIfExists(filePath);
@@ -469,7 +473,7 @@ async function pruneSkills(workspaceDir, rootDir, keepNames) {
     const keep = new Set(keepNames);
     const owned = await ownedSkillNames();
     const removed = [];
-    for (const ent of entries) {
+    for (const ent of entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
         if (!ent.isDirectory()) continue;
         if (owned.has(ent.name) && !keep.has(ent.name)) {
             await fs.rm(path.join(skillsDir, ent.name), { recursive: true, force: true });
@@ -488,7 +492,7 @@ async function stripManaged(filePath) {
     if (b === -1 || e === -1 || e <= b) return false;
     const rest = existing.slice(0, b) + existing.slice(e + END.length);
     if (rest.trim() === "") { await fs.rm(filePath, { force: true }); return true; }
-    await fs.writeFile(filePath, rest, "utf8");
+    await writeIfChanged(filePath, rest);
     return true;
 }
 
@@ -550,13 +554,14 @@ async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
         const openCodeCommands = agent === "opencode"
             ? await syncOpenCodeCommands(workspaceDir, skills)
             : { written: [], skipped: [], removed: await cleanOpenCodeCommands(workspaceDir) };
-        const agentsDoc = await buildPalsyncDoc(palName, { cli: agent === "pi", skillsDir: ".agents/skills" });
+        const docOpts = { cli: agent === "pi", skillsDir: ".agents/skills" };
+        const agentsDoc = await buildPalsyncDoc(palName, docOpts);
         const agentsPath = path.join(workspaceDir, "AGENTS.md");
         const existingAgents = await readIfExists(agentsPath);
         const mergedAgents = mergeManaged(existingAgents, agentsBlock(agentsDoc));
-        await fs.writeFile(agentsPath, mergedAgents.content, "utf8");
+        await writeIfChanged(agentsPath, mergedAgents.content);
         const cleanedClaude = await cleanClaudeArtifacts(workspaceDir);
-        return {
+        const result = {
             agent,
             skills: [],
             agentSkills: skillNames.map(name => path.join(".agents/skills", name, "SKILL.md")),
@@ -566,20 +571,25 @@ async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
             openCodeCommands,
             version: VERSION
         };
+        result.contextManifest = await require("../core/contextManifest").emitManifest(workspaceDir, {
+            agent, palName, skills, parts: await buildPalsyncParts(palName, docOpts)
+        });
+        return result;
     }
 
     // Claude (default).
     await copySkillSet(workspaceDir, ".claude", skills);
     const prunedClaude = await pruneSkills(workspaceDir, ".claude", keep);
-    await fs.writeFile(path.join(workspaceDir, "CLAUDE.palsync.md"),
-        await buildPalsyncDoc(palName, { cli: false }), "utf8");
+    const docOpts = { cli: false };
+    await writeIfChanged(path.join(workspaceDir, "CLAUDE.palsync.md"),
+        await buildPalsyncDoc(palName, docOpts));
     const claudePath = path.join(workspaceDir, "CLAUDE.md");
     const existingClaude = await readIfExists(claudePath);
     const mergedClaude = mergeManaged(existingClaude, importBlock());
-    await fs.writeFile(claudePath, mergedClaude.content, "utf8");
+    await writeIfChanged(claudePath, mergedClaude.content);
     const cleanedAgents = await cleanAgentsArtifacts(workspaceDir);
     const cleanedOpenCodeCommands = await cleanOpenCodeCommands(workspaceDir);
-    return {
+    const result = {
         agent,
         skills: skillNames.map(name => path.join(".claude/skills", name, "SKILL.md")),
         agentSkills: [],
@@ -590,9 +600,13 @@ async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
         cleanedOpenCodeCommands,
         version: VERSION
     };
+    result.contextManifest = await require("../core/contextManifest").emitManifest(workspaceDir, {
+        agent, palName, skills, parts: await buildPalsyncParts(palName, docOpts)
+    });
+    return result;
 }
 
-module.exports = { inject, mergeManaged, importBlock, agentsBlock, buildPalsyncDoc, syncSection,
+module.exports = { inject, mergeManaged, importBlock, agentsBlock, buildPalsyncDoc, buildPalsyncParts, syncSection,
     pruneSkills, stripManaged, cleanClaudeArtifacts, cleanAgentsArtifacts, contextStatus,
     syncOpenCodeCommands, cleanOpenCodeCommands, openCodeSkillCommand,
     BEGIN, END, OPENCODE_COMMAND_MARKER, BUNDLE_DIR, VERSION, bundledSkills, ownedSkillNames };
