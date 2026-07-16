@@ -31,6 +31,17 @@ test("recordToolCall batches calls and flushes the legacy usage file shape", () 
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
+test("recordToolCall counts successful evidence separately from failed calls", () => {
+    const ws = tmpWorkspace();
+    usage.recordToolCall(ws, "pal_exercise", 10, 3, { successful: false });
+    usage.recordToolCall(ws, "pal_exercise", 10, 3, { successful: true });
+    usage.formatCost(ws, []);
+    const tally = JSON.parse(fs.readFileSync(`${ws}/${usage.USAGE_FILE}`, "utf8"));
+    assert.equal(tally.tools.pal_exercise.calls, 2);
+    assert.equal(tally.tools.pal_exercise.successfulCalls, 1);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
 test("contentStats: text ≈ bytes/4, images priced by pixel area not payload bytes", () => {
     const text = "x".repeat(400);
     // Minimal PNG header claiming 800x500 (IHDR width/height only — enough for the parser)

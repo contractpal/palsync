@@ -49,7 +49,9 @@ function createServer(getCtx, workspaceDir) {
                     // T3: meter palsync's own context contribution (bytes + est. tokens returned to the agent).
                     if (ctx && ctx.workspaceDir) {
                         const stats = usage.contentStats(content);
-                        usage.recordToolCall(ctx.workspaceDir, t.name, stats.bytes, stats.tokens);
+                        usage.recordToolCall(ctx.workspaceDir, t.name, stats.bytes, stats.tokens, {
+                            successful: t.name === "pal_exercise" && res && res.ran === true && res.pass === true
+                        });
                     }
                     if (res && Array.isArray(res.content)) return { content, isError: res.isError };
                     return { content };

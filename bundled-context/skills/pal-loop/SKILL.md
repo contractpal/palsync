@@ -244,6 +244,8 @@ Trigger: every task `done`, or every remaining task is a `blocked`/`needs-fronti
 
 The build session may fix review findings, but it may **never convert its own fixes into PASS**.
 Every CHANGES-NEEDED cycle ends with another fresh pal-review dispatch and a new REVIEW.md verdict;
+the build-complete handoff is invalid unless REVIEW.md contains the pasted `palsync review check`
+output, including its successful-exercise count and final result.
 "the exercises pass now" is task evidence, not permission to skip the independent re-review.
 
 ## Ending a session

@@ -121,13 +121,14 @@ function contentStats(content) {
 
 // Accumulate one tool call into the per-session tally. Best-effort: instrumentation must NEVER
 // break a tool call, so every failure is swallowed. pid mismatch (or missing file) => new session.
-function recordToolCall(workspaceDir, toolName, bytes, tokens) {
+function recordToolCall(workspaceDir, toolName, bytes, tokens, { successful = false } = {}) {
     try {
         const u = tallyFor(workspaceDir);
         const t = u.tools[toolName] || { calls: 0, bytes: 0, tokens: 0 };
         t.calls += 1;
         t.bytes += bytes || 0;
         t.tokens = (t.tokens || 0) + (tokens || 0);
+        if (successful) t.successfulCalls = (t.successfulCalls || 0) + 1;
         u.tools[toolName] = t;
         u.totalCalls += 1;
         u.totalBytes += bytes || 0;

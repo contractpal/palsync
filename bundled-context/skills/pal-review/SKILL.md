@@ -142,6 +142,10 @@ pal_validate: <quoted verdict line — required; no line means the review is inv
 - [ ] <task> — addresses <finding> — success condition: <tool + check>
 ```
 
+Before writing the final verdict, run `palsync review check` from the pal workspace and paste
+its complete output into REVIEW.md. Any flag or verdict cap from that command forces
+`CHANGES-NEEDED`; do not write PASS until the check reports `result: PASS`.
+
 ## Rules
 - **Never edit code or the spec.** Findings become fix tasks for pal-loop; a *spec* problem
   (missing/contradictory requirement) is a human blocker, not a self-edit.

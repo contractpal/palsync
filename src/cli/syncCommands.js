@@ -46,6 +46,7 @@ const USAGE = [
     "  palsync exercise --steps '<json>' | --steps-file <path> [--workflow console|web|transaction] [--viewport desktop|mobile] [--keep-lock] [--dir <ws>]",
     "                                                               Exercise workflow actions end-to-end; assert expect/absent strings in the rendered result",
     "  palsync cost   [--dir <workspace>]                           palsync's own context contribution: tool calls + bytes returned + injected-block size (offline)",
+    "  palsync review check [--dir <workspace>]                    Verify REVIEW.md PASS claims have successful pal_exercise evidence (offline)",
     "  palsync regression [--keep-lock] [--dir <ws>]                Brownfield regression vs baseline/baseline.json (freshness -> validate/test/H1; caused vs inherited)",
     "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Mechanical reality-check of a SPEC.md (offline): placeholders, dead links, §8a types, §12 floor",
     "  palsync task list [--ready] [--dir <ws>]                     List EXECUTION.md tasks; --ready prints the first todo whose depends are all done",
@@ -195,6 +196,14 @@ async function run(cmd, argv) {
     const flags = parseFlags(argv);
     if (flags.help) { console.log(USAGE); return 0; }
     const dir = path.resolve(flags.dir || process.cwd());
+
+    if (cmd === "review") {
+        if (flags._positional !== "check") { console.error("Usage: palsync review check [--dir <workspace>]"); return 1; }
+        const reviewCheck = require("../core/reviewCheck");
+        const result = reviewCheck.checkWorkspace(dir);
+        console.log(reviewCheck.formatReviewCheck(result));
+        return result.ok ? 0 : 1;
+    }
 
     // validate is fully OFFLINE: no .palsync.json, no keychain, no login, no lock. It only
     // reads the local files, so it works even in a half-set-up or disconnected workspace.
