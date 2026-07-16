@@ -1,12 +1,12 @@
 ---
 name: qa-report
-description: "After a pal-loop build or benchmark/eval run, write a standardized QA report in reports/ using the provided template. Ensures consistent filename, seven required sections, evidence-before-claim, and fix-task format. Triggers: 'write a QA report', 'summarize the run', 'post-run evaluation report', or after a benchmark/eval run."
+description: "After a pal-loop build or benchmark/eval run, write a standardized QA report in /Users/apple/Documents/palsync/reports/ using the provided template. Ensures consistent filename, seven required sections, evidence-before-claim, and fix-task format. Triggers: 'write a QA report', 'summarize the run', 'post-run evaluation report', or after a benchmark/eval run."
 ---
 
 # qa-report — standardized QA report for pal-loop/eval runs
 
 Use this skill after a pal-loop build, a benchmark run, or any QA pass on a spec. It produces
-one report in `reports/` that makes cross-run comparisons possible and prevents fabricated
+one report in `/Users/apple/Documents/palsync/reports/` that makes cross-run comparisons possible and prevents fabricated
 claims by requiring evidence before every finding.
 
 ## When to use
@@ -22,14 +22,14 @@ Read these before writing:
 - `SPEC.md` and `EXECUTION.md` for the run.
 - `REVIEW.md` if pal-review ran.
 - Tool transcripts and the output of `palsync cost`.
-- Any prior report on the same spec in `reports/` or `archives/`.
+- Any prior report on the same spec in `/Users/apple/Documents/palsync/reports/` or `/Users/apple/Documents/palsync/archives/`.
 
 ## Filename convention
 
 Save the report as:
 
 ```
-reports/YYYY-MM-DD_<spec-slug>_<harness>_<model-slug>.md
+/Users/apple/Documents/palsync/reports/YYYY-MM-DD_<spec-slug>_<harness>_<model-slug>.md
 ```
 
 - `YYYY-MM-DD` — the date the run started.
@@ -37,7 +37,7 @@ reports/YYYY-MM-DD_<spec-slug>_<harness>_<model-slug>.md
 - `<harness>` — the agent/harness name (e.g. `claude-code`, `pi`, `headless`).
 - `<model-slug>` — the exact model ID used for the build (e.g. `haiku-4.5`, `sonnet-5`).
 
-Example: `reports/2026-07-14_equipment-checkout_claude-code_haiku-4.5.md`
+Example: `/Users/apple/Documents/palsync/reports/2026-07-14_equipment-checkout_claude-code_haiku-4.5.md`
 
 ## Output — one markdown report with exactly these sections
 
@@ -71,7 +71,7 @@ nothing to say, write "none" and explain why.
 - **Severity requires user impact.** A severity label must explain what the user sees or
   loses: `High` = spec-violating behavior shipped or data at risk; `Medium` = real friction
   or verification gap; `Low` = cosmetic or efficiency issue.
-- **Check for prior reports.** Before writing findings, search `reports/` and `archives/`
+- **Check for prior reports.** Before writing findings, search `/Users/apple/Documents/palsync/reports/` and `/Users/apple/Documents/palsync/archives/`
   for a prior report on the same spec. Cross-reference converging findings and note
   diverging ones.
 - **No invented numbers.** Use only what `palsync cost` or the harness sidecar exposes. If

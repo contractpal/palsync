@@ -1,12 +1,12 @@
-> Rename this file to `reports/YYYY-MM-DD_<spec-slug>_<harness>_<model-slug>.md` before filling
-> it in. Example: `reports/2026-07-14_equipment-checkout_claude-code_haiku-4.5.md`.
+> Rename this file to `/Users/apple/Documents/palsync/reports/YYYY-MM-DD_<spec-slug>_<harness>_<model-slug>.md` before filling
+> it in. Example: `/Users/apple/Documents/palsync/reports/2026-07-14_equipment-checkout_claude-code_haiku-4.5.md`.
 > Remove these two reminder lines after renaming.
 
 # Palsync QA Test-Run Report — `<SPEC_NAME>`
 
 ## Header metadata block
 
-**Report file:** `reports/YYYY-MM-DD_<spec-slug>_<harness>_<model-slug>.md`
+**Report file:** `/Users/apple/Documents/palsync/reports/YYYY-MM-DD_<spec-slug>_<harness>_<model-slug>.md`
 **Workspace:** `<workspace path>`
 **Pal:** `<pal name>` (`<pal id>`)
 **Run date:** `YYYY-MM-DD` → wall clock `HH:MM:SS – HH:MM:SS`
