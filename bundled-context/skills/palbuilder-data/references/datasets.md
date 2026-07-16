@@ -288,6 +288,29 @@ existing.setInt("count", existing.getInt("count") + 1);
 ds.updateRecord(existing);                  // persists edits
 ```
 
+### Clearing a column
+
+Clear a Date or DateTime column through its typed setter, then persist the record:
+
+```js
+existing.setDate("checkedOutAt", null);
+ds.updateRecord(existing);
+```
+
+Do **not** use `existing.set("checkedOutAt", "")`: the generic `set(name, value)` API is
+the string-serialization path, so `""` is an empty string rather than a typed Date clear.
+Do not rely on `existing.set("checkedOutAt", null)` either; it goes through that same generic
+`Object` setter. The typed API declares its value as `java.util.Date`, and its `value`
+parameter permits an empty value, which is the source-backed Date clear shape.
+
+Source: vendored server API
+`com/nxlight/framework/pal/workflow/common/DataSetter.java:11-17,35-38` defines generic `set`
+as String serialization and `setDate` with a `Date` value;
+`com/nxlight/framework/pal/api/ApiParam.java:20-27` shows omitted parameters default to
+`required = false` and `allowEmpty = true`. `com/contractpal/pal/Data.java` and `Field.java`
+model serialized pal/document metadata, not dataset-record mutation, so they do not override
+this `DataSetter` contract.
+
 ### Find-or-create (idempotent write pattern)
 
 The safe default — prevents duplicates on re-run:
