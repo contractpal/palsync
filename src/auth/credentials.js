@@ -80,6 +80,10 @@ const defaultPrompts = {
     async askPassword(username, cloudUrl) {
         const clack = await loadClack();
         return cancelGuard(clack, await clack.password({ message: "Password for " + username + " @ " + cloudUrl }));
+    },
+    onAuthFailure(username, cloudUrl, attempt, err) {
+        const detail = err && err.message ? " (" + err.message + ")" : "";
+        process.stderr.write("Login failed for " + username + detail + " — try again.\n");
     }
 };
 
@@ -98,29 +102,43 @@ async function login({ cloudUrl, username, prompts = defaultPrompts, forcePrompt
         if (!username) { username = await prompts.askUsername(); prompted = true; }
     }
 
-    // Prefer cached password; only prompt if absent or explicitly forced.
-    let password = forcePrompt ? null : keychain.getPassword(cloudUrl, username);
+    // Prefer cached password; only prompt if absent or explicitly forced. A locked/unavailable
+    // keychain (e.g. SSH session into macOS) must not block login — degrade to prompting.
+    let password = null;
+    if (!forcePrompt) {
+        try {
+            password = keychain.getPassword(cloudUrl, username);
+        } catch (err) {
+            process.stderr.write("Warning: " + err.message + " — continuing without cached credentials.\n");
+        }
+    }
 
     for (let attempt = 0; ; attempt++) {
         if (!password) {
             password = await prompts.askPassword(username, cloudUrl);
             prompted = true;
         }
+        let session;
         try {
-            const session = await authenticate(cloudUrl, username, password);
-            keychain.setCredential(cloudUrl, username, password); // persist validated creds
-            // If it was a custom cloud URL, remember it for next time.
-            addCustomCloud(cloudUrl);
-            return { session, cloudUrl, username, prompted };
+            session = await authenticate(cloudUrl, username, password);
         } catch (err) {
             // Invalid creds: drop any cached value and re-prompt the password.
-            keychain.deleteCredential(cloudUrl, username);
+            try { keychain.deleteCredential(cloudUrl, username); } catch (e) { /* keychain unavailable */ }
             password = null;
             if (typeof prompts.onAuthFailure === "function") {
-                prompts.onAuthFailure(username, cloudUrl, attempt);
+                prompts.onAuthFailure(username, cloudUrl, attempt, err);
             }
             if (attempt >= 4) throw new Error("Authentication failed after multiple attempts for " + username + " @ " + cloudUrl);
+            continue;
         }
+        try {
+            keychain.setCredential(cloudUrl, username, password); // persist validated creds
+        } catch (err) {
+            process.stderr.write("Warning: " + err.message + " — credentials will not be remembered.\n");
+        }
+        // If it was a custom cloud URL, remember it for next time.
+        addCustomCloud(cloudUrl);
+        return { session, cloudUrl, username, prompted };
     }
 }
 
