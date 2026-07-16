@@ -8,12 +8,11 @@
 // rewrite that legacy code just to land an unrelated edit; only NEW errors block. (This snapshot
 // is also the foundation a future 3-way merge needs.)
 //
-// TEXT server-tracked files are stored — the common-ancestor snapshot used by BOTH the pre-push
-// gate (which diffs the lintable subset) and the 3-way merge (which needs the ancestor of every
-// text file an agent might hand-edit: workflows, pages, fragments, scripts, styles, dataset
-// defs). Binary folders (images, attachments, documents) are skipped — a 3-way TEXT merge can't
-// reconcile bytes, and they bloat the store. It lives under .palsync/, which pull's stale-delete
-// and the workspace hash never touch.
+// TEXT server-tracked files plus pal.json are stored. The pre-push gate diffs its lintable subset,
+// including pal.json; the 3-way merge filters ancestors through isTextTracked, so the manifest
+// remains on merge's separate manifest path. Binary folders (images, attachments, documents) are
+// skipped — a 3-way TEXT merge can't reconcile bytes, and they bloat the store. The snapshot lives
+// under .palsync/, which pull's stale-delete and the workspace hash never touch.
 const fs = require("fs");
 const path = require("path");
 const { walkTree } = require("./fsWalk");
@@ -23,6 +22,7 @@ const BASELINE_DIR = path.join(".palsync", "baseline");
 // The files the GATE can lint (must match validate/index.js lintContent dispatch). A subset of
 // what's snapshotted.
 function isLintable(rel) {
+    if (rel === "pal.json") return true;
     if (rel.startsWith("workflows/") && rel.endsWith(".js")) return true;
     if ((rel.startsWith("pages/") || rel.startsWith("fragments/")) && /\.(html?|xhtml)$/i.test(rel)) return true;
     if (rel.startsWith("datasets/") && rel.endsWith(".json")) return true;
@@ -41,13 +41,19 @@ function isTextTracked(rel) {
     return TEXT_FOLDERS.indexOf(rel.slice(0, slash)) !== -1;
 }
 
+function isSnapshottable(rel) {
+    return rel === "pal.json" || isTextTracked(rel);
+}
+
 // Snapshot the current (server-equal) text files into the baseline store. Call right after a
 // pull or a successful push, when the workspace's server-tracked files match the server.
 function snapshot(workspaceDir, serverPaths) {
     const baseAbs = path.join(workspaceDir, BASELINE_DIR);
     fs.rmSync(baseAbs, { recursive: true, force: true });
-    for (const rel of serverPaths || []) {
-        if (!isTextTracked(rel)) continue;
+    // Production serverPaths contains manifest entries, not the manifest file itself.
+    const paths = new Set([...(serverPaths || []), "pal.json"]);
+    for (const rel of paths) {
+        if (!isSnapshottable(rel)) continue;
         const src = path.join(workspaceDir, ...rel.split("/"));
         let content;
         try { content = fs.readFileSync(src); }

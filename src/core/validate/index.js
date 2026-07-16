@@ -17,7 +17,7 @@ const { lintWorkflowJs } = require("./workflowJs");
 const { lintMarkup } = require("./markup");
 const { lintDatasetDef } = require("./datasetDef");
 const { lintPalJson, checkUnknownKeys } = require("./palJson");
-const { lintContracts } = require("./contracts");
+const { lintContracts, lintFileContracts } = require("./contracts");
 const { capRepeats } = require("../findingCap");
 
 const MARKUP_EXT = new Set([".html", ".htm", ".xhtml"]);
@@ -161,7 +161,9 @@ function formatValidation(result, { context = "validate" } = {}) {
 // dispatch in validateWorkspace and the isLintable set in core/baseline.
 function lintContent(rel, content) {
     if (rel.startsWith("workflows/") && rel.endsWith(".js")) return lintWorkflowJs(rel, content);
-    if ((rel.startsWith("pages/") || rel.startsWith("fragments/")) && MARKUP_EXT.has(path.extname(rel).toLowerCase())) return lintMarkup(rel, content);
+    if ((rel.startsWith("pages/") || rel.startsWith("fragments/")) && MARKUP_EXT.has(path.extname(rel).toLowerCase())) {
+        return [...lintMarkup(rel, content), ...lintFileContracts(rel, content)];
+    }
     if (rel.startsWith("datasets/") && rel.endsWith(".json")) return lintDatasetDef(rel, content);
     if (rel === "pal.json") {
         try { return checkUnknownKeys(JSON.parse(content)); } catch (e) { return []; }

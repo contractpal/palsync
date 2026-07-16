@@ -100,8 +100,16 @@ Property access is dot-notation. **`c:list` rows use direct EL** (`${row.columnN
 
 ### EL operators and helpers
 
-Used in `test=`, `c:if`, `c:when`, `selected=`, `checked=`. **`eq` compares as strings** —
-a boolean column stored as `"true"` reads `${x eq 'true'}`, not `${x}`.
+PalBuilder evaluates expressions with Apache Commons JEXL plus platform extensions. Expressions
+are used in `test=`, `c:if`, `c:when`, `selected=`, and `checked=`. **`eq` compares as strings** —
+a boolean column stored as `"true"` reads `${x eq 'true'}`, not `${x}`; retain `eq` as the house
+style for string comparisons.
+
+Use `.get('name')` for property names that are not JEXL-friendly. This is a PalBuilder extension
+and the required access form for keys containing characters such as hyphens. For example,
+`data.set("first-name", "Bob")` is read as `${info.get('first-name')}`. Do not write
+`${info.first-name}`: JEXL parses the hyphen as an operator. Delimited-string `c:list` rows use the
+same extension, such as `${row.get('col0')}`.
 
 | Operator | Meaning | Example |
 |---|---|---|
@@ -126,18 +134,6 @@ date/number/string formatting:
 ```
 
 Full formatter method list: https://secure.cloudpiston.com/cpal/cp-api/console/Formatter.html
-
-**Not available in EL:** ternary operator, arithmetic, arbitrary method calls. For a simple
-true/false value, use `c:set` instead of a ternary; prepare more complex values in the workflow.
-
-```html
-<!-- ✗ WRONG: EL ternary is unsupported -->
-<div class="${active ? 'active' : ''}">...</div>
-
-<!-- ✓ RIGHT: c:set chooses the value first -->
-<c:set name="activeClass" test="${active eq 'true'}" true="active" false="" />
-<div class="${activeClass}">...</div>
-```
 
 ---
 

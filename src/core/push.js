@@ -84,10 +84,10 @@ function errorsByRule(findings) {
     return m;
 }
 
+// Only cross-file contracts belong here. Per-file rules must use the baseline diff;
+// whole-workspace linting would re-block pre-existing errors in untouched files.
 const WORKSPACE_GATE_RULES = new Set([
-    "unknownPalJsonKey", "missingPalJsonEntry",
-    "actionRouted", "elSyntax", "hrefAction",
-    "formTag", "fragmentBinding"
+    "missingPalJsonEntry", "actionRouted", "fragmentBinding"
 ]);
 const WORKSPACE_WARNING_RULES = new Set([
     "listNameContract", "ajaxTargetExists", "destructiveConfirm"
@@ -117,9 +117,9 @@ function addWorkspaceGateFindings(workspaceDir, findings) {
 //     only on the NET-NEW errors (per rule count). Pre-existing errors a touched file already had
 //     (e.g. a legacy workflow's object literals) do NOT block — they're surfaced as informational,
 //     not a wall the agent must rewrite legacy code to clear.
-//   - Workspace-level contract errors (pal.json manifest and cross-file contracts) always block
-//     in their CURRENT form. Per-file lint cannot see "fragment expects a DataList the workflow
-//     no longer produces", which is exactly the class of false bypass weak models exploit.
+//   - Cross-file contract errors (including manifest/file registration) always block in their
+//     CURRENT form. Per-file lint cannot see "fragment expects a DataList the workflow no longer
+//     produces", which is exactly the class of false bypass weak models exploit.
 //   - No per-file hash baseline (fresh/legacy record): lint the whole workspace (conservative).
 //   - Baseline hashes but no baseline CONTENT (pre-feature workspace): block on all errors in
 //     changed files (the prior behavior) — we can't tell new from old without the content.
@@ -128,6 +128,9 @@ function gateLint(record, workspaceDir) {
     if (!record || !record.fileHashes) return validateWorkspace(workspaceDir); // no diff possible
     const d = diffWorkspace(record, workspaceDir);
     const changed = [...d.added, ...d.changed];
+    // localDrift reports manifest edits separately because pull treats them specially. The push
+    // gate still needs pal.json in its per-file baseline diff (e.g. unknownPalJsonKey).
+    if (d.manifestChanged) changed.push("pal.json");
     if (!changed.length) {
         const findings = [];
         addWorkspaceGateFindings(workspaceDir, findings);

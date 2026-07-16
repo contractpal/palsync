@@ -348,8 +348,8 @@ uses `data-label`; never hide critical status or destructive context.
 </div>
 ```
 
-Prepare exact numbered links in the workflow; Palbuilder EL has no ternary operator, so render
-`aria-current="page"` only on the active `.pb-page-btn`.
+Prepare exact numbered links in the workflow so only the active `.pb-page-btn` renders
+`aria-current="page"`.
 
 ## 14. Stat Cards
 ```html

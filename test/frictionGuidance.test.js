@@ -101,7 +101,7 @@ test("pal_exercise guidance uses precise row scope and teaches the full CRUD flo
         "delete verification must assert the deleted value is absent");
 });
 
-test("pal authoring guidance prevents empty fragments and invalid EL ternaries", () => {
+test("pal authoring guidance prevents empty fragments and documents platform JEXL access", () => {
     const contract = read("bundled-context/CLAUDE.md") + "\n" + read("src/launcher/contextInject.js");
     const frontend = read("bundled-context/skills/palbuilder-frontend/SKILL.md");
 
@@ -109,10 +109,10 @@ test("pal authoring guidance prevents empty fragments and invalid EL ternaries",
         "the injected contract must warn that empty fragment content fails");
     mustMatch(contract, /<c:ignore\s+xmlns:c=["']contractpal["']\s*>/i,
         "the injected contract must provide a valid fragment stub");
-    mustMatch(frontend, /ternary[^\n]*(?:not available|unsupported|never)|(?:not available|unsupported)[^\n]*ternary/i,
-        "frontend guidance must forbid EL ternaries");
-    mustMatch(frontend, /<c:set[^>]*test=["']\$\{/i,
-        "frontend guidance must show c:set test/true/false as the ternary replacement");
+    mustMatch(frontend, /Apache Commons JEXL[^\n]*platform extensions/i,
+        "frontend guidance must identify the actual expression engine");
+    mustMatch(frontend, /data\.set\(["']first-name["'][\s\S]{0,240}\$\{info\.get\(["']first-name["']\)\}/i,
+        "frontend guidance must show the required accessor for non-JEXL-friendly keys");
 });
 
 test("pal-level manifest guidance no longer dead-ends on data and datalists", () => {

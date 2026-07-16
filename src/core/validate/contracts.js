@@ -320,44 +320,8 @@ function checkActionRouted(markupFiles, workflowFiles, actions, findings) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Check 4 — EL syntax in test="..." attributes.
+// Check 4 — EL wrapping in test="..." attributes.
 // ---------------------------------------------------------------------------------------------
-
-const EL_OP_MAP = [
-    [/==/, "eq"], [/!=/, "ne"], [/>=/, "ge"], [/<=/, "le"], [/&gt;=/, "ge"], [/&lt;=/, "le"],
-    [/&gt;/, "gt"], [/&lt;/, "lt"], [/>/, "gt"], [/</, "lt"],
-];
-
-const EL_ATTRS = new Set(["class", "style", "value", "test", "selected", "checked"]);
-
-function hasUnquotedQuestion(body) {
-    let quote = null;
-    for (let i = 0; i < body.length; i++) {
-        const ch = body[i];
-        if (quote) {
-            if (ch === quote && body[i - 1] !== "\\") quote = null;
-        } else if (ch === "'" || ch === '"') {
-            quote = ch;
-        } else if (ch === "?") {
-            return true;
-        }
-    }
-    return false;
-}
-
-function checkElTernary(value, label, rel, src, pos, findings) {
-    const re = /\$\{([^}]*)\}/g;
-    let match;
-    while ((match = re.exec(String(value))) !== null) {
-        if (!hasUnquotedQuestion(match[1])) continue;
-        findings.push({
-            file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "elSyntax",
-            message: label + "=\"" + value + "\" — EL has no ternary operator; the ? inside ${...} cannot be evaluated. " +
-                "Fix: use <c:set name=\"value\" test=\"${condition}\" true=\"yes\" false=\"no\"/> to pick the value first, then bind the c:set variable. " +
-                "See the palbuilder-frontend skill, \"c:set\" and \"EL operators\"."
-        });
-    }
-}
 
 function mechanicalBareFix(value) {
     let m;
@@ -371,10 +335,6 @@ function mechanicalBareFix(value) {
 }
 
 function checkElSyntax(tag, rel, src, pos, findings) {
-    for (const a of tag.attrs) {
-        const attrName = a.name.toLowerCase();
-        if (EL_ATTRS.has(attrName)) checkElTernary(a.value, attrName, rel, src, pos, findings);
-    }
     const value = attr(tag, "test");
     if (value == null) return;
 
@@ -385,49 +345,9 @@ function checkElSyntax(tag, rel, src, pos, findings) {
             message: "test=\"" + value + "\" — test must be an EL expression: test=\"${...}\". A bare (non-${}) value is " +
                 "never evaluated as EL and renders as a literal string, which is always truthy. " +
                 (fixed ? "Fix: test=\"" + fixed + "\"." :
-                    "Fix: wrap the whole expression in ${...} and use the documented operators (eq ne gt lt ge le empty ! and or).") +
+                    "Fix: wrap the whole expression in ${...}.") +
                 " See the palbuilder-frontend skill, \"EL operators\"."
         });
-        return;
-    }
-
-    const inner = /\$\{([^}]*)\}/.exec(value);
-    const body = inner ? inner[1] : value;
-
-    if (/\.\w+\(/.test(body)) {
-        const bareEquiv = mechanicalBareFix(body.replace(/^\$\{|\}$/g, ""));
-        findings.push({
-            file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "elSyntax",
-            message: "test=\"" + value + "\" — method-call syntax ('" + /\.\w+\(/.exec(body)[0].slice(1) +
-                "...') is not available in PalBuilder's EL; there is no ternary/arithmetic/method-call support. " +
-                (bareEquiv ? "Fix: test=\"" + bareEquiv + "\"." :
-                    "Fix: compute the value in the workflow and bind a plain value, or use the `empty` operator.") +
-                " See the palbuilder-frontend skill, \"EL operators\"."
-        });
-        return;
-    }
-
-    for (const [re, elOp] of EL_OP_MAP) {
-        if (re.test(body)) {
-            findings.push({
-                file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "elSyntax",
-                message: "test=\"" + value + "\" — '" + re.source.replace(/\\/g, "") + "' is not an EL operator. " +
-                    "PalBuilder's EL only supports eq/ne/gt/lt/ge/le/empty/!/and/or (string compare). " +
-                    "Fix: replace it with '" + elOp + "' (e.g. test=\"${" + body.replace(re, " " + elOp + " ").replace(/\s+/g, " ").trim() + "}\"). " +
-                    "See the palbuilder-frontend skill, \"EL operators\"."
-            });
-            return;
-        }
-    }
-}
-
-function checkTextElTernaries(rel, src, findings) {
-    const re = /\$\{([^}]*)\}/g;
-    let match;
-    while ((match = re.exec(src)) !== null) {
-        const before = src.slice(0, match.index);
-        if (before.lastIndexOf("<") > before.lastIndexOf(">")) continue;
-        if (hasUnquotedQuestion(match[1])) checkElTernary(match[0], "text", rel, src, match.index, findings);
     }
 }
 
@@ -1013,6 +933,16 @@ function checkStructuralClasses(markupFiles, findings) {
 // Entry point.
 // ---------------------------------------------------------------------------------------------
 
+function lintFileContracts(rel, src) {
+    const findings = [];
+    scanTags(src, (tag, pos) => {
+        checkElSyntax(tag, rel, src, pos, findings);
+        checkHrefAction(tag, rel, src, pos, findings);
+        checkFormTag(tag, rel, src, pos, findings);
+    });
+    return findings;
+}
+
 function lintContracts(workspaceDir) {
     const findings = [];
     const markupFiles = collectMarkupFiles(workspaceDir);
@@ -1029,13 +959,10 @@ function lintContracts(workspaceDir) {
     checkStructuralClasses(markupFiles, findings);
 
     for (const { rel, src } of markupFiles) {
+        findings.push(...lintFileContracts(rel, src));
         scanTags(src, (tag, pos) => {
-            checkElSyntax(tag, rel, src, pos, findings);
-            checkHrefAction(tag, rel, src, pos, findings);
-            checkFormTag(tag, rel, src, pos, findings);
             checkDestructiveConfirm(tag, rel, src, pos, findings);
         });
-        checkTextElTernaries(rel, src, findings);
         checkStaleVendor(rel, src, findings);
     }
 
@@ -1060,4 +987,4 @@ function lintContracts(workspaceDir) {
     return findings;
 }
 
-module.exports = { lintContracts };
+module.exports = { lintContracts, lintFileContracts };

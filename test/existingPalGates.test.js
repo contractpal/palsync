@@ -89,5 +89,6 @@ test("platform dialect guidance covers the equipment-checkout failure modes", ()
         assert.match(skill, /outside `#cp-root`/);
     }
 
-    assert.match(frontend, /use `c:set` instead of a ternary/);
+    assert.match(frontend, /Apache Commons JEXL/);
+    assert.match(frontend, /\$\{info\.get\('first-name'\)\}/);
 });

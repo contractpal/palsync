@@ -119,57 +119,33 @@ test("default-routed list action is accepted as the conventional return-to-list 
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("EL syntax — '==' inside ${...}", () => {
+test("EL expression bodies use JEXL and platform extensions without local syntax checks", () => {
     const dir = tmpWorkspace({
         "workflows/console.js": "function run(controller) {}",
-        "fragments/row.html": "<c:ignore xmlns:c=\"contractpal\"><c:if test=\"${a == b}\">x</c:if></c:ignore>",
+        "fragments/row.html": [
+            "<c:ignore xmlns:c=\"contractpal\">",
+            "  <c:if test=\"${opt.get('col0') eq 'Other'}\">delimited row</c:if>",
+            "  <c:if test=\"${info.get('first-name')}\">hyphenated key</c:if>",
+            "  <c:if test=\"${a == 'b'}\">symbolic operator</c:if>",
+            "  <div class=\"${active ? 'active' : ''}\">${label ? 'yes' : 'no'}</div>",
+            "</c:ignore>",
+        ].join("\n"),
     });
     const findings = lintContracts(dir).filter(f => f.rule === "elSyntax");
-    assert.strictEqual(findings.length, 1);
-    assert.strictEqual(findings[0].severity, "error");
-    assert.match(findings[0].message, /not an EL operator/);
-    assert.match(findings[0].message, /'eq'/);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("EL syntax — method-call syntax .count() inside ${...}", () => {
-    const dir = tmpWorkspace({
-        "workflows/console.js": "function run(controller) {}",
-        "fragments/row.html": "<c:ignore xmlns:c=\"contractpal\"><c:if test=\"${items.count() == 0}\">x</c:if></c:ignore>",
-    });
-    const findings = lintContracts(dir).filter(f => f.rule === "elSyntax");
-    assert.strictEqual(findings.length, 1);
-    assert.strictEqual(findings[0].severity, "error");
-    assert.match(findings[0].message, /method-call syntax/);
+    assert.deepStrictEqual(findings, []);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("EL syntax — bare test with no ${ at all", () => {
     const dir = tmpWorkspace({
         "workflows/console.js": "function run(controller) {}",
-        "fragments/row.html": "<c:ignore xmlns:c=\"contractpal\"><c:if test=\"editMode\">x</c:if></c:ignore>",
+        "fragments/row.html": "<c:ignore xmlns:c=\"contractpal\"><c:if test=\"foo == 'bar'\">x</c:if></c:ignore>",
     });
     const findings = lintContracts(dir).filter(f => f.rule === "elSyntax");
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /test must be an EL expression/);
-    assert.match(findings[0].message, /\$\{editMode\}/);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("EL syntax — ternary in class is an error, while quoted ? is clean", () => {
-    const dir = tmpWorkspace({
-        "fragments/row.html": [
-            "<c:ignore xmlns:c=\"contractpal\">",
-            "  <div class=\"pb-input ${!empty(nameError) ? 'is-error' : ''}\">${label ? 'yes' : 'no'}</div>",
-            "  <p class=\"${path eq '?action=save'}\">ok</p>",
-            "</c:ignore>",
-        ].join("\n"),
-    });
-    const findings = lintContracts(dir).filter(f => f.rule === "elSyntax");
-    assert.equal(findings.length, 2);
-    assert.ok(findings.every(f => f.severity === "error"));
-    assert.ok(findings.every(f => /no ternary/.test(f.message)));
+    assert.match(findings[0].message, /\$\{foo eq 'bar'\}/);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -216,7 +192,7 @@ test("design-system convention files are exempt from bypass warnings", () => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("clean EL attributes and text produce no ternary findings", () => {
+test("clean EL attributes and text produce no EL syntax findings", () => {
     const dir = tmpWorkspace({
         "fragments/row.html": "<c:ignore xmlns:c=\"contractpal\"><p class=\"${active}\">${name}</p></c:ignore>",
     });
