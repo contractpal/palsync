@@ -5,7 +5,7 @@
 // the report format, and the no-server invalid path of runExercise.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { runExercise, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, MAX_STEPS } = require("../src/core/exercise");
+const { runExercise, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, browserFailureMessage, MAX_STEPS } = require("../src/core/exercise");
 
 // ---- validateSteps ---------------------------------------------------------
 
@@ -377,6 +377,19 @@ test("resolveClickTarget: ambiguous click suggests nearby unique within selector
     assert.match(out.error, /tr:has-text/);
     const hasCandidate = out.error.includes("Camera run123") || out.error.includes("Projector run123");
     assert.ok(hasCandidate, "error should include a nearby unique text candidate: " + out.error);
+});
+
+test("resolveClickTarget: missing click reports the exact resolved Playwright locator", async () => {
+    const pg = { getByText() { return { async count() { return 0; } }; } };
+    const out = await resolveClickTarget(pg, { click: "Save" });
+    assert.match(out.error, /resolved Playwright locator: getByText\("Save", \{ exact: true \}\)/);
+});
+
+test("browserFailureMessage distinguishes a timed-out login redirect from a genuine timeout", () => {
+    const timeout = new Error("page.goto: Timeout 30000ms exceeded.");
+    assert.equal(browserFailureMessage(timeout, { url: () => "https://cloud.example/login" }, false, "console"),
+        "console session expired / not authenticated — re-auth and retry");
+    assert.match(browserFailureMessage(timeout, { url: () => "https://cloud.example/pal/123" }, false, "console"), /Timeout 30000ms exceeded/);
 });
 
 // ---- formatExercise warnings -----------------------------------------------

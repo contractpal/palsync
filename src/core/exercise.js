@@ -271,6 +271,8 @@ async function findWithinCandidates(scope, clickText) {
 async function resolveClickTarget(pg, step) {
     const c = step.click.trim();
     let scope = pg;
+    const resolved = (step.within ? "locator(" + JSON.stringify(step.within) + ")." : "") +
+        (/^[#.]/.test(c) ? "locator(" + JSON.stringify(c) + ")" : "getByText(" + JSON.stringify(c) + ", { exact: true })");
     if (step.within) {
         const scopes = pg.locator(step.within);
         const scopeCount = await scopes.count();
@@ -286,20 +288,35 @@ async function resolveClickTarget(pg, step) {
     const loc = /^[#.]/.test(c) ? scope.locator(c) : scope.getByText(c, { exact: true });
     const count = await loc.count();
     if (count === 0) {
-        return { error: "nothing to click matching \"" + c + "\"" + (step.within ? " within \"" + step.within + "\"" : "") };
+        return { error: "nothing to click matching \"" + c + "\"" + (step.within ? " within \"" + step.within + "\"" : "") + "; resolved Playwright locator: " + resolved };
     }
     if (count > 1) {
         const candidates = await findWithinCandidates(scope, c);
         const candidateHint = candidates.length
             ? " Nearby unique text suggests: " + candidates.map(t => "tr:has-text(" + JSON.stringify(t) + ")").join(", ") + "."
             : "";
-        return { error: "click \"" + c + "\" is ambiguous (matched " + count + " elements); add within with a precise row selector such as tr:has([data-label=\"Name\"]:has-text(\"Record {{runId}}\")), use the equivalent unique card selector, or click a unique #id/.class selector." + candidateHint };
+        return { error: "click \"" + c + "\" is ambiguous (matched " + count + " elements); resolved Playwright locator: " + resolved + ". Add within with a precise row selector such as tr:has([data-label=\"Name\"]:has-text(\"Record {{runId}}\")), use the equivalent unique card selector, or click a unique #id/.class selector." + candidateHint };
     }
     return { locator: loc.first() };
 }
 
 function needsBrowser(steps) {
     return steps.some(s => s.fill || s.click);
+}
+
+function isLoginRedirect(url) {
+    try { return /(?:^|\/)login(?:\/|\b)|\bgetlogin\b/i.test(new URL(url).pathname); }
+    catch (e) { return false; }
+}
+
+function browserFailureMessage(error, page, isWeb, kind) {
+    let landed = "";
+    try { landed = page && page.url ? page.url() : ""; } catch (e) { /* unavailable */ }
+    if (!isWeb && isLoginRedirect(landed)) {
+        return "console session expired / not authenticated — re-auth and retry";
+    }
+    const msg = (error && error.message ? error.message.split("\n")[0] : String(error)).replace(/https?:\/\/\S+/g, "<url>");
+    return (isWeb ? "Could not drive the web page" : "Could not drive the authenticated " + kind + " screen") + " (" + msg + ")";
 }
 
 async function screenFingerprint(pg) {
@@ -450,16 +467,21 @@ async function exerciseByBrowser(t, steps, viewport) {
                  reason: "Playwright is installed but its Chromium browser is not — install it with: npx playwright install chromium (" + (e && e.message ? e.message.split("\n")[0] : String(e)) + ")" };
     }
     const results = [];
-    let bctx;
+    let bctx, pg;
     try {
         bctx = await browser.newContext({ viewport: vp });
-        const pg = await bctx.newPage();
+        pg = await bctx.newPage();
         const acceptedDialogs = [];
         pg.on("dialog", async (dialog) => {
             acceptedDialogs.push(dialog.type() + (dialog.message() ? ": " + dialog.message() : ""));
             try { await dialog.accept(); } catch (e) { /* dialog may already be gone */ }
         });
         await pg.goto(target, { waitUntil: "networkidle" });
+        if (!isWeb && isLoginRedirect(pg.url())) {
+            return { ran: false, kind: t.kind,
+                     reason: "console session expired / not authenticated — re-auth and retry",
+                     steps: results };
+        }
         // Web base for page/action navigation — same derivation screenshot.js uses.
         let base = null;
         if (isWeb) {
@@ -504,8 +526,7 @@ async function exerciseByBrowser(t, steps, viewport) {
                     await waitForScreenSettle(pg, before);
                 }
             } catch (e) {
-                const msg = (e && e.message ? e.message.split("\n")[0] : String(e)).replace(/https?:\/\/\S+/g, "<url>");
-                return fail(msg);
+                return fail(browserFailureMessage(e, pg, isWeb, t.kind));
             }
             let text = "";
             try { text = await pg.innerText("body"); } catch (e) { /* keep "" */ }
@@ -524,9 +545,8 @@ async function exerciseByBrowser(t, steps, viewport) {
         }
         return { ran: true, kind: t.kind, mode: "browser", pass: true, steps: results };
     } catch (e) {
-        const msg = (e && e.message ? e.message.split("\n")[0] : String(e)).replace(/https?:\/\/\S+/g, "<url>");
         return { ran: false, kind: t.kind,
-                 reason: (isWeb ? "Could not drive the web page" : "Could not drive the authenticated " + t.kind + " screen") + " (" + msg + ")",
+                 reason: browserFailureMessage(e, pg, isWeb, t.kind),
                  steps: results };
     } finally {
         try { if (bctx) await bctx.close(); }
@@ -561,4 +581,4 @@ function formatExercise(res) {
     return lines.join("\n");
 }
 
-module.exports = { runExercise, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, MAX_STEPS };
+module.exports = { runExercise, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, browserFailureMessage, MAX_STEPS };
