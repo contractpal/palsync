@@ -1,6 +1,6 @@
 ---
 name: palbuilder-frontend
-description: Use when writing CloudPiston pages, fragments, forms, c: tags, XHTML/EL binding, navigation, modals, or browser scripts. Load before changing frontend markup or relying on a c: attribute; its references define supported tags and page/fragment boundaries.
+description: "Use when writing CloudPiston pages, fragments, forms, c: tags, XHTML/EL binding, navigation, modals, or browser scripts. Load before changing frontend markup or relying on a c: attribute; its references define supported tags and page/fragment boundaries."
 ---
 
 # CloudPiston Pal — Frontend

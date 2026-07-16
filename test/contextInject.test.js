@@ -9,6 +9,52 @@ const path = require("node:path");
 const ci = require("../src/launcher/contextInject");
 const { tmpWorkspace } = require("./helpers");
 
+// Skill frontmatter is deliberately a tiny YAML subset: a flat mapping of scalar values.
+// Reject YAML's ambiguous plain-scalar `: ` sequence, which stricter agent parsers reject.
+function parseSkillFrontmatter(skill, name) {
+    const match = skill.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+    assert.ok(match, `${name} has delimited YAML frontmatter`);
+    const parsed = {};
+    for (const line of match[1].split(/\r?\n/)) {
+        const field = line.match(/^([A-Za-z][A-Za-z0-9_-]*):\s+(.+)$/);
+        assert.ok(field, `${name} has a valid frontmatter mapping line: ${line}`);
+        const [, key, scalar] = field;
+        assert.ok(!Object.hasOwn(parsed, key), `${name} frontmatter has no duplicate ${key}`);
+        if (scalar.startsWith('"')) {
+            assert.doesNotThrow(() => JSON.parse(scalar), `${name} ${key} is a valid double-quoted YAML scalar`);
+            parsed[key] = JSON.parse(scalar);
+        } else if (scalar.startsWith("'")) {
+            assert.match(scalar, /^'(?:[^']|'')*'$/, `${name} ${key} is a valid single-quoted YAML scalar`);
+            parsed[key] = scalar.slice(1, -1).replace(/''/g, "'");
+        } else {
+            assert.ok(!/:\s/.test(scalar), `${name} ${key} must quote a value containing ': '`);
+            parsed[key] = scalar;
+        }
+    }
+    return parsed;
+}
+
+test("every bundled skill has strict parseable YAML frontmatter", () => {
+    const bundled = path.join(__dirname, "..", "bundled-context", "skills");
+    const names = fs.readdirSync(bundled, { withFileTypes: true })
+        .filter(e => e.isDirectory() && fs.existsSync(path.join(bundled, e.name, "SKILL.md")))
+        .map(e => e.name);
+    for (const name of names) {
+        const skill = fs.readFileSync(path.join(bundled, name, "SKILL.md"), "utf8");
+        const frontmatter = parseSkillFrontmatter(skill, name);
+        assert.equal(frontmatter.name, name, `${name} frontmatter name matches its directory`);
+        assert.ok(frontmatter.description, `${name} frontmatter has a description`);
+    }
+});
+
+test("bundled skill frontmatter rejects an unquoted colon-space scalar", () => {
+    const invalid = "---\nname: broken\ndescription: Use workflowType: run patterns.\n---\n";
+    assert.throws(
+        () => parseSkillFrontmatter(invalid, "broken"),
+        /must quote a value containing ': '/
+    );
+});
+
 test("every bundled skill injects, with its references/* assets (bundle dir = source of truth)", async () => {
     const ws = tmpWorkspace();
     await ci.inject(ws, { palName: "Demo", agent: "claude" });

@@ -1,6 +1,6 @@
 ---
 name: palbuilder-workflow
-description: Use when writing or debugging server-side CloudPiston workflow JavaScript for any workflowType: run patterns, action routing, responses, includes, utilities, logging, or workflow delegation. Load before editing workflow .js files or choosing controller APIs.
+description: "Use when writing or debugging server-side CloudPiston workflow JavaScript for any workflowType: run patterns, action routing, responses, includes, utilities, logging, or workflow delegation. Load before editing workflow .js files or choosing controller APIs."
 ---
 
 # CloudPiston Pal — Workflow Layer
