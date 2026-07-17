@@ -18,7 +18,9 @@ vs web distinction.
 Companion:
 - `../SKILL.md` — the `run()` pattern, reserved globals, action switch (universal to all types)
 - `responses.md` — page, ajax, download, redirect
-- `transaction.md` — console pals commonly manage transactions
+- `transaction.md` — a console workflow CAN orchestrate transaction packets; a transaction
+  workflow can also stand alone with no console workflow at all — see that file's
+  "Orchestration" section
 
 ---
 
@@ -32,7 +34,10 @@ The console-specific concerns are:
    app menu.
 3. **The `palTypeConsole` palType** — pages, fragments, scripts, and styles marked for the
    console context.
-4. **Console pals commonly orchestrate transactions** — see `transaction.md`.
+4. **A console workflow CAN orchestrate transactions** (list/filter/create packets, then
+   `c.switchToNavigator` into one) — but a transaction workflow doesn't need one in front of it;
+   a pal can be transaction-only (`consoleControlled: false`, `transactionWorkflow` set, no
+   console workflow registered). See `transaction.md`.
 
 ---
 
@@ -263,8 +268,8 @@ See `web.md`.
 
 ## Console pals and transactions
 
-**Console pals commonly manage transactions.** A transaction workflow (type 2) rarely runs in
-isolation — the typical pattern is:
+**A console workflow can manage transactions, but doesn't have to.** One common pattern, for
+back-office/admin UIs managing many packets:
 
 - A console workflow lists / filters / creates transaction packets
 - The user picks or creates a packet
@@ -275,7 +280,10 @@ Reading transaction packets *without* switching workflows (e.g., to list them or
 summary data) is also common from console workflows. The exact accessor for listing
 transactions is on the console controller — see the API docs.
 
-See `transaction.md` for what happens on the transaction side of that handoff.
+Equally valid: a pal with **no console workflow at all** — `consoleControlled: false` in
+`layout`, `transactionWorkflow` set, and the transaction workflow entered directly. Don't assume
+a transaction workflow needs a console workflow delegating into it; check `layout` before
+describing how a given pal is actually entered. See `transaction.md`.
 
 ---
 

@@ -178,3 +178,16 @@ needs multiple tunnel endpoints.
   missing or misnamed, the call will fail before your workflow runs.
 - **Return structured data, not pages.** Tunnels don't render UI. The response payload is
   read by another workflow, not a browser.
+
+---
+
+## Testing — no `Test<Type>.do`, a real call instead
+
+Tunnels aren't compile-tested through the `Test<Console|Web|System|Pal>.do` family at all —
+there is no `TestTunnel.do`. Instead, `pal_tunnel_test` mints short-lived real credentials via
+**`CreateTunnel.do`** (`{ tunnelUrl, tunnelUsername, tunnelPassword }`, password expires in
+~5 min) and then calls the tunnel workflow **for real**, over HTTP, exactly as another pal's
+caller side would — POSTing to `tunnelUrl` with Basic auth and the `tunnelAction`/
+`tunnelWorkflow` headers. It's the one testing surface that returns actual DATA back to the
+agent instead of a validation verdict; an empty 200 response means the workflow threw at
+runtime (the server swallows the error).

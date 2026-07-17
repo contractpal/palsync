@@ -171,8 +171,8 @@ for a correction. Deep detail lives in each skill's `references/*.md`, loaded on
 ## Limitations
 
 The agent can **edit any existing file of any type**, and **create** pages, fragments, scripts,
-workflows, emails, images, styles, attachments, and datasets (via `pal_sync_datasets`). The only
-things it can't create — the server rejects them on push — are **documents, fonts, and
+workflows, emails, images, styles, attachments, wizards, and datasets (via `pal_sync_datasets`).
+The only things it can't create — the server rejects them on push — are **documents, fonts, and
 dataviews/data/datalists**: make those in PalBuilder first, then palsync edits them normally.
 
 ## Troubleshooting

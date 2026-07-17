@@ -1,7 +1,7 @@
 "use strict";
 // Headless pull: resolve fresh id by GUID -> getPal(id) -> SYNC the server pal to disk.
 //
-// SYNC, NOT WIPE. The 13 manifest folders (pages, fragments, scripts, styles, …) are
+// SYNC, NOT WIPE. The 14 manifest folders (pages, fragments, scripts, styles, …) are
 // pull-managed: their contents are replaced with the server state, and files that no longer
 // exist on the server are removed. Everything ELSE in the workspace — files at the root
 // (spec.md, notes, the palsync-managed .palsync.json / CLAUDE.md / .claude/), user-created
@@ -9,7 +9,7 @@
 // pull touches only the files it manages.
 //
 // Datasets/dataviews/data/datalists are JSON passthrough — written verbatim, never created or
-// altered semantically. Only the 9 base64 "content" types are decoded to files (and then
+// altered semantically. Only the 10 base64 "content" types are decoded to files (and then
 // blanked in pal.json by clearContent, exactly like the extension).
 const fs = require("fs/promises");
 const path = require("path");
@@ -20,12 +20,12 @@ const { resolveServerPalByGuid } = require("./resolve");
 // `baseline` (the fileHashes map for the sync decision), which would shadow this inside the fn.
 const baselineStore = require("./baseline");
 
-// The 13 manifest folders pull manages. Files INSIDE these are pull-owned and may be deleted
+// The 14 manifest folders pull manages. Files INSIDE these are pull-owned and may be deleted
 // as stale; anything outside is left alone.
 const ALL_FOLDERS = [
     "data", "datalists", "datasets", "dataviews",
     "attachments", "documents", "emails", "fragments",
-    "images", "pages", "scripts", "styles", "workflows"
+    "images", "pages", "scripts", "styles", "workflows", "wizards"
 ];
 
 // JSON-based entry types: [getter, entry sub-key, folder]
@@ -46,7 +46,8 @@ const BASE64_TYPES = [
     ["allPages", "Page", "pages"],
     ["allScripts", "Script", "scripts"],
     ["allStyles", "Style", "styles"],
-    ["allWorkflows", "Workflow", "workflows"]
+    ["allWorkflows", "Workflow", "workflows"],
+    ["allWizards", "Wizard", "wizards"]
 ];
 
 // Folders whose NEW local files palsync can legitimately push (and so whose pal.json entries
@@ -54,10 +55,10 @@ const BASE64_TYPES = [
 // workflowType). documents/fonts are server-rejected on create; datasets/dataviews/data/datalists
 // are PalBuilder-provisioned. Files of those types are still PRESERVED on disk (never destroy
 // local work) — they just can't ride a push.
-const CREATABLE_FOLDERS = new Set(["pages", "fragments", "scripts", "styles", "images", "emails", "attachments", "workflows"]);
+const CREATABLE_FOLDERS = new Set(["pages", "fragments", "scripts", "styles", "images", "emails", "attachments", "workflows", "wizards"]);
 
 // Compute the set of POSIX-style relative paths the current server manifest will write into
-// the workspace (everything inside the 13 manifest folders). Exposed for tests/diagnostics.
+// the workspace (everything inside the 14 manifest folders). Exposed for tests/diagnostics.
 function manifestPaths(pal) {
     const out = new Set();
     for (const [getter, , folder] of JSON_TYPES) {
@@ -120,7 +121,7 @@ function mergePreservedEntries(pal, oldPalJson, toPreserve) {
     return report;
 }
 
-// List every file currently under the 13 manifest folders (recursive, files only). Returns
+// List every file currently under the 14 manifest folders (recursive, files only). Returns
 // POSIX-style relative paths so equality with manifestPaths() comparison is straightforward.
 async function listTrackedFiles(targetDir) {
     const out = [];
@@ -139,9 +140,9 @@ async function listTrackedFiles(targetDir) {
     return out;
 }
 
-// After deletions, prune empty directories INSIDE the 13 manifest folders (bottom-up). The
-// 13 top-level folders themselves are kept (mkdir-recursive re-creates them anyway, and
-// keeping them around makes the workspace shape stable). Never touches dirs outside the 13.
+// After deletions, prune empty directories INSIDE the 14 manifest folders (bottom-up). The
+// 14 top-level folders themselves are kept (mkdir-recursive re-creates them anyway, and
+// keeping them around makes the workspace shape stable). Never touches dirs outside the 14.
 async function pruneEmptySubdirs(targetDir) {
     async function prune(dirAbs, depth) {
         let entries;
@@ -150,7 +151,7 @@ async function pruneEmptySubdirs(targetDir) {
         for (const e of entries) {
             if (e.isDirectory()) await prune(path.join(dirAbs, e.name), depth + 1);
         }
-        if (depth === 0) return;                         // keep the 13 top-level dirs
+        if (depth === 0) return;                         // keep the 14 top-level dirs
         const after = await fs.readdir(dirAbs);
         if (after.length === 0) await fs.rmdir(dirAbs);
     }
@@ -207,7 +208,7 @@ async function saveLocal(pal) {
 }
 
 // Full pull (SYNC). Returns { resolved, serverPal, pal, written, removed, preserved, serverPaths }.
-//   - Pull-managed = the 13 manifest folders + pal.json. Files there are overwritten with the
+//   - Pull-managed = the 14 manifest folders + pal.json. Files there are overwritten with the
 //     server state; files the server no longer tracks are removed ONLY when the baseline
 //     proves the server tracked them before (a real server-side delete). New un-pushed local
 //     files are PRESERVED and their pal.json entries carried forward (see planSync /
@@ -259,8 +260,8 @@ async function pull(session, guid, targetDir, { baseline = null } = {}) {
     //    JSON entries and base64 entries — overwriting any prior local versions in place.
     const written = await expandPalFiles(pal);
 
-    // 4) Prune any subdirs INSIDE the 13 manifest folders that became empty after deletions.
-    //    The 13 top-level folders themselves stay (kept for stable workspace shape).
+    // 4) Prune any subdirs INSIDE the 14 manifest folders that became empty after deletions.
+    //    The 14 top-level folders themselves stay (kept for stable workspace shape).
     await pruneEmptySubdirs(targetDir);
 
     // 5) Carry preserved new files' manifest entries forward, then write pal.json (base64

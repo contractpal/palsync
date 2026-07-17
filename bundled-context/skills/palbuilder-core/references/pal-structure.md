@@ -48,7 +48,7 @@ pal-root/
 ├── datalists/             ← static tabular data
 │
 ├── attachments/           ← arbitrary binary files (PDFs, CSVs, XLSX, XML, etc.)
-├── wizards/               ← wizard definitions
+├── wizards/               ← wizard definitions (Wizard type) — multi-step dialog flows
 │
 └── folders                ← (array in pal.json) — registers every subfolder above,
                               each entry has { name, folderType }
@@ -56,8 +56,43 @@ pal-root/
 
 **Every subfolder must be registered** in the manifest's `folders` array with a `name` (which
 can be nested, e.g., `doc_folder/level2`) and a `folderType` matching the category
-(`Workflows`, `Documents`, `Pages`, `Emails`, `Styles`, `Fragments`, etc.). A folder that isn't
-registered doesn't exist to the runtime — even if files at that path do.
+(`Workflows`, `Documents`, `Pages`, `Emails`, `Styles`, `Fragments`, `Wizards`, etc.). A folder
+that isn't registered doesn't exist to the runtime — even if files at that path do.
+
+---
+
+## Wizards — Multi-Step Dialog Flows
+
+A wizard (`wizards/<name>.xml`, registered as a `Wizard` entry) is a sequence of dialogs walking
+a user through a form one screen at a time. It is XHTML like a page or fragment, but its own
+schema — not `c:` tags — full reference:
+https://secure.cloudpiston.com/cpal/cp-api/transaction/misc.html#wizards
+
+```xml
+<dialogs first="start" xmlns="http://www.contractpal.net/schemas/wizard" xmlns:c="contractpal">
+    <dialog name="start">
+        <if field="age" condition="lt" value="5" type="number" target="end" action="endWizard"></if>
+        <content>
+            <div>
+                What is your age? <input type="text" name="age" use="R" cp-pattern="pos integer"/>
+            </div>
+        </content>
+    </dialog>
+    <dialog name="end" goto="end" action="endWizard">
+        <content>
+            <div>Thanks!</div>
+        </content>
+    </dialog>
+</dialogs>
+```
+
+- **`<dialogs first="...">`** — the root, naming the entry dialog by `name`.
+- **`<dialog name="..." goto="..." action="...">`** — one screen. `goto`/`action` say where to go
+  next; `<if>` inside a dialog can branch to a different `target` conditionally instead.
+- **`<content>`** — plain HTML shown for that dialog; inputs use `name` (the field key) and the
+  `use`/`cp-pattern`/`cp-validationMessage` attributes documented at the link above.
+- Manifest entry has no `palType`/`workflowType` — just `content`/`contentType`/`filename` like a
+  Document. palsync does **not** validate wizard XHTML client-side; the server is authoritative.
 
 ---
 

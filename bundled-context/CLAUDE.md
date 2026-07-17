@@ -67,21 +67,21 @@ the spec is written.
     pal.json                    # the pal manifest (pull-managed)
     pages/  fragments/          # XHTML c:-tag markup (pages = shells, fragments = partials)
     workflows/                  # server-side JS — run(controller) entry points
-    scripts/  styles/  images/  emails/  attachments/  documents/
+    scripts/  styles/  images/  emails/  attachments/  documents/  wizards/
     datasets/                   # schema JSON — tables provisioned via pal_sync_datasets
     dataviews/  data/  datalists/   # JSON passthrough
     .palsync.json  .mcp.json  .claude/skills/  CLAUDE.md  CLAUDE.palsync.md   # palsync-managed
 ```
 
 **Pull is SYNC, not WIPE:**
-- Pull-managed = `pal.json` + the **13 manifest folders** above (`pages/` … `datalists/`).
+- Pull-managed = `pal.json` + the **14 manifest folders** above (`pages/` … `datalists/`).
   Pull overwrites these from the server; it removes a local file only when the server deleted it.
 - NEW un-pushed files in manifest folders SURVIVE a pull (their `pal.json` entries carry forward).
 - Pull REFUSES (naming the files) if server-tracked files have un-pushed local edits —
   push first, or `force:true` to discard the edits.
 - Everything else at the workspace root is NEVER touched by pull. Put notes, specs,
   reference images, `baseline/` there — e.g. `~/PalBuilder/<pal>/spec.md`, `notes/`,
-  `references/*.png`. Never park scratch files inside the 13 manifest folders.
+  `references/*.png`. Never park scratch files inside the 14 manifest folders.
 
 ---
 

@@ -7,7 +7,8 @@ compliance forms, signed records).
 
 Companion:
 - `../SKILL.md` — the `run()` pattern, reserved globals (universal to all types)
-- `console.md` — console pals typically orchestrate transactions
+- `console.md` — one common way to reach a transaction workflow, not the only way
+- `wizards.md` — multi-dialog data-collection flows within a transaction
 
 **Official APIs:**
 - Transaction controller — https://secure.cloudpiston.com/cpal/cp-api/transaction/index.html
@@ -40,18 +41,33 @@ If you don't need documents or signatures, use pal datasets directly instead.
 
 ---
 
-## Orchestration — transactions don't operate alone
+## Orchestration — two valid shapes, not one required pattern
 
-**A transaction workflow rarely runs in isolation.** The typical pattern:
+**A pal is not one workflow type.** `layout` registers a *default* workflow per type
+independently — a single pal can have a console workflow, a transaction workflow, a web
+workflow, etc., any subset of them, and none is required to route through another. Don't assume
+a transaction workflow needs a console workflow in front of it; check `layout.consoleControlled`
+and which default workflows are actually registered before describing how a specific pal is
+entered.
 
+**Console-orchestrated** — common for back-office/admin work where a user manages *many*
+packets (list, filter, create, resume):
 - A **console workflow** (see `console.md`) lists, filters, and creates transaction packets
 - The user selects or creates a packet from the console UI
 - The console workflow delegates to the transaction workflow via
   `c.switchToNavigator(txId, action, anon)` — see `console.md`
+- Console workflows can also **read transaction packet data without switching workflows** — to
+  list packets, show summaries, extract completed values, etc.
 
-Console workflows can also **read transaction packet data without switching workflows** — to
-list packets, show summaries, extract completed values, etc. The transaction workflow itself
-is entered only when the user is actively working within a specific packet.
+**Transaction-only** — a complete, valid shape for a pal whose entire purpose is one packet
+flow (a signing flow, a single data-collection form, etc.), with no console app at all:
+- `layout.consoleControlled = false`
+- `layout.transactionWorkflow` set to the entry workflow
+- No `consoleWorkflow` registered — the transaction workflow's `run()` is reached directly
+
+Pick the shape the pal actually needs — don't add a console workflow "to orchestrate" a
+transaction that doesn't need one, and don't assume an existing transaction-only pal is
+missing something.
 
 ---
 
@@ -222,19 +238,10 @@ Document + signature details will be covered in the forthcoming documents refere
 
 ## Wizards
 
-**Wizards** are multi-step workflows within a transaction. Each step renders a page or
-fragment; the wizard tracks progress and allows navigation between steps.
-
-Wizards are registered in `pal.json`'s `wizards` section (see
-`palbuilder-core/references/pal-json.md`). Runtime access is via the controller — check the
-controller API docs for the wizard-specific accessors:
-https://secure.cloudpiston.com/cpal/cp-api/transaction/index.html
-
-The general pattern:
-- Each wizard step is a page or fragment
-- Navigation actions (`next`, `back`, `save-and-continue`) live in the action switch
-- The wizard's current step is stored in the packet state
-- Final-step completion finalizes the packet (auto-commit at cycle end handles persistence)
+A **Wizard** is a multi-dialog, branching data-collection flow driven from the transaction
+`Packet` (`packet.addWizard`/`getWizard`/`deleteWizard`) and rendered via the `c:wizard`/
+`c:wizard-next`/`c:wizard-previous` tags — not a series of separate pages/fragments navigated
+through the action switch. Full dialect, API, and a working end-to-end example: `wizards.md`.
 
 ---
 
@@ -258,6 +265,7 @@ The general pattern:
   underlying data may invalidate the signature.
 - **`packet` vs `tx`** — older pals may use `packet` as the global; new code should use
   `tx`. Don't mix the two names in one file.
-- **Transactions rarely make sense as the pal's entry point.** They're usually reached from
-  a console workflow via `c.switchToNavigator(...)`. If your pal starts users directly in a
-  transaction with no console orchestration, verify that's really the right shape.
+- **A transaction workflow as the pal's sole entry point is a valid, complete shape** —
+  `consoleControlled: false` + `transactionWorkflow` set, no console workflow at all. Reaching
+  it via a console workflow's `c.switchToNavigator(...)` is one common pattern for multi-packet
+  admin UIs, not a requirement. Don't assume a transaction-only pal is missing a console layer.

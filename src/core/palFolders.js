@@ -16,12 +16,13 @@ const SECTION_FOLDER_TYPES = {
     attachments: "Attachments",
     documents: "Documents",
     fonts: "Fonts",
-    workflows: "Workflows"
+    workflows: "Workflows",
+    wizards: "Wizards"
 };
 
 const WORKSPACE_BUCKET_NAMES = new Set([
     "pages", "fragments", "styles", "scripts", "images", "emails", "attachments",
-    "documents", "fonts", "workflows", "datasets", "dataviews", "data", "datalists"
+    "documents", "fonts", "workflows", "datasets", "dataviews", "data", "datalists", "wizards"
 ]);
 
 function asArray(node) {

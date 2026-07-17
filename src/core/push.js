@@ -36,7 +36,8 @@ const CREATABLE = [
     { key: "scripts", folder: "scripts" },
     { key: "images", folder: "images" },
     { key: "emails", folder: "emails" },
-    { key: "attachments", folder: "attachments" }
+    { key: "attachments", folder: "attachments" },
+    { key: "wizards", folder: "wizards" }
 ];
 
 // Files on disk in creatable folders that have no pal.json entry → will NOT be pushed.

@@ -16,7 +16,7 @@ const { analyzeFolderRegistrations } = require("../palFolders");
 
 // Folders whose files are pushed via pal.json entries. Matches the keys used in real pal.json
 // files (verified against V2-OE-Website).
-const CREATABLE_FOLDERS = ["pages", "fragments", "styles", "scripts", "images", "emails", "attachments"];
+const CREATABLE_FOLDERS = ["pages", "fragments", "styles", "scripts", "images", "emails", "attachments", "wizards"];
 
 // Type hint for the error message so the agent knows which stanza to copy.
 const FOLDER_TYPE = {
@@ -27,6 +27,7 @@ const FOLDER_TYPE = {
     images:      "Image",
     emails:      "Email",
     attachments: "Attachment",
+    wizards:     "Wizard",
 };
 
 // Manually extracted from the vendored server source (Pal.java / Layout.java field
@@ -217,7 +218,7 @@ function checkDataStructures(manifest) {
 
 // Unknown top-level or layout key with a close real match → error (near-certain invention,
 // e.g. a case slip or a plausible-sounding guess). No close match → warn, never error — the
-// server's real field set is bigger than this manually-extracted list (wizards/fonts/etc. have
+// server's real field set is bigger than this manually-extracted list (fonts/etc. have
 // no local example to verify their shape further, and future platform fields are unknown to us).
 function checkUnknownKeys(manifest) {
     const findings = [];

@@ -30,9 +30,9 @@ function isLintable(rel) {
 }
 
 // Folders whose files are text and worth a merge ancestor. Images/attachments/documents are
-// excluded (binary; merge can't reconcile them).
+// excluded (binary; merge can't reconcile them). Wizards are XHTML text like pages/fragments.
 const TEXT_FOLDERS = ["workflows", "pages", "fragments", "scripts", "styles", "emails",
-    "datasets", "dataviews", "data", "datalists"];
+    "datasets", "dataviews", "data", "datalists", "wizards"];
 
 // Is this a text server-tracked file worth snapshotting (for the gate and/or merge)?
 function isTextTracked(rel) {

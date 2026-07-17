@@ -2,7 +2,7 @@
 // Deterministic hashes of the SERVER-TRACKED files in a pal workspace. Used as the baseline
 // at pull/push time so palsync can detect un-pushed local changes (the reverse drift guard).
 //
-// SCOPE — the 13 manifest folders + pal.json. Exactly the files pull manages; user-only files
+// SCOPE — the 14 manifest folders + pal.json. Exactly the files pull manages; user-only files
 // at the workspace root (spec.md, references/, notes/) do NOT enter any hash, so editing or
 // adding them never triggers the drift guard.
 //
@@ -20,7 +20,7 @@ const { walkTree } = require("./fsWalk");
 const IN_SCOPE = [
     "data", "datalists", "datasets", "dataviews",
     "attachments", "documents", "emails", "fragments",
-    "images", "pages", "scripts", "styles", "workflows"
+    "images", "pages", "scripts", "styles", "workflows", "wizards"
 ];
 const MANIFEST_FILE = "pal.json";
 

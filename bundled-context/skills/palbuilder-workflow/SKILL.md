@@ -38,6 +38,10 @@ workflow-JS workarounds (no object literals, no `.forEach`, etc.) that apply thr
 - **`references/console.md`** — `workflowType: 7`. Authenticated user, in-platform console UI.
 - **`references/web.md`** — `workflowType: 9`. Public web, anonymous users, pal's own domain.
 - **`references/transaction.md`** — `workflowType: 2`. Transaction packets, wizards.
+- **`references/wizards.md`** — multi-step `<dialogs>` wizard flows inside a transaction
+  workflow: the XML dialect, `c:wizard`/`c:wizard-next`/`c:wizard-previous` tags, and the
+  `Packet.addWizard`/`getWizard`/`deleteWizard` API. Read when a pal uses `<c:wizard>`, a
+  `pal.json` `wizards` section, or any multi-step data-collection flow.
 - **`references/console-system.md`** — `workflowType: 11`. Background jobs — pointer to
   `palbuilder-realtime` which owns this in depth.
 - **`references/webservices.md`** — `workflowType: 5` / `12` / `14`. Webservice endpoints

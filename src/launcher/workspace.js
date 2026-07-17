@@ -162,7 +162,7 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
         throw new Error("Could not lock \"" + sel.pal.name + "\" (" + (lk.blocked || "unknown") + "). Unlock and close it in PalBuilder, then re-run palsync.");
     }
 
-    // CLAUDE.md is not wiped by pull (sync only touches files inside the 13 manifest folders
+    // CLAUDE.md is not wiped by pull (sync only touches files inside the 14 manifest folders
     // + pal.json) — inject() reads the user's existing CLAUDE.md and merges its managed block
     // in place.
     log("injecting CLAUDE.md + skills" +

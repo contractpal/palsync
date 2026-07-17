@@ -2,9 +2,9 @@
 // pal_test core: run the builder's "Test pal" against a workflow and report FRESH validation
 // (the workflow-compile feedback the save API never gives), plus build a runnable preview URL.
 //
-// Confirmed live (scripts/test-workflow-probe*.js against ISR): Test<Console|Web|Pal>.do
+// Confirmed live (scripts/test-workflow-probe*.js against ISR): Test<Console|Web|System|Pal>.do
 // returns { success, validated, token, validationResults, profileList }. The `token` is a
-// CreateTest<Type>.do URL; for console/transaction the runnable form appends
+// CreateTest<Type>.do URL; for console/console-system/transaction the runnable form appends
 // &cp-auth=base64(user:pass) &nxProfileId=<profile> &cp-workflow=<name-no-ext>. A CONSOLE pal
 // renders inside the platform console chrome via encrypted AJAX (so a real browser is needed to
 // SEE it — a plain fetch reaches only the host frame); a WEB pal renders directly.
@@ -17,19 +17,24 @@ const { normalizeValidation } = require("./push");
 const lock = require("./lock");
 
 // workflowType number → the engine name the Test endpoint + EL use. From the extension's
-// types/fileProperties.js (workflowTypes). "transaction*" → "Pal" endpoint (the Transaction
-// engine); console/web map to themselves. Library/tunnel/user aren't runnable test targets.
+// types/fileProperties.js (workflowTypes). Four real endpoints: TestConsole.do (7),
+// TestWeb.do (9), TestSystem.do (11, console-system/job workflows — NOT the same endpoint as
+// console!), TestPal.do (2/3/5 — "Pal" is the legacy name for the Transaction engine).
+// Library/user aren't runnable test targets at all. Tunnel (15) has no Test*.do compile
+// endpoint either — it's exercised via a completely different path (core/tunnel.js's
+// CreateTunnel.do mints real short-lived credentials and calls the workflow for real over
+// HTTP), so it's intentionally absent from this table too.
 const TYPE_NUM = {
     2: { kind: "transaction", endpoint: "Pal" },
     3: { kind: "transaction", endpoint: "Pal" },
     5: { kind: "transaction", endpoint: "Pal" },
     7: { kind: "console", endpoint: "Console" },
     9: { kind: "web", endpoint: "Web" },
-    11: { kind: "console", endpoint: "Console" },
+    11: { kind: "console-system", endpoint: "System" },
     12: { kind: "console", endpoint: "Console" }
 };
 // caller-facing kind → Test endpoint name.
-const KIND_ENDPOINT = { console: "Console", web: "Web", transaction: "Pal" };
+const KIND_ENDPOINT = { console: "Console", web: "Web", transaction: "Pal", "console-system": "System" };
 
 // Server-level messages (resp.messages) are SEPARATE from per-rule validationResults: they carry
 // whole-test failures like "Pal is not a Web Pal". The CLI used to ignore them and print "No

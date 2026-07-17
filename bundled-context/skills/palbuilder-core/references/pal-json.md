@@ -26,7 +26,7 @@ It is JSON, not workflow JS — normal object/array literals are fine here.
   "pages":          { "entry": [ ...Page entries... ] },
   "fragments":      { "entry": [ ...Fragment entries... ] },
   "styles":         { "entry": [ ...Style (CSS) entries... ] },
-  "wizards":        [ ... ],
+  "wizards":        { "entry": [ ...Wizard entries... ] },
   "workflows":      { "entry": [ ...Workflow entries (server-side JS)... ] },
   "scripts":        { "entry": [ ...Script entries (client-side JS)... ] },
   "fonts":          [ ... ],
@@ -52,7 +52,12 @@ Each entry (except in `layout` and `folders`) follows the pattern
 `{ "string": "<filename>", "<Type>": { ...fields... } }`, where `string` is the entry's
 identifier (typically the filename) and `<Type>` matches the section (`Workflow`, `Page`,
 `Fragment`, `Document`, `Email`, `Style`, `Dataset`, `Dataview`, `Data`, `DataList`,
-`Attachment`, `Image`).
+`Attachment`, `Image`, `Wizard`).
+
+A `Wizard` entry has just `content`/`contentType`/`filename` — no `palType`, no
+`workflowType`. Content is base64-encoded XHTML following the `<dialogs>`/`<dialog>` schema at
+https://secure.cloudpiston.com/cpal/cp-api/transaction/misc.html#wizards (see
+`pal-structure.md`). Wizards are creatable via push, same as pages/fragments/scripts.
 
 ### Quick reference — named entry shapes
 
@@ -96,7 +101,7 @@ existing object. Create a new object in PalBuilder first. Runtime DataViews are 
 | `properties`, `roles` | Pal-level metadata (often empty) |
 | `auditDocumentView` | Auditing flag |
 | `workflowVersion` | Workflow schema version |
-| `consoleControlled` | Whether the pal is controlled from a console |
+| `consoleControlled` | Whether the pal has a console app registered. **`false` + `transactionWorkflow` set is a valid, complete shape** — a transaction-only pal with no console at all, entered directly via the transaction workflow. Console orchestration (see `palbuilder-workflow/references/console.md`/`transaction.md`) is one common pattern, not a requirement. |
 | `mobileAccessType`, `groupAccessOnly` | Access-control flags |
 | `loginPage`, `mobileLoginPage` | Path to the login page (default / mobile-specific) |
 
@@ -294,7 +299,8 @@ already has those categories, and registering bucket names creates empty clutter
   { "name": "other",                "folderType": "Pages" },
   { "name": "important",            "folderType": "Emails" },
   { "name": "themes",               "folderType": "Styles" },
-  { "name": "moreFrags",            "folderType": "Fragments" }
+  { "name": "moreFrags",            "folderType": "Fragments" },
+  { "name": "onboarding",           "folderType": "Wizards" }
 ]
 ```
 
@@ -307,7 +313,8 @@ Rules:
 - **A file at `pages/console.html` does NOT require `{ "name": "pages", "folderType": "Pages" }`.**
   That entry is wrong: `pages` is the local bucket/category, not a PalBuilder subfolder.
 - **`folderType` values** track category names, but **use singular Pascal-case**:
-  `Workflows`, `Documents`, `Pages`, `Fragments`, `Emails`, `Styles`. Match the casing exactly.
+  `Workflows`, `Documents`, `Pages`, `Fragments`, `Emails`, `Styles`, `Wizards`. Match the
+  casing exactly.
 
 ---
 

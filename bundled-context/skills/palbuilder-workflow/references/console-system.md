@@ -33,6 +33,16 @@ See `palbuilder-core/references/pal-json.md` for the full workflowType table.
 
 ---
 
+## Testing — a distinct server endpoint
+
+`pal_test` still compiles a console-system workflow, but through **`TestSystem.do`** — a
+separate endpoint from `TestConsole.do` (type 7). Don't assume a console-system job shares the
+console workflow's test path just because both are "console"-adjacent; the two workflow types
+are tested independently, and a pal can have both a type-7 console workflow and a type-11 job
+at once.
+
+---
+
 ## Read next
 
 - **`palbuilder-realtime`** — the skill that owns jobs, websockets, progress UI, and the
