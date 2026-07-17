@@ -62,16 +62,21 @@ Ordered by severity: High, then Medium, then Low.
 
 ### `palsync cost` output
 
+> Before running it: if the harness exposes this session's token/cost figures, record them with
+> `palsync cost record --model X --provider Y --in N --cached N --out N [--cost N] --phase review`
+> so they appear in the phase totals below.
+
 ```
-<paste palsync cost output verbatim>
+<paste palsync cost output verbatim, including the model-token spend section with
+build/review phase totals>
 ```
 
 ### Model tokens / dollars
 
 - Build model: `<value or "not available">`
 - Review/QA model: `<value or "not available">`
-- If `.palsync/session-cost.json` exists in the workspace, paste it here; otherwise state that
-  it is absent and do not estimate.
+- These come from the sidecar totals in the `palsync cost` output above; if the sidecar is
+  absent, state that and do not estimate.
 
 ## Recommendations for palsync
 

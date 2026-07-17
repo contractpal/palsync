@@ -53,9 +53,11 @@ nothing to say, write "none" and explain why.
    live reproduction evidence (actual tool output, not paraphrase), root cause with
    `file:line`, and a "palsync improvement" line. No finding without evidence.
 4. **What worked well** — for balance and to protect features from being "fixed" away.
-5. **Cost & usage** — `palsync cost` output verbatim, plus model-token/dollar figures when the
-   harness exposes them; when it doesn't, say so explicitly, never estimate. If
-   `.palsync/session-cost.json` exists, read it here.
+5. **Cost & usage** — first, if the harness exposes this session's model-token/cost figures,
+   record them with `palsync cost record --model X --provider Y --in N --cached N --out N
+   [--cost N] --phase review` (builders use `--phase build`). Then paste `palsync cost` output
+   verbatim — it includes the session-cost sidecar with build/review phase totals when entries
+   exist. When the harness exposes no figures, say so explicitly, never estimate.
 6. **Recommendations for palsync** — numbered, prioritized (P0 / P1 / P2), each naming the
    file or tool it targets.
 7. **Fix tasks** — checkbox list in pal-loop task format (file, change, success condition) so
