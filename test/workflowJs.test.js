@@ -3,6 +3,8 @@
 // reaches PalBuilder's more permissive compile gate.
 const { test } = require("node:test");
 const assert = require("node:assert");
+const fs = require("node:fs");
+const path = require("node:path");
 const { lintWorkflowJs } = require("../src/core/validate/workflowJs");
 
 test("lintWorkflowJs: duplicate switch action labels are errors", () => {
@@ -131,6 +133,56 @@ test("lintWorkflowJs: unsupported String/Array methods are errors", () => {
 test("lintWorkflowJs: ES3 String methods remain clean", () => {
     const src = "function run(controller) { var name = controller.getName(); return name.substring(0, name.length); }";
     assert.equal(lintWorkflowJs("workflows/main.js", src).filter(f => f.rule === "bannedMethod").length, 0);
+});
+
+test("lintWorkflowJs: calling length is a warning; property access is clean", () => {
+    const src = "function run(controller) { var s = controller.getName(); return s.length() + s.length; }";
+    const findings = lintWorkflowJs("workflows/main.js", src).filter(f => f.rule === "lengthCall");
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].severity, "warn");
+    assert.match(findings[0].message, /drop the parentheses/i);
+});
+
+test("lintWorkflowJs: findRecord cannot read a column excluded by selectColumns", () => {
+    const src = [
+        "function load(controller) {",
+        "  var view = controller.getPal().getDataView('items');",
+        "  var filter = view.createFilter();",
+        "  filter.selectColumns(['id', 'name']);",
+        "  var record = view.findRecord(filter);",
+        "  return record.get('status');",
+        "}",
+    ].join("\n");
+    const findings = lintWorkflowJs("workflows/main.js", src).filter(f => f.rule === "findRecordSelectColumns");
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].severity, "warn");
+    assert.equal(findings[0].line, 6);
+    assert.match(findings[0].message, /add the column|remove the projection/i);
+});
+
+test("lintWorkflowJs: safe and uncertain record lookup paths stay clean", () => {
+    const sources = [
+        "function f(v) { var q=v.createFilter(); q.selectColumns(['id']); var r=v.findRecord(q); return r.get('id'); }",
+        "function f(v) { var r=v.findRecord('id', '1'); return r.get('name'); }",
+        "function f(v) { var q=v.createFilter(); q.selectColumns(['id']); var rows=v.getRecords(q); return rows.get('name'); }",
+        "function f(v, cols) { var q=v.createFilter(); q.selectColumns(cols); var r=v.findRecord(q); return r.get('name'); }",
+        "function f(v) { var q=v.createFilter(); q['selectColumns'](['id']); var r=v.findRecord(q); return r.get('name'); }",
+        "function f(v) { var q=v.createFilter(); q.selectColumns(['id']); var r=v.findRecord(q); q=v.createFilter(); return r.get('name'); }",
+        "function f(v) { var q=v.createFilter(); var r=v.findRecord(q); q.selectColumns(['id']); return r.get('name'); }",
+    ];
+    for (const src of sources) {
+        assert.equal(lintWorkflowJs("workflows/main.js", src).filter(f => f.rule === "findRecordSelectColumns").length, 0);
+    }
+});
+
+test("lintWorkflowJs: regression fixture pins the exact rule and severity set", () => {
+    const fixture = fs.readFileSync(path.join(__dirname, "fixtures", "workflowJs", "regression.js"), "utf8");
+    const findings = lintWorkflowJs("workflows/regression.js", fixture);
+    assert.deepEqual(findings.map(f => ({ rule: f.rule, severity: f.severity })), [
+        { rule: "findRecordSelectColumns", severity: "warn" },
+        { rule: "bannedMethod", severity: "error" },
+        { rule: "lengthCall", severity: "warn" },
+    ]);
 });
 
 test("lintWorkflowJs: unconditional render call after frag-validator handler is flagged", () => {

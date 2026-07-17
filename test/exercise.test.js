@@ -192,7 +192,7 @@ test("lintSteps: warns on global absent status words against multi-row lists", (
 });
 
 test("lintSteps: scoped absent status word passes", () => {
-    const r = lintSteps([{ within: 'tr:has-text("Camera")', absent: ["Delete"], expect: ["x"] }]);
+    const r = lintSteps([{ within: 'tr:has([data-label="Name"]:has-text("{{runId}}"))', absent: ["Delete"], expect: ["x"] }]);
     assert.strictEqual(r.warnings.length, 0);
     assert.strictEqual(r.errors.length, 0);
 });
@@ -200,11 +200,12 @@ test("lintSteps: scoped absent status word passes", () => {
 test("lintSteps: rejects duplicate row-action clicks without within", () => {
     const r = lintSteps([{ click: "Delete" }]);
     assert.ok(r.errors.some(e => /Delete.*appears in every row/.test(e)), r.errors.join("; "));
+    assert.match(r.errors.join("; "), /within: 'tr:has\(\[data-label="Name"\]:has-text\("\{\{runId\}\}"\)\)'/);
     assert.strictEqual(r.warnings.length, 0);
 });
 
 test("lintSteps: scoped duplicate row-action click passes", () => {
-    const r = lintSteps([{ click: "Delete", within: 'tr:has-text("Camera")' }]);
+    const r = lintSteps([{ click: "Delete", within: 'tr:has([data-label="Name"]:has-text("{{runId}}"))' }]);
     assert.strictEqual(r.errors.length, 0);
     assert.strictEqual(r.warnings.length, 0);
 });
@@ -218,12 +219,13 @@ test("lintSteps: warns when expecting a just-deleted runId value", () => {
     assert.strictEqual(r.errors.length, 0);
 });
 
-test("lintSteps: non-runId delete scope passes", () => {
+test("lintSteps: non-runId delete scope warns but does not trigger deleted-runId guidance", () => {
     const r = lintSteps([
         { click: "Delete", within: 'tr:has-text("Camera")' },
         { expect: ["Camera {{runId}}"] }
     ]);
-    assert.strictEqual(r.warnings.length, 0);
+    assert.ok(r.warnings.some(w => /within.*without \{\{runId\}\}/.test(w)), r.warnings.join("; "));
+    assert.ok(!r.warnings.some(w => /after a delete step/.test(w)), r.warnings.join("; "));
     assert.strictEqual(r.errors.length, 0);
 });
 
@@ -233,7 +235,7 @@ test("lintSteps: rejects nth selectors for record actions", () => {
 });
 
 test("lintSteps: unique row selector for record action passes", () => {
-    const r = lintSteps([{ click: "Delete", within: 'tr:has-text("Camera")' }]);
+    const r = lintSteps([{ click: "Delete", within: 'tr:has([data-label="Name"]:has-text("{{runId}}"))' }]);
     assert.strictEqual(r.errors.length, 0);
     assert.strictEqual(r.warnings.length, 0);
 });
@@ -241,6 +243,7 @@ test("lintSteps: unique row selector for record action passes", () => {
 test("lintSteps: warns when expecting a typed value as visible text", () => {
     const r = lintSteps([{ fill: { name: "Camera" }, expect: ["Camera"] }]);
     assert.ok(r.warnings.some(w => /typed into an input.*visible rendered text/.test(w)), r.warnings.join("; "));
+    assert.match(r.warnings.join("; "), /full unique old\/new values/);
     assert.strictEqual(r.errors.length, 0);
 });
 
@@ -248,6 +251,63 @@ test("lintSteps: fill + save + expect passes", () => {
     const r = lintSteps([{ fill: { name: "Camera" }, click: "Save", expect: ["Camera"] }]);
     assert.strictEqual(r.warnings.length, 0);
     assert.strictEqual(r.errors.length, 0);
+});
+
+test("lintSteps: warns on shared-name has-text scope with canonical replacement", () => {
+    const r = lintSteps([{ click: "Edit", within: 'tr:has-text("Camera")' }]);
+    assert.match(r.warnings.join("; "), /within: 'tr:has\(\[data-label="Name"\]:has-text\("\{\{runId\}\}"\)\)'/);
+    assert.strictEqual(r.errors.length, 0);
+});
+
+test("lintSteps: shared-name warning notes an available runId fill", () => {
+    const r = lintSteps([
+        { fill: { name: "Camera {{runId}}" }, click: "Save" },
+        { click: "Edit", within: 'tr:has-text("Camera")' }
+    ]);
+    assert.ok(r.warnings.some(w => /exercise fills a \{\{runId\}\} value/.test(w)), r.warnings.join("; "));
+    assert.strictEqual(r.errors.length, 0);
+});
+
+test("lintSteps: runId has-text and non-text selectors do not warn", () => {
+    const runId = lintSteps([{ click: "Edit", within: 'tr:has-text("Camera {{runId}}")' }]);
+    const css = lintSteps([{ click: "Edit", within: 'tr[data-record-id="42"]' }]);
+    assert.strictEqual(runId.warnings.length, 0);
+    assert.strictEqual(css.warnings.length, 0);
+});
+
+test("lintSteps: rejects absent substring of same-step expectation", () => {
+    const r = lintSteps([{ expect: ["EditTest {{runId}} Changed"], absent: ["EditTest {{runId}}"] }]);
+    assert.ok(r.errors.some(e => /substring.*cannot pass.*full unique old\/new values/.test(e)), r.errors.join("; "));
+});
+
+test("lintSteps: rejects absent substring of current or earlier fill", () => {
+    const current = lintSteps([{ fill: { name: "EditTest Changed" }, absent: ["EditTest"] }]);
+    const earlier = lintSteps([{ fill: { name: "EditTest Changed" }, click: "Save" }, { absent: ["EditTest"] }]);
+    assert.ok(current.errors.some(e => /substring/.test(e)), current.errors.join("; "));
+    assert.ok(earlier.errors.some(e => /substring/.test(e)), earlier.errors.join("; "));
+});
+
+test("lintSteps: distinct, equal, and reverse-substring assertions do not collide", () => {
+    const distinct = lintSteps([{ expect: ["New {{runId}}"], absent: ["Old {{runId}}"] }]);
+    const equal = lintSteps([{ expect: ["Same {{runId}}"], absent: ["Same {{runId}}"] }]);
+    const reverse = lintSteps([{ expect: ["EditTest"], absent: ["EditTest Changed"] }]);
+    assert.strictEqual(distinct.errors.length, 0);
+    assert.strictEqual(equal.errors.length, 0);
+    assert.strictEqual(reverse.errors.length, 0);
+});
+
+test("lintSteps: warns on global empty-state expect and absent", () => {
+    const expected = lintSteps([{ expect: ["No equipment yet"] }]);
+    const absent = lintSteps([{ absent: ["No records found"] }]);
+    assert.ok(expected.warnings.some(w => /global empty-state assertion.*unique \{\{runId\}\}/.test(w)), expected.warnings.join("; "));
+    assert.ok(absent.warnings.some(w => /global empty-state assertion.*unique \{\{runId\}\}/.test(w)), absent.warnings.join("; "));
+});
+
+test("lintSteps: scoped empty-state and ordinary copy do not warn", () => {
+    const scoped = lintSteps([{ within: "#empty-state", expect: ["No equipment yet"] }]);
+    const ordinary = lintSteps([{ expect: ["Nobody is assigned"] }]);
+    assert.strictEqual(scoped.warnings.length, 0);
+    assert.strictEqual(ordinary.warnings.length, 0);
 });
 
 // ---- lintSteps regressions (T4 false-positive fixes) -----------------------

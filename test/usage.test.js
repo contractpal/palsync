@@ -6,6 +6,7 @@ const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawn } = require("node:child_process");
 const usage = require("../src/core/usage");
 const { tmpWorkspace } = require("./helpers");
 
@@ -209,4 +210,70 @@ test("readSessionCost falls back to a bare array or single object", () => {
 
     fs.rmSync(ws1, { recursive: true, force: true });
     fs.rmSync(ws2, { recursive: true, force: true });
+});
+
+test("recordSessionCost writes a canonical sidecar readable by readSessionCost", () => {
+    const ws = tmpWorkspace();
+    const result = usage.recordSessionCost(ws, {
+        model: "builder", provider: "anthropic", tokensIn: "12", tokensCached: -4,
+        tokensOut: "3", cost: "0.25", currency: "USD", phase: "build"
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(usage.readSessionCost(ws).entries, [{
+        model: "builder", provider: "anthropic", tokensIn: 12, tokensCached: 0,
+        tokensOut: 3, cost: 0.25, currency: "USD", phase: "build"
+    }]);
+    assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(result.path, "utf8"))), ["entries"]);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("recordSessionCost appends to a pre-existing bare-array sidecar", () => {
+    const ws = tmpWorkspace();
+    fs.mkdirSync(path.join(ws, ".palsync"), { recursive: true });
+    fs.writeFileSync(path.join(ws, usage.SESSION_COST_FILE), JSON.stringify([{ model: "first", provider: "p", tokensIn: 1 }]));
+    assert.equal(usage.recordSessionCost(ws, { model: "second", provider: "p", tokensOut: 2 }).ok, true);
+    assert.deepEqual(usage.readSessionCost(ws).entries.map(entry => entry.model), ["first", "second"]);
+    assert.ok(Array.isArray(JSON.parse(fs.readFileSync(path.join(ws, usage.SESSION_COST_FILE), "utf8")).entries));
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("recordSessionCost rejects invalid entries without throwing", () => {
+    const ws = tmpWorkspace();
+    assert.deepEqual(usage.recordSessionCost(ws, { provider: "p" }), { ok: false, error: "model is required" });
+    assert.deepEqual(usage.recordSessionCost(ws, { model: "m", provider: "p", cost: "nope" }), { ok: false, error: "cost must be a finite number" });
+    assert.equal(fs.existsSync(path.join(ws, usage.SESSION_COST_FILE)), false);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+function recordInChild(ws, index) {
+    const script = "const u=require(process.env.USAGE_MODULE);const r=u.recordSessionCost(process.env.WS,{model:'m'+process.env.INDEX,provider:'p',tokensIn:1});if(!r.ok){console.error(r.error);process.exit(1)}";
+    return new Promise((resolve, reject) => {
+        const child = spawn(process.execPath, ["-e", script], {
+            env: { ...process.env, USAGE_MODULE: require.resolve("../src/core/usage"), WS: ws, INDEX: String(index) },
+            stdio: ["ignore", "ignore", "pipe"]
+        });
+        let stderr = "";
+        child.stderr.on("data", chunk => { stderr += chunk; });
+        child.on("error", reject);
+        child.on("exit", code => code === 0 ? resolve() : reject(new Error(stderr || "child exited " + code)));
+    });
+}
+
+test("recordSessionCost serializes concurrent writers without dropping entries", async () => {
+    const ws = tmpWorkspace();
+    await Promise.all(Array.from({ length: 8 }, (_, index) => recordInChild(ws, index)));
+    assert.equal(usage.readSessionCost(ws).entries.length, 8);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("recordSessionCost retries a held lock", async () => {
+    const ws = tmpWorkspace();
+    const lockDir = path.join(ws, ".palsync", "session-cost.lock");
+    fs.mkdirSync(lockDir, { recursive: true });
+    const pending = recordInChild(ws, "retry");
+    await new Promise(resolve => setTimeout(resolve, 100));
+    fs.rmSync(lockDir, { recursive: true, force: true });
+    await pending;
+    assert.equal(usage.readSessionCost(ws).entries[0].model, "mretry");
+    fs.rmSync(ws, { recursive: true, force: true });
 });

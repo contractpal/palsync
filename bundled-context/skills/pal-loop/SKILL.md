@@ -232,9 +232,10 @@ Trigger: every task `done`, or every remaining task is a `blocked`/`needs-fronti
 `needs-human` the human accepted as parked.
 
 1. `baseline/` exists → run the regression re-check above, unconditionally.
-2. **Dispatch pal-review in a fresh session/subagent** with: SPEC.md, EXECUTION.md,
-   DESIGN_SYSTEM.md/COMPONENTS.md, `baseline/` (if any), and the pal's identity so it can
-   `pal_fetch`/`pal_screenshot`/`pal_test` the real artifacts.
+2. Run `palsync review brief`, then **dispatch pal-review in a fresh session/subagent** with its
+   EVIDENCE LEDGER output, SPEC.md, EXECUTION.md, DESIGN_SYSTEM.md/COMPONENTS.md, `baseline/`
+   (if any), and the pal's identity so it can `pal_fetch`/`pal_screenshot`/`pal_test` the real
+   artifacts.
 3. **PASS** → the build is genuinely done; report it.
 4. **CHANGES-NEEDED** → append each `## Fix tasks` item as a new EXECUTION.md task (next id,
    `spec ref` from the finding, `depends` per stated order, `todo`, tier `standard` unless it

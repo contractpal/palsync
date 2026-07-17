@@ -41,6 +41,19 @@ test("gateLint surfaces but does not block current workspace-level list/DataList
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("gateLint surfaces a workflow warning without increasing errors", () => {
+    const dir = tmpWorkspace({
+        "workflows/main.js": "function run(controller) { var s = controller.getName(); return s.length(); }",
+    });
+    const record = { fileHashes: {} };
+    const lint = gateLint(record, dir);
+    assert.equal(lint.errors, 0);
+    assert.equal(lint.warnings, 1);
+    assert.equal(lint.findings[0].rule, "lengthCall");
+    assert.equal(lint.findings[0].severity, "warn");
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("gateLint does not re-block a pre-existing per-file error in an untouched file", () => {
     const dir = tmpWorkspace({
         "fragments/legacy.html": '<c:ignore xmlns:c="contractpal"><c:a href="?action=save">Save</c:a></c:ignore>',

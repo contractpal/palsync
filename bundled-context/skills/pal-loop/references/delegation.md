@@ -54,6 +54,10 @@ A brief with an empty slot is invalid. Do not dispatch it.
    - the success-condition self-check it ran, with the key tool-output line(s) — never raw
      tool dumps or file dumps.
 
+For the build-complete pal-review handoff, run `palsync review brief` and include its full
+EVIDENCE LEDGER in the dispatch payload. The reviewer treats it as primary evidence and opens
+source only for the ledger's `NO EVIDENCE` criteria or a failed/ambiguous proof.
+
 ## 3. After the subagent returns — every time, no exceptions
 1. **Re-verify independently — never trust the report.** Run the task's tools yourself:
    - `pal_validate` before push; read push output for the stray-file warning.

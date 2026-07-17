@@ -19,6 +19,10 @@ const path = require("path");
 
 const USAGE_FILE = ".palsync.usage.json";
 const SESSION_COST_FILE = ".palsync/session-cost.json";
+const SESSION_COST_LOCK = ".palsync/session-cost.lock";
+const LOCK_RETRIES = 20;
+const LOCK_RETRY_MS = 25;
+const LOCK_STALE_MS = 2000;
 const tallies = new Map();
 const flushTimers = new Map();
 
@@ -281,6 +285,85 @@ function readSessionCost(workspaceDir) {
     return { entries };
 }
 
+function sleepSync(ms) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function normalizeSessionCostEntry(entry) {
+    if (!entry || typeof entry !== "object") return { ok: false, error: "entry is required" };
+    if (typeof entry.model !== "string" || !entry.model.trim()) return { ok: false, error: "model is required" };
+    if (typeof entry.provider !== "string" || !entry.provider.trim()) return { ok: false, error: "provider is required" };
+    if (entry.cost != null && entry.cost !== "" && !Number.isFinite(Number(entry.cost))) {
+        return { ok: false, error: "cost must be a finite number" };
+    }
+    for (const field of ["currency", "phase"]) {
+        if (entry[field] != null && typeof entry[field] !== "string") return { ok: false, error: field + " must be a string" };
+    }
+    const token = (value) => {
+        value = Number(value);
+        return Number.isFinite(value) ? Math.max(0, value) : 0;
+    };
+    const normalized = {
+        model: entry.model,
+        provider: entry.provider,
+        tokensIn: token(entry.tokensIn),
+        tokensCached: token(entry.tokensCached),
+        tokensOut: token(entry.tokensOut)
+    };
+    if (entry.cost != null && entry.cost !== "") normalized.cost = Number(entry.cost);
+    if (entry.currency != null) normalized.currency = entry.currency;
+    if (entry.phase != null) normalized.phase = entry.phase;
+    return { ok: true, entry: normalized };
+}
+
+// Append harness-reported model spend without losing concurrent writers. This stays synchronous
+// like the rest of this module so a short-lived CLI process cannot exit before the sidecar lands.
+function recordSessionCost(workspaceDir, entry) {
+    let locked = false;
+    let tmp = null;
+    try {
+        if (typeof workspaceDir !== "string" || !workspaceDir) return { ok: false, error: "workspace directory is required" };
+        const valid = normalizeSessionCostEntry(entry);
+        if (!valid.ok) return valid;
+        const dest = sessionCostPath(workspaceDir);
+        const lockDir = path.join(workspaceDir, SESSION_COST_LOCK);
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        for (let attempt = 0; attempt <= LOCK_RETRIES; attempt++) {
+            try {
+                fs.mkdirSync(lockDir);
+                locked = true;
+                break;
+            } catch (e) {
+                if (e.code !== "EEXIST") throw e;
+                try {
+                    if (Date.now() - fs.statSync(lockDir).mtimeMs > LOCK_STALE_MS) {
+                        fs.rmSync(lockDir, { recursive: true, force: true });
+                        continue;
+                    }
+                } catch (statError) { if (statError.code !== "ENOENT") throw statError; }
+                if (attempt === LOCK_RETRIES) return { ok: false, error: "session cost sidecar is locked" };
+                sleepSync(LOCK_RETRY_MS);
+            }
+        }
+        const existing = readSessionCost(workspaceDir);
+        const entries = existing ? existing.entries.slice() : [];
+        entries.push(valid.entry);
+        tmp = dest + ".palsync-tmp-" + process.pid + "-" + Math.random().toString(16).slice(2);
+        fs.writeFileSync(tmp, JSON.stringify({ entries }, null, 2) + "\n");
+        fs.renameSync(tmp, dest);
+        tmp = null;
+        return { ok: true, entry: valid.entry, path: dest };
+    } catch (e) {
+        return { ok: false, error: e && e.message ? e.message : String(e) };
+    } finally {
+        if (tmp) { try { fs.rmSync(tmp, { force: true }); } catch (e) { /* best effort */ } }
+        if (locked) {
+            try { fs.rmSync(path.join(workspaceDir, SESSION_COST_LOCK), { recursive: true, force: true }); }
+            catch (e) { /* best effort */ }
+        }
+    }
+}
+
 function makeAcc() { return { tokensIn: 0, tokensCached: 0, tokensOut: 0, cost: 0, hasCost: false }; }
 function addEntry(acc, e) {
     acc.tokensIn += Number(e.tokensIn) || 0;
@@ -411,5 +494,5 @@ function formatCost(workspaceDir, tools) {
 }
 
 module.exports = { recordToolCall, recordContextGeneration, contentBytes, contentStats, injectedContext,
-    formatCost, skillDescription, readSessionCost, normalizeV2, USAGE_FILE, SESSION_COST_FILE,
+    formatCost, skillDescription, readSessionCost, recordSessionCost, phaseTotals, normalizeV2, USAGE_FILE, SESSION_COST_FILE,
     SOFT_THRESHOLD_BYTES };

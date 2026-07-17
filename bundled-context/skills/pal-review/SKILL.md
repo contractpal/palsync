@@ -12,6 +12,8 @@ the build meets the contract. pal-loop ran the *tests* (compile/validate); you r
 never pal-loop's self-report.
 
 ## Inputs (read all, first)
+- Run `palsync review brief` first. Treat its EVIDENCE LEDGER as primary evidence; open source
+  files only for criteria listed under `NO EVIDENCE` or for a specific failed/ambiguous proof.
 - `SPEC.md` (must be `status: approved`) — the contract: §3 sitemap, §4 copy, §5 behavior,
   §6 layout, §11 constraints, §12 acceptance criteria.
 - `EXECUTION.md` — what was built and in what state.
@@ -66,10 +68,7 @@ proof artifact for rendered output or data effects.
   verdict `CHANGES-NEEDED` with a fix task to run the exercise. Do not convert a plausible
   file:line trace into a data-effects pass.
 
-Common exercise-authoring mistakes: duplicate-text clicks need `within`; an input `value` is not
-visible text; CSS `text-transform` means assert source casing; deleted records need `absent` plus
-empty-state copy; console workflows use fill/click, not web action/page steps; split flows longer
-than 10 steps into separate exercises.
+Common exercise-authoring mistakes: scope duplicate-text clicks with `within: 'tr:has([data-label="Name"]:has-text("{{runId}}"))'`; use full unique old/new values where neither is a substring of the other; an input `value` is not visible text; CSS `text-transform` means assert source casing; prove deletion by the unique value's `absent`, not global empty-state copy; console workflows use fill/click, not web action/page steps; split flows longer than 10 steps into separate exercises.
 - Copy on-brand per BRAND_VOICE / DESIGN_SYSTEM intent, not just present?
 - §6 layout matches the composition the spec described?
 

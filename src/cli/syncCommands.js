@@ -46,8 +46,9 @@ const USAGE = [
     "  palsync exercise --steps '<json>' | --steps-file <path> [--workflow console|web|transaction] [--viewport desktop|mobile] [--keep-lock] [--dir <ws>]",
     "                                                               Exercise workflow actions end-to-end; assert expect/absent strings in the rendered result",
     "  palsync cost   [--dir <workspace>]                           palsync's own context contribution: tool calls + bytes returned + injected-block size (offline)",
+    "  palsync cost record --model X --provider Y --in N --cached N --out N [--cost N] [--currency USD] [--phase build|review] [--dir <ws>]",
     "  palsync context inspect|diff [--dir <workspace>]             Inspect locally stable context or compare the last changed generation (offline)",
-    "  palsync review check [--dir <workspace>]                    Verify REVIEW.md PASS claims have successful pal_exercise evidence (offline)",
+    "  palsync review check|brief [--dir <workspace>]              Check REVIEW.md evidence or print the pre-review evidence ledger (offline)",
     "  palsync regression [--keep-lock] [--dir <ws>]                Brownfield regression vs baseline/baseline.json (freshness -> validate/test/H1; caused vs inherited)",
     "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Mechanical reality-check of a SPEC.md (offline): placeholders, dead links, §8a types, §12 floor",
     "  palsync task list [--ready] [--dir <ws>]                     List EXECUTION.md tasks; --ready prints the first todo whose depends are all done",
@@ -106,6 +107,16 @@ function parseFlags(argv) {
         else if (a.startsWith("--steps=")) flags.steps = a.slice("--steps=".length);
         else if (a === "--steps-file") { flags.stepsFile = argv[++i]; if (!flags.stepsFile) throw new Error("--steps-file requires a path"); }
         else if (a.startsWith("--steps-file=")) flags.stepsFile = a.slice("--steps-file=".length);
+        else if (["--model", "--provider", "--in", "--cached", "--out", "--cost", "--currency", "--phase"].includes(a)) {
+            const key = { "--model": "model", "--provider": "provider", "--in": "tokensIn", "--cached": "tokensCached", "--out": "tokensOut", "--cost": "cost", "--currency": "currency", "--phase": "phase" }[a];
+            flags[key] = argv[++i];
+            if (flags[key] === undefined) throw new Error(a + " requires a value");
+        }
+        else if (["--model=", "--provider=", "--in=", "--cached=", "--out=", "--cost=", "--currency=", "--phase="].some(prefix => a.startsWith(prefix))) {
+            const prefix = a.slice(0, a.indexOf("=") + 1);
+            const key = { "--model=": "model", "--provider=": "provider", "--in=": "tokensIn", "--cached=": "tokensCached", "--out=": "tokensOut", "--cost=": "cost", "--currency=": "currency", "--phase=": "phase" }[prefix];
+            flags[key] = a.slice(prefix.length);
+        }
         else if (a === "--dir") { flags.dir = argv[++i]; if (!flags.dir) throw new Error("--dir requires a value"); }
         else if (a.startsWith("--dir=")) flags.dir = a.slice("--dir=".length);
         else if (a.charAt(0) !== "-" && flags._positional === undefined) flags._positional = a;
@@ -199,8 +210,12 @@ async function run(cmd, argv) {
     const dir = path.resolve(flags.dir || process.cwd());
 
     if (cmd === "review") {
-        if (flags._positional !== "check") { console.error("Usage: palsync review check [--dir <workspace>]"); return 1; }
         const reviewCheck = require("../core/reviewCheck");
+        if (flags._positional === "brief") {
+            console.log(reviewCheck.formatReviewBrief(reviewCheck.buildReviewBrief(dir)));
+            return 0;
+        }
+        if (flags._positional !== "check") { console.error("Usage: palsync review check|brief [--dir <workspace>]"); return 1; }
         const result = reviewCheck.checkWorkspace(dir);
         console.log(reviewCheck.formatReviewCheck(result));
         return result.ok ? 0 : 1;
@@ -220,6 +235,12 @@ async function run(cmd, argv) {
     // MCP server) and measures the injected context block from the workspace files. No login/lock.
     if (cmd === "cost") {
         const usage = require("../core/usage");
+        if (flags._positional === "record") {
+            const result = usage.recordSessionCost(dir, flags);
+            if (!result.ok) { console.error("cost record failed: " + result.error); return 1; }
+            console.log("Recorded session cost for " + result.entry.model + " (" + result.entry.provider + ").");
+            return 0;
+        }
         console.log(usage.formatCost(dir, TOOLS));
         return 0;
     }

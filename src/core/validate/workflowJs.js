@@ -75,6 +75,21 @@ const RULES = {
             "Fix: use an ES3 equivalent such as indexOf/substring, or write a classic loop for the operation. " +
             "See palbuilder-core/references/es3-cheatsheet.md (unsupported String/Array methods)."
     },
+    // Evidence: palbuilder-core/references/es3-cheatsheet.md documents `.length` as a
+    // property in its supported syntax, loops, and replacement examples (lines 21, 119, 288).
+    lengthCall: {
+        severity: "warn",
+        msg: "`.length()` calls length as a function, but length is a property; this throws at runtime. " +
+            "Fix: drop the parentheses and use `.length`. See palbuilder-core/references/es3-cheatsheet.md."
+    },
+    // Evidence: palbuilder-workflow/references/legacy-api-reference.md documents filter-based
+    // findRecord(filter), findRecord(column, value), and getRecords(filter) as distinct valid paths.
+    findRecordSelectColumns: {
+        severity: "warn",
+        msg: "This record column was excluded by the filter's selectColumns(), so get() cannot read it from " +
+            "findRecord(filter). Fix: add the column to selectColumns(), or remove the projection when the full " +
+            "record is required. See palbuilder-workflow/references/legacy-api-reference.md."
+    },
     funcExpr: {
         severity: "warn",
         msg: "Function expression (var f = function(){}) — not confirmed supported by the workflow engine. " +
@@ -301,6 +316,110 @@ function checkFragClobber(rel, ast, findings) {
     });
 }
 
+function walkFunctionBody(node, visit) {
+    if (!node || typeof node.type !== "string") return;
+    visit(node);
+    for (const key of Object.keys(node)) {
+        if (key === "loc" || key === "start" || key === "end" || key === "range") continue;
+        const value = node[key];
+        if (Array.isArray(value)) {
+            for (const child of value) {
+                if (child && /^Function/.test(child.type)) continue;
+                walkFunctionBody(child, visit);
+            }
+        } else if (value && typeof value.type === "string" && !/^Function/.test(value.type)) {
+            walkFunctionBody(value, visit);
+        }
+    }
+}
+
+function memberCall(node, name) {
+    return node && node.type === "CallExpression" && node.callee &&
+        node.callee.type === "MemberExpression" && !node.callee.computed &&
+        node.callee.property && node.callee.property.name === name;
+}
+
+function checkFindRecordSelectColumns(rel, ast, findings) {
+    walk(ast, null, null, (func) => {
+        if (!/^Function/.test(func.type) || !func.body) return;
+        const filters = new Map();
+        const records = new Map();
+        const gets = [];
+
+        walkFunctionBody(func.body, (node) => {
+            if (node.type === "VariableDeclarator" && node.id && node.id.type === "Identifier") {
+                const name = node.id.name;
+                if (memberCall(node.init, "createFilter")) {
+                    if (filters.has(name)) filters.get(name).invalid = true;
+                    else filters.set(name, { columns: null, invalid: false, selectedAt: null });
+                } else if (filters.has(name)) {
+                    filters.get(name).invalid = true;
+                }
+
+                if (memberCall(node.init, "findRecord") && node.init.arguments.length === 1 &&
+                    node.init.arguments[0].type === "Identifier") {
+                    const filter = filters.get(node.init.arguments[0].name);
+                    if (filter) {
+                        const duplicate = records.has(name);
+                        if (duplicate) records.get(name).invalid = true;
+                        records.set(name, { filter, invalid: duplicate, start: node.init.end, queryStart: node.init.start });
+                    }
+                } else if (records.has(name)) {
+                    records.get(name).invalid = true;
+                }
+            }
+
+            if (node.type === "AssignmentExpression" && node.left && node.left.type === "Identifier") {
+                if (filters.has(node.left.name)) filters.get(node.left.name).invalid = true;
+                if (records.has(node.left.name)) records.get(node.left.name).invalid = true;
+            }
+
+            if (node.type !== "CallExpression" || !node.callee || node.callee.type !== "MemberExpression") return;
+            const member = node.callee;
+            const objectName = member.object && member.object.type === "Identifier" ? member.object.name : null;
+            if (member.computed) {
+                if (filters.has(objectName)) filters.get(objectName).invalid = true;
+                if (records.has(objectName)) records.get(objectName).invalid = true;
+                if (node.arguments.length === 1 && node.arguments[0].type === "Identifier" && filters.has(node.arguments[0].name)) {
+                    filters.get(node.arguments[0].name).invalid = true;
+                }
+                return;
+            }
+
+            if (member.property.name === "selectColumns" && filters.has(objectName)) {
+                const filter = filters.get(objectName);
+                const arg = node.arguments.length === 1 ? node.arguments[0] : null;
+                if (filter.columns || !arg || arg.type !== "ArrayExpression" ||
+                    arg.elements.some(e => !e || e.type !== "Literal" || typeof e.value !== "string")) {
+                    filter.invalid = true;
+                } else {
+                    filter.columns = new Set(arg.elements.map(e => e.value));
+                    filter.selectedAt = node.end;
+                }
+            }
+
+            if (member.property.name === "get" && records.has(objectName)) {
+                const record = records.get(objectName);
+                const arg = node.arguments.length === 1 ? node.arguments[0] : null;
+                if (!arg || arg.type !== "Literal" || typeof arg.value !== "string") {
+                    record.invalid = true;
+                } else if (node.start > record.start) {
+                    gets.push({ record, arg });
+                }
+            }
+        });
+
+        for (const item of gets) {
+            const record = item.record;
+            if (!record.invalid && !record.filter.invalid && record.filter.columns &&
+                record.filter.selectedAt < record.queryStart &&
+                !record.filter.columns.has(item.arg.value)) {
+                findings.push(finding(rel, item.arg, "findRecordSelectColumns", "(missing column '" + item.arg.value + "')"));
+            }
+        }
+    });
+}
+
 // Lint one workflow file's source. rel is the display path (e.g. "workflows/main.js").
 function lintWorkflowJs(rel, source) {
     const findings = [];
@@ -362,6 +481,8 @@ function lintWorkflowJs(rel, source) {
                         findings.push(finding(rel, node.callee.property, "hof", "(.'" + node.callee.property.name + "')"));
                     } else if (BANNED_METHODS.has(node.callee.property.name)) {
                         findings.push(finding(rel, node.callee.property, "bannedMethod", "(.'" + node.callee.property.name + "()')"));
+                    } else if (node.callee.property.name === "length") {
+                        findings.push(finding(rel, node.callee.property, "lengthCall"));
                     }
                 }
                 break;
@@ -385,6 +506,7 @@ function lintWorkflowJs(rel, source) {
     });
 
     checkFragClobber(rel, ast, findings);
+    checkFindRecordSelectColumns(rel, ast, findings);
 
     // Stable order: by line, then column.
     findings.sort((a, b) => a.line - b.line || a.column - b.column);

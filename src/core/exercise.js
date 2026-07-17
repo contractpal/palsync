@@ -91,6 +91,9 @@ function lintSteps(steps) {
     const warnings = [];
     const errors = [];
     let runIdDeleted = false;
+    const earlierFillValues = [];
+    const hasRunIdFill = steps.some(s => s.fill && Object.values(s.fill).some(v => String(v).indexOf("{{runId}}") !== -1));
+    const canonicalWithin = "within: 'tr:has([data-label=\"Name\"]:has-text(\"{{runId}}\"))'";
 
     function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
     function findStatusWord(a) {
@@ -116,6 +119,30 @@ function lintSteps(steps) {
 
     steps.forEach((s, i) => {
         const at = "step " + (i + 1);
+        const currentFillValues = s.fill ? Object.values(s.fill).map(String) : [];
+
+        // Shared text exists in containing rows and cards, so :has-text() needs the unique run value.
+        // This remains advisory: fixed text may intentionally target a pre-existing record.
+        if (s.within && /:has-text\s*\(/i.test(s.within) && s.within.indexOf("{{runId}}") === -1) {
+            warnings.push(at + " `within` uses :has-text() without {{runId}} and may match a shared-name row/card; use " + canonicalWithin +
+                (hasRunIdFill ? ". This exercise fills a {{runId}} value, so scope the action to that record" : ""));
+        }
+
+        // An absent string that is contained by expected or filled text can never disappear.
+        for (const a of s.absent || []) {
+            const evidence = (s.expect || []).map(String).concat(earlierFillValues, currentFillValues);
+            if (a && evidence.some(e => e !== a && e.indexOf(a) !== -1)) {
+                errors.push(at + " absent value " + JSON.stringify(a) + " is a substring of an expected or filled value, so the assertion cannot pass; use full unique old/new values (`'Old {{runId}}'` absent, `'New {{runId}}'` expect), neither a substring of the other");
+            }
+        }
+
+        // Shared datasets make page-global empty-state copy unreliable evidence.
+        if (!s.within) {
+            const emptyState = (s.expect || []).concat(s.absent || []).find(v => /^no\s+\w+/i.test(v));
+            if (emptyState) {
+                warnings.push(at + " global empty-state assertion " + JSON.stringify(emptyState) + " is unsafe in a shared dataset; assert absence of the unique {{runId}} value instead");
+            }
+        }
 
         // 1. Global absent checks on common status words against multi-row lists.
         if (s.absent && !s.within) {
@@ -132,7 +159,7 @@ function lintSteps(steps) {
         if (s.click && !s.within) {
             const label = s.click.trim();
             if (DUPLICATE_ACTION_LABELS.includes(label)) {
-                errors.push(at + " click \"" + label + "\" appears in every row; scope it with a unique row selector such as tr:has([data-label=\"Name\"]:has-text(\"Record {{runId}}\"))");
+                errors.push(at + " click \"" + label + "\" appears in every row; scope it with a unique row selector such as " + canonicalWithin);
             }
         }
 
@@ -173,11 +200,12 @@ function lintSteps(steps) {
             for (const raw of s.expect) {
                 const e = meaningful(raw);
                 if (e && filled.some(v => v === e)) {
-                    warnings.push(at + " expects a value that was just typed into an input; inputs only show it in markup until a save action renders it as visible text. Assert the value in visible rendered text after the click, or use an action that exposes it.");
+                    warnings.push(at + " expects a value that was just typed into an input; inputs only show it in markup until a save action renders it as visible text. Assert the value in visible rendered text after the click, using full unique old/new values (`'Old {{runId}}'` absent, `'New {{runId}}'` expect), neither a substring of the other.");
                     break;
                 }
             }
         }
+        earlierFillValues.push(...currentFillValues);
     });
     return { warnings, errors };
 }

@@ -316,7 +316,7 @@
                 "type": "string"
               },
               "within": {
-                "description": "Browser mode: scope click to exactly one CSS/Playwright locator, e.g. tr:has-text(\"Camera {{runId}}\"). Required when the same action text appears in multiple rows/cards.",
+                "description": "Browser mode: scope click to exactly one CSS/Playwright locator through its identifying cell, e.g. tr:has([data-label=\"Name\"]:has-text(\"{{runId}}\")). Required when the same action text appears in multiple rows/cards; shared-name :has-text() scopes are ambiguous.",
                 "type": "string"
               },
               "expect": {
@@ -327,7 +327,7 @@
                 }
               },
               "absent": {
-                "description": "Strings that must NOT appear in visible rendered text after this step (the pre-edit value; a stale row proves a duplicate insert).",
+                "description": "Full unique strings that must NOT appear in visible rendered text after this step. For edits, use unique old/new values where neither is a substring of the other; a stale old value proves a duplicate insert.",
                 "type": "array",
                 "items": {
                   "type": "string"

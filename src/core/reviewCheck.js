@@ -4,7 +4,10 @@
 // least one successful pal_exercise call in the current session.
 const fs = require("fs");
 const path = require("path");
-const { USAGE_FILE } = require("./usage");
+const { USAGE_FILE, SESSION_COST_FILE, readSessionCost, phaseTotals } = require("./usage");
+const { parseTasks, STATUSES } = require("./taskState");
+
+const REVIEW_TOOLS = ["pal_exercise", "pal_test", "pal_push", "pal_screenshot"];
 
 function readJson(file) {
     try { return JSON.parse(fs.readFileSync(file, "utf8")); }
@@ -61,4 +64,74 @@ function formatReviewCheck(result) {
     return lines.join("\n");
 }
 
-module.exports = { successfulExerciseCalls, passRows, checkReview, checkWorkspace, formatReviewCheck };
+function toolCalls(ledger, name) {
+    if (!ledger) return null;
+    const tool = ledger.tools && ledger.tools[name];
+    return {
+        successful: tool && Number.isFinite(Number(tool.successfulCalls)) ? Number(tool.successfulCalls) : 0,
+        total: tool && Number.isFinite(Number(tool.calls)) ? Number(tool.calls) : 0
+    };
+}
+
+function taskEvidence(workspaceDir) {
+    try {
+        const parsed = parseTasks(fs.readFileSync(path.join(workspaceDir, "EXECUTION.md"), "utf8"));
+        if (!parsed.ok) return { available: false, detail: "unreadable (" + parsed.error + ")" };
+        const counts = Object.fromEntries(STATUSES.map(status => [status, 0]));
+        for (const row of parsed.rows) counts[row.status] = (counts[row.status] || 0) + 1;
+        return { available: true, total: parsed.rows.length, counts };
+    } catch (e) {
+        return { available: false, detail: "not available" };
+    }
+}
+
+function buildReviewBrief(workspaceDir) {
+    const usage = readJson(path.join(workspaceDir, USAGE_FILE));
+    const cost = readSessionCost(workspaceDir);
+    return {
+        usageAvailable: usage !== null,
+        tools: Object.fromEntries(REVIEW_TOOLS.map(name => [name, toolCalls(usage, name)])),
+        cost: cost ? Object.assign({ available: true, entries: cost.entries }, phaseTotals(cost.entries)) : { available: false },
+        tasks: taskEvidence(workspaceDir)
+    };
+}
+
+function formatAccumulator(acc, currency) {
+    const cost = acc.hasCost ? acc.cost.toFixed(4) + " " + currency : "not provided";
+    return "in=" + acc.tokensIn + " cached=" + acc.tokensCached + " out=" + acc.tokensOut + " cost=" + cost;
+}
+
+function formatReviewBrief(brief) {
+    const lines = ["palsync review brief", "EVIDENCE LEDGER"];
+    lines.push("usage sidecar: " + (brief.usageAvailable ? "available" : "not available"));
+    lines.push("tool calls (successful/total):");
+    for (const name of REVIEW_TOOLS) {
+        const calls = brief.tools[name];
+        lines.push("  " + name + ": " + (calls ? calls.successful + "/" + calls.total : "not available"));
+    }
+    lines.push("session cost sidecar: " + (brief.cost.available ? "available" : "not available"));
+    if (brief.cost.available) {
+        const currency = (brief.cost.entries[0] && brief.cost.entries[0].currency) || "USD";
+        lines.push("  total: " + formatAccumulator(brief.cost.total, currency));
+        for (const phase of ["build", "review", "other"]) {
+            lines.push("  " + phase + ": " + (brief.cost.phases[phase] ? formatAccumulator(brief.cost.phases[phase], currency) : "not available"));
+        }
+    } else {
+        lines.push("  total: not available");
+        lines.push("  build: not available");
+        lines.push("  review: not available");
+        lines.push("  other: not available");
+    }
+    lines.push("EXECUTION.md tasks: " + (brief.tasks.available ? brief.tasks.total + " total" : brief.tasks.detail));
+    for (const status of STATUSES) lines.push("  " + status + ": " + (brief.tasks.available ? brief.tasks.counts[status] || 0 : "not available"));
+    lines.push("NO EVIDENCE — open source only for these:");
+    lines.push("- SPEC requirements not represented by the tool and task tallies above");
+    lines.push("- action-to-workflow-to-data traces not proven by a named exercise result");
+    lines.push("- implementation constraints and workflow-payload-to-fragment contracts");
+    return lines.join("\n");
+}
+
+module.exports = {
+    successfulExerciseCalls, passRows, checkReview, checkWorkspace, formatReviewCheck,
+    buildReviewBrief, formatReviewBrief
+};

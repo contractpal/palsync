@@ -39,6 +39,38 @@ test("USAGE documents browser-open preview default and no-open escape hatch", ()
     assert.match(USAGE, /palsync open/);
     assert.doesNotMatch(USAGE, /palsync scaffold/);
     assert.match(USAGE, /palsync context inspect\|diff/);
+    assert.match(USAGE, /palsync cost record --model X --provider Y/);
+});
+
+test("parseFlags parses cost record fields", () => {
+    assert.deepEqual(
+        (({ _positional, model, provider, tokensIn, tokensCached, tokensOut, cost, currency, phase }) =>
+            ({ _positional, model, provider, tokensIn, tokensCached, tokensOut, cost, currency, phase }))(
+            parseFlags(["record", "--model", "m", "--provider=p", "--in", "1", "--cached=2", "--out", "3", "--cost=0.1", "--currency", "USD", "--phase=review"])
+        ),
+        { _positional: "record", model: "m", provider: "p", tokensIn: "1", tokensCached: "2", tokensOut: "3", cost: "0.1", currency: "USD", phase: "review" }
+    );
+});
+
+test("cost record writes the sidecar and reports validation errors", async () => {
+    const ws = tmpWorkspace();
+    const originalLog = console.log;
+    const originalError = console.error;
+    const output = [];
+    console.log = (...args) => output.push(args.join(" "));
+    console.error = (...args) => output.push(args.join(" "));
+    try {
+        const syncCommands = require("../src/cli/syncCommands");
+        assert.equal(await syncCommands.run("cost", ["record", "--model", "m", "--provider", "p", "--in", "1", "--cached", "0", "--out", "2", "--dir", ws]), 0);
+        assert.equal(await syncCommands.run("cost", ["record", "--provider", "p", "--dir", ws]), 1);
+    } finally {
+        console.log = originalLog;
+        console.error = originalError;
+    }
+    assert.match(output[0], /Recorded session cost for m \(p\)/);
+    assert.match(output[1], /cost record failed: model is required/);
+    assert.equal(require("../src/core/usage").readSessionCost(ws).entries.length, 1);
+    fs.rmSync(ws, { recursive: true, force: true });
 });
 
 test("context inspect and diff run fully offline", async () => {

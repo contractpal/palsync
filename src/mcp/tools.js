@@ -841,9 +841,9 @@ const TOOLS = [
                 params: z.record(z.union([z.string(), z.number()])).optional().describe("WEB only: query params sent with the action, e.g. {\"name\":\"Camera\"}."),
                 fill: z.record(z.union([z.string(), z.number()])).optional().describe("Fill inputs by their name= attribute before clicking, e.g. {\"name\":\"Camera\",\"category\":\"AV\"}."),
                 click: z.string().optional().describe("EXACT visible text of the link/button to click (a c:a Save link), or a simple #id/.class selector."),
-                within: z.string().optional().describe("Browser mode: scope click to exactly one CSS/Playwright locator, e.g. tr:has-text(\"Camera {{runId}}\"). Required when the same action text appears in multiple rows/cards."),
+                within: z.string().optional().describe("Browser mode: scope click to exactly one CSS/Playwright locator through its identifying cell, e.g. tr:has([data-label=\"Name\"]:has-text(\"{{runId}}\")). Required when the same action text appears in multiple rows/cards; shared-name :has-text() scopes are ambiguous."),
                 expect: z.array(z.string()).optional().describe("Strings that MUST appear in visible rendered text after this step (for example, the saved value in the list). Hidden markup and input value= attributes do not count."),
-                absent: z.array(z.string()).optional().describe("Strings that must NOT appear in visible rendered text after this step (the pre-edit value; a stale row proves a duplicate insert).")
+                absent: z.array(z.string()).optional().describe("Full unique strings that must NOT appear in visible rendered text after this step. For edits, use unique old/new values where neither is a substring of the other; a stale old value proves a duplicate insert.")
             })).min(1).max(10).describe("Steps run in order; the run stops at the first failing step."),
             workflow: z.enum(["console", "web", "transaction"]).optional().describe("Engine to exercise (default: auto-detected)."),
             viewport: z.enum(["desktop", "mobile"]).optional().describe("Browser-mode viewport (default desktop).")
