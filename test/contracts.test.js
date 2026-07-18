@@ -1057,3 +1057,68 @@ test("scriptWithoutConsumer accepts pb-motion with data-animate markup", () => {
     assert.strictEqual(lintContracts(dir).filter(f => f.rule === "scriptWithoutConsumer").length, 0);
     fs.rmSync(dir, { recursive: true, force: true });
 });
+
+// --- filename-resolution conventions (reports/2026-07-18 equipment_checkout runs) ---------------
+
+test("bannedFilenamePrefix — workflows/fragments filename repeating its category folder errors", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({
+            workflows: { entry: [{ string: "console.js", Workflow: { name: "console.js", filename: "workflows/console.js" } }] },
+            fragments: { entry: [{ string: "list.html", Fragment: { name: "list.html", filename: "fragments/list.html" } }] },
+        }),
+    });
+    const findings = lintPalJson(dir).filter(f => f.rule === "bannedFilenamePrefix");
+    assert.strictEqual(findings.length, 2);
+    assert.ok(findings.every(f => f.severity === "error"));
+    assert.match(findings[0].message, /"console\.js"/);
+    assert.match(findings[1].message, /"list\.html"/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("bannedFilenamePrefix — layout.consoleWorkflow with workflows/ prefix errors; clean layout passes", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({ layout: { consoleWorkflow: "workflows/console.js", webWorkflow: "web.js" } }),
+    });
+    const findings = lintPalJson(dir).filter(f => f.rule === "bannedFilenamePrefix");
+    assert.strictEqual(findings.length, 1);
+    assert.match(findings[0].message, /layout\.consoleWorkflow/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("bannedFilenamePrefix — legit subfolder paths and prefixed styles/scripts produce no finding", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({
+            workflows: { entry: [{ string: "defaults/default_console.js", Workflow: { name: "defaults/default_console.js", filename: "defaults/default_console.js" } }] },
+            styles: { entry: [{ string: "styles.css", Style: { name: "styles.css", filename: "styles/styles.css" } }] },
+        }),
+    });
+    assert.strictEqual(lintPalJson(dir).filter(f => f.rule === "bannedFilenamePrefix").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("missingManifestFilename — fragment entry without Fragment.filename errors with the exact entry shape", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({
+            fragments: { entry: [{ string: "navbar.html", Fragment: { name: "navbar.html" } }] },
+        }),
+        "fragments/navbar.html": "<c:ignore xmlns:c=\"contractpal\">x</c:ignore>",
+    });
+    const findings = lintPalJson(dir).filter(f => f.rule === "missingManifestFilename");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "error");
+    assert.match(findings[0].message, /"filename": "navbar\.html"/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("missingFragment — name= with .html extension leads with the corrected extensionless markup", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({}),
+        "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="navbar.html"/></body></html>',
+        "fragments/navbar.html": "<c:ignore xmlns:c=\"contractpal\">x</c:ignore>",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "missingFragment");
+    assert.strictEqual(findings.length, 1);
+    assert.match(findings[0].message, /EXTENSIONLESS/);
+    assert.match(findings[0].message, /<c:fragment name="navbar"\/>/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});

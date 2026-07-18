@@ -321,6 +321,72 @@ function listFilesRecursive(root) {
     return out;
 }
 
+// Filename-resolution conventions, verified live (reports/2026-07-18 equipment_checkout runs):
+// workflows and fragments are resolved by the platform's internal NAME registry, so their
+// manifest filename is category-relative WITHOUT the folder prefix. "workflows/console.js"
+// pushes fine but breaks at runtime — "Error: Invalid workflow: console" for workflows, a
+// silently-empty getAjaxFragment() for fragments; removing the prefix fixed both (haiku-4.5
+// report, findings #1/#2). styles/scripts are loaded by literal URL and legitimately keep the
+// "styles/x.css" disk-relative form (observed working in the same pal) — not checked here.
+// A fragment entry with no Fragment.filename is save-REJECTED by the server after clean local
+// lint (deepseek-v4-flash report, finding #4 — 52 retries against this exact rejection).
+const NAME_RESOLVED_FOLDERS = { workflows: "Workflow", fragments: "Fragment" };
+
+function checkEntryFilenames(manifest) {
+    const findings = [];
+    const err = (rule, message) => findings.push({
+        file: "pal.json", line: 1, column: 0, severity: "error", rule, message,
+    });
+
+    for (const folder of Object.keys(NAME_RESOLVED_FOLDERS)) {
+        const typeName = NAME_RESOLVED_FOLDERS[folder];
+        const section = manifest[folder];
+        if (!isObject(section) || !Array.isArray(section.entry)) continue;
+        for (let i = 0; i < section.entry.length; i++) {
+            const entry = section.entry[i];
+            if (!isObject(entry)) continue;
+            const body = entry[typeName];
+            if (!isObject(body)) continue;
+            const at = "pal.json " + folder + ".entry[" + i + "]." + typeName;
+            if (folder === "fragments" && !nonEmptyString(body.filename)) {
+                err("missingManifestFilename", at + ".filename is missing — the server REJECTS " +
+                    "the whole save when a fragment entry has no filename, even when local lint " +
+                    "is clean. Fix: set " + typeName + ".filename to the category-relative file, " +
+                    "e.g. { \"string\": \"" + entry.string + "\", \"" + typeName + "\": { \"name\": \"" +
+                    entry.string + "\", \"filename\": \"" + entry.string + "\" } }.");
+                continue;
+            }
+            if (nonEmptyString(body.filename) && body.filename.startsWith(folder + "/")) {
+                const fixed = body.filename.slice(folder.length + 1);
+                err("bannedFilenamePrefix", at + ".filename \"" + body.filename + "\" repeats its " +
+                    "own category folder — " + folder + " are resolved by internal name lookup, " +
+                    "so this pushes fine but BREAKS at runtime (" +
+                    (folder === "workflows"
+                        ? "\"Error: Invalid workflow\" on page load"
+                        : "the fragment silently renders nothing") +
+                    "). Fix: use the category-relative value \"" + fixed + "\".");
+            }
+        }
+    }
+
+    // The same runtime lookup applies to layout.*Workflow pointers ("workflows/console.js" in
+    // layout.consoleWorkflow was the exact bug that broke the haiku-built console pal).
+    const layout = manifest.layout;
+    if (isObject(layout)) {
+        for (const key of Object.keys(layout)) {
+            if (!/Workflow$/.test(key)) continue;
+            const value = layout[key];
+            if (typeof value === "string" && value.startsWith("workflows/")) {
+                err("bannedFilenamePrefix", "pal.json layout." + key + " \"" + value + "\" repeats " +
+                    "the workflows/ folder — layout workflow pointers are category-relative names. " +
+                    "This pushes fine but the page fails at runtime with \"Error: Invalid workflow\". " +
+                    "Fix: \"" + value.slice("workflows/".length) + "\".");
+            }
+        }
+    }
+    return findings;
+}
+
 function checkFolderRegistrations(manifest) {
     return analyzeFolderRegistrations(manifest).map(f => {
         const isBucket = f.phantomBucket;
@@ -431,6 +497,7 @@ function lintPalJson(workspaceDir) {
         }
     }
 
+    findings.push(...checkEntryFilenames(manifest));
     findings.push(...checkUnknownKeys(manifest));
     findings.push(...checkDataStructures(manifest));
     findings.push(...checkFolderRegistrations(manifest));
@@ -438,4 +505,4 @@ function lintPalJson(workspaceDir) {
     return findings;
 }
 
-module.exports = { lintPalJson, checkUnknownKeys, checkDataStructures, checkFolderRegistrations, listFilesRecursive };
+module.exports = { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryFilenames, checkFolderRegistrations, listFilesRecursive };

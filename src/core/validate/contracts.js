@@ -692,10 +692,16 @@ function checkStaticFragmentExists(markupFiles, findings) {
             if (name == null || /^\$\{\s*[\w]+\s*\}$/.test(name)) return;
             const target = "fragments/" + String(name).replace(/^\/+|\/+$/g, "");
             if (shipped.has(target)) return;
+            // Trailing ".html" in name= is the most common cause (resolves to <name>.html.html):
+            // lead with the exact corrected markup instead of the generic add-a-file advice.
+            const extIncluded = /\.(?:html?|xhtml)$/i.test(String(name));
             findings.push({
                 file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "missingFragment",
-                message: "<c:fragment name=\"" + name + "\"/> references " + target + ".html, but that static fragment is not shipped. " +
-                    "Fix: add fragments/" + name + ".html (or change name= to an existing fragment path). See the palbuilder-frontend skill, \"c:fragment\"."
+                message: extIncluded
+                    ? "<c:fragment name=\"" + name + "\"/> — fragment names are EXTENSIONLESS; this resolves to " +
+                      target + ".html. Fix: <c:fragment name=\"" + String(name).replace(/\.(?:html?|xhtml)$/i, "") + "\"/>."
+                    : "<c:fragment name=\"" + name + "\"/> references " + target + ".html, but that static fragment is not shipped. " +
+                      "Fix: add fragments/" + name + ".html (or change name= to an existing fragment path). See the palbuilder-frontend skill, \"c:fragment\"."
             });
         });
     }

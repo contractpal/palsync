@@ -1126,6 +1126,7 @@ const TOOLS = [
                 return Object.assign(res, envelopeFields(ctx.workspaceDir, "pal_push", source, args));
             }
             if (res.pushed) {
+                ctx.pushRefusalStreak = null;
                 refreshBaseline(ctx.record, ctx.workspaceDir, res.serverPaths);
                 await ctx.persist();
                 ctx.renderVerified = false; // a push can change what renders — re-verify before declaring done
@@ -1175,10 +1176,29 @@ const TOOLS = [
             // Show the server's validation notes — this is the real reason (e.g. a tag the server
             // doesn't allow), not a generic failure.
             if (res.refused === "save-rejected") {
+                // Retry-loop breaker: an eval run burned 52 pushes against the byte-identical
+                // server rejection (reports/2026-07-18 deepseek run, finding #3). Track the
+                // normalized rejection per session; on the 2nd identical one, tell the agent to
+                // STOP pushing and change its hypothesis instead of iterating blind.
+                const sig = JSON.stringify(res.validation == null ? null : res.validation);
+                const prior = ctx.pushRefusalStreak;
+                ctx.pushRefusalStreak = (prior && prior.sig === sig)
+                    ? { sig, count: prior.count + 1 } : { sig, count: 1 };
+                const streak = ctx.pushRefusalStreak.count;
+                const repeatBlock = streak >= 2
+                    ? "REPEATED FAILURE: the server rejected this push with the IDENTICAL response " +
+                      streak + " times in a row. Your last change did not address the real cause — " +
+                      "do NOT push again until you have a NEW root-cause hypothesis. Next steps: " +
+                      "re-read the rejection notes above literally; run pal_validate; check the " +
+                      "pal.json entry shape for every file this push adds (each entry needs its " +
+                      "\"string\", \"name\", and \"filename\"); compare against a working entry of " +
+                      "the same type."
+                    : null;
                 const source = Object.assign({}, res, {
                     ok: false,
                     filesChecked: null,
-                    findings: serverFindings(res.validation, false)
+                    findings: serverFindings(res.validation, false),
+                    debug: repeatBlock
                 });
                 return Object.assign(res, envelopeFields(ctx.workspaceDir, "pal_push", source, args));
             }
