@@ -25,7 +25,7 @@ never pal-loop's self-report.
 
 ## The review arms
 
-If fresh-context reviewer dispatch fails, do not silently self-review. Put `BIAS WARNING: review ran in build context (dispatch error: <err>)` at the top of REVIEW.md and cap the verdict at CHANGES-NEEDED unless the user explicitly overrides.
+If fresh-context reviewer dispatch fails, do not silently self-review. Put `BIAS WARNING: review ran in build context (dispatch error: <err>)` at the top of REVIEW.md. Whenever a BIAS WARNING is present, the Verdict section must read `CHANGES-NEEDED`; a PASS verdict heading anywhere in REVIEW.md alongside the warning is itself a defect.
 
 ### 1. Conformance (always runs)
 - **Run `pal_validate` and paste its verdict line — a review with no `pal_validate` run is
@@ -147,9 +147,11 @@ pal_validate: <quote `ok` and `diagnosticCount` — required; missing fields mak
 - [ ] <task> — addresses <finding> — success condition: <tool + check>
 ```
 
-Before writing the final verdict, if the harness exposes spend, record the review phase with
-`palsync cost record --model <id> --provider <p> --in N --cached N --out N [--cost N] --phase review`;
-skip silently only when no figures are exposed. Then run `palsync review check` from the pal workspace and paste
+Before writing the final verdict, record review cost only from available harness figures. In
+claude-code, the agent cannot read its own token spend mid-session: skip `palsync cost record`
+and state that limitation explicitly. In pi, use the user-supplied footer figures and run
+`palsync cost record --model <id> --provider <p> --in N --cached N --out N [--cost N] --phase review`.
+Then run `palsync review check` from the pal workspace and paste
 its complete output into REVIEW.md. Any flag or verdict cap from that command forces
 `CHANGES-NEEDED`; do not write PASS until the check reports `result: PASS`.
 

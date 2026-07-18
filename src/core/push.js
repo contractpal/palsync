@@ -11,7 +11,7 @@ const { Pal } = require("../../lib/pal");
 const { CloudPistonAPIManager } = require("../../lib/apiManager");
 const { resolveServerPalByGuid, refreshResolvedPal } = require("./resolve");
 const { manifestPaths } = require("./pull");
-const { validateWorkspace, lintContent } = require("./validate");
+const { validateWorkspace, lintContent, hasDesignSystem } = require("./validate");
 const { cachedLint } = require("./lintCache");
 const { diffWorkspace } = require("./localDrift");
 const { prunePhantomFolderRegistrations } = require("./palFolders");
@@ -93,7 +93,8 @@ const WORKSPACE_GATE_RULES = new Set([
 ]);
 const WORKSPACE_WARNING_RULES = new Set([
     "listNameContract", "ajaxTargetExists", "destructiveConfirm", "fontDeclaredNotLoaded",
-    "scriptWithoutConsumer"
+    "scriptWithoutConsumer", "pbControlClass", "pbHeadingClass", "pbTableClass",
+    "pbActionAffordance", "pbUndefinedClass", "pbSection", "pbMain"
 ]);
 
 function findingKey(f) {
@@ -129,6 +130,8 @@ function addWorkspaceGateFindings(workspaceDir, findings) {
 // Returns the standard { errors, warnings, findings, filesChecked, scope } shape.
 function gateLint(record, workspaceDir) {
     if (!record || !record.fileHashes) return validateWorkspace(workspaceDir); // no diff possible
+    const designSystemPresent = hasDesignSystem(workspaceDir);
+    const designSystemDep = [{ path: "design-system#present", content: String(designSystemPresent) }];
     const d = diffWorkspace(record, workspaceDir);
     const changed = [...d.added, ...d.changed];
     // localDrift reports manifest edits separately because pull treats them specially. The push
@@ -148,7 +151,9 @@ function gateLint(record, workspaceDir) {
         let current;
         try {
             const content = fs.readFileSync(path.join(workspaceDir, ...rel.split("/")), "utf8");
-            current = cachedLint(workspaceDir, { rel, content, mode: "push-gate" }, () => lintContent(rel, content));
+            current = cachedLint(workspaceDir,
+                { rel, content, mode: "push-gate", deps: designSystemDep },
+                () => lintContent(rel, content, { designSystemPresent }));
         }
         catch (e) { continue; }
         // warnings never block but always surface
@@ -161,8 +166,8 @@ function gateLint(record, workspaceDir) {
 
         // MODIFIED with a baseline: block only on the net-new errors per rule.
         const baseCount = errorsByRule(cachedLint(workspaceDir,
-            { rel, content: baseContent, mode: "push-gate" },
-            () => lintContent(rel, baseContent)));
+            { rel, content: baseContent, mode: "push-gate", deps: designSystemDep },
+            () => lintContent(rel, baseContent, { designSystemPresent })));
         const curCount = errorsByRule(curErr);
         for (const rule of Object.keys(curCount)) {
             const introduced = curCount[rule] - (baseCount[rule] || 0);

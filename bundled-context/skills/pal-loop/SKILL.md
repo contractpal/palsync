@@ -32,15 +32,20 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
    - `reality_check: blocked` → STOP. `pass` → proceed. Absent/`not_run` → check §13 for any
      unresolved `HARD FLAG`; found → STOP and list them; no §13 at all → proceed, record a
      caveat in the session summary.
-3. Not a git repo → `git init && git add -A && git commit -m "loop start"`. Commit after every
+3. **Reviewer-dispatch preflight at Build Plan time:** before starting any task, perform a
+   lightweight fresh-context reviewer dispatch preflight. Confirm the subagent/session
+   mechanism is available and the review provider credentials are present. If either check
+   fails, add a Blockers entry prefixed `HUMAN GATE:` with the exact failure and surface it
+   now; do not burn the full build before discovering that independent review cannot run.
+4. Not a git repo → `git init && git add -A && git commit -m "loop start"`. Commit after every
    task. **git is a LOCAL checkpoint only** — the server is the source of truth; `git
    checkout` does NOT undo a pushed change (recovery: "On fail" below). Never push this repo.
-4. **Load exactly the skills SPEC.md §9 lists, just in time.** §9 is the manifest — don't
+5. **Load exactly the skills SPEC.md §9 lists, just in time.** §9 is the manifest — don't
    guess it (it may include palbuilder-workflow, palbuilder-data, or palbuilder-realtime).
    Load a listed skill when the first task requiring it starts, not all before coding.
    palbuilder-frontend and design-build still load before the first UI task. The restraint ladder below is the default discipline on every task.
-5. `pal_status`. Server newer than your last pull → `pal_pull` first.
-6. **Smoke-test before picking work:** `pal_validate`, plus `pal_test` on the workflow the
+6. `pal_status`. Server newer than your last pull → `pal_pull` first.
+7. **Smoke-test before picking work:** `pal_validate`, plus `pal_test` on the workflow the
    Checkpoints show as last touched — a prior session can leave the workspace broken despite
    what EXECUTION.md says. Either fails → fix that first.
 
@@ -75,13 +80,16 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
 5. **Verify** against the success condition with tool outputs, not opinion. Before UI or exercise verification, read `references/verify-ladder.md` (especially §Exercise authoring before writing steps). Offline first, so
    a bad result never reaches the server. **Batch every edit for the task first, then verify
    once — target ONE `pal_push` per task, never push per-file:**
-   1. `pal_push` directly (push policy `checkpoint` → ask the user first). Push runs the FULL
-      offline validation as its gate and refuses — with the same lint output — before anything
-      reaches the server, so a standalone `pal_validate` right before a push is a wasted turn:
-      never do it. Push must return `ok:true` and `diagnosticCount:0`. Fix warnings too, or checkpoint why each warning is
-      safe for this task before marking it `done`; warnings are allowed to push but never
-      silently ignored. Standalone `pal_validate` is for diagnosis between edits only, and
-      never twice without an edit in between — same input, same output.
+   1. `pal_push` directly (push policy `checkpoint` → ask the user first). Push gates the files
+      changed by this push plus narrow cross-file contracts; it blocks errors the change
+      introduces and surfaces advisory warnings. Do not run standalone `pal_validate`
+      immediately before this push merely to duplicate that changed-file checkpoint. Push must
+      return `ok:true` and `diagnosticCount:0`. Fix warnings too, or checkpoint why each warning
+      is safe for this task before marking it `done`; warnings are allowed to push but never
+      silently ignored. Use standalone `pal_validate` between edits for diagnosis, and never
+      twice without an edit in between — same input, same output. The mandatory whole-workspace
+      pre-`done` validation below is a separate completion checkpoint, not a redundant pre-push
+      call.
    2. `pal_test` once per task, after that task's final push → `ok:true`, `diagnosticCount:0` —
       the real server compile (console AND web). Read `messages` too (whole-test failures like
       "Pal is not a Web Pal" live there).
@@ -108,7 +116,12 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
         prefixed `HUMAN GATE:` naming exactly what to eyeball. Continue with independent
         tasks. (Full rule: `../pal-review/references/console-render-verification.md`.)
    6. ANY write action (create/edit/delete), when the task includes behavior changes: `pal_exercise` — trigger the action and assert the
-      result in the rendered output. **Batch the whole flow into ONE call's `steps` array**
+      result in the rendered output. For every §5 effect, read the record back and assert
+      **every field named by the effect**, including fields the default fragment does not
+      render; use a detail/read action that exposes a non-rendered field rather than assuming
+      its value from visible state. For example, if check-in sets `status = available` and
+      clears `checkedOutAt`, assert both fields after check-in, not only the rendered status.
+      **Batch the whole flow into ONE call's `steps` array**
       (e.g. add → edit → delete is one exercise with expects per step), not one call per
       action — each extra call is a full context-window round trip. Web:
       `steps:[{action, params, expect}]`. Console:
@@ -135,6 +148,9 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       alphabetically, so a shorter list is not proof of the right row leaving). This is the
       read-back check; a failing step is a task failure. Never use global `absent` for a state word (for example "available") on a multi-row list — scope with `within:`.
    7. `pal_sync_datasets` after pushing a **§8a** definition (never §8b).
+   8. Before marking any UI-touching task `done`, run standalone `pal_validate` against the
+      whole workspace. Require 0 diagnostics, or individually waive every remaining warning
+      in EXECUTION.md with its `file:line` and a concrete reason. Errors cannot be waived.
    - `pal_preview`/`pal_fetch`/`pal_exercise`/`pal_seo_audit`/`pal_test` all act on the LAST
      PUSHED version — push before verifying.
    - **Done when:** every success-condition clause has current pushed-version evidence and every warning is fixed or explicitly waived.
@@ -232,9 +248,10 @@ Trigger: every task `done`, or every remaining task is a `blocked`/`needs-fronti
 `needs-human` the human accepted as parked.
 
 1. `baseline/` exists → run the regression re-check above, unconditionally.
-2. If the harness exposes spend, record the build phase before review dispatch:
+2. Record build cost only from available harness figures. In claude-code, the agent cannot
+   read its own token spend mid-session: skip `palsync cost record` and state that limitation
+   explicitly. In pi, use the user-supplied footer figures and run
    `palsync cost record --model <id> --provider <p> --in N --cached N --out N [--cost N] --phase build`.
-   Skip silently only when the harness exposes no figures.
 3. Run `palsync review brief`, then **dispatch pal-review in a fresh session/subagent** with its
    EVIDENCE LEDGER output, SPEC.md, EXECUTION.md, DESIGN_SYSTEM.md/COMPONENTS.md, `baseline/`
    (if any), and the pal's identity so it can `pal_fetch`/`pal_screenshot`/`pal_test` the real

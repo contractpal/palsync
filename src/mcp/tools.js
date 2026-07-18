@@ -422,7 +422,7 @@ const TOOLS = [
     },
     {
         name: "pal_validate",
-        description: "Check the pal's code OFFLINE (no server/network) for the mistakes that silently break in PalBuilder: invalid workflow JS for the restricted engine, and invalid c:/XHTML markup. Returns each finding's file, line, ERROR/WARNING label, and the fix. Use for diagnosis between edits; pal_push runs the same validation as its gate and refuses on errors.",
+        description: "Check the pal's WHOLE workspace OFFLINE (no server/network) for the mistakes that silently break in PalBuilder: invalid workflow JS for the restricted engine, invalid c:/XHTML markup, and workspace contract violations. Returns each finding's file, line, ERROR/WARNING label, and the fix. Run once before finishing a task; pal_push only gates changed files plus narrow workspace contracts.",
         // Fully offline + read-only: validateWorkspace lints local files (fs/acorn only — no
         // CloudPiston call, no lock). Opt out of the ctx/login/lock lifecycle. The lifecycle guard
         // below already no-ops when ctx has no lifecycle, so the bare { workspaceDir } ctx is safe.
@@ -1107,7 +1107,7 @@ const TOOLS = [
     },
     {
         name: "pal_push",
-        description: "Push local changes to the server (UPDATE). FIRST runs the offline code check (pal_validate) and REFUSES on errors — every error must be fixed before the push can proceed; each finding says exactly how. force:true is drift-only: it can overwrite a newer server marker, but it cannot bypass validation errors. Also refuses if the pal is locked by another person (typed confirmOverride). On success returns the server's save result plus any code WARNINGS.",
+        description: "Push local changes to the server (UPDATE). FIRST runs the pre-push gate — full lint of the files this push changes (blocking on errors your change introduces) plus cross-file contract checks; advisory warnings are surfaced but never block. Standalone pal_validate lints the WHOLE workspace and may report findings in files this push didn't touch. force:true is drift-only: it can overwrite a newer server marker, but it cannot bypass validation errors. Also refuses if the pal is locked by another person (typed confirmOverride). On success returns the server's save result plus any code WARNINGS.",
         // skipValidation is deliberately NOT in inputShape (the MCP layer strips unknown keys, so
         // agents cannot pass it). In the test-06 haiku run the agent read the "call pal_push with
         // skipValidation:true" hint in this tool's refusal message, decided the validator was

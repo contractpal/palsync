@@ -45,8 +45,11 @@ function passRows(review) {
 function checkReview(review, ledger) {
     const exercises = successfulExerciseCalls(ledger);
     const rows = passRows(review);
-    const verdictPass = /^\s*verdict\s*:\s*PASS\s*$/im.test(String(review || ""));
-    const biasWarning = /\bBIAS WARNING:/i.test(String(review || ""));
+    const reviewText = String(review || "");
+    // [^\w]* tolerates trailing decoration — live REVIEW.md files write "## Verdict: PASS ✅".
+    const verdictPass = /^\s*(?:#{1,6}\s*)?verdict\s*:\s*PASS\b[^\w]*$/im.test(reviewText) ||
+        /^\s*#{1,6}\s+(?:verdict\s*[-:—]\s*)?PASS\b[^\w]*$/im.test(reviewText);
+    const biasWarning = /\bBIAS WARNING:/i.test(reviewText);
     const flags = exercises === 0 ? rows.map(r => Object.assign({ code: "PASS WITHOUT EXERCISE EVIDENCE" }, r)) : [];
     return {
         ok: flags.length === 0 && !(verdictPass && exercises === 0) && !biasWarning,
@@ -72,6 +75,7 @@ function formatReviewCheck(result) {
     if (result.missingReview) lines.push("FAIL: REVIEW.md not found.");
     for (const flag of result.flags) lines.push("FLAG line " + flag.line + ": " + flag.code + " — " + flag.label);
     if (result.biasWarning) lines.push("VERDICT CAP: BIAS WARNING present; self-review cannot receive PASS.");
+    if (result.biasWarning && result.verdictMustChange) lines.push("REVIEW.md declares PASS while bias-capped — edit the verdict to CHANGES-NEEDED.");
     if (result.verdictMustChange && !result.biasWarning) lines.push("VERDICT CAP: zero successful pal_exercise calls; PASS must be changed to CHANGES-NEEDED.");
     if (result.localDrift && result.localDrift.dirty) {
         lines.push("UNPUSHED CHANGES: server-tracked files differ from the last pull/push:");

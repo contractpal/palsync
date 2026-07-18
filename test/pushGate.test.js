@@ -34,10 +34,9 @@ test("gateLint surfaces but does not block current workspace-level list/DataList
 
     const lint = gateLint(record, dir);
     assert.equal(lint.errors, 0);
-    assert.equal(lint.warnings, 1);
-    assert.equal(lint.findings[0].rule, "listNameContract");
-    assert.equal(lint.findings[0].severity, "warn");
-    assert.match(lint.findings[0].message, /items/);
+    const finding = lint.findings.find(f => f.rule === "listNameContract");
+    assert.equal(finding?.severity, "warn");
+    assert.match(finding.message, /items/);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -131,6 +130,69 @@ test("gateLint still blocks a pre-existing cross-file contract error in current 
 
     const lint = gateLint(record, dir);
     assert.equal(lint.errors, 1);
-    assert.equal(lint.findings[0].rule, "fragmentBinding");
+    assert.ok(lint.findings.some(f => f.rule === "fragmentBinding" && f.severity === "error"));
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("gateLint blocks a bare text input added to a design-system workspace", () => {
+    const dir = tmpWorkspace({ "DESIGN_SYSTEM.md": "# system" });
+    const record = { fileHashes: hashWorkspaceFiles(dir).files };
+    baseline.snapshot(dir, Object.keys(record.fileHashes));
+
+    fs.mkdirSync(path.join(dir, "fragments"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "fragments", "form.html"),
+        '<c:ignore xmlns:c="contractpal"><input type="text" /></c:ignore>');
+
+    const lint = gateLint(record, dir);
+    assert.equal(lint.errors, 1);
+    assert.ok(lint.findings.some(f => f.rule === "designClassRequired" && f.severity === "error"));
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("gateLint permits the same bare text input without a design system", () => {
+    const dir = tmpWorkspace();
+    const record = { fileHashes: {} };
+
+    fs.mkdirSync(path.join(dir, "fragments"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "fragments", "form.html"),
+        '<c:ignore xmlns:c="contractpal"><input type="text" /></c:ignore>');
+
+    const lint = gateLint(record, dir);
+    assert.equal(lint.errors, 0);
+    assert.equal(lint.findings.some(f => f.rule === "designClassRequired"), false);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("gateLint does not re-block a baseline design-class error in a modified file", () => {
+    const original = '<c:ignore xmlns:c="contractpal"><input type="text" /></c:ignore>';
+    const dir = tmpWorkspace({
+        "DESIGN_SYSTEM.md": "# system",
+        "fragments/form.html": original,
+    });
+    const record = { fileHashes: hashWorkspaceFiles(dir).files };
+    baseline.snapshot(dir, Object.keys(record.fileHashes));
+
+    fs.writeFileSync(path.join(dir, "fragments", "form.html"),
+        original.replace("</c:ignore>", "<p>Clean edit</p></c:ignore>"));
+
+    const lint = gateLint(record, dir);
+    assert.equal(lint.errors, 0, "the pre-existing designClassRequired error must not block");
+    assert.equal(lint.findings.some(f => f.rule === "designClassRequired"), false);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("gateLint surfaces pbSection and pbUndefinedClass warnings without blocking", () => {
+    const dir = tmpWorkspace({
+        "styles/styles.css": ".pb-btn {}",
+        "fragments/screen.html": '<c:ignore xmlns:c="contractpal"><div class="pb-invented">Screen</div></c:ignore>',
+    });
+    const record = { fileHashes: {} };
+
+    const lint = gateLint(record, dir);
+    const byRule = new Map(lint.findings.map(f => [f.rule, f]));
+    assert.equal(lint.errors, 0);
+    for (const rule of ["pbSection", "pbUndefinedClass"]) {
+        assert.equal(byRule.get(rule)?.severity, "warn", "expected advisory " + rule + " finding");
+    }
     fs.rmSync(dir, { recursive: true, force: true });
 });

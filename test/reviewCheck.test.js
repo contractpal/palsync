@@ -71,7 +71,21 @@ test("BIAS WARNING prevents a PASS verdict", () => {
     assert.equal(result.ok, false);
     assert.equal(result.biasWarning, true);
     assert.match(formatReviewCheck(result), /BIAS WARNING present/);
+    assert.match(formatReviewCheck(result), /REVIEW\.md declares PASS while bias-capped — edit the verdict to CHANGES-NEEDED\./);
     assert.match(formatReviewCheck(result), /result: FAIL/);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("bias-capped PASS is detected under a decorated heading verdict", () => {
+    const ws = tmpWorkspace({
+        "REVIEW.md": "BIAS WARNING: review ran in build context\n" +
+            REVIEW.replace("verdict: PASS", "## Verdict: PASS ✅"),
+        ".palsync.usage.json": JSON.stringify({ tools: { pal_exercise: { calls: 1, successfulCalls: 1 } } })
+    });
+    const result = checkWorkspace(ws);
+    assert.equal(result.ok, false);
+    assert.equal(result.verdictMustChange, true);
+    assert.match(formatReviewCheck(result), /REVIEW\.md declares PASS while bias-capped/);
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
