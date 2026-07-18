@@ -95,7 +95,9 @@ test("malformed table (no ## Tasks): parse error, changes nothing", () => {
 });
 
 test("checkpoint append lands in Checkpoints, before Blockers", () => {
-    const r = appendCheckpoint(EXEC, "T2 done: preview contained the H1");
+    // T2 must actually be done in the table before a "T2 done" checkpoint is accepted.
+    const upd = setStatus(EXEC, "T2", "done");
+    const r = appendCheckpoint(upd.text, "T2 done: preview contained the H1");
     assert.ok(r.ok);
     const lines = r.text.split("\n");
     const cpIdx = lines.findIndex(l => /^## Checkpoints/.test(l));
@@ -107,4 +109,25 @@ test("checkpoint append lands in Checkpoints, before Blockers", () => {
 test("checkpoint into a file with no Checkpoints section: error", () => {
     const r = appendCheckpoint("## Tasks\n| id | status |\n| T1 | todo |\n", "x");
     assert.equal(r.ok, false);
+});
+
+// Fabricated-completion gate (2026-07-18 haiku QA report, finding #1)
+test("checkpoint claiming a task done while its table status is todo: refused", () => {
+    const r = appendCheckpoint(EXEC, "T2 complete — all files VALIDATED");
+    assert.equal(r.ok, false);
+    assert.match(r.error, /T2/);
+    assert.match(r.error, /palsync task T2 done/);
+});
+
+test("checkpoint session summary with a done count contradicting the table: refused", () => {
+    const r = appendCheckpoint(EXEC, "== session 1: 6 done, 0 blocked");
+    assert.equal(r.ok, false);
+    assert.match(r.error, /claims 6 done/);
+    assert.match(r.error, /1 task\(s\)/);
+});
+
+test("checkpoint with an accurate done count and non-claim prose: accepted", () => {
+    assert.ok(appendCheckpoint(EXEC, "== session 1: 1 done, 2 todo").ok);
+    assert.ok(appendCheckpoint(EXEC, "T2 in progress: wiring the console page").ok);
+    assert.ok(appendCheckpoint(EXEC, "T1 done earlier; dataset synced").ok); // T1 is done in the table
 });

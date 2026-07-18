@@ -89,7 +89,7 @@ function errorsByRule(findings) {
 // Only cross-file contracts belong here. Per-file rules must use the baseline diff;
 // whole-workspace linting would re-block pre-existing errors in untouched files.
 const WORKSPACE_GATE_RULES = new Set([
-    "missingPalJsonEntry", "actionRouted", "fragmentBinding"
+    "missingPalJsonEntry", "malformedManifestEntry", "actionRouted", "fragmentBinding"
 ]);
 const WORKSPACE_WARNING_RULES = new Set([
     "listNameContract", "ajaxTargetExists", "destructiveConfirm", "fontDeclaredNotLoaded",

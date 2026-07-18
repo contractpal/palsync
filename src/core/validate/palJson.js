@@ -387,6 +387,40 @@ function checkEntryFilenames(manifest) {
     return findings;
 }
 
+// Entry shape contract, verified against lib/pal.js injectFileContent() (the only push path):
+// file content is injected exclusively through entry[<Type>] (or its lowercase twin), so an
+// entry with no <Type> wrapper object ships NOTHING — the push "succeeds" locally but the
+// server never receives the file. Live repro: equipment_checkout-cc-haiku-5918066-01
+// (2026-07-18 haiku QA report, finding #2) authored flat { "string", "filename" } entries for
+// every page/fragment/style/workflow; nothing ever reached the server.
+const SHAPE_CHECKED_FOLDERS = Object.assign({ workflows: "Workflow" }, FOLDER_TYPE);
+
+function checkEntryShape(manifest) {
+    const findings = [];
+    for (const folder of Object.keys(SHAPE_CHECKED_FOLDERS)) {
+        const typeName = SHAPE_CHECKED_FOLDERS[folder];
+        const section = manifest[folder];
+        if (!isObject(section) || !Array.isArray(section.entry)) continue;
+        for (let i = 0; i < section.entry.length; i++) {
+            const entry = section.entry[i];
+            if (!isObject(entry) || typeof entry.string !== "string") continue;
+            if (isObject(entry[typeName]) || isObject(entry[typeName.toLowerCase()])) continue;
+            findings.push({
+                file: "pal.json", line: 1, column: 0, severity: "error", rule: "malformedManifestEntry",
+                message: "pal.json " + folder + ".entry[" + i + "] (\"string\": \"" + entry.string + "\") has no \"" +
+                    typeName + "\" object — push injects file content only through the \"" + typeName +
+                    "\" wrapper, so this entry ships NOTHING and the server never receives the file" +
+                    (typeof entry.filename === "string"
+                        ? " (a flat top-level \"filename\" key is ignored)"
+                        : "") +
+                    ". Fix: { \"string\": \"<file>\", \"" + typeName + "\": { \"name\": ..., \"filename\": \"<file>\", ... } }" +
+                    " — copy a working " + typeName + " stanza from pal-json.md.",
+            });
+        }
+    }
+    return findings;
+}
+
 function checkFolderRegistrations(manifest) {
     return analyzeFolderRegistrations(manifest).map(f => {
         const isBucket = f.phantomBucket;
@@ -436,19 +470,39 @@ function lintPalJson(workspaceDir) {
 
         // Report any file on disk that has no pal.json entry. Recursive because manifest strings
         // may contain subpaths, e.g. fragments/equipment/list.html.
+        //
+        // Push resolves content strictly by entry.string: lib/pal.js injectFileContent() reads
+        // <folder>/<entry.string> from disk into entry.<Type>.content. So "string" must be the
+        // EXACT category-relative filename — an extensionless "string" (e.g. "console" for
+        // console.html) is a distinct, unmatched entry that ships nothing. That exact shape
+        // hard-walled the 2026-07-18 haiku run (5 identical push failures); when a near-miss
+        // entry exists, say so instead of repeating "add an entry" the agent believes it did.
+        const entries = (section && Array.isArray(section.entry)) ? section.entry : [];
         for (const rel of diskFiles) {
             if (!registered.has(rel)) {
                 const typeHint = FOLDER_TYPE[folder] || folder;
+                const base = rel.replace(/\.[^./]+$/, "");
+                const near = entries.find(e => isObject(e) && (e.string === base ||
+                    e.filename === rel ||
+                    (isObject(e[typeHint]) && e[typeHint].filename === rel)));
+                const fixShape = "{ \"string\": \"" + rel + "\", \"" + typeHint + "\": { \"name\": \"" +
+                    base + "\", \"filename\": \"" + rel + "\", ... } }";
                 findings.push({
                     file: "pal.json",
                     line: 1,   // pal.json has no meaningful line for missing entries
                     column: 0,
                     severity: "error",
                     rule: "missingPalJsonEntry",
-                    message: folder + "/" + rel + " exists on disk but has NO pal.json entry — " +
-                        "push will silently skip it and the server will never receive it. " +
-                        "Fix: add a matching entry to pal.json (copy an existing " + typeHint + " entry " +
-                        "inside the \"" + folder + "\".entry array and set both \"string\" and \"filename\" to \"" + rel + "\").",
+                    message: near
+                        ? folder + "/" + rel + " has no MATCHING pal.json entry. A near-miss entry exists " +
+                          "(\"string\": \"" + String(near.string) + "\") but push locates the file by the exact " +
+                          "value of \"string\" — it must be the category-relative filename \"" + rel + "\", " +
+                          "extension included. Fix that entry to " + fixShape + " (copy a working " + typeHint +
+                          " stanza from pal-json.md for the remaining fields)."
+                        : folder + "/" + rel + " exists on disk but has NO pal.json entry — " +
+                          "push will silently skip it and the server will never receive it. " +
+                          "Fix: add " + fixShape + " to the \"" + folder + "\".entry array " +
+                          "(copy a working " + typeHint + " stanza from pal-json.md for the remaining fields).",
                 });
             }
         }
@@ -497,6 +551,7 @@ function lintPalJson(workspaceDir) {
         }
     }
 
+    findings.push(...checkEntryShape(manifest));
     findings.push(...checkEntryFilenames(manifest));
     findings.push(...checkUnknownKeys(manifest));
     findings.push(...checkDataStructures(manifest));
@@ -505,4 +560,4 @@ function lintPalJson(workspaceDir) {
     return findings;
 }
 
-module.exports = { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryFilenames, checkFolderRegistrations, listFilesRecursive };
+module.exports = { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryShape, checkEntryFilenames, checkFolderRegistrations, listFilesRecursive };

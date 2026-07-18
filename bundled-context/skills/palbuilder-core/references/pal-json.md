@@ -49,8 +49,12 @@ Empty sections may serialize as `""` rather than `[]` — that's a serialization
 XML → JSON conversion, not a bug.
 
 Each entry (except in `layout` and `folders`) follows the pattern
-`{ "string": "<filename>", "<Type>": { ...fields... } }`, where `string` is the entry's
-identifier (typically the filename) and `<Type>` matches the section (`Workflow`, `Page`,
+`{ "string": "<filename>", "<Type>": { ...fields... } }`. For file-backed sections (pages,
+fragments, styles, scripts, workflows, images, emails, attachments, wizards) `string` MUST be
+the exact category-relative filename, extension included — push reads the file at
+`<folder>/<string>` and injects its content through the `<Type>` wrapper, so an extensionless
+`string` or a flat `{ "string", "filename" }` entry with no `<Type>` object ships nothing.
+`<Type>` matches the section (`Workflow`, `Page`,
 `Fragment`, `Document`, `Email`, `Style`, `Dataset`, `Dataview`, `Data`, `DataList`,
 `Attachment`, `Image`, `Wizard`).
 

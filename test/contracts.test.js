@@ -286,7 +286,54 @@ test("nested creatable file without pal.json entry is reported", () => {
     const findings = lintPalJson(dir).filter(f => f.rule === "missingPalJsonEntry" && f.message.includes("fragments/equipment/list.html"));
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "error");
-    assert.match(findings[0].message, /string\" and \"filename\" to \"equipment\/list\.html/);
+    assert.match(findings[0].message, /"string": "equipment\/list\.html"/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// --- manifest entry shape (2026-07-18 haiku equipment_checkout run: flat entries shipped nothing) ---
+
+test("missingPalJsonEntry — near-miss entry (extensionless string) gets a targeted message", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({
+            pages: { entry: [{ string: "console", Page: { name: "console", filename: "console.html" } }] },
+        }),
+        "pages/console.html": "<html></html>",
+    });
+    const findings = lintPalJson(dir).filter(f => f.rule === "missingPalJsonEntry");
+    assert.strictEqual(findings.length, 1);
+    assert.match(findings[0].message, /near-miss/i);
+    assert.match(findings[0].message, /"string": "console\.html"/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("malformedManifestEntry — flat {string, filename} entry with no Type wrapper errors", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({
+            pages: { entry: [{ string: "console.html", filename: "console.html" }] },
+            workflows: { entry: [{ string: "console.js", filename: "console.js" }] },
+        }),
+    });
+    const findings = lintPalJson(dir).filter(f => f.rule === "malformedManifestEntry");
+    assert.strictEqual(findings.length, 2);
+    assert.ok(findings.every(f => f.severity === "error"));
+    const msgs = findings.map(f => f.message).join("\n");
+    assert.match(msgs, /"Page" object/);
+    assert.match(msgs, /"Workflow" object/);
+    assert.match(msgs, /flat top-level "filename" key is ignored/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("malformedManifestEntry — properly wrapped entries produce no finding", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({
+            pages: { entry: [{ string: "console.html", Page: { name: "console", filename: "console.html" } }] },
+            workflows: { entry: [{ string: "console.js", workflow: { name: "console", filename: "console.js" } }] },
+        }),
+        "pages/console.html": "<html></html>",
+        "workflows/console.js": "function main() {}",
+    });
+    const findings = lintPalJson(dir).filter(f => ["malformedManifestEntry", "missingPalJsonEntry"].includes(f.rule));
+    assert.deepStrictEqual(findings.map(f => f.rule), []);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -695,6 +742,35 @@ test("selective pb-* workspace warns when row actions are ungrouped or conflicti
     const rules = new Set(lintContracts(dir).map(f => f.rule));
     assert.ok(rules.has("pbRowActionGroup"));
     assert.ok(rules.has("pbConflictingStateActions"));
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("mutually exclusive c:div test= wrappers suppress pbConflictingStateActions", () => {
+    const dir = tmpWorkspace({
+        "styles/styles.css": [".pb-table {}", ".pb-btn {}", ".pb-btn-secondary {}", ".pb-row-actions {}"].join("\n"),
+        "fragments/list.html": [
+            '<c:ignore xmlns:c="contractpal">',
+            '  <table class="pb-table"><tbody><tr><td data-label="Actions"><div class="pb-row-actions">',
+            '    <c:div test="${row.status eq \'available\'}"><c:a action="showCheckout?id=${row.id}" class="pb-btn pb-btn-secondary">Check out</c:a></c:div>',
+            '    <c:div test="${row.status eq \'checkedOut\'}"><c:a action="checkin?id=${row.id}" class="pb-btn pb-btn-secondary">Check in</c:a></c:div>',
+            '  </div></td></tr></tbody></table>',
+            '</c:ignore>',
+        ].join("\n"),
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "pbConflictingStateActions").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("pbControlClass skips controls whose class is an EL expression", () => {
+    const dir = tmpWorkspace({
+        "styles/styles.css": ".pb-input {}\n.pb-field-group {}",
+        "fragments/form.html": [
+            '<c:ignore xmlns:c="contractpal">',
+            '  <div class="pb-field-group"><c:field name="assignee" class="${assigneeClass}"/></div>',
+            '</c:ignore>',
+        ].join("\n"),
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "pbControlClass").length, 0);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 

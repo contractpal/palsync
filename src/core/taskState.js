@@ -79,10 +79,45 @@ function setStatus(text, id, status) {
     return { ok: true, text: p.lines.join("\n"), from, to: status, id: row.id };
 }
 
+// Fabricated-completion gate (2026-07-18 haiku equipment_checkout QA report, finding #1): a build
+// session recorded "VALIDATED"/"done" checkpoint prose and a "6 done" session summary while every
+// Tasks-table status was still todo and no push had ever succeeded. Checkpoint prose must not
+// outrun the CLI-tracked table — refuse completion claims that contradict it. The table itself is
+// only mutable via `palsync task <id> <status>`, so the gate forces the two to move together.
+const COMPLETION_CLAIM = /\b(done|completed?|finished|validated|passed)\b/i;
+
+function completionClaimError(text, clean) {
+    const p = parseTasks(text);
+    if (!p.ok) return null; // no parseable table — nothing to contradict
+    if (COMPLETION_CLAIM.test(clean)) {
+        for (const r of p.rows) {
+            if (r.status === "done") continue;
+            const idRe = new RegExp("(^|[^A-Za-z0-9])" + r.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^A-Za-z0-9]|$)", "i");
+            if (idRe.test(clean)) {
+                return "Checkpoint claims completion for " + r.id + " but its Tasks-table status is \"" +
+                    r.status + "\". If its success condition verifiably passed, run `palsync task " + r.id +
+                    " done` first, then re-record the checkpoint; otherwise reword the checkpoint to match reality.";
+            }
+        }
+    }
+    const m = clean.match(/(\d+)\s+done\b/i);
+    if (m) {
+        const actual = p.rows.filter(r => r.status === "done").length;
+        if (Number(m[1]) !== actual) {
+            return "Checkpoint claims " + m[1] + " done but the Tasks table has " + actual +
+                " task(s) with status done. Update task statuses via `palsync task <id> done` (only for " +
+                "verifiably passing tasks) or correct the count.";
+        }
+    }
+    return null;
+}
+
 // append a checkpoint line to the end of the "## Checkpoints" section. Returns { ok, text } or error.
 function appendCheckpoint(text, line) {
     const clean = String(line || "").replace(/[\r\n]+/g, " ").trim();
     if (!clean) return { ok: false, error: "Checkpoint line is empty." };
+    const claimError = completionClaimError(text, clean);
+    if (claimError) return { ok: false, error: claimError };
     const lines = text.split(/\r?\n/);
     const start = lines.findIndex(l => /^##\s+Checkpoints\b/i.test(l.trim()));
     if (start === -1) return { ok: false, error: "No \"## Checkpoints\" section found in EXECUTION.md." };

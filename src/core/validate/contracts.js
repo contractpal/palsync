@@ -749,7 +749,10 @@ function checkPbQualityHints(workspaceDir, markupFiles, findings) {
             const type = String(attr(tag, "type") || "").toLowerCase();
             const textControl = name === "textarea" || name === "select" || name === "c:select" ||
                 ((name === "input" || name === "c:field") && !["hidden", "button", "submit", "reset", "image", "checkbox", "radio", "option"].includes(type));
-            if (textControl && !/\bpb-(?:input|select|textarea)\b/.test(cls)) {
+            // A class containing an EL expression (e.g. class="${nameClass}" resolved by c:set)
+            // can't be traced statically — skip rather than false-positive (deepseek 2026-07-18
+            // run, finding #2: c:set test= resolving to "pb-input" / "pb-input is-error").
+            if (textControl && !/\bpb-(?:input|select|textarea)\b/.test(cls) && !cls.includes("${")) {
                 const expected = (name === "select" || name === "c:select") ? "pb-select" : name === "textarea" ? "pb-textarea" : "pb-input";
                 findings.push({
                     file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "pbControlClass",
@@ -824,7 +827,11 @@ function checkPbQualityHints(workspaceDir, markupFiles, findings) {
             const labels = links.map(m => m[0].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().toLowerCase());
             const hasCheckout = labels.includes("check out");
             const hasCheckin = labels.includes("check in");
+            // Any c:* tag with a test= attribute counts as conditional rendering — the deepseek
+            // 2026-07-18 run wrapped the two actions in mutually exclusive <c:div test=> blocks
+            // and this rule false-positived because it only looked for c:if/c:choose/c:when.
             const conditional = /<c:(?:if|choose|when)\b/i.test(body) ||
+                /<c:[a-z][\w-]*\b[^>]*\btest\s*=/i.test(body) ||
                 links.some(m => /\btest\s*=/.test(m[0]));
             if (hasCheckout && hasCheckin && !conditional) {
                 findings.push({
