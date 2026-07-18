@@ -4,7 +4,8 @@ const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
 const { tmpWorkspace } = require("./helpers");
-const { cachedLint, keyFor, readStats, RULES_VERSION } = require("../src/core/lintCache");
+const { cachedLint, keyFor, readStats, RULES_VERSION, RULE_VERSIONS, WORKSPACE_RULE_VERSIONS,
+    pushGateRulesVersion } = require("../src/core/lintCache");
 const { validateWorkspace } = require("../src/core/validate");
 const { TOOLS } = require("../src/mcp/tools");
 
@@ -20,7 +21,71 @@ test("content-addressed lint cache hits exactly and invalidates content/rules in
     assert.deepStrictEqual(run("workflows/b.js", "same"), other);
     run("workflows/a.js", "one", RULES_VERSION + 1);
     assert.equal(computes, 4);
-    assert.deepStrictEqual(readStats(ws), { version: 1, hits: 2, misses: 4, bypasses: 0 });
+    assert.deepStrictEqual(readStats(ws), {
+        version: 2, hits: 2, misses: 4, bypasses: 0,
+        missReasons: { content: 1, deps: 0, rulesVersion: 1, palsyncVersion: 0, evicted: 0, cold: 2 }
+    });
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("push-gate cache invalidates when a shared workspace rule version changes", () => {
+    const ws = tmpWorkspace();
+    const content = "<main>same content</main>";
+    let computes = 0;
+    const run = rulesVersion => cachedLint(ws, Object.assign({
+        rel: "pages/home.html", content, mode: "push-gate"
+    }, rulesVersion == null ? {} : { rulesVersion }), () => ({ compute: ++computes }));
+    const current = pushGateRulesVersion();
+    const bumped = pushGateRulesVersion(Object.assign({}, WORKSPACE_RULE_VERSIONS, {
+        "workspace-markup": WORKSPACE_RULE_VERSIONS["workspace-markup"] + 1
+    }));
+
+    assert.equal(RULE_VERSIONS["push-gate"], current);
+    assert.deepStrictEqual(run(), { compute: 1 });
+    assert.deepStrictEqual(run(), { compute: 1 });
+    assert.deepStrictEqual(run(bumped), { compute: 2 });
+    assert.equal(readStats(ws).missReasons.rulesVersion, 1);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("cache misses are recorded when writing the cache entry fails", () => {
+    const ws = tmpWorkspace();
+    const renameSync = fs.renameSync;
+    fs.renameSync = (from, to) => {
+        if (to.includes(`${path.sep}lint${path.sep}`)) throw new Error("simulated entry write failure");
+        return renameSync(from, to);
+    };
+    try {
+        assert.deepStrictEqual(cachedLint(ws, {
+            rel: "pages/home.html", content: "<main></main>", mode: "push-gate"
+        }, () => ({ valid: true })), { valid: true });
+        assert.equal(readStats(ws).misses, 1);
+        assert.equal(readStats(ws).missReasons.cold, 1);
+    } finally {
+        fs.renameSync = renameSync;
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("dependency changes invalidate only dependent entries and count miss reasons", () => {
+    const ws = tmpWorkspace();
+    let computes = 0;
+    const run = (rel, content, dep, extra = {}) => cachedLint(ws, Object.assign({
+        rel, content, mode: "deps-test", deps: [{ path: "central-map", content: dep }]
+    }, extra), () => ({ compute: ++computes }));
+    const a = run("pages/a.html", "a", "one");
+    const b = run("pages/b.html", "b", "one");
+    assert.deepStrictEqual(run("pages/a.html", "a", "one"), a);
+    assert.deepStrictEqual(run("pages/b.html", "b", "one"), b);
+    run("pages/a.html", "a", "two");
+    assert.deepStrictEqual(run("pages/b.html", "b", "one"), b, "unrelated entry remains a hit");
+    run("pages/a.html", "changed", "two");
+    run("pages/a.html", "changed", "two", { palsyncVersion: "next" });
+    const stats = readStats(ws);
+    assert.equal(stats.missReasons.cold, 2);
+    assert.equal(stats.missReasons.deps, 1);
+    assert.equal(stats.missReasons.content, 1);
+    assert.equal(stats.missReasons.palsyncVersion, 1);
     fs.rmSync(ws, { recursive: true, force: true });
 });
 

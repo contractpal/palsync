@@ -179,7 +179,7 @@ function lintSpec(text, { workspaceDir, hasMap } = {}) {
     } else {
         const t12 = bodyText(s12);
         if (!/pal_validate/.test(t12)) add("FLAG", "§12", s12.start, "§12 global floor is missing the pal_validate criterion.", "Add: pal_validate 0 errors.");
-        if (!/pal_test/.test(t12)) add("FLAG", "§12", s12.start, "§12 global floor is missing the pal_test criterion.", "Add: pal_test workflow VALIDATED, 0 notes.");
+        if (!/pal_test/.test(t12)) add("FLAG", "§12", s12.start, "§12 global floor is missing the pal_test criterion.", "Add: pal_test returns ok:true, diagnosticCount:0.");
         if (!/nav link|routes|dead link/i.test(t12)) add("FLAG", "§12", s12.start, "§12 global floor is missing the nav-links-route criterion.", "Add: every §3 nav link routes (no dead links).");
         if (mapPresent && !/regression/i.test(t12)) {
             add("HARD_FLAG", "§12", s12.start, "A MAP.md exists (brownfield) but §12 has no REGRESSION criterion.", "Add the REGRESSION criterion: the pal-init baseline still passes and untouched UI didn't shift.");

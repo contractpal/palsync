@@ -7,7 +7,7 @@
   `.mcp.json`, and `opencode.json`.
 - Versioned context manifests, previous-generation diffs, `palsync context inspect|diff`, and a
   locally stable-prefix summary in `palsync cost`.
-- A committed snapshot of all 19 advertised MCP wire schemas (16,689 compact bytes) plus additive
+- A committed snapshot of all 20 advertised MCP wire schemas plus additive
   server instructions. Safety wording remains in tool descriptions because Pi drops instructions.
 - Rule-grouped validation/server/SEO output with all unique rules, fixes, and locations preserved;
   full structured results use a stable `.agent-work-history` trailer.
@@ -57,7 +57,7 @@ unchanged.
 ## Runtime limitations
 
 - Claude Code now documents deferred MCP tool search; Codex/Pi/OpenCode do not document equivalent
-  cache-preserving third-party loading. The static 19-tool set remains the cross-host contract.
+  cache-preserving third-party loading. The static 20-tool set remains the Codex/OpenCode contract.
 - Pi's installed adapter does not surface MCP server instructions, so shared safety prose cannot be
   removed from tool descriptions.
 - OpenAI/Anthropic provider cache status is unavailable to PalSync. `tokensCached` is shown only when

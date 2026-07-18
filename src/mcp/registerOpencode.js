@@ -14,7 +14,7 @@ function buildOpencodeConfig(workspaceDir, { nodePath = process.execPath } = {})
                 type: "local",
                 command: [nodePath, MCP_BIN],
                 enabled: true,
-                environment: { PALSYNC_WORKSPACE: workspaceDir }
+                environment: { PALSYNC_WORKSPACE: workspaceDir, PALSYNC_TOOL_PROFILE: "opencode" }
             }
         }
     };

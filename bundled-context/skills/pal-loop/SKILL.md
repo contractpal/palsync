@@ -78,17 +78,17 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
    1. `pal_push` directly (push policy `checkpoint` → ask the user first). Push runs the FULL
       offline validation as its gate and refuses — with the same lint output — before anything
       reaches the server, so a standalone `pal_validate` right before a push is a wasted turn:
-      never do it. Push must show 0 errors. Fix warnings too, or checkpoint why each warning is
+      never do it. Push must return `ok:true` and `diagnosticCount:0`. Fix warnings too, or checkpoint why each warning is
       safe for this task before marking it `done`; warnings are allowed to push but never
       silently ignored. Standalone `pal_validate` is for diagnosis between edits only, and
       never twice without an edit in between — same input, same output.
-   2. `pal_test` once per task, after that task's final push → workflow VALIDATED, 0 notes —
+   2. `pal_test` once per task, after that task's final push → `ok:true`, `diagnosticCount:0` —
       the real server compile (console AND web). Read `messages` too (whole-test failures like
       "Pal is not a Web Pal" live there).
    3. WEB page: `pal_fetch` or `pal_preview` with `expect:[the exact strings the success
       condition names]` → all found. (This returns per-string found/missing, not the HTML —
-      use `selector`/`maxChars` only when you truly need markup.) Then `pal_seo_audit` → 0
-      errors (public pages).
+      use `selector`/`maxChars` only when you truly need markup.) Then `pal_seo_audit` →
+      `ok:true`, `diagnosticCount:0` (public pages).
    4. **UI verification by task type:** UI-only task → one desktop `pal_screenshot`; behavior-only
       task → one `pal_exercise`; a task changing both → one desktop screenshot and one exercise.
       Merge same-page assertions into one exercise flow. Mobile screenshots are final-review-only

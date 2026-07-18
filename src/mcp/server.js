@@ -14,8 +14,30 @@ const { TOOLS } = require("./tools");
 const { buildContext } = require("./context");
 const usage = require("../core/usage");
 const lintCache = require("../core/lintCache");
+const { z } = require("zod");
+const toolMetadata = require("./pi-tools.json");
+const { routeTools } = require("../core/piHelpers");
 const pkg = require("../../package.json");
 const SERVER_INSTRUCTIONS = "PalSync runtime tools act on the LAST PUSHED server version. Push local changes with pal_push before runtime tests, previews, screenshots, fetches, exercises, tunnels, or SEO audits.";
+const LAZY_PROFILES = new Set(["pi-minimal", "pi-standard", "claude"]);
+const PROFILE_TOOLS = {
+    "pi-minimal": ["pal_validate", "pal_spec_lint", "pal_context"],
+    "pi-standard": ["pal_validate", "pal_spec_lint", "pal_context", "pal_status", "pal_test", "pal_push", "pal_pull"],
+    "pi-full": TOOLS.map(tool => tool.name),
+    claude: ["pal_validate", "pal_spec_lint", "pal_context"],
+    codex: TOOLS.map(tool => tool.name),
+    opencode: TOOLS.map(tool => tool.name)
+};
+
+function normalizeProfile(value) {
+    return Object.prototype.hasOwnProperty.call(PROFILE_TOOLS, value) ? value : "codex";
+}
+
+function instructionsForProfile(profile) {
+    return SERVER_INSTRUCTIONS + (LAZY_PROFILES.has(profile)
+        ? " Use pal_tools with task keywords to activate additional PalSync tools."
+        : "");
+}
 
 // All server diagnostics go to stderr with a consistent prefix. The agent talks over stdio
 // (stdin/stdout); stderr is the ONLY safe channel for logs, and it must be LOUD — a silent
@@ -24,15 +46,17 @@ const SERVER_INSTRUCTIONS = "PalSync runtime tools act on the LAST PUSHED server
 function logErr(msg) { try { process.stderr.write("[palsync-mcp] " + msg + "\n"); } catch (e) { /* stderr gone */ } }
 function stackOf(err) { return err && err.stack ? err.stack : String(err); }
 
-function createServer(getCtx, workspaceDir) {
+function createServer(getCtx, workspaceDir, options = {}) {
+    const profile = normalizeProfile(options.profile || process.env.PALSYNC_TOOL_PROFILE);
     // Keep the same rule in affected tool descriptions: Pi's MCP adapter lists tools but does not
     // surface initialize-result instructions to the model, so server instructions are additive.
     const server = new McpServer(
         { name: "palsync", version: pkg.version },
-        { instructions: SERVER_INSTRUCTIONS }
+        { instructions: instructionsForProfile(profile) }
     );
+    const registered = new Map();
     for (const t of TOOLS) {
-        server.registerTool(
+        const handle = server.registerTool(
             t.name,
             { description: t.description, inputSchema: t.inputShape, annotations: t.annotations, title: t.title },
             async (args) => {
@@ -85,6 +109,19 @@ function createServer(getCtx, workspaceDir) {
                 }
             }
         );
+        registered.set(t.name, handle);
+        if (!PROFILE_TOOLS[profile].includes(t.name)) handle.disable();
+    }
+    if (LAZY_PROFILES.has(profile)) {
+        server.registerTool("pal_tools", {
+            title: "Activate PalSync tools",
+            description: "Activate additional PalSync tools additively by deterministic keyword or group.",
+            inputSchema: { query: z.string().describe("Task keywords or groups: sync, browser, runtime, project, spec.") }
+        }, async ({ query }) => {
+            const names = routeTools(query, toolMetadata);
+            for (const name of names) registered.get(name)?.enable();
+            return { content: [{ type: "text", text: names.length ? "Activated: " + names.join(", ") : "No PalSync tools matched that query." }] };
+        });
     }
     return server;
 }
@@ -119,7 +156,7 @@ async function main() {
         }
         return ctxPromise;
     };
-    const server = createServer(getCtx, workspaceDir);
+    const server = createServer(getCtx, workspaceDir, { profile: process.env.PALSYNC_TOOL_PROFILE });
 
     const transport = new StdioServerTransport();
     // EPIPE et al.: if the client end hiccups, a stream 'error' with no listener becomes an
@@ -161,4 +198,5 @@ async function main() {
     logErr("serving for workspace " + workspaceDir);
 }
 
-module.exports = { createServer, main, installProcessGuards, TOOLS, SERVER_INSTRUCTIONS };
+module.exports = { createServer, main, installProcessGuards, TOOLS, SERVER_INSTRUCTIONS,
+    PROFILE_TOOLS, normalizeProfile, instructionsForProfile };

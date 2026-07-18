@@ -166,7 +166,7 @@ Canonical base: <https://...>
 
 ## 12. Acceptance criteria
 GLOBAL FLOOR (both modes):
-- [ ] pal_validate: 0 errors   - [ ] pal_test: workflow VALIDATED, 0 notes
+- [ ] pal_validate: `ok:true`, `diagnosticCount:0`   - [ ] pal_test: `ok:true`, `diagnosticCount:0`
 - [ ] every §3 nav link routes (no dead links)
 - [ ] every new-pal UI page follows `../../shared/references/css-conventions.md`
 - [ ] [brownfield/MAP.md present — mandatory] REGRESSION: MAP.md's Step-3 baseline still passes
@@ -179,7 +179,7 @@ WEB pages add (every §3 row tagged `web`):
       anti-slop fingerprints (see ../../pal-review/references/console-render-verification.md).
       State the exact thing to see.
 INDEXABLE pages add (every §3 row listed in §7):
-- [ ] pal_seo_audit: 0 errors per §7-listed page
+- [ ] pal_seo_audit: `ok:true`, `diagnosticCount:0` per §7-listed page
 CONSOLE pages add (every §3 row tagged `console`):
 - [ ] VISUAL (one per visually-significant §3 screen) + HUMAN-EYEBALL fallback — per
       ../../pal-review/references/console-render-verification.md.

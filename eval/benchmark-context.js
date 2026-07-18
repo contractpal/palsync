@@ -9,6 +9,7 @@ const { formatValidation } = require("../src/core/validate");
 const { readStats } = require("../src/core/lintCache");
 const { TOOLS } = require("../src/mcp/tools");
 const { serializeToolDefinitions } = require("../src/mcp/toolSchema");
+const { run: lintCacheBenchmark } = require("../bench/lint-cache-hit-rate");
 
 function workspace(files = {}) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-context-bench-"));
@@ -41,7 +42,7 @@ function legacyValidation(result) {
         (f.severity === "error" ? "ERROR" : "WARNING") + " " + f.file + ":" + f.line + " — " + f.message).join("\n\n");
 }
 
-async function run() {
+async function measure() {
     const ws = workspace({ "pages/demo.html": "<c:debug />\n" });
     try {
         const baseline = JSON.parse(fs.readFileSync(path.join(__dirname, "context-efficiency-baseline.json"), "utf8"));
@@ -98,13 +99,35 @@ async function run() {
         const editedSchema = serializeToolDefinitions(editedTools);
         const schemaSnapshotMatches = JSON.stringify(serialized) === JSON.stringify(snapshot);
         const schemaEditDetected = JSON.stringify(editedSchema) !== JSON.stringify(snapshot);
+        const eager = manifestApi.eagerSummary(current);
+        const schemaBytes = Buffer.byteLength(JSON.stringify(snapshot));
+        const metrics = {
+            schema: "palsync/efficiency-baseline/1",
+            eagerContextBytes: {
+                total: eager.totalBytes,
+                releaseStable: eager.stablePrefixBytes,
+                workspaceStable: eager.dynamicTailBytes
+            },
+            toolSchemaBytes: schemaBytes,
+            lintCache: {
+                coldMisses: afterFirst.misses - beforeCache.misses,
+                repeatedHits: secondHits,
+                repeatedMisses: secondMisses,
+                repeatedHitRate: Number(hitRate.toFixed(1)),
+                incrementalHitRate: lintCacheBenchmark().hitRate
+            },
+            fixtureResultBytes: {
+                pal_validate_clean: successReturnedBytes,
+                pal_validate_diagnostics: returnedBytes
+            }
+        };
         const rows = [
-            ["Fresh inject", "No manifest", manifestApi.eagerSummary(current).totalBytes + " eager B measured", "observable"],
+            ["Fresh inject", "No manifest", eager.totalBytes + " eager B measured", "observable"],
             ["Repeated inject", baseline.repeatedInjectWrites, repeatWrites + " writes", repeatWrites === 0 ? "pass" : "fail"],
             ["Pal-name change", "whole instruction file churn", palDiff.firstDivergentSection, palDiff.reason],
             ["Agent switch", "unexplained churn", agentDiff.firstDivergentSection, agentDiff.reason],
             ["Skill source edit", "unobservable", skillDiff.firstDivergentSection, "isolated source edit detected"],
-            ["Tool schema edit", baseline.toolSchemaSnapshot ? "snapshot-gated" : "unreviewed", Buffer.byteLength(JSON.stringify(snapshot)) + " B snapshot", schemaSnapshotMatches && schemaEditDetected ? "edit detected" : "fail"],
+            ["Tool schema edit", baseline.toolSchemaSnapshot ? "snapshot-gated" : "unreviewed", schemaBytes + " B snapshot", schemaSnapshotMatches && schemaEditDetected ? "edit detected" : "fail"],
             ["25 duplicate lint findings", rawBytes + " B", returnedBytes + " B", ((1 - returnedBytes / rawBytes) * 100).toFixed(1) + "% smaller"],
             ["Clean validation", successRawBytes + " B", successReturnedBytes + " B", ((1 - successReturnedBytes / successRawBytes) * 100).toFixed(1) + "% smaller"],
             ["Repeated pal_validate", baseline.lintResultCache ? "cached" : "0% local hits", hitRate.toFixed(1) + "% local hits", (afterFirst.misses - beforeCache.misses) + " cold miss(es)"]
@@ -118,15 +141,23 @@ async function run() {
             "",
             "Deterministic local benchmark; no live server or provider-cache claims."
         ];
-        return lines.join("\n") + "\n";
+        return { markdown: lines.join("\n") + "\n", metrics };
     } finally {
         fs.rmSync(ws, { recursive: true, force: true });
     }
 }
 
-if (require.main === module) run().then(output => process.stdout.write(output)).catch(error => {
+async function run() {
+    return (await measure()).markdown;
+}
+
+async function runJson() {
+    return JSON.stringify((await measure()).metrics, null, 2) + "\n";
+}
+
+if (require.main === module) (process.argv.includes("--json") ? runJson() : run()).then(output => process.stdout.write(output)).catch(error => {
     process.stderr.write(error.stack + "\n");
     process.exitCode = 1;
 });
 
-module.exports = { run };
+module.exports = { run, runJson };

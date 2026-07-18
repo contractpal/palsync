@@ -18,6 +18,9 @@ const { lintSpec, formatSpecLint } = require("../core/specLint");
 const { syncDatasets } = require("../core/datasets");
 const { validateWorkspace, formatValidation: formatLint } = require("../core/validate");
 const { cachedLint } = require("../core/lintCache");
+const palsyncfile = require("../core/palsyncfile");
+const { onDemandSyncSections } = require("../launcher/contextInject");
+const { routeItems } = require("../core/piHelpers");
 const { openUrl } = require("../platform/openUrl");
 const {
     createWorkHistoryRun,
@@ -25,25 +28,106 @@ const {
     writeRunMetadata,
     writeRunNotes
 } = require("./workHistory");
+const { serializeEnvelope } = require("./envelope");
 const fs = require("fs");
 const pathMod = require("path");
 
-function fullResultArtifact(workspaceDir, tool, value, fileName = "full-result.json") {
-    const raw = JSON.stringify(value, null, 2) + "\n";
-    try {
-        const run = createWorkHistoryRun(workspaceDir, { tool, feature: "full-result" });
-        const absolute = writeArtifactFile(run, fileName, raw, "utf8");
-        return {
-            line: "Full result: " + pathMod.relative(workspaceDir, absolute).split(pathMod.sep).join("/"),
-            rawBytes: Buffer.byteLength(raw, "utf8")
-        };
-    } catch (e) {
-        return { line: "Full result: unavailable (artifact write failed)", rawBytes: Buffer.byteLength(raw, "utf8") };
-    }
+const diagnosticInputShape = {
+    detail: z.enum(["summary", "normal", "full"]).optional(),
+    maxDiagnostics: z.number().int().positive().optional(),
+    maxBytes: z.number().int().positive().optional(),
+    includePassing: z.boolean().optional(),
+    includeDebug: z.boolean().optional()
+};
+
+function envelopeOptions(args) {
+    return {
+        detail: args.detail,
+        maxDiagnostics: args.maxDiagnostics,
+        maxBytes: args.maxBytes,
+        includePassing: args.includePassing,
+        includeDebug: args.includeDebug
+    };
 }
 
-function withFullResult(message, artifact) {
-    return message.replace(/\s+$/, "") + "\n" + artifact.line;
+function envelopeFields(workspaceDir, tool, source, args) {
+    const serialized = serializeEnvelope(workspaceDir, tool, source, envelopeOptions(args));
+    return {
+        message: serialized.message,
+        envelope: serialized.envelope,
+        _usage: { rawBytes: Buffer.byteLength(JSON.stringify(source, null, 2) + "\n") }
+    };
+}
+
+function serverFindings(notes, validated) {
+    return (notes || []).map(note => ({
+        severity: isBenignServerNote(note) ? "info" : (validated ? "warn" : "error"),
+        code: note.group || "serverValidation",
+        file: note.object || null,
+        message: note.message || "Server validation note"
+    }));
+}
+
+function seoEnvelopeResults(res) {
+    const findings = (res.findings || []).slice();
+    const passing = (res.passed || []).slice();
+    for (const page of res.pages || []) {
+        if (page.fetchFailed) {
+            findings.push({
+                severity: "error",
+                rule: "pageFetch",
+                file: page.page,
+                message: "Page did not render (HTTP " + page.status + "). Check the route in the workflow and the pal.json entry."
+            });
+            continue;
+        }
+        for (const finding of page.findings || []) findings.push(Object.assign({}, finding, { file: page.page }));
+        for (const item of page.passed || []) passing.push(Object.assign({}, item, { file: page.page }));
+    }
+    for (const crawler of Object.values(res.crawlerFiles || {})) {
+        for (const finding of crawler.findings || []) findings.push(Object.assign({}, finding, { file: crawler.label }));
+    }
+    return { findings, passing };
+}
+
+function pushVisibilityFindings(res) {
+    const findings = [];
+    for (const file of res.strayCreatable || []) {
+        findings.push({ severity: "warn", rule: "strayCreatable", file,
+            message: "File is not registered in pal.json and was not pushed." });
+    }
+    for (const item of res.skipped || []) {
+        findings.push({ severity: "warn", rule: "pushSkipped",
+            file: item.type && item.file ? item.type + "/" + item.file : item.file || null,
+            message: "File was not pushed: " + (item.reason || "push guard skipped it") });
+    }
+    return findings;
+}
+
+function testEnvelopeFindings(res, previewMsg, verdict) {
+    const findings = serverFindings(res.validation, res.validated);
+    for (const item of res.messages || []) {
+        if (!item || !item.message) continue;
+        findings.push({ severity: res.validated ? "warn" : "error", rule: "serverMessage",
+            message: (item.type ? item.type + ": " : "") + item.message });
+    }
+    findings.push({ severity: "info", rule: "testVerdict", message: verdict });
+    findings.push({ severity: "info", rule: "previewStatus", message: previewMsg });
+    return findings;
+}
+
+function datasetSaveFindings(res) {
+    const save = res.saveResult || {};
+    const findings = save.lint && save.lint.findings ? save.lint.findings.slice() :
+        serverFindings((res.serverNotes || []).map(message => ({ group: "datasetSync", message })), false);
+    if (save.refused === "drift") {
+        findings.push({ severity: "error", rule: "datasetSaveDrift",
+            message: "The server changed since your last pull. Run pal_pull first, or retry with force:true only to intentionally overwrite the server version." });
+    } else if (["gui-lock-self", "gui-lock-other", "override-disabled", "unknown-holder", "lock"].includes(save.refused)) {
+        findings.push({ severity: "error", rule: "datasetSaveLock",
+            message: "The pal save is blocked by a lock. Resolve or release the lock, then run pal_sync_datasets again." });
+    }
+    return findings;
 }
 
 function formatPushValidationRefusal(lint) {
@@ -310,8 +394,8 @@ const TOOLS = [
     {
         name: "pal_status",
         description: "Report whether the server is newer than your last pull, and who holds the lock (read-only).",
-        inputShape: {},
-        async run(ctx) {
+        inputShape: diagnosticInputShape,
+        async run(ctx, args = {}) {
             const live = await resolveServerPalByGuid(ctx.session, ctx.record.palGuid);
             const serverNewer = live ? drift.serverAdvanced(ctx.record.lastModifiedDate, live.lastModifiedDate) : false;
             // read-only — no lock attempt; reuse the resolve above instead of a second account walk
@@ -343,15 +427,12 @@ const TOOLS = [
         // CloudPiston call, no lock). Opt out of the ctx/login/lock lifecycle. The lifecycle guard
         // below already no-ops when ctx has no lifecycle, so the bare { workspaceDir } ctx is safe.
         needsCtx: false,
-        inputShape: {},
-        async run(ctx) {
+        inputShape: diagnosticInputShape,
+        async run(ctx, args = {}) {
             const lint = validateWorkspace(ctx.workspaceDir);
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
-            const artifact = fullResultArtifact(ctx.workspaceDir, "pal_validate", lint, "validation.json");
-            return Object.assign({ ran: true }, lint, {
-                message: withFullResult(formatLint(lint, { context: "validate" }), artifact),
-                _usage: { rawBytes: artifact.rawBytes }
-            });
+            const source = Object.assign({ ok: lint.errors === 0, cacheHits: null, cacheMisses: null }, lint);
+            return Object.assign({ ran: true }, lint, envelopeFields(ctx.workspaceDir, "pal_validate", source, args));
         }
     },
     {
@@ -374,12 +455,13 @@ const TOOLS = [
     {
         name: "pal_test",
         description: "Validate a workflow ON THE SERVER and return the server's validation notes. Does NOT open a browser by default; pass preview:true only when the user has stopped for human review and wants a live browser preview. The preview URL carries the user's credentials, is NEVER returned to you, and you CANNOT see the rendered page — use pal_screenshot/pal_exercise for agent-visible verification.",
-        inputShape: {
+        inputShape: Object.assign({
             workflow: z.enum(["console", "web", "transaction"]).optional(),
             workflowName: z.string().optional(),
             preview: z.boolean().optional()
-        },
-        async run(ctx, { workflow, workflowName, preview = false } = {}) {
+        }, diagnosticInputShape),
+        async run(ctx, args = {}) {
+            const { workflow, workflowName, preview = false } = args;
             const disabled = testingDisabledResult(ctx, "pal_test");
             if (disabled) return disabled;
             const res = await runTest(ctx.session, ctx.record.palGuid, { kind: workflow, workflowName });
@@ -410,21 +492,15 @@ const TOOLS = [
                 ? "✅ " + res.kind + " workflow VALIDATED on the server. (Compile-only: this does NOT clear " +
                   "pal_validate errors — those describe code that mis-renders or dies at runtime after a clean compile.)"
                 : "❌ " + res.kind + " workflow did NOT validate.";
-            // Server-level messages (e.g. "Pal is not a Web Pal") explain a whole-test failure that
-            // never shows up in per-rule validation notes — surface them or the real cause is lost.
-            const serverMsgs = (res.messages || []).filter(m => m && m.message);
-            const msgText = serverMsgs.length
-                ? "Server message(s):\n" + serverMsgs.map(m => "   - " + (m.type ? m.type + ": " : "") + m.message).join("\n") + "\n"
-                : "";
-            let message = "Tested " + ctx.record.palName + " (" + res.kind + ").\n" +
-                verdict + "\n" + msgText + formatValidation(res.validation) + "\n" + previewMsg +
-                (res.availableKinds.length > 1 ? "\n(testable engines on this pal: " + res.availableKinds.join(", ") + ")" : "") +
-                (res.validated ? renderNotVerifiedReminder(ctx) : "");
             // Strip credential-bearing fields before returning or persisting — defense in depth.
             const safe = safeTestResult(res);
-            const artifact = fullResultArtifact(ctx.workspaceDir, "pal_test", safe, "test-result.json");
-            message = withFullResult(message, artifact);
-            return Object.assign(safe, { message, _usage: { rawBytes: artifact.rawBytes } });
+            const source = Object.assign({}, safe, {
+                ok: !!safe.validated,
+                filesChecked: null,
+                findings: testEnvelopeFindings(safe, previewMsg, verdict),
+                debug: safe.serverDebug || null
+            });
+            return Object.assign(safe, envelopeFields(ctx.workspaceDir, "pal_test", source, args));
         }
     },
     {
@@ -861,8 +937,8 @@ const TOOLS = [
     {
         name: "pal_seo_audit",
         description: "On-page SEO audit of a WEB pal's server-rendered page (last pushed): title/meta, canonical, og/twitter, single H1, JSON-LD, img alt, robots.txt/sitemap.xml/llms.txt. Returns each problem + its fix, plus what PASSED. Use after pushing a web page; fix every ERROR. Not for console pals. Read the palbuilder-seo skill BEFORE writing heads; this verifies the result.",
-        inputShape: {},
-        async run(ctx) {
+        inputShape: diagnosticInputShape,
+        async run(ctx, args = {}) {
             const disabled = testingDisabledResult(ctx, "pal_seo_audit");
             if (disabled) return disabled;
             const res = await runSeoAudit(ctx.session, ctx.record.palGuid, ctx.record, ctx.workspaceDir);
@@ -874,11 +950,37 @@ const TOOLS = [
             const dirtyNote = res.dirty
                 ? "\n⚠ You have un-pushed local changes (" + (res.dirtyFiles || []).join(", ") + "). This audit reflects the LAST PUSHED version — pal_push, then audit again to check your latest edits."
                 : "";
-            const artifact = fullResultArtifact(ctx.workspaceDir, "pal_seo_audit", res, "seo-audit.json");
-            return Object.assign(res, {
-                message: withFullResult(formatSeoAudit(res) + dirtyNote, artifact),
-                _usage: { rawBytes: artifact.rawBytes }
+            const envelopeResults = seoEnvelopeResults(res);
+            const source = Object.assign({}, res, {
+                ok: (res.errors || 0) === 0,
+                filesChecked: null,
+                findings: envelopeResults.findings,
+                passing: envelopeResults.passing,
+                debug: dirtyNote || null
             });
+            return Object.assign(res, envelopeFields(ctx.workspaceDir, "pal_seo_audit", source, args));
+        }
+    },
+    {
+        name: "pal_context",
+        description: "Load an on-demand PalSync contract section by id or keyword. Use before sync/drift/lock work, creating files or pal.json entries, and dataset provisioning.",
+        needsCtx: false,
+        inputShape: {
+            section: z.enum(["sync-workflow", "creating-files", "datasets"]).optional(),
+            query: z.string().optional().describe("Keywords used when the exact section id is unknown.")
+        },
+        async run(ctx, { section, query } = {}) {
+            let palName = null;
+            try { palName = (await palsyncfile.read(ctx.workspaceDir)).palName; } catch (e) { /* optional context */ }
+            const sections = onDemandSyncSections(palName, { cli: false, skillsDir: ".claude/skills" });
+            let ids = section ? [section] : query ? routeItems(query, sections) : [];
+            if (!ids.length && !section && !query) {
+                const catalog = sections.map(item => ({ id: item.id, keywords: item.keywords }));
+                return { ran: true, sections: [], message: JSON.stringify({ sections: catalog }) };
+            }
+            ids = [...new Set(ids)];
+            const selected = sections.filter(item => ids.includes(item.id)).map(item => ({ id: item.id, content: item.content }));
+            return { ran: true, sections: selected, message: JSON.stringify({ sections: selected }) };
         }
     },
     {
@@ -896,7 +998,7 @@ const TOOLS = [
                 rel: pathMod.relative(ctx.workspaceDir, specPath).split(pathMod.sep).join("/"),
                 content: text,
                 mode: "spec-lint",
-                context: { hasMap: fs.existsSync(pathMod.join(specWorkspace, "MAP.md")) }
+                deps: [{ path: "MAP.md#present", content: String(fs.existsSync(pathMod.join(specWorkspace, "MAP.md"))) }]
             }, () => lintSpec(text, { workspaceDir: specWorkspace }));
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             return Object.assign({ ran: true }, res, { message: formatSpecLint(res) });
@@ -919,13 +1021,14 @@ const TOOLS = [
         description: "Create or update dataset TABLES on the server from pal.json's dataset definitions (it saves the pal first — editing datasets/<name>.json alone only changes the definition, not the table). " +
             "Default is a SAFE sync: create if missing, additive changes only, never deletes data. " +
             "recreate:true DROPS AND REBUILDS a table, DELETING ALL ITS ROWS, and requires a separate exact typed confirmation — it can't happen by accident.",
-        inputShape: {
+        inputShape: Object.assign({
             datasets: z.array(z.string()).optional(),
             recreate: z.boolean().optional(),
             confirmRecreate: z.string().optional(),
             force: z.boolean().optional()
-        },
-        async run(ctx, { datasets, recreate = false, confirmRecreate, force = false } = {}) {
+        }, diagnosticInputShape),
+        async run(ctx, args = {}) {
+            const { datasets, recreate = false, confirmRecreate, force = false } = args;
             const res = await syncDatasets(ctx.session, ctx.record, ctx.workspaceDir, { datasets, recreate, confirmRecreate, force });
             if (ctx.lifecycle) ctx.lifecycle.onActivity(); // sync saves + locks — re-arm the idle timer
             if (res.synced) {
@@ -948,18 +1051,13 @@ const TOOLS = [
                 return Object.assign(res, { message: "REFUSED (recreate not confirmed): " + res.reason });
             }
             if (res.refused === "save-failed") {
-                // Bubble up the underlying push refusal text so the agent knows exactly what to fix.
                 const sr = res.saveResult || {};
-                let detail;
-                if (sr.refused === "validation" && sr.lint) detail = "code errors — run pal_validate:\n" + formatLint(sr.lint, { context: "pre-push" });
-                else if (sr.refused === "drift") detail = "the server changed since your last pull — run pal_pull first (or force:true).";
-                else if (res.serverNotes && res.serverNotes.length) detail = "the server rejected the save:\n   - " + res.serverNotes.join("\n   - ");
-                else detail = sr.refused || "unknown reason";
-                const artifact = fullResultArtifact(ctx.workspaceDir, "pal_sync_datasets", res, "dataset-sync-refusal.json");
-                return Object.assign(res, {
-                    message: withFullResult("REFUSED: could not save the dataset definitions before provisioning.\n" + detail, artifact),
-                    _usage: { rawBytes: artifact.rawBytes }
+                const source = Object.assign({}, res, {
+                    ok: false,
+                    filesChecked: sr.lint ? sr.lint.filesChecked : null,
+                    findings: datasetSaveFindings(res)
                 });
+                return Object.assign(res, envelopeFields(ctx.workspaceDir, "pal_sync_datasets", source, args));
             }
             if (res.refused === "no-datasets" || res.refused === "unknown-dataset") {
                 return Object.assign(res, { message: "REFUSED: " + res.reason });
@@ -1016,18 +1114,16 @@ const TOOLS = [
         // "overly cautious", and pushed past 9 real errors six times in a row. Agents fix errors.
         // run() still accepts it because the CLI's --skip-validation flag (human escape hatch)
         // calls run() directly, bypassing the MCP schema.
-        inputShape: { force: z.boolean().optional(), confirmOverride: z.string().optional() },
-        async run(ctx, { force = false, confirmOverride, skipValidation = false } = {}) {
+        inputShape: Object.assign({ force: z.boolean().optional(), confirmOverride: z.string().optional() }, diagnosticInputShape),
+        async run(ctx, args = {}) {
+            const { force = false, confirmOverride, skipValidation = false } = args;
             const palName = ctx.record.palName;
             const overrideLock = confirmOverride === overridePhrase(palName);
             const res = await push(ctx.session, ctx.record, ctx.workspaceDir, { force: !!force, overrideLock, skipValidation: !!skipValidation });
             // Pre-push lint refusal: errors found, push not attempted.
             if (res.refused === "validation") {
-                const artifact = fullResultArtifact(ctx.workspaceDir, "pal_push", res.lint, "push-lint.json");
-                return Object.assign(res, {
-                    message: withFullResult(formatPushValidationRefusal(res.lint), artifact),
-                    _usage: { rawBytes: artifact.rawBytes }
-                });
+                const source = Object.assign({ ok: false, cacheHits: null, cacheMisses: null }, res.lint);
+                return Object.assign(res, envelopeFields(ctx.workspaceDir, "pal_push", source, args));
             }
             if (res.pushed) {
                 refreshBaseline(ctx.record, ctx.workspaceDir, res.serverPaths);
@@ -1052,22 +1148,15 @@ const TOOLS = [
                     ? "\n\nPruned phantom folder registrations:\n" +
                       res.prunedFolders.map(f => "   - " + f.folderType + "/" + f.name + " (" + f.reason + ")").join("\n")
                     : "";
-                const artifact = fullResultArtifact(ctx.workspaceDir, "pal_push", res, "push-result.json");
-                return Object.assign(res, {
-                    message: withFullResult("Pushed " + res.filesPushed + " files" + (res.forced ? " (forced past drift)" : "") +
-                        ". save " + (res.pushed ? "OK" : "FAILED") + ". marker=" + res.newMarker + ".\n" +
-                        formatValidation(res.validation) +
-                        (res.skipped && res.skipped.length
-                            ? "\n⚠ Skipped (create in PalBuilder):\n" +
-                              res.skipped.map(s => "   - " + s.type + "/" + s.file + " (" + s.reason + ")").join("\n")
-                            : "") +
-                        (res.strayCreatable && res.strayCreatable.length
-                            ? "\n\n🚨 Not pushed: " + res.strayCreatable.length + " file(s) lack pal.json entries:\n" +
-                              res.strayCreatable.map(f => "   - " + f).join("\n") +
-                              "\nFix: add matching pal.json entries, then push again."
-                            : "") + folderBlock + skippedBlock + warnBlock + webBlock + consoleBlock + renderNotVerifiedReminder(ctx), artifact),
-                    _usage: { rawBytes: artifact.rawBytes }
+                const findings = (res.lint && res.lint.findings || [])
+                    .concat(serverFindings(res.validation, true), pushVisibilityFindings(res));
+                const source = Object.assign({}, res, {
+                    ok: true,
+                    filesChecked: res.lint ? res.lint.filesChecked : null,
+                    findings,
+                    debug: [folderBlock, skippedBlock, warnBlock, webBlock, consoleBlock].filter(Boolean).join("\n") || null
                 });
+                return Object.assign(res, envelopeFields(ctx.workspaceDir, "pal_push", source, args));
             }
             if (res.refused === "drift") {
                 return Object.assign(res, {
@@ -1086,13 +1175,12 @@ const TOOLS = [
             // Show the server's validation notes — this is the real reason (e.g. a tag the server
             // doesn't allow), not a generic failure.
             if (res.refused === "save-rejected") {
-                const artifact = fullResultArtifact(ctx.workspaceDir, "pal_push", res, "push-save-rejection.json");
-                return Object.assign(res, {
-                    message: withFullResult("PUSH FAILED: the server rejected the save (nothing was saved). The server's reasons:\n" +
-                        formatValidation(res.validation) +
-                        "\n\nFix the issue(s) above in your files and push again. (These come from the PalBuilder server, not the offline check.)", artifact),
-                    _usage: { rawBytes: artifact.rawBytes }
+                const source = Object.assign({}, res, {
+                    ok: false,
+                    filesChecked: null,
+                    findings: serverFindings(res.validation, false)
                 });
+                return Object.assign(res, envelopeFields(ctx.workspaceDir, "pal_push", source, args));
             }
             return Object.assign(res, { message: "Push failed: " + (res.reason || res.refused || "unknown") });
         }
@@ -1140,6 +1228,7 @@ const TOOLS = [
 // MCP clients use these hints for presentation and confirmation UX. They are deliberately
 // metadata only; the tool implementations remain the authority for safety and idempotency.
 const TOOL_HINTS = {
+    pal_context: ["Load PalSync context", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_status: ["Report pal status", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_validate: ["Validate pal code", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_testing: ["Toggle automated testing", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
@@ -1175,4 +1264,5 @@ function safeTestResult(result) {
 }
 
 module.exports = { TOOLS, overridePhrase, blockedMessage, formatExpect, formatValidation, isBenignServerNote,
-    htmlRegionResult, recordScreenshotEvidence, safeTestResult, formatPushValidationRefusal };
+    htmlRegionResult, recordScreenshotEvidence, safeTestResult, formatPushValidationRefusal, seoEnvelopeResults,
+    pushVisibilityFindings, testEnvelopeFindings, datasetSaveFindings };

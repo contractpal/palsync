@@ -95,7 +95,10 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
                 rel: f.rel,
                 content: src,
                 mode: "workspace-markup",
-                context: { nonParseable: nonParseable.has(f.rel), designSystemPresent }
+                deps: [
+                    { path: "pal.json#parseable:" + f.rel, content: String(nonParseable.has(f.rel)) },
+                    { path: "design-system#present", content: String(designSystemPresent) }
+                ]
             }, () => lintMarkup(f.rel, src, { nonParseable, designSystemPresent })));
         }
     }

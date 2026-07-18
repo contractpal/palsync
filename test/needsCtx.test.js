@@ -12,7 +12,7 @@ const { InMemoryTransport } = require("@modelcontextprotocol/sdk/inMemory.js");
 const { createServer } = require("../src/mcp/server");
 // A fresh empty workspace — pal_validate lints it offline (missing pal.json / files degrade to a
 // clean result), so the call succeeds without ever needing a session.
-const { tmpWorkspace } = require("./helpers");
+const { tmpWorkspace, parseEnvelope } = require("./helpers");
 
 // Wire a client to a server built around a getCtx spy. The spy records every call and, if it ever
 // runs, hands back a deliberately inert ctx (no real session) — so a ctx-requiring tool gets past
@@ -30,12 +30,17 @@ async function connect(workspaceDir) {
     return { client, calls };
 }
 
-test("offline tool (pal_validate) runs WITHOUT resolving ctx — no login/lock", async () => {
-    const ws = tmpWorkspace();
+test("offline tool (pal_validate) runs WITHOUT resolving ctx and returns deterministic envelopes", async () => {
+    const ws = tmpWorkspace({ "pages/demo.html": "<c:debug />\n" });
     const { client, calls } = await connect(ws);
-    const res = await client.callTool({ name: "pal_validate", arguments: {} });
+    const first = await client.callTool({ name: "pal_validate", arguments: {} });
+    const second = await client.callTool({ name: "pal_validate", arguments: {} });
     assert.strictEqual(calls.getCtx, 0, "pal_validate must NOT trigger getCtx (no login/lock/session)");
-    assert.strictEqual(res.isError, undefined, "pal_validate should succeed against a bare workspace");
+    assert.strictEqual(first.isError, undefined, "pal_validate should succeed against a bare workspace");
+    assert.equal(second.content[0].text, first.content[0].text);
+    const parsed = parseEnvelope(first.content[0].text);
+    assert.equal(parsed.envelope.ok, false);
+    assert.ok(parsed.envelope.diagnosticCount > 0);
     await client.close();
     fs.rmSync(ws, { recursive: true, force: true });
 });

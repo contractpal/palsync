@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const usage = require("../core/usage");
 
 const HISTORY_DIR = ".agent-work-history";
@@ -77,6 +78,31 @@ function writeArtifactFile(run, fileName, data, encoding) {
     }
 }
 
+function writeContentAddressedArtifact(workspaceDir, tool, value) {
+    if (!workspaceDir) return null;
+    const data = typeof value === "string" ? value : JSON.stringify(value, null, 2) + "\n";
+    const digest = crypto.createHash("sha256").update(data).digest("hex");
+    const dir = path.join(workspaceDir, HISTORY_DIR, safeSlug(tool, "palsync"));
+    const filePath = path.join(dir, digest.slice(0, 16) + ".json");
+    ensureGitignored(workspaceDir);
+    try {
+        fs.mkdirSync(dir, { recursive: true });
+        if (!fs.existsSync(filePath)) {
+            const tmp = filePath + ".tmp-" + process.pid + "-" + Math.random().toString(16).slice(2);
+            try {
+                fs.writeFileSync(tmp, data, "utf8");
+                fs.renameSync(tmp, filePath);
+            } catch (e) {
+                try { fs.rmSync(tmp, { force: true }); } catch (ignored) { /* best-effort */ }
+                throw e;
+            }
+        }
+        return path.relative(workspaceDir, filePath).split(path.sep).join("/");
+    } catch (e) {
+        return null;
+    }
+}
+
 function writeRunMetadata(run, metadata) {
     if (!run || !run.dir) return null;
     const payload = Object.assign({
@@ -125,6 +151,7 @@ module.exports = {
     safeSlug,
     createWorkHistoryRun,
     writeArtifactFile,
+    writeContentAddressedArtifact,
     writeRunMetadata,
     writeRunNotes,
     recordSessionCost

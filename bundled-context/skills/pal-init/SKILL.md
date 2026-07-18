@@ -31,7 +31,7 @@ purpose per item, inferences marked. Do not deep-analyze workflows you won't cha
 ## Step 3 — Capture the regression baseline
 Record what passes RIGHT NOW, before any change. Run the checks, then write a STRUCTURED
 artifact so `pal_regression` (used by pal-loop and pal-review) can read it mechanically:
-- `pal_validate` → current error/warning count (not 0 → note it; you inherited it).
+- `pal_validate` → current `diagnosticCount` and diagnostics (`ok:false` → note it; you inherited it).
 - `pal_test` on the primary workflow(s) → current VALIDATED state.
 - Web: `pal_fetch`/`pal_preview` on key pages → note H1s present.
 - `pal_screenshot` the key screens (web, or console if capture succeeds). A viewport that
@@ -100,7 +100,7 @@ truth:
 ### Existing-pal verification floor (required in EXECUTION.md)
 pal-init does not build, but its handoff must force the same gates pal-loop uses. The
 change-scoped EXECUTION.md must include verification tasks/criteria for:
-- `pal_validate` before push — 0 new errors; inherited warnings/errors stay documented.
+- `pal_validate` before push — `ok:true`, or no new diagnostics; inherited warnings/errors stay documented.
 - `pal_push` after validation — no force/bypass flags unless the user explicitly approves a
   drift or lock decision.
 - `pal_sync_datasets` if the approved change creates or alters dataset definitions (safe sync

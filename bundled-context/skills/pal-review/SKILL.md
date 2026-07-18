@@ -127,7 +127,7 @@ chat-only verdicts are invalid.
 ```
 # REVIEW — <project> — <date> — reviewer: fresh session
 verdict: PASS | CHANGES-NEEDED
-pal_validate: <quoted verdict line — required; no line means the review is invalid>
+pal_validate: <quote `ok` and `diagnosticCount` — required; missing fields make the review invalid>
 ## Proof ledger
 | proof id | tool/file evidence | proves |
 ## Conformance
@@ -169,8 +169,8 @@ its complete output into REVIEW.md. Any flag or verdict cap from that command fo
   proofs name the tool and the relevant result (`pal_exercise step 2 PASS`,
   `pal_fetch expect all found`, `pal_screenshot captured:true renderError:null`). File proofs
   name exact `file:line`. A row with no proof id is not reviewed.
-- **Verdict gating — PASS only when all four hold:** `pal_validate` reports 0 errors (quote
-  the line); every §5 action has a complete trace row; every runnable write/data-effect action
+- **Verdict gating — PASS only when all four hold:** `pal_validate` returns `ok:true` and
+  `diagnosticCount:0` (quote both fields); every §5 action has a complete trace row; every runnable write/data-effect action
   has passing `pal_exercise` evidence; no §12 criterion sits in PASS without its evidence
   class. Any one missing → CHANGES-NEEDED with fix tasks.
 - **`pal_test` never outranks `pal_validate`.** pal_test proves the workflow COMPILES, nothing

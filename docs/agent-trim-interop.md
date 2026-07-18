@@ -4,9 +4,9 @@ PalSync removes domain repetition before returning MCP text. Agent Trim may perf
 or history trimming afterward. There is no runtime dependency, environment-variable handshake, or
 shared ANSI-cleaning implementation.
 
-Every condensed PalSync result ends with `Full result: <workspace-relative path>`. A downstream
-trimmer must retain that final line and must not add a second omission marker when PalSync already
-states that duplicates were grouped.
+Every diagnostic-bearing PalSync result has a serialized JSON envelope body and ends with
+`Full result: <workspace-relative path>`. A downstream trimmer must retain that final line and
+must not add a second omission marker when PalSync already groups repeated diagnostics.
 
 ```json
 {

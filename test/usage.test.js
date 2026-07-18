@@ -277,3 +277,19 @@ test("recordSessionCost retries a held lock", async () => {
     assert.equal(usage.readSessionCost(ws).entries[0].model, "mretry");
     fs.rmSync(ws, { recursive: true, force: true });
 });
+
+test("formatCost merges Pi telemetry without treating estimates as billing", () => {
+    const ws = tmpWorkspace();
+    const file = path.join(ws, usage.PI_USAGE_FILE);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, [
+        { schema: "palsync/pi-usage/1", tool: "pal_validate", bytes: 100, tokenEstimate: 25, provider: null, model: null, cost: null },
+        { schema: "palsync/pi-usage/1", tool: "pal_test", bytes: 20, tokenEstimate: 5, provider: "anthropic", model: "m", cost: null }
+    ].map(entry => JSON.stringify(entry)).join("\n") + "\n");
+    assert.equal(usage.readPiUsage(ws).length, 2);
+    const output = usage.formatCost(ws, []);
+    assert.match(output, /Pi extension tool telemetry/);
+    assert.match(output, /2 tool result\(s\).*120 B returned.*≈30 estimated tokens/s);
+    assert.match(output, /cost: not provided.*never estimates billing/);
+    fs.rmSync(ws, { recursive: true, force: true });
+});

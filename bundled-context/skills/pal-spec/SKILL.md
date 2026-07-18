@@ -133,7 +133,7 @@ The **first task is always a standalone foundation task**. Give it its own row, 
 runtime files with bash `cp` (never read-then-write), author a readable per-project
 `styles/styles.css`, register the four runtime entries in `pal.json`, and — for console pals —
 establish the `run()` skeleton from the copied template.
-The task must reach `pal_validate 0` and `pal_test` VALIDATED on that hand-built shell. Every task
+The task must reach `ok:true`, `diagnosticCount:0` from both `pal_validate` and `pal_test` on that hand-built shell. Every task
 that adapts the shell, fragments, or workflow depends on this foundation task (datasets are leaves
 and may be created before or alongside it). Existing pals that lack `styles.css` are not migrated.
 

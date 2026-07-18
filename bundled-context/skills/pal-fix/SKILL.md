@@ -33,9 +33,9 @@ When in doubt it's not a fix — escalate.
 3. **Minimal diff, using the pal-loop restraint ladder.** Reuse before building, platform before library,
    touch only the lines this fix needs. Don't "improve" adjacent code.
 4. **Verify** — the step-1 reproduction must now pass:
-   - `pal_push` → 0 errors (push runs the full offline validation as its gate — no separate
+   - `pal_push` → `ok:true`, `diagnosticCount:0` (push runs the full offline validation as its gate — no separate
      `pal_validate` first).
-   - `pal_test` → VALIDATED, 0 notes, if a workflow changed.
+   - `pal_test` → `ok:true`, `diagnosticCount:0`, if a workflow changed.
    - Web fix: `pal_fetch`/`pal_preview` shows the corrected string/render.
    - Console render fix: `pal_screenshot` — `captured:true` with `renderError` null = fixed;
      `captured:false` → `HUMAN GATE:` eyeball entry, don't claim the render fixed.

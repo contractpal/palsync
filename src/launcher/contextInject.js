@@ -52,7 +52,7 @@ const OPENCODE_COMMAND_MARKER = "<!-- palsync managed OpenCode skill command; re
 // The sync-etiquette section that teaches the agent the palsync workflow (decision: conversational).
 // cli=true renders the Pi flavor: palsync CLI subcommands instead of MCP tools, and lock-per-command
 // instead of an always-on session lock (Pi has no MCP — it drives palsync through its shell CLI).
-function syncSection(palName, { cli = false, skillsDir = ".claude/skills" } = {}) {
+function syncDetails(palName, { cli = false, skillsDir = ".claude/skills" } = {}) {
     const T = cli
         ? { pull: "`palsync pull`", push: "`palsync push`", validate: "`palsync validate`",
             test: "`palsync test`", preview: "`palsync preview`", open: "`palsync open`", seo: "`palsync seo-audit`",
@@ -275,6 +275,54 @@ function syncSection(palName, { cli = false, skillsDir = ".claude/skills" } = {}
         "- " + T.datasets + " provisions DataSet tables only. A DataView is a read-only join/read model, not a table;",
         "  DataViews/data/datalists stay PalBuilder-created, and push/pull only preserves them."
     ].join("\n");
+}
+
+function syncSection(palName, { cli = false, skillsDir = ".claude/skills" } = {}) {
+    const T = cli
+        ? { pull: "`palsync pull`", push: "`palsync push`", validate: "`palsync validate`", test: "`palsync test`", screenshot: "`palsync screenshot`" }
+        : { pull: "`pal_pull`", push: "`pal_push`", validate: "`pal_validate`", test: "`pal_test`", screenshot: "`pal_screenshot`" };
+    return [
+        "## palsync — essential sync contract (managed)",
+        "",
+        "This pal" + (palName ? " (**" + palName + "**)" : "") + " is connected to CloudPiston through " + (cli ? "the palsync CLI; locks are per-command." : "the palsync MCP server and is locked for your session."),
+        "",
+        "Load every skill the task touches before writing PalBuilder code. For visible UI, load",
+        "Visible UI has a mandatory two-skill route: load both `palbuilder-frontend` and `design-build`;",
+        "load `design-system-init` first when design-system files are absent. Render desktop and mobile,",
+        "inspect pixels and `designAudit`, then fix failures. " + (skillsDir === ".claude/skills" ? "" : "Load skills through the skill tool; never additionally Read/cat files under `" + skillsDir + "`.").trim(),
+        "",
+        "Working loop:",
+        "1. " + T.pull + " before significant work; it refuses rather than overwrite local edits.",
+        "2. Follow the owning skills. Use " + T.validate + " between edits, not immediately before push.",
+        "3. Offer " + T.push + " once per meaningful change. Push validates and has no agent bypass.",
+        "4. After workflow/UI pushes, run " + T.test + " for server compile and " + T.screenshot + " for",
+        "   actual render evidence. Compile success never proves the UI rendered or behavior worked.",
+        "5. Runtime checks inspect the last pushed version. Never narrate UI/data a tool did not show.",
+        "",
+        (cli ? "Use the owning bundled skill references" : "Use `pal_context`") + " for the detailed `sync-workflow`, `creating-files`, or `datasets` contract",
+        "before those operations. It includes drift/lock handling, browser/runtime verification, exact",
+        "pal.json entries, creatable-file limits, dataset schemas, and destructive-sync rules.",
+        ...(cli ? [
+            "",
+            "CLI tools: `palsync push`, `palsync pull`, `palsync validate`, `palsync test`,",
+            "`palsync screenshot`, `palsync sync-datasets`. Do not use validation-skip flags."
+        ] : [
+            "",
+            "Use `pal_testing` when the user stops/resumes tests. Never run palsync sync commands in the",
+            "shell while MCP tools are active, and never kill a process matching `palsync`."
+        ])
+    ].filter(line => line !== "").join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+function onDemandSyncSections(palName, opts = {}) {
+    const full = syncDetails(null, opts);
+    const creatingAt = full.indexOf("### Creating new files");
+    const datasetsAt = full.indexOf("### Datasets");
+    return [
+        { id: "sync-workflow", keywords: ["sync", "workflow", "push", "pull", "test", "browser", "runtime", "lock", "drift"], content: full.slice(0, creatingAt).trim() },
+        { id: "creating-files", keywords: ["create", "file", "manifest", "pal.json", "page", "fragment", "workflow", "wizard"], content: full.slice(creatingAt, datasetsAt).trim() },
+        { id: "datasets", keywords: ["dataset", "schema", "table", "sync", "recreate", "dataview"], content: full.slice(datasetsAt).trim() }
+    ];
 }
 
 // The single palsync-owned doc: the static PalBuilder coding contract (bundled CLAUDE.md) + the
@@ -612,7 +660,7 @@ async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
     return result;
 }
 
-module.exports = { inject, mergeManaged, importBlock, agentsBlock, buildPalsyncDoc, buildPalsyncParts, syncSection,
+module.exports = { inject, mergeManaged, importBlock, agentsBlock, buildPalsyncDoc, buildPalsyncParts, syncSection, syncDetails, onDemandSyncSections,
     pruneSkills, stripManaged, cleanClaudeArtifacts, cleanAgentsArtifacts, contextStatus,
     syncOpenCodeCommands, cleanOpenCodeCommands, openCodeSkillCommand,
     BEGIN, END, OPENCODE_COMMAND_MARKER, BUNDLE_DIR, VERSION, bundledSkills, ownedSkillNames };

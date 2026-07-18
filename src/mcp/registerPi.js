@@ -4,15 +4,54 @@ const fs = require("fs/promises");
 const os = require("os");
 const path = require("path");
 
-const installCommand = "install the pi-mcp extension at ~/.pi/agent/extensions/mcp (see its README)";
+const SOURCE_DIR = path.join(__dirname, "..", "..", "pi-extension");
+const FILES = ["index.ts", "helpers.js", "tools.json"];
+const SHARED_SOURCES = {
+    "helpers.js": path.join(__dirname, "..", "core", "piHelpers.js"),
+    "tools.json": path.join(__dirname, "pi-tools.json")
+};
+const installCommand = "rerun palsync setup with --agent pi to install ~/.pi/agent/extensions/palsync";
 
-// Verify only: pi auto-detects the project .palsync.json. Writing another project config here
-// would double-inject the palsync server, so setup only reports whether the global extension exists.
-async function register() {
-    const filePath = path.join(os.homedir(), ".pi", "agent", "extensions", "mcp", "index.ts");
-    let installed = false;
-    try { installed = (await fs.stat(filePath)).isFile(); } catch (e) { installed = false; }
-    return { filePath: null, written: false, installed, installCommand };
+async function sameFile(left, right) {
+    try {
+        const [a, b] = await Promise.all([fs.readFile(left), fs.readFile(right)]);
+        return a.equals(b);
+    } catch (e) { return false; }
 }
 
-module.exports = { register, installCommand };
+async function install({ homeDir = os.homedir(), sourceDir = SOURCE_DIR } = {}) {
+    const dir = path.join(homeDir, ".pi", "agent", "extensions", "palsync");
+    await fs.mkdir(dir, { recursive: true });
+    let written = false;
+    for (const file of FILES) {
+        const source = sourceDir === SOURCE_DIR && SHARED_SOURCES[file]
+            ? SHARED_SOURCES[file]
+            : path.join(sourceDir, file);
+        const target = path.join(dir, file);
+        if (await sameFile(source, target)) continue;
+        await fs.copyFile(source, target);
+        written = true;
+    }
+    return { filePath: path.join(dir, "index.ts"), dir, written, installed: true };
+}
+
+async function register({ installExtension = false, homeDir = os.homedir(), sourceDir = SOURCE_DIR } = {}) {
+    const nativePath = path.join(homeDir, ".pi", "agent", "extensions", "palsync", "index.ts");
+    const thirdPartyPath = path.join(homeDir, ".pi", "agent", "extensions", "mcp", "index.ts");
+    let thirdPartyInstalled = false;
+    try { thirdPartyInstalled = (await fs.stat(thirdPartyPath)).isFile(); } catch (e) { /* absent */ }
+    if (installExtension) {
+        const result = await install({ homeDir, sourceDir });
+        return Object.assign(result, { thirdPartyInstalled, collisionGuidance: thirdPartyInstalled
+            ? "Configure pi-mcp's explicit palsync server with lifecycle:\"lazy\", or disable one integration."
+            : null, installCommand });
+    }
+    let installed = false;
+    try { installed = (await fs.stat(nativePath)).isFile(); } catch (e) { /* absent */ }
+    return { filePath: installed ? nativePath : null, written: false, installed, thirdPartyInstalled,
+        collisionGuidance: thirdPartyInstalled
+            ? "Configure pi-mcp's explicit palsync server with lifecycle:\"lazy\", or disable one integration."
+            : null, installCommand };
+}
+
+module.exports = { register, install, installCommand, SOURCE_DIR, FILES, SHARED_SOURCES };

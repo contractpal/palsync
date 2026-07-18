@@ -289,17 +289,17 @@ test("generated agent docs route every visible UI task through frontend + design
     }
 });
 
-test("exercise guidance covers the delete-absent rule in both MCP and CLI flavors", async () => {
-    const mcpDoc = await ci.buildPalsyncDoc("Demo", { cli: false });
-    const cliDoc = await ci.buildPalsyncDoc("Demo", { cli: true });
+test("on-demand exercise guidance covers the delete-absent rule in both MCP and CLI flavors", async () => {
+    const mcpDoc = ci.syncDetails(null, { cli: false });
+    const cliDoc = ci.syncDetails(null, { cli: true });
     for (const doc of [mcpDoc, cliDoc]) {
         assert.match(doc, /after a delete put the deleted name in `absent`/);
     }
 });
 
-test("generated file guidance requires a fragment stub and distinguishes DataViews from tables", async () => {
+test("on-demand file guidance requires a fragment stub and distinguishes DataViews from tables", async () => {
     for (const opts of [{ cli: false }, { cli: true }]) {
-        const doc = await ci.buildPalsyncDoc("Demo", Object.assign({ skillsDir: ".agents/skills" }, opts));
+        const doc = ci.syncDetails(null, Object.assign({ skillsDir: ".agents/skills" }, opts));
         assert.match(doc, /<c:ignore xmlns:c="contractpal"><\/c:ignore>/);
         assert.match(doc, /Fragment content is missing/);
         assert.match(doc, /DataView is a read-only join\/read model, not a table/);

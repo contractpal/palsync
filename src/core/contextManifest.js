@@ -42,6 +42,7 @@ function skillDescription(text) {
 
 async function buildManifest({ agent, palName, skills, parts, bundleRoot = path.join(__dirname, "..", "..", "bundled-context") }) {
     const { TOOLS } = require("../mcp/tools");
+    const { onDemandSyncSections } = require("../launcher/contextInject");
     const toolJson = JSON.stringify(serializeToolDefinitions(TOOLS));
     const skillCatalog = [];
     const bodies = [];
@@ -57,6 +58,13 @@ async function buildManifest({ agent, palName, skills, parts, bundleRoot = path.
         section("skill-catalog", "release-stable", 2, JSON.stringify(skillCatalog), "bundled-context/skills/*/SKILL.md#frontmatter"),
         section("sync-section", "workspace-stable", 3, parts.sync, "src/launcher/contextInject.js#syncSection")
     ];
+    for (const item of onDemandSyncSections(palName, {
+        cli: agent === "pi",
+        skillsDir: agent === "claude" ? ".claude/skills" : ".agents/skills"
+    })) {
+        sections.push(section(item.id, "on-demand", sections.length, item.content,
+            "src/launcher/contextInject.js#syncDetails", { eager: false, keywords: item.keywords }));
+    }
     for (const item of bodies) {
         sections.push(section("skill-body:" + item.name, "on-demand", sections.length,
             item.body, item.source, { eager: false }));

@@ -37,7 +37,13 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "project"
+    ],
+    "keywords": [
+      "status"
+    ]
   },
   {
     "name": "pal_validate",
@@ -77,7 +83,14 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "project",
+      "spec"
+    ],
+    "keywords": [
+      "validate"
+    ]
   },
   {
     "name": "pal_testing",
@@ -97,7 +110,14 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "runtime"
+    ],
+    "keywords": [
+      "testing",
+      "testing"
+    ]
   },
   {
     "name": "pal_test",
@@ -151,7 +171,14 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "runtime"
+    ],
+    "keywords": [
+      "test",
+      "testing"
+    ]
   },
   {
     "name": "pal_tunnel_test",
@@ -191,7 +218,15 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "runtime"
+    ],
+    "keywords": [
+      "tunnel",
+      "test",
+      "testing"
+    ]
   },
   {
     "name": "pal_debug",
@@ -206,7 +241,14 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "runtime"
+    ],
+    "keywords": [
+      "debug",
+      "testing"
+    ]
   },
   {
     "name": "pal_preview",
@@ -249,7 +291,13 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "browser"
+    ],
+    "keywords": [
+      "preview"
+    ]
   },
   {
     "name": "pal_fetch",
@@ -287,7 +335,13 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "browser"
+    ],
+    "keywords": [
+      "fetch"
+    ]
   },
   {
     "name": "pal_screenshot",
@@ -327,7 +381,13 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "browser"
+    ],
+    "keywords": [
+      "screenshot"
+    ]
   },
   {
     "name": "pal_exercise",
@@ -438,7 +498,15 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "browser",
+      "runtime"
+    ],
+    "keywords": [
+      "exercise",
+      "testing"
+    ]
   },
   {
     "name": "pal_seo_audit",
@@ -478,7 +546,14 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "browser"
+    ],
+    "keywords": [
+      "seo",
+      "audit"
+    ]
   },
   {
     "name": "pal_context",
@@ -506,7 +581,14 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "project",
+      "spec"
+    ],
+    "keywords": [
+      "context"
+    ]
   },
   {
     "name": "pal_spec_lint",
@@ -526,7 +608,14 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "spec"
+    ],
+    "keywords": [
+      "spec",
+      "lint"
+    ]
   },
   {
     "name": "pal_regression",
@@ -541,7 +630,15 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "spec",
+      "runtime"
+    ],
+    "keywords": [
+      "regression",
+      "testing"
+    ]
   },
   {
     "name": "pal_sync_datasets",
@@ -596,7 +693,14 @@
       "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": false
-    }
+    },
+    "groups": [
+      "sync"
+    ],
+    "keywords": [
+      "sync",
+      "datasets"
+    ]
   },
   {
     "name": "pal_pull",
@@ -615,7 +719,14 @@
       "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": false
-    }
+    },
+    "groups": [
+      "sync",
+      "project"
+    ],
+    "keywords": [
+      "pull"
+    ]
   },
   {
     "name": "pal_merge",
@@ -630,7 +741,14 @@
       "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": false
-    }
+    },
+    "groups": [
+      "sync",
+      "project"
+    ],
+    "keywords": [
+      "merge"
+    ]
   },
   {
     "name": "pal_push",
@@ -676,7 +794,14 @@
       "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": false
-    }
+    },
+    "groups": [
+      "sync",
+      "project"
+    ],
+    "keywords": [
+      "push"
+    ]
   },
   {
     "name": "pal_lock",
@@ -695,7 +820,13 @@
       "readOnlyHint": false,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "project"
+    ],
+    "keywords": [
+      "lock"
+    ]
   },
   {
     "name": "pal_unlock",
@@ -710,6 +841,12 @@
       "readOnlyHint": false,
       "destructiveHint": false,
       "idempotentHint": true
-    }
+    },
+    "groups": [
+      "project"
+    ],
+    "keywords": [
+      "unlock"
+    ]
   }
 ]

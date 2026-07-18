@@ -17,4 +17,11 @@ function tmpWorkspace(files = {}) {
     return dir;
 }
 
-module.exports = { tmpWorkspace };
+function parseEnvelope(text) {
+    const lines = String(text).split("\n");
+    const trailer = lines.pop();
+    if (!/^Full result: .+$/.test(trailer || "")) throw new Error("Missing final Full result trailer");
+    return { envelope: JSON.parse(lines.join("\n")), trailer };
+}
+
+module.exports = { tmpWorkspace, parseEnvelope };

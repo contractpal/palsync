@@ -10,6 +10,7 @@ const {
     safeSlug,
     createWorkHistoryRun,
     writeArtifactFile,
+    writeContentAddressedArtifact,
     writeRunMetadata,
     writeRunNotes,
     recordSessionCost
@@ -48,6 +49,16 @@ test("writeArtifactFile, metadata, and notes stay inside the run folder", () => 
     assert.equal(path.dirname(notes), run.dir);
     assert.equal(JSON.parse(fs.readFileSync(metadata, "utf8")).status, 200);
     assert.match(fs.readFileSync(notes, "utf8"), /# pal_fetch/);
+});
+
+test("content-addressed artifacts reuse a deterministic path", () => {
+    const ws = tmpWorkspace();
+    const value = { findings: [{ code: "x" }] };
+    const first = writeContentAddressedArtifact(ws, "pal_validate", value);
+    const second = writeContentAddressedArtifact(ws, "pal_validate", value);
+    assert.equal(second, first);
+    assert.match(first, /^\.agent-work-history\/pal_validate\/[a-f0-9]{16}\.json$/);
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(ws, first), "utf8")), value);
 });
 
 test("recordSessionCost appends to the .palsync/session-cost.json sidecar", () => {

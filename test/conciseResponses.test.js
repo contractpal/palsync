@@ -6,7 +6,7 @@ const path = require("node:path");
 const { formatValidation } = require("../src/core/validate");
 const { formatSeoAudit } = require("../src/core/seoAudit");
 const { TOOLS, safeTestResult, formatPushValidationRefusal } = require("../src/mcp/tools");
-const { tmpWorkspace } = require("./helpers");
+const { tmpWorkspace, parseEnvelope } = require("./helpers");
 
 test("lint formatting groups remediation but retains every rule, fix, and location", () => {
     const findings = [];
@@ -31,6 +31,9 @@ test("pal_validate ends with a recoverable workspace-relative full-result artifa
     const ws = tmpWorkspace({ "pages/demo.html": "<c:debug />\n" });
     const tool = TOOLS.find(value => value.name === "pal_validate");
     const result = await tool.run({ workspaceDir: ws }, {});
+    const parsed = parseEnvelope(result.message);
+    assert.equal(parsed.envelope.ok, false);
+    assert.ok(parsed.envelope.diagnosticCount > 0);
     const match = result.message.match(/Full result: (\.agent-work-history\/[^\n]+)$/);
     assert.ok(match, "stable trailer is the final line");
     const artifact = path.join(ws, ...match[1].split("/"));

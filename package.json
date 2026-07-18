@@ -17,6 +17,7 @@
     "bin/",
     "src/",
     "lib/",
+    "pi-extension/",
     "bundled-context/",
     "eval/specs/",
     "palpush.js",

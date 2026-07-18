@@ -15,7 +15,7 @@ function buildMcpConfig(workspaceDir, { nodePath = process.execPath } = {}) {
             palsync: {
                 command: nodePath,
                 args: [MCP_BIN],
-                env: { PALSYNC_WORKSPACE: workspaceDir }
+                env: { PALSYNC_WORKSPACE: workspaceDir, PALSYNC_TOOL_PROFILE: "claude" }
             }
         }
     };

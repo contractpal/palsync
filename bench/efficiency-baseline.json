@@ -1,0 +1,20 @@
+{
+  "schema": "palsync/efficiency-baseline/1",
+  "eagerContextBytes": {
+    "total": 38101,
+    "releaseStable": 36519,
+    "workspaceStable": 1582
+  },
+  "toolSchemaBytes": 19204,
+  "lintCache": {
+    "coldMisses": 1,
+    "repeatedHits": 1,
+    "repeatedMisses": 0,
+    "repeatedHitRate": 100,
+    "incrementalHitRate": 95
+  },
+  "fixtureResultBytes": {
+    "pal_validate_clean": 106,
+    "pal_validate_diagnostics": 815
+  }
+}

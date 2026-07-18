@@ -35,7 +35,7 @@ const USAGE = [
     "  --user <username>    account (default: env CP_USER, else the single keychain account)",
     "  --profile <name>     narrow by profile name (disambiguates a duplicate pal name)",
     "  --group <name>       narrow by group name",
-    "  --agent claude|codex|pi|opencode  which agent's context/MCP to write (default: claude; pi auto-detects .palsync.json via the pi-mcp extension (nothing written; install the extension once globally))",
+    "  --agent claude|codex|pi|opencode  which agent's context/MCP to write (default: claude; pi installs the native lazy-loading extension globally)",
     "  --overwrite-local    if the workspace has un-pushed local edits, overwrite them (default: refuse)",
     "  --json               machine-readable result",
     "",
@@ -126,12 +126,13 @@ async function run(argv) {
     const result = await workspace.setup({ session, cloudUrl, sel, workspaceDir, agent: flags.agent, onDrift, log });
 
     if (flags.agent === "pi") {
-        const pi = result.mcpRegistration || await registerPi.register();
+        const pi = result.mcpRegistration || await registerPi.register({ installExtension: true });
         result.mcpRegistration = pi;
         result.mcpConfig = null;
-        if (!flags.json) log(pi.installed
-            ? "Pi MCP extension detected at " + pi.installCommand.split(" at ")[1].split(" ")[0] + ". No project file written."
-            : "Pi MCP extension not detected. " + pi.installCommand);
+        if (!flags.json) {
+            log((pi.written ? "Native Pi extension installed at " : "Native Pi extension current at ") + pi.filePath + ". No project file written.");
+            if (pi.collisionGuidance) log("⚠ " + pi.collisionGuidance);
+        }
     }
 
     // Release the lock — no agent is launched here, so don't strand it. The MCP server re-acquires

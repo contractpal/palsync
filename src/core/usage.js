@@ -16,9 +16,11 @@
 // the report says so explicitly and makes no estimate.
 const fs = require("fs");
 const path = require("path");
+const { contentStats: sharedContentStats } = require("./piHelpers");
 
 const USAGE_FILE = ".palsync.usage.json";
 const SESSION_COST_FILE = ".palsync/session-cost.json";
+const PI_USAGE_FILE = ".palsync/pi-usage.jsonl";
 const SESSION_COST_LOCK = ".palsync/session-cost.lock";
 const LOCK_RETRIES = 20;
 const LOCK_RETRY_MS = 25;
@@ -120,45 +122,11 @@ function contentBytes(content) {
         (b && b.data ? b.data.length : 0), 0);
 }
 
-// Model-token estimate for one inline image. Anthropic bills images by PIXELS (~w*h/750
-// tokens), not payload bytes — a heavily-compressed JPEG costs the same tokens as a lossless
-// PNG at the same dimensions. Dimensions come from the image header (PNG IHDR / JPEG SOF).
-function imageTokens(b64) {
-    try {
-        const buf = Buffer.from(b64.slice(0, 65536), "base64");
-        let w = 0, h = 0;
-        if (buf.length > 24 && buf.readUInt32BE(0) === 0x89504e47) { // PNG magic
-            w = buf.readUInt32BE(16); h = buf.readUInt32BE(20);
-        } else if (buf.length > 10 && buf.readUInt16BE(0) === 0xffd8) { // JPEG SOI, scan for SOF
-            let i = 2;
-            while (i + 9 < buf.length) {
-                if (buf[i] !== 0xff) { i++; continue; }
-                const m = buf[i + 1];
-                if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) {
-                    h = buf.readUInt16BE(i + 5); w = buf.readUInt16BE(i + 7); break;
-                }
-                i += 2 + buf.readUInt16BE(i + 2);
-            }
-        }
-        if (w && h) return Math.ceil((w * h) / 750);
-    } catch (e) { /* fall through to the default */ }
-    return 1365; // header unreadable — assume a 1280x800 viewport capture
-}
-
 // Bytes AND estimated model tokens for a result: text ≈ bytes/4, images by pixel dimensions.
 // An estimate (real tokenization varies), but it stops image-heavy byte counts from reading
 // as the top token cost when they aren't.
 function contentStats(content) {
-    if (!Array.isArray(content)) return { bytes: 0, tokens: 0 };
-    let bytes = 0, tokens = 0;
-    for (const b of content) {
-        if (b && b.text) {
-            const n = Buffer.byteLength(b.text, "utf8");
-            bytes += n; tokens += Math.ceil(n / 4);
-        }
-        if (b && b.data) { bytes += b.data.length; tokens += imageTokens(b.data); }
-    }
-    return { bytes, tokens };
+    return sharedContentStats(content);
 }
 
 // Accumulate one tool call into the per-session tally. Best-effort: instrumentation must NEVER
@@ -415,6 +383,28 @@ function formatSessionCost(workspaceDir) {
     return L;
 }
 
+function readPiUsage(workspaceDir) {
+    try {
+        return fs.readFileSync(path.join(workspaceDir, PI_USAGE_FILE), "utf8").split(/\r?\n/)
+            .filter(Boolean).map(line => JSON.parse(line))
+            .filter(entry => entry && entry.schema === "palsync/pi-usage/1");
+    } catch (e) { return []; }
+}
+
+function formatPiUsage(workspaceDir) {
+    const entries = readPiUsage(workspaceDir);
+    const L = ["Pi extension tool telemetry (" + PI_USAGE_FILE + "):" ];
+    if (!entries.length) return L.concat("  no Pi telemetry recorded.");
+    const bytes = entries.reduce((sum, entry) => sum + (Number(entry.bytes) || 0), 0);
+    const tokens = entries.reduce((sum, entry) => sum + (Number(entry.tokenEstimate) || 0), 0);
+    const providers = [...new Set(entries.map(entry => entry.provider).filter(Boolean))];
+    const models = [...new Set(entries.map(entry => entry.model).filter(Boolean))];
+    L.push("  " + entries.length + " tool result(s), " + fmtBytes(bytes) + " returned, ≈" + fmtNum(tokens) + " estimated tokens");
+    L.push("  provider: " + (providers.length ? providers.join(", ") : "not reported") + "   model: " + (models.length ? models.join(", ") : "not reported"));
+    L.push("  cost: not provided — PalSync never estimates billing from tool-result telemetry.");
+    return L;
+}
+
 // Render the cost report. Always labels the numbers as palsync's OWN context contribution.
 function formatCost(workspaceDir, tools) {
     flush(workspaceDir);
@@ -465,6 +455,8 @@ function formatCost(workspaceDir, tools) {
 
     L.push(...formatSessionCost(workspaceDir));
     L.push("");
+    L.push(...formatPiUsage(workspaceDir));
+    L.push("");
 
     if (manifest) {
         const summary = manifestApi.eagerSummary(manifest);
@@ -494,5 +486,6 @@ function formatCost(workspaceDir, tools) {
 }
 
 module.exports = { recordToolCall, recordContextGeneration, contentBytes, contentStats, injectedContext,
-    formatCost, skillDescription, readSessionCost, recordSessionCost, phaseTotals, normalizeV2, USAGE_FILE, SESSION_COST_FILE,
+    formatCost, skillDescription, readSessionCost, recordSessionCost, readPiUsage, formatPiUsage,
+    phaseTotals, normalizeV2, USAGE_FILE, SESSION_COST_FILE, PI_USAGE_FILE,
     SOFT_THRESHOLD_BYTES };

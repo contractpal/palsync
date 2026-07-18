@@ -188,10 +188,10 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
             log("  ⚠ `codex mcp add` failed (" + (reg.stderr || "unknown") + ") — register manually:\n      " + reg.command);
         }
     } else if (agent === "pi") {
-        // pi-mcp auto-detects .palsync.json; a project config would double-inject the server.
-        log("checking Pi MCP extension (no project file written)");
-        reg = await registerPi.register();
-        log(reg.installed ? "  Pi MCP extension detected" : "  ⚠ Pi MCP extension not detected — " + reg.installCommand);
+        log("installing native PalSync Pi extension (no project file written)");
+        reg = await registerPi.register({ installExtension: true });
+        log(reg.written ? "  installed native Pi extension" : "  native Pi extension already current");
+        if (reg.collisionGuidance) log("  ⚠ " + reg.collisionGuidance);
     } else if (agent === "opencode") {
         log("registering palsync MCP server with OpenCode (opencode.json)");
         reg = await registerOpencode(workspaceDir);

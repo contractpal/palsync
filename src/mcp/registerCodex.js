@@ -27,6 +27,7 @@ function codex(args, cwd) {
 function addArgs(workspaceDir, nodePath) {
     return ["mcp", "add", SERVER_NAME,
         "--env", "PALSYNC_WORKSPACE=" + workspaceDir,
+        "--env", "PALSYNC_TOOL_PROFILE=codex",
         "--", nodePath, MCP_BIN];
 }
 
