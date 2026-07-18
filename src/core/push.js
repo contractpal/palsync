@@ -92,7 +92,8 @@ const WORKSPACE_GATE_RULES = new Set([
     "missingPalJsonEntry", "actionRouted", "fragmentBinding"
 ]);
 const WORKSPACE_WARNING_RULES = new Set([
-    "listNameContract", "ajaxTargetExists", "destructiveConfirm"
+    "listNameContract", "ajaxTargetExists", "destructiveConfirm", "fontDeclaredNotLoaded",
+    "scriptWithoutConsumer"
 ]);
 
 function findingKey(f) {

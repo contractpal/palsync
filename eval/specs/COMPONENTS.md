@@ -1,5 +1,8 @@
 # COMPONENTS — palsync UX benchmark recipes
 
+Copy recipe CSS verbatim, with values unchanged, from the reference catalog; a re-derived
+approximation of a catalogued component is a defect.
+
 These are approved pb-* recipe references. Compose the subset the content needs; do not invent
 class names or force every page through the same template. Copy only used recipe rules and their
 dependencies into `styles/styles.css`; the full `design-system.css` remains reference-only and is

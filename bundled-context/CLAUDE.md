@@ -58,6 +58,9 @@ the spec is written.
 
 `design-system-init/references/design-system.css` is reference-only: never copy/register/link/load it wholesale. Put only used rules and dependencies in `styles/styles.css`; follow `skills/shared/references/css-conventions.md` for CSS/script ordering and casing. Remove unused presets/themes/components.
 
+Console pals with no font specified by the user, spec, or references use the system font stack only
+and no Fontshare import; marketing/web pals keep the Satoshi/Fontshare default.
+
 ---
 
 ## Workspace layout

@@ -54,11 +54,16 @@ Hard gates — any failure means the visible task is not done:
       Copy only the needed rules and dependencies; never copy unused components "just in case."
 - Verify page shell resource order against `../shared/references/css-conventions.md`: spacing before authored CSS, each used behavior script once, and no Bootstrap merely for spacing.
 - Fontshare loads through an `@import` at the top of `styles.css`; never add remote page-head font
-  resources or copy a font import the pal does not use.
+  resources or copy a font import the pal does not use. A console pal with no font specified by the
+  user, spec, or references uses only `system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+  Roboto, sans-serif` and no `@import`; marketing/web pals keep the Satoshi/Fontshare default.
 - For non-trivial UI, read `../design-system-init/references/design-principles.md` before building
   or reviewing. It is the practical checklist for hierarchy, UX flow, Gestalt grouping, Fitts target
   sizing, typography, color meaning, consistency, and simplicity.
 - For Palbuilder UI, read `../design-system-init/references/component-library.md` before implementing any non-trivial app/console component, or `../design-system-init/references/marketing-library.md` for marketing sections (hero, bento, pricing, testimonials, logo cloud, CTA, stats, mockups). Copy the selected recipe's CSS and dependencies from the reference catalog into `styles.css`; never copy unrelated families. Pair either with `palbuilder-frontend/references/c-tags.md` before using any `c:` attribute you have not verified.
+- Before styling any control, check whether COMPONENTS.md or the reference catalog already defines
+  its recipe. Copy catalogued recipes verbatim; a hand-rolled version of an existing component is a
+  review defect.
 - Enforce the current palsync visual stack unless the project explicitly overrides it: system or Fontshare typography, inline SVG icons from one approved family (Iconoir, Heroicons, or Phosphor), and `scripts/pb-motion.js` data attributes for scripted animation — no other motion library. Always grab the SVG version; see component-library.md Icons.
 - Chart.js is optional and only for chart-heavy pals: platform `<c:resource source="chartjs"
   version="4.0.0" name="chart.js" />` plus opt-in `scripts/pb-charts.js`; it is not part of the
@@ -178,6 +183,8 @@ Apply the same vocabulary to yourself at the review gate.
       for non-trivial UI and local reusable components recorded back into COMPONENTS.md.
 - [ ] Typography, SVG icons, and motion match the stack policy: system/Fontshare fonts, inline
       Iconoir/Heroicons/Phosphor-style SVGs, `pb-motion.js` data attributes only for scripted motion; always grab the SVG version.
+- [ ] Console pal with no recorded font decision: `styles.css` has no `@import` and
+      `--ds-font-ui` is the system stack.
 - [ ] No leftover scripted-animation vendor file or `<script>` reference remains anywhere in the
       pal's own files.
 - [ ] Decomposed into atomic units with explicit interfaces; no monolith, no near-duplicates.

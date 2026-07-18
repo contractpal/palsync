@@ -1014,3 +1014,46 @@ test("pageResponseSource — c.getPage(...) is the correct source, no finding", 
     assert.strictEqual(lintContracts(dir).filter(f => f.rule === "pageResponseSource").length, 0);
     fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("fontDeclaredNotLoaded warns for an unimported web font and accepts system/imported fonts", () => {
+    const missing = tmpWorkspace({
+        "styles/styles.css": ':root { --ds-font-ui: "Satoshi", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }'
+    });
+    const loaded = tmpWorkspace({
+        "styles/styles.css": '@import url("https://api.fontshare.com/v2/css?f[]=satoshi@400,700&display=swap");\n:root { --ds-font-ui: "Satoshi", system-ui, sans-serif; }'
+    });
+    const system = tmpWorkspace({
+        "styles/styles.css": ':root { --ds-font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }'
+    });
+    const findings = lintContracts(missing).filter(f => f.rule === "fontDeclaredNotLoaded");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "warn");
+    assert.match(findings[0].message, /Satoshi/);
+    assert.strictEqual(lintContracts(loaded).filter(f => f.rule === "fontDeclaredNotLoaded").length, 0);
+    assert.strictEqual(lintContracts(system).filter(f => f.rule === "fontDeclaredNotLoaded").length, 0);
+    fs.rmSync(missing, { recursive: true, force: true });
+    fs.rmSync(loaded, { recursive: true, force: true });
+    fs.rmSync(system, { recursive: true, force: true });
+});
+
+test("scriptWithoutConsumer warns for registered pb-motion without a consumer", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({ scripts: { entry: [{ string: "pb-motion.js" }] } }),
+        "pages/console.html": '<html><body><main class="pb-main"></main><script src="../scripts/pb-motion.js"></script></body></html>'
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "scriptWithoutConsumer");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "warn");
+    assert.strictEqual(findings[0].file, "pal.json");
+    assert.strictEqual(lintContracts(dir).filter(f => f.severity === "error" && f.rule === "scriptWithoutConsumer").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("scriptWithoutConsumer accepts pb-motion with data-animate markup", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({ scripts: { entry: [{ string: "pb-motion.js" }] } }),
+        "pages/console.html": '<html><body><main class="pb-main"><section data-animate="fade-in"></section></main><script src="../scripts/pb-motion.js"></script></body></html>'
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "scriptWithoutConsumer").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});

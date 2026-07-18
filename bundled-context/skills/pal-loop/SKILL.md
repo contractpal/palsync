@@ -232,15 +232,20 @@ Trigger: every task `done`, or every remaining task is a `blocked`/`needs-fronti
 `needs-human` the human accepted as parked.
 
 1. `baseline/` exists → run the regression re-check above, unconditionally.
-2. Run `palsync review brief`, then **dispatch pal-review in a fresh session/subagent** with its
+2. If the harness exposes spend, record the build phase before review dispatch:
+   `palsync cost record --model <id> --provider <p> --in N --cached N --out N [--cost N] --phase build`.
+   Skip silently only when the harness exposes no figures.
+3. Run `palsync review brief`, then **dispatch pal-review in a fresh session/subagent** with its
    EVIDENCE LEDGER output, SPEC.md, EXECUTION.md, DESIGN_SYSTEM.md/COMPONENTS.md, `baseline/`
    (if any), and the pal's identity so it can `pal_fetch`/`pal_screenshot`/`pal_test` the real
    artifacts.
-3. **PASS** → the build is genuinely done; report it.
-4. **CHANGES-NEEDED** → append each `## Fix tasks` item as a new EXECUTION.md task (next id,
+4. **PASS** → the build is genuinely done; report it.
+5. **CHANGES-NEEDED** → append each `## Fix tasks` item as a new EXECUTION.md task (next id,
    `spec ref` from the finding, `depends` per stated order, `todo`, tier `standard` unless it
    needs new structure); resume the task cycle on exactly those tasks.
-5. **Re-review** when the fix tasks are `done`; repeat until PASS. A `needs-human` verdict
+6. **Re-review** when the fix tasks are `done`; repeat until PASS. Every review pass, including a
+   re-review after fixes, overwrites `REVIEW.md` with that pass's new verdict, its own complete
+   `palsync review check` output, and fresh evidence. Chat-only verdicts are invalid. A `needs-human` verdict
    (console eyeball gate) routes like any other `needs-human` task, not a failure.
 
 The build session may fix review findings, but it may **never convert its own fixes into PASS**.

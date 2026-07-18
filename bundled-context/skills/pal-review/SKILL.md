@@ -71,6 +71,10 @@ proof artifact for rendered output or data effects.
 Common exercise-authoring mistakes: scope duplicate-text clicks with `within: 'tr:has([data-label="Name"]:has-text("{{runId}}"))'`; use full unique old/new values where neither is a substring of the other; an input `value` is not visible text; CSS `text-transform` means assert source casing; prove deletion by the unique value's `absent`, not global empty-state copy; console workflows use fill/click, not web action/page steps; split flows longer than 10 steps into separate exercises.
 - Copy on-brand per BRAND_VOICE / DESIGN_SYSTEM intent, not just present?
 - §6 layout matches the composition the spec described?
+- Tokens in `styles/styles.css` match the shipped preset recorded in `DESIGN_SYSTEM.md`, or a
+  documented reference-derived palette. Invented fallback palettes are a finding.
+- A console pal with no recorded explicit font decision uses the system font stack and has no
+  `@import`; otherwise record a visual finding.
 
 ### 3. Visual / UX (capability-gated)
 Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per screen.
@@ -117,7 +121,9 @@ Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per 
 
 ## Output — a verdict, not a fix
 Write `REVIEW.md` (or a `## Review` block). **Producing it is not optional** — a build with no
-REVIEW.md is incomplete.
+REVIEW.md is incomplete. Every pass, including a re-review after fixes, overwrites REVIEW.md with
+the new verdict, fresh evidence, and that pass's own complete `palsync review check` output;
+chat-only verdicts are invalid.
 ```
 # REVIEW — <project> — <date> — reviewer: fresh session
 verdict: PASS | CHANGES-NEEDED
@@ -141,7 +147,9 @@ pal_validate: <quoted verdict line — required; no line means the review is inv
 - [ ] <task> — addresses <finding> — success condition: <tool + check>
 ```
 
-Before writing the final verdict, run `palsync review check` from the pal workspace and paste
+Before writing the final verdict, if the harness exposes spend, record the review phase with
+`palsync cost record --model <id> --provider <p> --in N --cached N --out N [--cost N] --phase review`;
+skip silently only when no figures are exposed. Then run `palsync review check` from the pal workspace and paste
 its complete output into REVIEW.md. Any flag or verdict cap from that command forces
 `CHANGES-NEEDED`; do not write PASS until the check reports `result: PASS`.
 

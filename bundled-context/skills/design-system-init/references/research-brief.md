@@ -180,8 +180,10 @@ structure, disciplined rhythm, good content, and refined states—not from stack
 - Inline one consistent SVG icon family. Do not depend on icon fonts, injected sprites, or a JS icon
   replacer; AJAX fragments do not rerun page boot code automatically.
 - Fonts are system stacks or Fontshare. A Fontshare `@import`, when used, is the first line of
-  `design-system.css`; do not add remote page-head fonts. Express body/type tokens in `rem`; spacing,
-  radii, and borders may remain in `px`.
+  `design-system.css`; do not add remote page-head fonts. A console pal with no font specified by
+  the user, spec, or references uses the system stack only and no import; marketing/web pals keep
+  the Satoshi default. Express body/type tokens in `rem`; spacing, radii, and borders may remain in
+  `px`.
 - CSS custom properties and semantic `.pb-*` classes hold the system. Simple states stay in CSS.
   Mounted effects use the shipped dependency-free `pb-motion.js` and its documented
   `data-animate`/`data-ticker`/`data-typewriter`/`data-tilt`/`data-spotlight` hooks; its shared

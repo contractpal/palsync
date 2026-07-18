@@ -5,6 +5,8 @@ const fs = require("fs");
 const path = require("path");
 const { tmpWorkspace } = require("./helpers");
 const { checkWorkspace, formatReviewCheck, buildReviewBrief, formatReviewBrief } = require("../src/core/reviewCheck");
+const { hashWorkspaceFiles } = require("../src/core/workspaceHash");
+const { version: PACKAGE_VERSION } = require("../package.json");
 const syncCommands = require("../src/cli/syncCommands");
 
 const REVIEW = `# REVIEW — demo
@@ -35,7 +37,41 @@ test("PASS review is clean with successful pal_exercise evidence", () => {
     const result = checkWorkspace(ws);
     assert.equal(result.ok, true);
     assert.equal(result.flags.length, 0);
+    assert.match(formatReviewCheck(result), new RegExp("^palsync " + PACKAGE_VERSION + " review check"));
     assert.match(formatReviewCheck(result), /result: PASS/);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("review check fails and names unpushed server-tracked files", () => {
+    const ws = tmpWorkspace({
+        "REVIEW.md": REVIEW,
+        "pal.json": "{}",
+        "styles/styles.css": ":root { --ds-bg: white; }",
+        ".palsync.usage.json": JSON.stringify({ tools: { pal_exercise: { calls: 1, successfulCalls: 1 } } })
+    });
+    const baseline = hashWorkspaceFiles(ws).files;
+    fs.writeFileSync(path.join(ws, ".palsync.json"), JSON.stringify({ fileHashes: baseline }));
+    fs.writeFileSync(path.join(ws, "styles/styles.css"), ":root { --ds-bg: black; }");
+    const result = checkWorkspace(ws);
+    const output = formatReviewCheck(result);
+    assert.equal(result.ok, false);
+    assert.equal(result.localDrift.dirty, true);
+    assert.match(output, /modified: styles\/styles\.css/);
+    assert.match(output, /push, then re-capture evidence/);
+    assert.match(output, /result: FAIL/);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("BIAS WARNING prevents a PASS verdict", () => {
+    const ws = tmpWorkspace({
+        "REVIEW.md": "BIAS WARNING: review ran in build context\n" + REVIEW,
+        ".palsync.usage.json": JSON.stringify({ tools: { pal_exercise: { calls: 1, successfulCalls: 1 } } })
+    });
+    const result = checkWorkspace(ws);
+    assert.equal(result.ok, false);
+    assert.equal(result.biasWarning, true);
+    assert.match(formatReviewCheck(result), /BIAS WARNING present/);
+    assert.match(formatReviewCheck(result), /result: FAIL/);
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
@@ -70,7 +106,7 @@ test("review brief renders sidecar evidence and explicit coverage gaps", () => {
         { model: "reviewer", provider: "test", tokensIn: 4, tokensOut: 1, cost: 0.02, currency: "USD", phase: "review" }
     ] }));
     const output = formatReviewBrief(buildReviewBrief(ws));
-    assert.equal(output, `palsync review brief
+    assert.equal(output, `palsync ${PACKAGE_VERSION} review brief
 EVIDENCE LEDGER
 usage sidecar: available
 tool calls (successful/total):
@@ -104,6 +140,7 @@ test("review brief reports absent sidecars without failing", async () => {
     assert.match(output, /pal_exercise: not available/);
     assert.match(output, /session cost sidecar: not available/);
     assert.match(output, /EXECUTION\.md tasks: not available/);
+    assert.match(output, new RegExp("^palsync " + PACKAGE_VERSION + " review brief"));
 
     const oldLog = console.log;
     const logged = [];

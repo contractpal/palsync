@@ -18,6 +18,12 @@ Reference tools: `pal_validate` (offline lint), `pal_test` (workflow validation)
 `pal_fetch` / `pal_screenshot` (render), `pal_tunnel_test` (tunnel workflows), `pal_seo_audit`
 (SEO/crawler files), `pal.json` + workflow source (structure inspection).
 
+**Design contract checks (all scenarios; record as scoring defects, outside the §12 tally)**
+| # | Check | Criterion | Evidence |
+|---|---|---|---|
+| D1 | [ ] | Console specs render the system font stack with no `@import` and no declared-but-unloaded font; marketing spec 05 may use the loaded Satoshi default | |
+| D2 | [ ] | Runtime tokens match one shipped preset, or the spec's explicitly stated palette when applicable; composition-only §6 guidance does not authorize invented colors/fonts | |
+
 ---
 
 ## Scenario 01 — crud_equipment_checkout

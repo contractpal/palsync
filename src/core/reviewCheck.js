@@ -4,8 +4,11 @@
 // least one successful pal_exercise call in the current session.
 const fs = require("fs");
 const path = require("path");
+const { version: PACKAGE_VERSION } = require("../../package.json");
 const { USAGE_FILE, SESSION_COST_FILE, readSessionCost, phaseTotals } = require("./usage");
 const { parseTasks, STATUSES } = require("./taskState");
+const { diffWorkspace } = require("./localDrift");
+const { FILENAME: PALSYNC_FILE } = require("./palsyncfile");
 
 const REVIEW_TOOLS = ["pal_exercise", "pal_test", "pal_push", "pal_screenshot"];
 
@@ -43,23 +46,41 @@ function checkReview(review, ledger) {
     const exercises = successfulExerciseCalls(ledger);
     const rows = passRows(review);
     const verdictPass = /^\s*verdict\s*:\s*PASS\s*$/im.test(String(review || ""));
+    const biasWarning = /\bBIAS WARNING:/i.test(String(review || ""));
     const flags = exercises === 0 ? rows.map(r => Object.assign({ code: "PASS WITHOUT EXERCISE EVIDENCE" }, r)) : [];
-    return { ok: flags.length === 0 && !(verdictPass && exercises === 0), exercises, rows, flags, verdictMustChange: verdictPass && exercises === 0 };
+    return {
+        ok: flags.length === 0 && !(verdictPass && exercises === 0) && !biasWarning,
+        exercises, rows, flags, biasWarning,
+        verdictMustChange: verdictPass && (exercises === 0 || biasWarning)
+    };
 }
 
 function checkWorkspace(workspaceDir) {
     const reviewPath = path.join(workspaceDir, "REVIEW.md");
     let review;
     try { review = fs.readFileSync(reviewPath, "utf8"); }
-    catch (e) { return { ok: false, missingReview: true, reviewPath, exercises: 0, rows: [], flags: [], verdictMustChange: false }; }
-    return Object.assign(checkReview(review, readJson(path.join(workspaceDir, USAGE_FILE))), { reviewPath });
+    catch (e) { return { ok: false, missingReview: true, reviewPath, exercises: 0, rows: [], flags: [], biasWarning: false, verdictMustChange: false }; }
+    const result = Object.assign(checkReview(review, readJson(path.join(workspaceDir, USAGE_FILE))), { reviewPath });
+    const localDrift = diffWorkspace(readJson(path.join(workspaceDir, PALSYNC_FILE)), workspaceDir);
+    result.localDrift = localDrift;
+    if (localDrift.dirty) result.ok = false;
+    return result;
 }
 
 function formatReviewCheck(result) {
-    const lines = ["palsync review check", "successful pal_exercise calls: " + result.exercises];
+    const lines = ["palsync " + PACKAGE_VERSION + " review check", "successful pal_exercise calls: " + result.exercises];
     if (result.missingReview) lines.push("FAIL: REVIEW.md not found.");
     for (const flag of result.flags) lines.push("FLAG line " + flag.line + ": " + flag.code + " — " + flag.label);
-    if (result.verdictMustChange) lines.push("VERDICT CAP: zero successful pal_exercise calls; PASS must be changed to CHANGES-NEEDED.");
+    if (result.biasWarning) lines.push("VERDICT CAP: BIAS WARNING present; self-review cannot receive PASS.");
+    if (result.verdictMustChange && !result.biasWarning) lines.push("VERDICT CAP: zero successful pal_exercise calls; PASS must be changed to CHANGES-NEEDED.");
+    if (result.localDrift && result.localDrift.dirty) {
+        lines.push("UNPUSHED CHANGES: server-tracked files differ from the last pull/push:");
+        for (const rel of result.localDrift.changed) lines.push("  modified: " + rel);
+        for (const rel of result.localDrift.deleted) lines.push("  deleted: " + rel);
+        if (result.localDrift.manifestOnly) lines.push("  modified: pal.json (not explained by new files)");
+        if (result.localDrift.legacy) lines.push("  file list unavailable from legacy sync baseline");
+        lines.push("REMEDIATION: push, then re-capture evidence.");
+    }
     lines.push("result: " + (result.ok ? "PASS" : "FAIL"));
     return lines.join("\n");
 }
@@ -102,7 +123,7 @@ function formatAccumulator(acc, currency) {
 }
 
 function formatReviewBrief(brief) {
-    const lines = ["palsync review brief", "EVIDENCE LEDGER"];
+    const lines = ["palsync " + PACKAGE_VERSION + " review brief", "EVIDENCE LEDGER"];
     lines.push("usage sidecar: " + (brief.usageAvailable ? "available" : "not available"));
     lines.push("tool calls (successful/total):");
     for (const name of REVIEW_TOOLS) {

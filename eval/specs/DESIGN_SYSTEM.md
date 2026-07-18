@@ -1,5 +1,5 @@
 # DESIGN_SYSTEM — palsync UX benchmark contract
-status: approved (benchmark contract v2)
+status: approved (benchmark contract v3)
 
 Purpose: test whether Palsync helps weak agents produce usable, polished, responsive UI. Visual
 quality is a scored requirement, not decoration. Functional correctness cannot compensate for an
@@ -15,7 +15,10 @@ logos, customers, testimonials, metrics, awards, or other proof to fill the visu
 
 1. Classify the surface as marketing or CRUD/admin before coding.
 2. Write a six-line brief: user, job, primary action, information order, density, signature idea.
-3. Apply the matching COMPONENTS.md recipes, copying only used CSS recipes and dependencies into
+   Pick exactly one shipped preset (`ink`, `indigo`, `emerald`, `amber`, `rose`, or `slate-dark`),
+   copy its token block verbatim from the `design-system.css` reference, and record the choice.
+   Invented palettes are a scoring defect under distinctiveness.
+3. Apply the matching COMPONENTS.md recipes verbatim, copying only used CSS recipes and dependencies into
    the pal-owned `styles/styles.css`; never load the full `design-system.css` reference.
 4. Verify behavior, then capture desktop and mobile screenshots.
 5. Read `designAudit`, inspect the actual pixels, fix the three highest-impact failures, and
@@ -34,7 +37,12 @@ logos, customers, testimonials, metrics, awards, or other proof to fill the visu
   group-to-group < section-to-section. Whitespace must group, pace, or emphasize real content;
   an unexplained blank band is a defect.
 - Type: one UI family by default; 2-3 obvious hierarchy levels per region; body copy at least
-  16px and constrained to roughly 60-75 characters. Sentence case. One visible H1.
+  16px and constrained to roughly 60-75 characters. Sentence case. One visible H1. These
+  benchmark scenarios have no reference images: console/CRUD specs always use the system font
+  stack
+  `system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif` with no
+  `@import`; marketing spec 05 may use the Satoshi/Fontshare default through one line-1 `@import`.
+  Declaring a font family without actually loading it is a defect.
 - Surfaces: use a border/background/radius/shadow only for real grouping, selection, or elevation.
   Cards are not the default wrapper for every section. Pills are for badges/statuses, not shells.
 - Actions: one primary action per group. Buttons perform actions; links navigate. Destructive

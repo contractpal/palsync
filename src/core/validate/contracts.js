@@ -63,6 +63,25 @@ function collectWorkflowFiles(workspaceDir) {
     return files;
 }
 
+function collectStylesheetFiles(workspaceDir) {
+    const files = [];
+    const seen = new Set();
+    for (const folder of ["styles", "Styles"]) {
+        const found = [];
+        walkFiles(path.join(workspaceDir, folder), folder, found);
+        for (const f of found) {
+            if (path.extname(f.rel).toLowerCase() !== ".css") continue;
+            let identity = f.abs;
+            try { const st = fs.statSync(f.abs); identity = st.dev + ":" + st.ino; } catch (e) { /* keep path */ }
+            if (seen.has(identity)) continue;
+            seen.add(identity);
+            const src = readUtf8(f.abs);
+            if (src != null) files.push({ rel: f.rel, src });
+        }
+    }
+    return files;
+}
+
 // Line number for a char offset. Files here are small (pal apps), so a plain scan is fine —
 // no need for markup.js's binary-search indexer (that file isn't exported from here anyway).
 function lineAt(src, pos) {
@@ -865,6 +884,77 @@ function checkReferenceStylesheetNotShipped(workspaceDir, markupFiles, findings)
     }
 }
 
+const SYSTEM_FONT_FAMILIES = new Set([
+    "systemui", "applesystem", "blinkmacsystemfont", "segoeui", "roboto", "sansserif",
+    "uisansserif", "uimonospace", "sfmonoregular", "menlo", "monaco", "consolas",
+    "liberationmono", "couriernew", "monospace", "serif", "uiserif", "georgia",
+    "timesnewroman", "arial", "helvetica", "cursive", "fantasy", "math", "emoji"
+]);
+
+function normalizedFontName(value) {
+    return String(value || "").trim().replace(/^['"]|['"]$/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function declaredFontFamilies(value) {
+    const families = [];
+    for (const part of String(value || "").split(",")) {
+        const raw = part.trim().replace(/\s*!important\s*$/i, "");
+        if (!raw || /(?:var|calc|min|max|clamp)\s*\(/i.test(raw) || /[\d/]/.test(raw)) continue;
+        const normalized = normalizedFontName(raw);
+        if (!normalized || /^(?:inherit|initial|unset|revert|revertlayer|normal|bold|bolder|lighter)$/.test(normalized)) continue;
+        families.push({ raw: raw.replace(/^['"]|['"]$/g, ""), normalized });
+    }
+    return families;
+}
+
+// Evidence: the 2026-07-16 equipment_checkout-cc-haiku-fe2ebbb-01 run declared Satoshi at
+// styles/styles.css:26 without an import and silently fell back. The sanctioned loader is the
+// line-1 Fontshare import documented at design-system-init/references/design-system.css:1-7.
+function checkFontDeclaredNotLoaded(stylesheetFiles, findings) {
+    for (const { rel, src } of stylesheetFiles) {
+        const uncommented = src.replace(/\/\*[\s\S]*?\*\//g, comment => comment.replace(/[^\n]/g, " "));
+        const imports = (uncommented.match(/@import\s+[^;]+;/gi) || []).join(" ").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const declaration = /(?:font-family|--ds-font-[\w-]+)\s*:\s*([^;}]+)/gi;
+        const reported = new Set();
+        let m;
+        while ((m = declaration.exec(uncommented))) {
+            for (const family of declaredFontFamilies(m[1])) {
+                if (SYSTEM_FONT_FAMILIES.has(family.normalized) || imports.includes(family.normalized) || reported.has(family.normalized)) continue;
+                reported.add(family.normalized);
+                findings.push({
+                    file: rel, line: lineAt(uncommented, m.index), column: 0, severity: "warn",
+                    rule: "fontDeclaredNotLoaded",
+                    message: "Font family \"" + family.raw + "\" is declared but no @import in this stylesheet loads it. Add the matching line-1 Fontshare import or use the system font stack."
+                });
+            }
+        }
+    }
+}
+
+// Evidence: the 2026-07-16 pi equipment-checkout eval shipped pb-motion.js and pb-ui.js with no
+// consuming attributes. This is already prohibited by design-system-init/SKILL.md:19,304,359 and
+// design-build/SKILL.md:168; this advisory automates that existing invariant.
+function checkScriptWithoutConsumer(workspaceDir, markupFiles, findings) {
+    const manifest = readUtf8(path.join(workspaceDir, "pal.json")) || "";
+    const markup = markupFiles.map(f => f.src).join("\n");
+    const scripts = [
+        { name: "pb-motion.js", consumer: /\b(?:data-animate|data-ticker|data-typewriter|data-tilt|data-spotlight)\s*=/i },
+        { name: "pb-ui.js", consumer: /\bdata-pb-theme-toggle(?:\s*=|\b)/i }
+    ];
+    for (const script of scripts) {
+        const escaped = script.name.replace(".", "\\.");
+        const linked = markupFiles.find(f => f.rel.startsWith("pages/") && new RegExp("(?:src|href)\\s*=\\s*['\"][^'\"]*" + escaped, "i").test(f.src));
+        const registered = new RegExp(escaped, "i").test(manifest);
+        if ((!registered && !linked) || script.consumer.test(markup)) continue;
+        findings.push({
+            file: registered ? "pal.json" : linked.rel,
+            line: registered ? 1 : lineAt(linked.src, linked.src.search(new RegExp(escaped, "i"))),
+            column: 0, severity: "warn", rule: "scriptWithoutConsumer",
+            message: script.name + " is registered or linked but no markup uses its consuming attribute. Remove the unused script from pal.json/page links, or add the intended documented behavior."
+        });
+    }
+}
+
 // A pal-owned stylesheet must consume the design-system catalog, not quietly replace its
 // control recipes with bespoke selectors or raw palette values.
 function checkDesignSystemBypass(workspaceDir, findings) {
@@ -947,6 +1037,7 @@ function lintContracts(workspaceDir) {
     const findings = [];
     const markupFiles = collectMarkupFiles(workspaceDir);
     const workflowFiles = collectWorkflowFiles(workspaceDir);
+    const stylesheetFiles = collectStylesheetFiles(workspaceDir);
 
     const listNames = collectListNames(workflowFiles);
     checkListNameContract(markupFiles, listNames, findings);
@@ -978,6 +1069,10 @@ function lintContracts(workspaceDir) {
     checkStaticFragmentExists(markupFiles, findings);
 
     checkReferenceStylesheetNotShipped(workspaceDir, markupFiles, findings);
+
+    checkFontDeclaredNotLoaded(stylesheetFiles, findings);
+
+    checkScriptWithoutConsumer(workspaceDir, markupFiles, findings);
 
     checkDesignSystemBypass(workspaceDir, findings);
 

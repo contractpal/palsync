@@ -83,11 +83,14 @@ domain-skill rebuild. See the sequencing note at the bottom.
 
 Unchanged from the bundle README, restated for completeness:
 
-1. Set the workspace/cloud URL in the spec's `pal:` header line (replace the `<WORKSPACE — set by evaluator before run>` placeholder). Do this in a working copy — do not commit URLs into `eval/specs`.
-2. Copy the scenario's `SPEC.md` + `EXECUTION.md` into the palsync workspace alongside `DESIGN_SYSTEM.md` and `COMPONENTS.md` from `eval/specs/`.
-3. Launch palsync in the chosen harness on the chosen model.
-4. **Auto / full mode. ZERO mid-run intervention.** No hints, no answering questions, no nudging past a stuck point. If the agent stops to ask in auto mode, that is a hard-rule violation (count it, §4e) — you still do not answer.
-5. When the agent finishes, evaluate against the spec's §12 using `eval/scoring.md`. This is the post-hoc human evaluation — done once, at the end, never during.
+1. Preflight the shared contracts: `diff -q eval/specs/DESIGN_SYSTEM.md eval/runs/DESIGN_SYSTEM.md`
+   and `diff -q eval/specs/COMPONENTS.md eval/runs/COMPONENTS.md` must both be clean. Any mismatch
+   invalidates the run.
+2. Set the workspace/cloud URL in the spec's `pal:` header line (replace the `<WORKSPACE — set by evaluator before run>` placeholder). Do this in a working copy — do not commit URLs into `eval/specs`.
+3. Copy the scenario's `SPEC.md` + `EXECUTION.md` into the palsync workspace alongside `DESIGN_SYSTEM.md` and `COMPONENTS.md` from `eval/specs/`.
+4. Launch palsync in the chosen harness on the chosen model.
+5. **Auto / full mode. ZERO mid-run intervention.** No hints, no answering questions, no nudging past a stuck point. If the agent stops to ask in auto mode, that is a hard-rule violation (count it, §4e) — you still do not answer.
+6. When the agent finishes, evaluate against the spec's §12 using `eval/scoring.md`. This is the post-hoc human evaluation — done once, at the end, never during.
 
 ## 4. Cost capture (per run, MANDATORY)
 
@@ -102,6 +105,10 @@ Fill these from the finished transcript. Record them in `eval/RESULTS.md`.
 **(b) Tokens in / out**, if the harness reports them. Per harness:
 - **Claude Code** — run `/cost` at end of session; record input + output tokens. (Also visible in the transcript's usage summary.)
 - **Cursor / others** — record if surfaced; leave blank if the harness does not expose it. Blank is honest; a guess is not.
+
+When the harness exposes spend, also record it in the workspace sidecar:
+`palsync cost record --model <id> --provider <p> --in N --cached N --out N [--cost N] --phase build|review`.
+Skip this only when the harness exposes no figures.
 
 **(c) Wall-clock time** — start of run to agent's final message.
 

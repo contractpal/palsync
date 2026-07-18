@@ -35,7 +35,9 @@ Omit `spacing.css` and either script when the page has no consumer for it. Never
 `design-system.css` link.
 
 When Fontshare is selected, copy only its `@import` to line 1 of `styles.css`; do not add remote font
-resources to a page shell. Optional charts add Chart.js separately (section 21).
+resources to a page shell. A console pal with no font specified by the user, spec, or references
+uses the system stack only and no Fontshare import; marketing/web pals keep the Satoshi default.
+Optional charts add Chart.js separately (section 21).
 
 `pb-ui.js` and `pb-motion.js` delegate every listener on `document` and re-scan AJAX-swapped
 fragments automatically (MutationObserver) — never add a per-fragment `<script>` or re-init call.

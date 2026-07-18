@@ -94,7 +94,8 @@ Ask in one compact turn when possible. If interactive elicitation buttons exist,
    - If they do not have a palette, ask whether to run the default workflow: generate 20-30 palette
      directions externally (Coolors-style), narrow to 2-3, refine harmony (Adobe Color-style), check
      AA contrast, preview in a real UI (Realtime Colors-style), then map the direction onto one of
-     the six shipped presets below (or override a handful of tokens on top of the closest one).
+     the six shipped presets below. Directions never replace a shipped preset in the no-reference
+     path.
    - Which shipped preset fits the vibe: `ink` (default — near-black primary on cool white/light-gray
      surfaces; neutral, professional, works almost anywhere), `indigo` (deep indigo-violet primary;
      confident, techy, SaaS), `emerald` (deep green primary; growth, trust, finance/health), `amber`
@@ -109,6 +110,8 @@ Ask in one compact turn when possible. If interactive elicitation buttons exist,
    - Motion: none, restrained, or expressive?
    - Theme: light, dark, or both?
    - Target: console pal, public web pal, mobile-heavy, desktop-heavy, printable/document-heavy?
+   - Font: what font, if any, is named by the user, spec, or references? No font named plus a console
+     target means the system font stack only and no Fontshare import.
    - Any platform constraints: Bootstrap already loaded, existing fragment structure, locked
      enterprise branding, old browser concerns?
 
@@ -123,6 +126,12 @@ palette and components from the existing pal.
 The reference catalog contains a full token set plus six `:root[data-preset="..."]` examples.
 Select the closest palette and copy only its required base tokens into `styles.css`; do not copy all
 presets just to use one.
+
+When no user-provided design system or reference photos exist, pick exactly one shipped preset
+(`ink`, `indigo`, `emerald`, `amber`, `rose`, or `slate-dark`) and copy its
+`:root[data-preset=...]` token block verbatim from `design-system.css`. Do not invent palettes or
+hand-write token values. Record the chosen preset in `DESIGN_SYSTEM.md`. Reference-derived systems
+retain precedence over this fallback.
 
 - **ink** (default, no attribute needed) — near-black primary on cool white/light-gray surfaces.
   Neutral, crisp, high-contrast; the primary action reads ink, accent color appears only for
@@ -180,6 +189,10 @@ Define:
   system fonts or Fontshare fonts. Palbuilder rejects remote page-head font resources; Fontshare
   loads only through an `@import` kept as line 1 of the pal's `styles.css`. Copy that import from
   the reference only when the chosen Fontshare family is used. Do not default to Google Fonts.
+  **Console system font rule:** if the pal is a console pal and no font is specified by the user, spec, or
+  references, use `--ds-font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  sans-serif;` and do not add a Fontshare `@import`. Marketing/web pals keep the Satoshi/Fontshare
+  default. Record every explicit web-font decision and its source in `DESIGN_SYSTEM.md`.
 - Iconography: always grab the SVG version; never use icon fonts or JS icon replacers. Use one family
   per pal from Iconoir (default), Heroicons, or Phosphor; see component-library.md Icons.
 - Runtime files: create one authored `styles/styles.css`, register it in `pal.json`, and link it
@@ -213,7 +226,9 @@ Use `references/component-library.md` as the canonical Palbuilder-ready library 
 components, and `references/marketing-library.md` for marketing sections (hero, bento, pricing,
 testimonials, logo cloud, CTA band, stats/ticker, mockups, text effects) — load marketing-library
 only when the pal actually has marketing pages. Copy the dependency-complete CSS recipes for the
-components actually selected into readable `styles/styles.css`. In
+components actually selected into readable `styles/styles.css`. Copy catalogued component recipes
+verbatim, with values unchanged. Custom CSS is only for page-level layout glue; justify any modified
+recipe in `DESIGN_SYSTEM.md`. In
 `COMPONENTS.md`, name only the components this pal
 needs now plus likely shared primitives, but do not copy CSS for a likely component until markup
 uses it. Every component must list variants, states, tokens, and
@@ -276,6 +291,7 @@ Radix/Headless-style accessible states, Polaris-style dense tables, Carbon-style
 [Semantic role -> value. Include default fallback or brand derivation notes.]
 ### Type
 [Families, loading method, scale, weights, numeric rules.]
+Font decision: system (console default) | <font> (source: user/spec/reference)
 ### Spacing
 [State whether `styles/spacing.css` is used and, if so, that it is linked before `styles.css` and
 owns the spacing/layout utility scale. State that `styles.css` contains the selected reference
@@ -377,6 +393,10 @@ reality. A correction means re-check references or source files before editing t
 - Use system fonts or Fontshare fonts. Do not introduce a Google Fonts dependency by default.
 - Load Fontshare only through an `@import` at the top of `styles.css`; never add remote page-head
   font resources or copy unused font imports.
+- **Console system font rule:** if no font is specified by the user, spec, or references, use only
+  `system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif` and no `@import`.
+  Marketing/web pals keep the Satoshi/Fontshare default; record an explicit font and its source in
+  `DESIGN_SYSTEM.md`.
 - When motion is used, it is `scripts/pb-motion.js` data attributes only (`data-animate`, `data-ticker`,
   `data-typewriter`, `data-tilt`, `data-spotlight`, `data-scroll-progress`) — no other animation
   library. It delegates from `document` and rescans AJAX-swapped fragments itself; never add a
