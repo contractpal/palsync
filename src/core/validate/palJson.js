@@ -12,6 +12,7 @@
 const fs = require("fs");
 const path = require("path");
 const { findSuggestion } = require("./suggest");
+const { buildSnapshot } = require("./snapshot");
 const { analyzeFolderRegistrations } = require("../palFolders");
 
 // Folders whose files are pushed via pal.json entries. Matches the keys used in real pal.json
@@ -29,6 +30,86 @@ const FOLDER_TYPE = {
     attachments: "Attachment",
     wizards:     "Wizard",
 };
+
+function manifestEntryTemplate(rel, typeName) {
+    const name = rel.replace(/\.[^./]+$/, "");
+    return [
+        "{",
+        "  \"string\": \"" + rel + "\",",
+        "  \"" + typeName + "\": { \"name\": \"" + name + "\", \"filename\": \"" + rel + "\" }",
+        "}"
+    ].join("\n");
+}
+
+function datasetEntryTemplate(name, snapshot) {
+    const source = (snapshot.datasets || []).find(file => file.rel === "datasets/" + name + ".json");
+    let dataset = { name, fields: { DatasetField: [] }, freeform: true };
+    try { if (source) dataset = JSON.parse(source.content); } catch (e) { /* dataset linter reports parse failure */ }
+    return [
+        "{",
+        "  \"string\": \"" + name + "\",",
+        "  \"Dataset\": " + JSON.stringify(dataset),
+        "}"
+    ].join("\n");
+}
+
+function arrayObjectBounds(raw, arrayStart, wantedIndex) {
+    let inString = false;
+    let escaped = false;
+    let depth = 0;
+    let index = -1;
+    let start = -1;
+    for (let i = arrayStart + 1; i < raw.length; i++) {
+        const ch = raw[i];
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (ch === "\\") escaped = true;
+            else if (ch === '"') inString = false;
+            continue;
+        }
+        if (ch === '"') { inString = true; continue; }
+        if (ch === "{") {
+            if (depth === 0) {
+                index++;
+                if (index === wantedIndex) start = i;
+            }
+            depth++;
+        } else if (ch === "}") {
+            depth--;
+            if (depth === 0 && index === wantedIndex) return { start, end: i + 1 };
+        } else if (ch === "]" && depth === 0) break;
+    }
+    return null;
+}
+
+function lineForFinding(raw, finding) {
+    if (!raw) return 1;
+    const message = String(finding.message || "");
+    const stringValue = message.match(/"string"\s*:\s*"([^"]+)"/);
+    const entryPath = message.match(/pal\.json\s+([A-Za-z]+)\.entry\[(\d+)\]((?:\.[A-Za-z]+)*)/);
+    if (entryPath) {
+        const sectionAt = raw.indexOf(JSON.stringify(entryPath[1]));
+        const entryAt = sectionAt === -1 ? -1 : raw.indexOf('"entry"', sectionAt);
+        const arrayAt = entryAt === -1 ? -1 : raw.indexOf("[", entryAt);
+        const bounds = arrayAt === -1 ? null : arrayObjectBounds(raw, arrayAt, Number(entryPath[2]));
+        if (bounds) {
+            const fields = entryPath[3].split(".").filter(Boolean);
+            const field = fields.length ? fields[fields.length - 1] : null;
+            const valueAt = stringValue ? raw.indexOf(JSON.stringify(stringValue[1]), bounds.start) : -1;
+            const fieldAt = field ? raw.indexOf(JSON.stringify(field), bounds.start) : valueAt;
+            const at = fieldAt >= bounds.start && fieldAt < bounds.end ? fieldAt : bounds.start;
+            return raw.slice(0, at).split("\n").length;
+        }
+    }
+    const quoted = (stringValue ? [stringValue[1]] : [])
+        .concat([...message.matchAll(/"([^"]+)"/g)].map(match => match[1]))
+        .filter((value, index, values) => values.indexOf(value) === index);
+    for (const value of quoted) {
+        const at = raw.indexOf(JSON.stringify(value));
+        if (at !== -1) return raw.slice(0, at).split("\n").length;
+    }
+    return 1;
+}
 
 // Manually extracted from the vendored server source (Pal.java / Layout.java field
 // declarations) — update this list if those classes gain/lose a serialized field. Excludes
@@ -413,8 +494,8 @@ function checkEntryShape(manifest) {
                     (typeof entry.filename === "string"
                         ? " (a flat top-level \"filename\" key is ignored)"
                         : "") +
-                    ". Fix: { \"string\": \"<file>\", \"" + typeName + "\": { \"name\": ..., \"filename\": \"<file>\", ... } }" +
-                    " — copy a working " + typeName + " stanza from pal-json.md.",
+                    ". Replace it with this complete entry:\n" + manifestEntryTemplate(entry.string, typeName) +
+                    "\nCopy any category-specific optional fields from pal-json.md only when needed.",
             });
         }
     }
@@ -441,23 +522,18 @@ function checkFolderRegistrations(manifest) {
     });
 }
 
-function lintPalJson(workspaceDir) {
-    // Locate pal.json.
-    const palJsonPath = path.join(workspaceDir, "pal.json");
-    let raw;
-    try { raw = fs.readFileSync(palJsonPath, "utf8"); }
-    catch (e) { return []; } // not a workspace — skip silently
-
-    let manifest;
-    try { manifest = JSON.parse(raw); }
-    catch (e) { return []; } // unparseable — skip silently
+function lintPalJson(snapshotOrDir) {
+    const snapshot = typeof snapshotOrDir === "string" ? buildSnapshot(snapshotOrDir) : snapshotOrDir;
+    const manifest = snapshot && snapshot.palJson && snapshot.palJson.parsed;
+    if (!manifest) return []; // absent/unparseable manifest — skip silently
 
     const findings = [];
 
     for (const folder of CREATABLE_FOLDERS) {
-        const folderPath = path.join(workspaceDir, folder);
-
-        const diskFiles = listFilesRecursive(folderPath);
+        const prefix = folder + "/";
+        const diskFiles = snapshot.allFiles
+            .filter(rel => rel.startsWith(prefix) && !rel.slice(prefix.length).split("/").some(part => part.startsWith(".")))
+            .map(rel => rel.slice(prefix.length));
 
         // Build the set of strings registered in pal.json for this folder.
         const section = manifest[folder];
@@ -485,8 +561,7 @@ function lintPalJson(workspaceDir) {
                 const near = entries.find(e => isObject(e) && (e.string === base ||
                     e.filename === rel ||
                     (isObject(e[typeHint]) && e[typeHint].filename === rel)));
-                const fixShape = "{ \"string\": \"" + rel + "\", \"" + typeHint + "\": { \"name\": \"" +
-                    base + "\", \"filename\": \"" + rel + "\", ... } }";
+                const fixShape = manifestEntryTemplate(rel, typeHint);
                 findings.push({
                     file: "pal.json",
                     line: 1,   // pal.json has no meaningful line for missing entries
@@ -497,12 +572,10 @@ function lintPalJson(workspaceDir) {
                         ? folder + "/" + rel + " has no MATCHING pal.json entry. A near-miss entry exists " +
                           "(\"string\": \"" + String(near.string) + "\") but push locates the file by the exact " +
                           "value of \"string\" — it must be the category-relative filename \"" + rel + "\", " +
-                          "extension included. Fix that entry to " + fixShape + " (copy a working " + typeHint +
-                          " stanza from pal-json.md for the remaining fields)."
+                          "extension included. Replace that entry with:\n" + fixShape
                         : folder + "/" + rel + " exists on disk but has NO pal.json entry — " +
                           "push will silently skip it and the server will never receive it. " +
-                          "Fix: add " + fixShape + " to the \"" + folder + "\".entry array " +
-                          "(copy a working " + typeHint + " stanza from pal-json.md for the remaining fields).",
+                          "Add this complete entry to the \"" + folder + "\".entry array:\n" + fixShape,
                 });
             }
         }
@@ -514,12 +587,11 @@ function lintPalJson(workspaceDir) {
     // (see palbuilder-data/references/datasets.md, "Registering a dataset"). Handled separately
     // from CREATABLE_FOLDERS for that reason.
     {
-        const folderPath = path.join(workspaceDir, "datasets");
-        let diskFiles;
-        try { diskFiles = fs.readdirSync(folderPath, { withFileTypes: true }); }
-        catch (e) { if (e.code !== "ENOENT") throw e; diskFiles = null; }
+        const diskFiles = snapshot.allFiles
+            .filter(rel => /^datasets\/[^/]+\.json$/.test(rel))
+            .map(rel => rel.slice("datasets/".length));
 
-        if (diskFiles) {
+        if (diskFiles.length) {
             const section = manifest.datasets;
             const registered = new Set();
             if (section && Array.isArray(section.entry)) {
@@ -528,10 +600,8 @@ function lintPalJson(workspaceDir) {
                 }
             }
 
-            for (const de of diskFiles) {
-                if (!de.isFile()) continue;
-                if (de.name.startsWith(".") || !de.name.endsWith(".json")) continue;
-                const baseName = de.name.slice(0, -".json".length);
+            for (const name of diskFiles) {
+                const baseName = name.slice(0, -".json".length);
 
                 if (!registered.has(baseName)) {
                     findings.push({
@@ -540,11 +610,10 @@ function lintPalJson(workspaceDir) {
                         column: 0,
                         severity: "error",
                         rule: "missingPalJsonEntry",
-                        message: "datasets/" + de.name + " exists on disk but has NO pal.json entry — " +
+                        message: "datasets/" + name + " exists on disk but has NO pal.json entry — " +
                             "the table will never be provisioned server-side. " +
-                            "Fix: add an entry to pal.json's \"datasets\".entry array with \"string\": \"" + baseName +
-                            "\" and a \"Dataset\" object (name, fields.DatasetField[], freeform:true) matching " +
-                            "datasets/" + de.name + ".",
+                            "Add this complete entry to pal.json's \"datasets\".entry array (its Dataset object is copied from datasets/" +
+                            name + "):\n" + datasetEntryTemplate(baseName, snapshot),
                     });
                 }
             }
@@ -557,7 +626,13 @@ function lintPalJson(workspaceDir) {
     findings.push(...checkDataStructures(manifest));
     findings.push(...checkFolderRegistrations(manifest));
 
+    const raw = snapshot.palJson.raw;
+    for (const finding of findings) {
+        if (finding.line === 1) finding.line = lineForFinding(raw, finding);
+    }
+
     return findings;
 }
 
-module.exports = { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryShape, checkEntryFilenames, checkFolderRegistrations, listFilesRecursive };
+module.exports = { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryShape, checkEntryFilenames,
+    checkFolderRegistrations, lineForFinding, listFilesRecursive };

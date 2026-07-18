@@ -30,7 +30,7 @@ test("advertised MCP tool schema matches the committed wire snapshot", async () 
     const actual = JSON.stringify(advertised.tools, null, 2) + "\n";
     const fixture = fs.readFileSync(path.join(__dirname, "fixtures", "tool-schema.snapshot.json"), "utf8");
     assert.equal(advertised.tools.length, 20);
-    assert.equal(Buffer.byteLength(JSON.stringify(advertised.tools)), 19390);
+    assert.equal(Buffer.byteLength(JSON.stringify(advertised.tools)), 16187);
     assert.equal(actual, fixture);
     assert.deepStrictEqual(serializeToolDefinitions(TOOLS), advertised.tools);
     assert.equal(advertised.instructions, SERVER_INSTRUCTIONS);

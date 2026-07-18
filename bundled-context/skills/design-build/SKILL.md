@@ -1,6 +1,6 @@
 ---
 name: design-build
-description: "Enforce an established design system while building or reviewing UI, and self-critique the result before calling it done — for any frontend construction in a project with a DESIGN_SYSTEM.md. Pairs with design-system-init. Triggers: 'build this screen', 'make this component', 'implement the design', 'review this UI', or any interface work."
+description: "Enforces DESIGN_SYSTEM.md while building/reviewing UI and self-critiques before done. Triggers: 'build this screen', 'make this component', 'implement the design', 'review this UI', or any interface work. Does not establish the system; design-system-init does."
 ---
 
 # Design Build
@@ -54,9 +54,8 @@ Hard gates — any failure means the visible task is not done:
       Copy only the needed rules and dependencies; never copy unused components "just in case."
 - Verify page shell resource order against `../shared/references/css-conventions.md`: spacing before authored CSS, each used behavior script once, and no Bootstrap merely for spacing.
 - Fontshare loads through an `@import` at the top of `styles.css`; never add remote page-head font
-  resources or copy a font import the pal does not use. A console pal with no font specified by the
-  user, spec, or references uses only `system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-  Roboto, sans-serif` and no `@import`; marketing/web pals keep the Satoshi/Fontshare default.
+  resources or copy an unused import. Console pals use the system font stack and no Fontshare import;
+  `design-system-init` owns the literal stack. Marketing/web pals keep the Fontshare default.
 - For non-trivial UI, read `../design-system-init/references/design-principles.md` before building
   or reviewing. It is the practical checklist for hierarchy, UX flow, Gestalt grouping, Fitts target
   sizing, typography, color meaning, consistency, and simplicity.
@@ -145,8 +144,9 @@ Score every render with the canonical seven-dimension ship gate in `../shared/re
   from the workflow?
 - Palbuilder-specific: no undocumented `c:` attributes, no inline scripts in fragments, no `onclick` on `c:a`, no ARIA attributes on `c:field`, and direct `${row.field}` access inside `c:list`.
 
-**Against slop** (the fingerprint list below is the authority; this is the backstop)
-- Any known fingerprints — generic gradient-blob hero, pill-everything uniform radius, the only layout idea being a three-card row, default "AI editorial" serif-on-cream-with-sage?
+**Against anti-slop fingerprints**
+- Check generic gradient-blob hero, pill-everything uniform radius, and three-card-row-as-only-idea;
+  read `../shared/references/anti-slop.md` for the full list.
 - Does it resemble the references in feel, or just in surface palette?
 - Would it look credible next to shadcn/ui, Radix/Headless examples, or a mature product system like Polaris, Carbon, or Atlassian? If not, identify whether the failure is coverage, density, type, iconography, spacing, interaction states, or motion.
 - Palbuilder-specific modernity: no icon fonts, no Google Fonts default, no Lucide leftover unless the project explicitly chose it, no inline animation scripts, no giant tool-surface headings, and no flat teal-gray admin output without a product rationale.
@@ -167,22 +167,14 @@ Apply the same vocabulary to yourself at the review gate.
 
 ## Acceptance checklist
 - [ ] DESIGN_SYSTEM.md, COMPONENTS.md, and `design/refs/` loaded before building.
-- [ ] `styles/styles.css` is present, registered, linked once, human-readable, and contains only the
-      dependency-complete tokens/base/component rules used by current markup. No runtime file,
-      manifest entry, or page link named `design-system.css` exists.
-- [ ] Optional `spacing.css`, `pb-ui.js`, and `pb-motion.js` have real consumers and are each
-      registered/loaded once; unused utilities, presets, themes, components, and scripts are absent.
+- [ ] `design-system.css` is reference-only and must never be copied, registered, linked, loaded, or shipped; only needed rules go to `styles/styles.css`.
 - [ ] Shell owns `<main id="body" class="pb-main">`; every fragment root is `pb-section`; multi-field forms wrap fields in `pb-stack` or `pb-form-grid`.
-- [ ] No undefined classes: every `class=` value in pages/fragments resolves to runtime
-      `spacing.css`, `styles.css`, or COMPONENTS.md-recorded local styles.
 - [ ] Every multi-action table cell uses `.pb-row-actions`; only actions valid for the row's current
       state render, and desktop/mobile captures show wrapping without collision or overflow.
 - [ ] Applied design-principles review: user journey, hierarchy, grouping, Fitts target sizing,
       progressive disclosure, typography, color meaning, and consistency.
 - [ ] `component-library.md` (app/console) or `marketing-library.md` (marketing sections) consulted
       for non-trivial UI and local reusable components recorded back into COMPONENTS.md.
-- [ ] Typography, SVG icons, and motion match the stack policy: system/Fontshare fonts, inline
-      Iconoir/Heroicons/Phosphor-style SVGs, `pb-motion.js` data attributes only for scripted motion; always grab the SVG version.
 - [ ] Console pal with no recorded font decision: `styles.css` has no `@import` and
       `--ds-font-ui` is the system stack.
 - [ ] No leftover scripted-animation vendor file or `<script>` reference remains anywhere in the
@@ -194,3 +186,4 @@ Apply the same vocabulary to yourself at the review gate.
 - [ ] Desktop and mobile captures inspected; `designAudit.errors` is zero; any changed viewport
       was re-captured after fixes and functional checks still pass.
 - [ ] Result resembles the references in feel, not just palette, and trips no anti-slop fingerprints.
+- [ ] Then run every item in `../shared/references/ui-acceptance.md`.

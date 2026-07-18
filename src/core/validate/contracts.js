@@ -9,78 +9,8 @@
 // Source of truth: bundled-context/skills/palbuilder-frontend/references/c-tags.md,
 // palbuilder-workflow/references/responses.md, palbuilder-data/references/{datasets,payloads}.md.
 // Ground-truthed against real bug corpora in /Users/apple/PalBuilder/test-0{1,2,4,5}-*.
-const fs = require("fs");
-const path = require("path");
 const { parseTag } = require("./markup");
-
-const MARKUP_EXT = new Set([".html", ".htm", ".xhtml"]);
-
-// ---------------------------------------------------------------------------------------------
-// File collection (contracts.js reads the workspace itself — it is not fed content by index.js).
-// ---------------------------------------------------------------------------------------------
-
-function walkFiles(absDir, relBase, out) {
-    let entries;
-    try { entries = fs.readdirSync(absDir, { withFileTypes: true }); }
-    catch (e) { if (e.code === "ENOENT") return; throw e; }
-    for (const e of entries) {
-        const abs = path.join(absDir, e.name);
-        const rel = relBase + "/" + e.name;
-        if (e.isDirectory()) walkFiles(abs, rel, out);
-        else out.push({ abs, rel });
-    }
-}
-
-function readUtf8(abs) {
-    try { return fs.readFileSync(abs, "utf8"); } catch (e) { return null; }
-}
-
-function collectMarkupFiles(workspaceDir) {
-    const files = [];
-    for (const folder of ["pages", "fragments"]) {
-        const found = [];
-        walkFiles(path.join(workspaceDir, folder), folder, found);
-        for (const f of found) {
-            if (!MARKUP_EXT.has(path.extname(f.rel).toLowerCase())) continue;
-            const src = readUtf8(f.abs);
-            if (src == null) continue;
-            files.push({ rel: f.rel, src });
-        }
-    }
-    return files;
-}
-
-function collectWorkflowFiles(workspaceDir) {
-    const found = [];
-    walkFiles(path.join(workspaceDir, "workflows"), "workflows", found);
-    const files = [];
-    for (const f of found) {
-        if (!f.rel.endsWith(".js")) continue;
-        const src = readUtf8(f.abs);
-        if (src == null) continue;
-        files.push({ rel: f.rel, src });
-    }
-    return files;
-}
-
-function collectStylesheetFiles(workspaceDir) {
-    const files = [];
-    const seen = new Set();
-    for (const folder of ["styles", "Styles"]) {
-        const found = [];
-        walkFiles(path.join(workspaceDir, folder), folder, found);
-        for (const f of found) {
-            if (path.extname(f.rel).toLowerCase() !== ".css") continue;
-            let identity = f.abs;
-            try { const st = fs.statSync(f.abs); identity = st.dev + ":" + st.ino; } catch (e) { /* keep path */ }
-            if (seen.has(identity)) continue;
-            seen.add(identity);
-            const src = readUtf8(f.abs);
-            if (src != null) files.push({ rel: f.rel, src });
-        }
-    }
-    return files;
-}
+const { buildSnapshot } = require("./snapshot");
 
 // Line number for a char offset. Files here are small (pal apps), so a plain scan is fine —
 // no need for markup.js's binary-search indexer (that file isn't exported from here anyway).
@@ -130,7 +60,8 @@ function checkReservedElName(tag, rel, src, pos, tagName, attrName, value, findi
     const id = String(value).trim();
     const isList = tagName === "c:list";
     findings.push({
-        file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "reservedElWord",
+        // Evidence weak: no vendored-source citation or live repro. Promote only after one exists.
+        file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "reservedElWord",
         message: "<" + tagName + " " + attrName + "=\"" + id + "\"> — \"" + id +
             "\" is a reserved EL operator and cannot be a " + tagName + " " + (isList ? "id / loop variable" : "name") +
             "; every ${" + id + ".x} becomes ambiguous. Fix: use a short non-reserved name (e, r, row, item). " +
@@ -715,7 +646,7 @@ function checkStaticFragmentExists(markupFiles, findings) {
 // the exact weak-model failure mode (browser-default controls/actions) before the first push.
 // ---------------------------------------------------------------------------------------------
 
-function checkPbQualityHints(workspaceDir, markupFiles, findings) {
+function checkPbQualityHints(stylesheetFiles, markupFiles, findings) {
     const usedInMarkup = markupFiles.some(({ src }) => /class\s*=\s*["'][^"']*\bpb-/.test(src));
     if (!usedInMarkup) return;
 
@@ -725,17 +656,11 @@ function checkPbQualityHints(workspaceDir, markupFiles, findings) {
     // component list here. This catches the common weak-model move of inventing a plausible
     // modifier (for example `.pb-btn-sm`) that silently renders as if the class were absent.
     const definedPbClasses = new Set();
-    for (const folder of ["styles", "Styles"]) {
-        const cssFiles = [];
-        walkFiles(path.join(workspaceDir, folder), folder, cssFiles);
-        for (const f of cssFiles) {
-            if (path.extname(f.rel).toLowerCase() !== ".css") continue;
-            const css = readUtf8(f.abs);
-            if (css == null) continue;
+    for (const f of stylesheetFiles) {
+            const css = f.src;
             const re = /\.((?:pb-)[A-Za-z0-9_-]+)/g;
             let m;
             while ((m = re.exec(css))) definedPbClasses.add(m[1]);
-        }
     }
 
     for (const { rel, src } of markupFiles) {
@@ -850,20 +775,16 @@ function checkPbQualityHints(workspaceDir, markupFiles, findings) {
     }
 }
 
+// Owner-approved policy gate (Sam, 2026-07-18): not a server rejection; blocks because shipping
+// the reference catalog defeats selective component adoption and bloats every rendered page.
 // design-system.css is deliberately bundled as a recipe catalog for agents to consult. Loading or
 // registering the whole file bloats small pals and couples them to dozens of unused components.
 // Runtime CSS belongs in styles.css and contains only the tokens/base/component rules the pal uses.
-function checkReferenceStylesheetNotShipped(workspaceDir, markupFiles, findings) {
-    const reportedFiles = new Set();
-    for (const folder of ["styles", "Styles"]) {
-        const abs = path.join(workspaceDir, folder, "design-system.css");
-        if (!fs.existsSync(abs)) continue;
-        let identity = abs;
-        try { const st = fs.statSync(abs); identity = st.dev + ":" + st.ino; } catch (e) { /* keep lexical path */ }
-        if (reportedFiles.has(identity)) continue; // macOS case-insensitive styles/Styles alias
-        reportedFiles.add(identity);
+function checkReferenceStylesheetNotShipped(snapshot, markupFiles, stylesheetFiles, findings) {
+    for (const stylesheet of stylesheetFiles) {
+        if (!/(^|\/)design-system\.css$/i.test(stylesheet.rel)) continue;
         findings.push({
-            file: folder + "/design-system.css", line: 1, column: 0, severity: "error",
+            file: stylesheet.rel, line: 1, column: 0, severity: "error",
             rule: "referenceStylesheetShipped",
             message: "design-system.css is reference material, not a pal runtime asset. Remove it from the pal and copy only the tokens, base rules, and component recipes this pal actually uses into styles/styles.css (or Styles/styles.css)."
         });
@@ -881,9 +802,7 @@ function checkReferenceStylesheetNotShipped(workspaceDir, markupFiles, findings)
         }
     }
 
-    const manifestPath = path.join(workspaceDir, "pal.json");
-    let manifest = null;
-    try { manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")); } catch (e) { /* optional */ }
+    const manifest = snapshot.palJson.parsed;
     const entries = manifest && manifest.styles && Array.isArray(manifest.styles.entry)
         ? manifest.styles.entry : [];
     for (const entry of entries) {
@@ -947,8 +866,8 @@ function checkFontDeclaredNotLoaded(stylesheetFiles, findings) {
 // Evidence: the 2026-07-16 pi equipment-checkout eval shipped pb-motion.js and pb-ui.js with no
 // consuming attributes. This is already prohibited by design-system-init/SKILL.md:19,304,359 and
 // design-build/SKILL.md:168; this advisory automates that existing invariant.
-function checkScriptWithoutConsumer(workspaceDir, markupFiles, findings) {
-    const manifest = readUtf8(path.join(workspaceDir, "pal.json")) || "";
+function checkScriptWithoutConsumer(snapshot, markupFiles, findings) {
+    const manifest = snapshot.palJson.raw || "";
     const markup = markupFiles.map(f => f.src).join("\n");
     const scripts = [
         { name: "pb-motion.js", consumer: /\b(?:data-animate|data-ticker|data-typewriter|data-tilt|data-spotlight)\s*=/i },
@@ -970,34 +889,21 @@ function checkScriptWithoutConsumer(workspaceDir, markupFiles, findings) {
 
 // A pal-owned stylesheet must consume the design-system catalog, not quietly replace its
 // control recipes with bespoke selectors or raw palette values.
-function checkDesignSystemBypass(workspaceDir, findings) {
-    const hasDesignSystem = fs.existsSync(path.join(workspaceDir, "DESIGN_SYSTEM.md")) ||
-        fs.existsSync(path.join(workspaceDir, "styles", "design-system.css")) ||
-        fs.existsSync(path.join(workspaceDir, "Styles", "design-system.css"));
+function checkDesignSystemBypass(snapshot, stylesheetFiles, findings) {
+    const hasDesignSystem = snapshot.allFiles.includes("DESIGN_SYSTEM.md") ||
+        stylesheetFiles.some(f => /^(?:styles|Styles)\/design-system\.css$/.test(f.rel));
     if (!hasDesignSystem) return;
-    const reported = new Set();
-    for (const folder of ["styles", "Styles"]) {
-        const files = [];
-        walkFiles(path.join(workspaceDir, folder), folder, files);
-        for (const f of files) {
-            if (path.extname(f.rel).toLowerCase() !== ".css" || /(^|\/)(?:design-system|spacing|styles)\.css$/i.test(f.rel)) continue;
-            const css = readUtf8(f.abs);
-            if (css == null) continue;
+    for (const f of stylesheetFiles) {
+            if (/(^|\/)(?:design-system|spacing|styles)\.css$/i.test(f.rel)) continue;
+            const css = f.src;
             const coreSelector = /(?:^|[}\s])(?:button|input\s*\[|select\b|textarea\b|\.pb-(?:btn|input|select|textarea|table))[^{}]*\{/im.test(css);
             const controlBlock = /(?:button|input\s*\[|select\b|textarea\b|\.pb-(?:btn|input|select|textarea|table))[^{}]*\{[^}]*#[0-9a-f]{3,8}\b/i.test(css);
-            let identity = f.abs;
-            try {
-                const st = fs.statSync(f.abs);
-                identity = st.dev + ":" + st.ino;
-            } catch (e) { /* keep lexical path */ }
-            if ((coreSelector || controlBlock) && !reported.has(identity)) {
-                reported.add(identity);
+            if (coreSelector || controlBlock) {
                 findings.push({
                     file: f.rel, line: 1, column: 0, severity: "warn", rule: "designSystemBypass",
                     message: f.rel + " redefines core control styling alongside the workspace design system. spacing.css and styles.css are exempt convention files; other stylesheets must prefer selected component recipes and semantic tokens from design-build. Remove bespoke control selectors/raw hex palette values or record an explicit override in the design brief."
                 });
             }
-        }
     }
 }
 
@@ -1046,11 +952,12 @@ function lintFileContracts(rel, src) {
     return findings;
 }
 
-function lintContracts(workspaceDir) {
+function lintContracts(snapshotOrDir) {
+    const snapshot = typeof snapshotOrDir === "string" ? buildSnapshot(snapshotOrDir) : snapshotOrDir;
     const findings = [];
-    const markupFiles = collectMarkupFiles(workspaceDir);
-    const workflowFiles = collectWorkflowFiles(workspaceDir);
-    const stylesheetFiles = collectStylesheetFiles(workspaceDir);
+    const markupFiles = snapshot.markup.map(f => ({ rel: f.rel, src: f.content }));
+    const workflowFiles = snapshot.workflows.map(f => ({ rel: f.rel, src: f.content }));
+    const stylesheetFiles = snapshot.stylesheets.map(f => ({ rel: f.rel, src: f.content }));
 
     const listNames = collectListNames(workflowFiles);
     checkListNameContract(markupFiles, listNames, findings);
@@ -1081,15 +988,15 @@ function lintContracts(workspaceDir) {
 
     checkStaticFragmentExists(markupFiles, findings);
 
-    checkReferenceStylesheetNotShipped(workspaceDir, markupFiles, findings);
+    checkReferenceStylesheetNotShipped(snapshot, markupFiles, stylesheetFiles, findings);
 
     checkFontDeclaredNotLoaded(stylesheetFiles, findings);
 
-    checkScriptWithoutConsumer(workspaceDir, markupFiles, findings);
+    checkScriptWithoutConsumer(snapshot, markupFiles, findings);
 
-    checkDesignSystemBypass(workspaceDir, findings);
+    checkDesignSystemBypass(snapshot, stylesheetFiles, findings);
 
-    checkPbQualityHints(workspaceDir, markupFiles, findings);
+    checkPbQualityHints(stylesheetFiles, markupFiles, findings);
 
     findings.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
     return findings;

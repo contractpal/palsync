@@ -18,6 +18,7 @@ const { writeIfChanged } = require("../core/atomicWrite");
 
 const BUNDLE_DIR = path.join(__dirname, "..", "..", "bundled-context");
 const VERSION = require("../../package.json").version;
+const SHARED_REFERENCES = "shared";
 
 // Stamp the owned doc with the palsync version that generated it, so `palsync status` can flag a
 // workspace whose context predates the installed build (relaunch re-injects and refreshes it).
@@ -436,6 +437,17 @@ async function copySkillSet(workspaceDir, rootDir, skills) {
     }
 }
 
+// Shared references are companion assets, not a discoverable skill, so they intentionally have
+// no SKILL.md. Copy them beside the real skills or every ../shared/... pointer injected into a
+// fresh workspace is broken.
+async function copySharedReferences(workspaceDir, rootDir) {
+    const sourceRoot = path.join(BUNDLE_DIR, "skills", SHARED_REFERENCES, "references");
+    for (const asset of await filesUnder(sourceRoot, "references")) {
+        await copyFile(path.join(BUNDLE_DIR, "skills", SHARED_REFERENCES, asset),
+                       path.join(workspaceDir, rootDir, "skills", SHARED_REFERENCES, asset));
+    }
+}
+
 // OpenCode discovers SKILL.md files for its agent-facing skill tool, but unlike Claude Code it does
 // not also expose those skills as slash commands. A tiny project command bridges the two systems:
 // `/pal-loop foo` sends a prompt that loads pal-loop through the skill tool, with `foo` preserved as
@@ -513,7 +525,7 @@ async function cleanOpenCodeCommands(workspaceDir) {
 // to remove — anything outside this set is a user-added skill and is left alone.
 async function ownedSkillNames() {
     const names = (await bundledSkills()).map(s => s.name);
-    return new Set([...names, ...RETIRED_SKILLS]);
+    return new Set([...names, SHARED_REFERENCES, ...RETIRED_SKILLS]);
 }
 
 // Remove palsync-owned skill dirs that are NOT in the effective set for this session (a skill that was
@@ -525,6 +537,7 @@ async function pruneSkills(workspaceDir, rootDir, keepNames) {
     try { entries = await fs.readdir(skillsDir, { withFileTypes: true }); }
     catch (e) { if (e.code === "ENOENT") return []; throw e; }
     const keep = new Set(keepNames);
+    if (keep.size) keep.add(SHARED_REFERENCES);
     const owned = await ownedSkillNames();
     const removed = [];
     for (const ent of entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
@@ -599,11 +612,12 @@ async function contextStatus(workspaceDir) {
 //            the MCP flavor (both get a registered MCP server — see workspace.js).
 async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
     const skills = await bundledSkills();
-    const keep = skills.map(s => s.name);
-    const skillNames = keep.slice();
+    const skillNames = skills.map(s => s.name);
+    const keep = skillNames.concat(SHARED_REFERENCES);
 
     if (agent === "codex" || agent === "pi" || agent === "opencode") {
         await copySkillSet(workspaceDir, ".agents", skills);
+        await copySharedReferences(workspaceDir, ".agents");
         const prunedAgents = await pruneSkills(workspaceDir, ".agents", keep);
         const openCodeCommands = agent === "opencode"
             ? await syncOpenCodeCommands(workspaceDir, skills)
@@ -633,6 +647,7 @@ async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
 
     // Claude (default).
     await copySkillSet(workspaceDir, ".claude", skills);
+    await copySharedReferences(workspaceDir, ".claude");
     const prunedClaude = await pruneSkills(workspaceDir, ".claude", keep);
     const docOpts = { cli: false };
     await writeIfChanged(path.join(workspaceDir, "CLAUDE.palsync.md"),

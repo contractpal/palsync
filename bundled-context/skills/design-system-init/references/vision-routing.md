@@ -15,9 +15,8 @@ upload), do the visual work inline — no routing needed.
   and ask for a **concrete** description: spacing rhythm, type-scale contrast, where emphasis lands,
   border/shadow restraint, how empty space is used, implied motion. Capture that text where the
   calling step says (e.g. `design/refs/extracted.md` under a "visual observations" heading).
-- For the anti-slop cross-check, also have the vision model report whether any known fingerprints
-  appear (gradient-blob hero, pill-everything uniform radius, three-card-row-as-only-idea,
-  serif-on-cream-with-sage).
+- For the anti-slop fingerprints cross-check, report gradient-blob hero, pill-everything uniform
+  radius, and serif-on-cream-with-sage; see `../../shared/references/anti-slop.md` for the full list.
 - The text-only model then synthesizes/acts on those written observations. References are persisted
   as images regardless, because the downstream agent may have its own vision routing and will want to
   look at them directly.

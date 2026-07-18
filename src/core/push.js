@@ -13,6 +13,7 @@ const { resolveServerPalByGuid, refreshResolvedPal } = require("./resolve");
 const { manifestPaths } = require("./pull");
 const { validateWorkspace, lintContent, hasDesignSystem } = require("./validate");
 const { cachedLint } = require("./lintCache");
+const { WORKSPACE_GATE_RULES, WORKSPACE_WARNING_RULES } = require("./validate/registry");
 const { diffWorkspace } = require("./localDrift");
 const { prunePhantomFolderRegistrations } = require("./palFolders");
 const baseline = require("./baseline");
@@ -86,17 +87,6 @@ function errorsByRule(findings) {
     return m;
 }
 
-// Only cross-file contracts belong here. Per-file rules must use the baseline diff;
-// whole-workspace linting would re-block pre-existing errors in untouched files.
-const WORKSPACE_GATE_RULES = new Set([
-    "missingPalJsonEntry", "malformedManifestEntry", "actionRouted", "fragmentBinding"
-]);
-const WORKSPACE_WARNING_RULES = new Set([
-    "listNameContract", "ajaxTargetExists", "destructiveConfirm", "fontDeclaredNotLoaded",
-    "scriptWithoutConsumer", "pbControlClass", "pbHeadingClass", "pbTableClass",
-    "pbActionAffordance", "pbUndefinedClass", "pbSection", "pbMain"
-]);
-
 function findingKey(f) {
     return [f.file, f.line, f.column || 0, f.rule, f.severity, f.message].join("\t");
 }
@@ -106,7 +96,8 @@ function addWorkspaceGateFindings(workspaceDir, findings) {
     const whole = validateWorkspace(workspaceDir);
     for (const f of whole.findings) {
         const blockingError = f.severity === "error" && WORKSPACE_GATE_RULES.has(f.rule);
-        const advisoryWarning = f.severity === "warn" && WORKSPACE_WARNING_RULES.has(f.rule);
+        const advisoryWarning = f.severity === "warn" &&
+            (WORKSPACE_GATE_RULES.has(f.rule) || WORKSPACE_WARNING_RULES.has(f.rule));
         if (!blockingError && !advisoryWarning) continue;
         const key = findingKey(f);
         if (seen.has(key)) continue;

@@ -1,6 +1,6 @@
 ---
 name: pal-review
-description: "Independently review a completed pal build against its SPEC.md in a FRESH context, never the session that built it: conformance, quality, visual render (or a human eyeball gate if no vision), and regression. Produces a verdict + fix tasks; never edits code or spec. Triggers: 'review the build', 'check it against the spec', 'QA this pal', or pal-loop build completion."
+description: "Reviews a completed pal against SPEC.md in a fresh context and produces a verdict + fix tasks. Triggers: 'review the build', 'check it against the spec', 'QA this pal', or pal-loop build completion. Does not edit code or spec."
 ---
 
 # pal-review — fresh-eyes evaluation against the spec
@@ -64,16 +64,14 @@ proof artifact for rendered output or data effects.
   inputs, `expect` the persisted value, `absent` the pre-edit value (catches duplicate
   insert). A passing exercise is the strongest evidence class for a data-effects criterion;
   a failing one is a finding with the step output as evidence.
-- Exercise records with unique `{{runId}}` values. Repeated row/card labels must be scoped with
-  `within` to the selector containing that unique value. An ambiguous click, reliance on the first
-  matching action, or a page-wide expectation that could be satisfied by another row is NOT proof
-  of the intended record's mutation.
+- IF authoring exercises THEN read `../shared/references/exercise-authoring.md` first.
+- Use unique `{{runId}}` data and assert the complete persisted effect.
+- Most common mistakes: unscoped duplicate-text clicks (scope with `within`) and missing `absent:` after delete.
 - **Code trace is necessary but not sufficient for write-action PASS.** If `pal_exercise` is
   available and a §5 write action was not exercised, mark that action `NOT VERIFIED` and the
   verdict `CHANGES-NEEDED` with a fix task to run the exercise. Do not convert a plausible
   file:line trace into a data-effects pass.
 
-Common exercise-authoring mistakes: scope duplicate-text clicks with `within: 'tr:has([data-label="Name"]:has-text("{{runId}}"))'`; use full unique old/new values where neither is a substring of the other; an input `value` is not visible text; CSS `text-transform` means assert source casing; prove deletion by the unique value's `absent`, not global empty-state copy; console workflows use fill/click, not web action/page steps; split flows longer than 10 steps into separate exercises.
 - Copy on-brand per BRAND_VOICE / DESIGN_SYSTEM intent, not just present?
 - §6 layout matches the composition the spec described?
 - Tokens in `styles/styles.css` match the shipped preset recorded in `DESIGN_SYSTEM.md`, or a
@@ -101,10 +99,9 @@ Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per 
   render). Null → judge each screen against DESIGN_SYSTEM.md and a short UX rubric: visual
   hierarchy, primary journey, Gestalt grouping, Fitts target sizing/proximity, progressive
   disclosure, spacing rhythm, legibility, color meaning/contrast, consistency, responsive behavior
-  if testable, presence/use of the required spacing utility layer, plus the AI fingerprints the
-  design skills flag (gradient-blob hero, pill-everything
-  uniform radius, three-card-row-as-only-idea, serif-on-cream-with-sage). Report each issue with
-  screenshot + fix.
+  if testable, presence/use of the required spacing utility layer, plus anti-slop fingerprints:
+  gradient-blob hero, pill-everything uniform radius, and serif-on-cream-with-sage. Read
+  `../shared/references/anti-slop.md` for the full list. Report each issue with screenshot + fix.
   Apply the complete ship gate in `../shared/references/visual-rubric.md`; every score cites visible evidence.
 - **`captured:false` / no screenshot tool / no vision:** do NOT guess from HTML — emit a
   `needs-human` eyeball gate naming each screen and what to confirm.
@@ -152,10 +149,7 @@ pal_validate: <quote `ok` and `diagnosticCount` — required; missing fields mak
 - [ ] <task> — addresses <finding> — success condition: <tool + check>
 ```
 
-Before writing the final verdict, record review cost only from available harness figures. In
-claude-code, the agent cannot read its own token spend mid-session: skip `palsync cost record`
-and state that limitation explicitly. In pi, use the user-supplied footer figures and run
-`palsync cost record --model <id> --provider <p> --in N --cached N --out N [--cost N] --phase review`.
+Cost recording — IF harness is claude-code THEN skip `palsync cost record` (agent cannot read its own spend); IF pi THEN run `palsync cost record --model <model> --phase <build|review>` using the user-supplied footer figures.
 Then run `palsync review check` from the pal workspace and paste
 its complete output into REVIEW.md. Any flag or verdict cap from that command forces
 `CHANGES-NEEDED`; do not write PASS until the check reports `result: PASS`.

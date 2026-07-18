@@ -100,6 +100,13 @@ test("every bundled skill injects, with its references/* assets (bundle dir = so
             }
         }
     }
+    const sharedRefs = path.join(bundled, "shared", "references");
+    for (const file of fs.readdirSync(sharedRefs)) {
+        assert.ok(fs.existsSync(path.join(skillsDir, "shared", "references", file)),
+            "shared/references/" + file + " injected");
+    }
+    assert.equal(fs.existsSync(path.join(skillsDir, "shared", "SKILL.md")), false,
+        "shared assets do not become a discoverable skill");
 });
 
 test("Claude CLAUDE.md @imports the owned doc (real import, not backticked)", async () => {
@@ -129,6 +136,8 @@ test("Pi pal carries only AGENTS.md + .agents skills — no CLAUDE files", async
     assert.ok(fs.existsSync(path.join(ws, "AGENTS.md")), "Pi gets AGENTS.md");
     assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-workflow/SKILL.md")), "Pi skills at .agents/ (workflow)");
     assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-realtime/SKILL.md")), "Pi skills at .agents/ (realtime)");
+    assert.ok(fs.existsSync(path.join(ws, ".agents/skills/shared/references/exercise-authoring.md")),
+        "Pi receives shared companion references");
     // The full doc is inlined in AGENTS.md (no fragile @import), with the stamp + contract.
     const md = fs.readFileSync(path.join(ws, "AGENTS.md"), "utf8");
     assert.ok(/<!--\s*palsync-context v/.test(md), "AGENTS.md carries the stamp");
@@ -189,6 +198,8 @@ test("pruneSkills removes retired/owned skills, keeps user skills", async () => 
     assert.ok(!fs.existsSync(path.join(skillsDir, "design-core")), "design-core dir removed");
     assert.ok(fs.existsSync(path.join(skillsDir, "my-team-skill")), "user skill is preserved");
     assert.ok(fs.existsSync(path.join(skillsDir, "palbuilder-frontend")), "kept skill survives");
+    assert.ok(fs.existsSync(path.join(skillsDir, "shared/references/exercise-authoring.md")),
+        "shared companion references survive with the kept skill set");
     fs.rmSync(ws, { recursive: true, force: true });
 });
 

@@ -7,6 +7,19 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { lintWorkflowJs } = require("../src/core/validate/workflowJs");
 
+test("lintWorkflowJs: core restricted-JavaScript rules are directly covered", () => {
+    const cases = [
+        ["objectLiteral", "var x = { a: 1 };"],
+        ["letConst", "let x = 1;"],
+        ["arrow", "var f = (x) => x;"],
+        ["template", "var x = `hello`;"],
+        ["parseError", "function broken( {"],
+    ];
+    for (const [rule, src] of cases) {
+        assert.ok(lintWorkflowJs("workflows/main.js", src).some(f => f.rule === rule), rule + " should be emitted");
+    }
+});
+
 test("lintWorkflowJs: duplicate switch action labels are errors", () => {
     const src = [
         "function main() {",

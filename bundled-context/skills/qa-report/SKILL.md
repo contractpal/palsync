@@ -1,6 +1,6 @@
 ---
 name: qa-report
-description: "After a pal-loop build or benchmark/eval run, write a standardized QA report in /Users/apple/Documents/palsync/reports/ using the provided template. Ensures consistent filename, seven required sections, evidence-before-claim, and fix-task format. Triggers: 'write a QA report', 'summarize the run', 'post-run evaluation report', or after a benchmark/eval run."
+description: "Writes an evidence-gated report after a pal-loop build or benchmark/eval run. Triggers: 'write a QA report', 'summarize the run', 'post-run evaluation report', or after a benchmark/eval run. Does not review without run evidence."
 ---
 
 # qa-report — standardized QA report for pal-loop/eval runs
@@ -26,18 +26,7 @@ Read these before writing:
 
 ## Filename convention
 
-Save the report as:
-
-```
-/Users/apple/Documents/palsync/reports/YYYY-MM-DD_<spec-slug>_<harness>_<model-slug>.md
-```
-
-- `YYYY-MM-DD` — the date the run started.
-- `<spec-slug>` — the spec identifier (e.g. `equipment-checkout`).
-- `<harness>` — the agent/harness name (e.g. `claude-code`, `pi`, `headless`).
-- `<model-slug>` — the exact model ID used for the build (e.g. `haiku-4.5`, `sonnet-5`).
-
-Example: `/Users/apple/Documents/palsync/reports/2026-07-14_equipment-checkout_claude-code_haiku-4.5.md`
+Use `/Users/apple/Documents/palsync/reports/YYYY-MM-DD_<spec-slug>_<harness>_<model-slug>.md`; field definitions and example: `references/report-template.md`.
 
 ## Output — one markdown report with exactly these sections
 
@@ -53,12 +42,7 @@ nothing to say, write "none" and explain why.
    live reproduction evidence (actual tool output, not paraphrase), root cause with
    `file:line`, and a "palsync improvement" line. No finding without evidence.
 4. **What worked well** — for balance and to protect features from being "fixed" away.
-5. **Cost & usage** — apply concrete harness handling. For claude-code, state that the agent
-   cannot read its own token spend mid-session and skip `palsync cost record`. For pi, record
-   the user-supplied footer figures with `palsync cost record --model X --provider Y --in N
-   --cached N --out N [--cost N] --phase review` (use `--phase build` for builders). Then paste
-   `palsync cost` output verbatim — it includes the session-cost sidecar with build/review phase
-   totals when entries exist. Never estimate unavailable figures.
+5. **Cost & usage** — Cost recording — IF harness is claude-code THEN skip `palsync cost record` (agent cannot read its own spend); IF pi THEN run `palsync cost record --model <model> --phase <build|review>` using the user-supplied footer figures. Then paste `palsync cost` output verbatim; never estimate unavailable figures.
 6. **Recommendations for palsync** — numbered, prioritized (P0 / P1 / P2), each naming the
    file or tool it targets.
 7. **Fix tasks** — checkbox list in pal-loop task format (file, change, success condition) so

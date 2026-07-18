@@ -1,6 +1,6 @@
 ---
 name: pal-loop
-description: "Execute an approved SPEC.md + EXECUTION.md build autonomously — one task at a time, verify with palsync tools, checkpoint to disk, hand off to pal-review, loop fix tasks until PASS. State on disk, so any session resumes. Triggers: 'run the loop', 'build the spec', 'continue the build', 'resume the build', or a workspace with unfinished EXECUTION.md tasks."
+description: "Executes approved SPEC.md + EXECUTION.md tasks, verifies, checkpoints, and hands off to pal-review until PASS. Triggers: 'run the loop', 'build the spec', 'continue the build', 'resume the build', or a workspace with unfinished EXECUTION.md tasks. Does not change the approved spec."
 ---
 
 # pal-loop — execute SPEC.md task by task
@@ -62,6 +62,7 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
    `references/delegation.md` first; required protocol.**)
 3. **Mark** `in_progress`: `palsync task <id> in_progress` — write state now, not later. **Done when:** disk state says `in_progress`.
 4. **Execute exactly as specced:**
+   - BEFORE writing your first page/fragment/style/workflow file, run `pal_context section:"creating-files"` — the manifest entry shapes are NOT guessable.
    - Foundation task (T1): use bash `cp` to copy the matching pal-type template files and the
      runtime shell/styles plus ONLY the behavior scripts with real consumers in current markup;
      add a script later when a task introduces its consumer. Replace `{{PAL_NAME}}`/`YOUR-DOMAIN`
@@ -121,6 +122,9 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       render; use a detail/read action that exposes a non-rendered field rather than assuming
       its value from visible state. For example, if check-in sets `status = available` and
       clears `checkedOutAt`, assert both fields after check-in, not only the rendered status.
+      Full authoring rules: `../shared/references/exercise-authoring.md` — read it before writing your FIRST `pal_exercise` call of the session.
+      Read the local page/fragment markup first; derive exact input names, click text, and `within`
+      selectors instead of discovering them through repeated exercise calls.
       **Batch the whole flow into ONE call's `steps` array**
       (e.g. add → edit → delete is one exercise with expects per step), not one call per
       action — each extra call is a full context-window round trip. Web:
@@ -227,16 +231,10 @@ Runs at each review-cadence pause and always at the build-completion handoff —
 
 ## When the spec is wrong (amendment path)
 
-Reality can contradict the spec mid-build (a type that won't create, a missing consumed field,
-an inexpressible behavior). You never fix this by editing SPEC.md. Instead:
-1. Set the task `blocked`.
-2. Write an **amendment proposal** in Blockers: which §, the exact build-time fact (tool
-   output pasted), the minimal change proposed.
-3. Continue with the next independent task.
-4. The human approves → pal-spec applies + re-gates → you re-read the amended § and resume.
-
-Invariant: **propose → human approve → re-gate → continue; the loop never silently self-amends.**
-Full protocol: `../pal-spec/references/amendment-path.md`.
+IF the build needs something SPEC.md doesn't say THEN follow
+`../pal-spec/references/amendment-path.md` — write an amendment proposal, wait for approval, apply, re-gate.
+Invariant: **propose → human approve → re-gate → continue**. Never edit SPEC.md silently.
+**Never silently edit SPEC.md**; the loop never silently self-amends.
 
 ## Build complete → hand off to pal-review
 
@@ -248,10 +246,7 @@ Trigger: every task `done`, or every remaining task is a `blocked`/`needs-fronti
 `needs-human` the human accepted as parked.
 
 1. `baseline/` exists → run the regression re-check above, unconditionally.
-2. Record build cost only from available harness figures. In claude-code, the agent cannot
-   read its own token spend mid-session: skip `palsync cost record` and state that limitation
-   explicitly. In pi, use the user-supplied footer figures and run
-   `palsync cost record --model <id> --provider <p> --in N --cached N --out N [--cost N] --phase build`.
+2. Cost recording — IF harness is claude-code THEN skip `palsync cost record` (agent cannot read its own spend); IF pi THEN run `palsync cost record --model <model> --phase <build|review>` using the user-supplied footer figures.
 3. Run `palsync review brief`, then **dispatch pal-review in a fresh session/subagent** with its
    EVIDENCE LEDGER output, SPEC.md, EXECUTION.md, DESIGN_SYSTEM.md/COMPONENTS.md, `baseline/`
    (if any), and the pal's identity so it can `pal_fetch`/`pal_screenshot`/`pal_test` the real

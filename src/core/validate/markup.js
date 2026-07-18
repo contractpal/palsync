@@ -145,6 +145,8 @@ function lintMarkup(rel, src, opts) {
             const nonInputClass = lname === "input" && [
                 "hidden", "checkbox", "radio", "range", "submit", "button", "reset", "image", "file", "color"
             ].includes((tag.attrs.find(a => a.name.toLowerCase() === "type")?.value || "").toLowerCase());
+            // Owner-approved policy gate (Sam, 2026-07-18): not a server rejection; blocks because
+            // a declared design system must own core controls consistently across the pal.
             if (requiredClass && !nonInputClass && !new RegExp("(^|\\s)" + requiredClass + "(?:\\s|$)").test(
                 tag.attrs.find(a => a.name.toLowerCase() === "class")?.value || "")) {
                 add(lt, "error", "designClassRequired",

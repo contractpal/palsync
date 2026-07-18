@@ -42,7 +42,7 @@
   {
     "name": "pal_validate",
     "title": "Validate pal code",
-    "description": "Check the pal's WHOLE workspace OFFLINE (no server/network) for the mistakes that silently break in PalBuilder: invalid workflow JS for the restricted engine, invalid c:/XHTML markup, and workspace contract violations. Returns each finding's file, line, ERROR/WARNING label, and the fix. Run once before finishing a task; pal_push only gates changed files plus narrow workspace contracts.",
+    "description": "Offline-check the whole workspace for restricted workflow JS, c:/XHTML markup, and cross-file contract violations. Returns each finding's location, severity, and fix. Run before finishing. pal_push gates changed files and narrow workspace contracts only.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -102,7 +102,7 @@
   {
     "name": "pal_test",
     "title": "Compile workflow on server",
-    "description": "Validate a workflow ON THE SERVER and return the server's validation notes. Does NOT open a browser by default; pass preview:true only when the user has stopped for human review and wants a live browser preview. The preview URL carries the user's credentials, is NEVER returned to you, and you CANNOT see the rendered page — use pal_screenshot/pal_exercise for agent-visible verification.",
+    "description": "Compile a workflow on the server and return validation notes. This does not render the pal; use pal_screenshot or pal_exercise for agent-visible verification. preview:true opens a credential-bearing URL only for human review; the URL is never returned.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -156,16 +156,16 @@
   {
     "name": "pal_tunnel_test",
     "title": "Test tunnel workflow",
-    "description": "Test a TUNNEL workflow (workflowType 15) by ACTUALLY CALLING it as a web service and returning its JSON response — the one tool where you get real DATA back from the server, not just a validation verdict. REQUIRES askedUser:true, which attests the action/workflow/payload values came from the USER (their message specified them, or they answered your questions) — a call without it returns the questions to relay to the user instead of running. NEVER invent an action or payload. Credentials are minted and refreshed automatically (~5 min expiry). Acts on the LAST PUSHED version — pal_push first. An empty response means the workflow THREW at runtime.",
+    "description": "Call the last-pushed tunnel workflow and return its JSON response. askedUser:true is required and attests that action, workflow, and payload came from the user; never invent them. Credentials stay internal. An empty response indicates a likely runtime exception. Push first.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "action": {
-          "description": "Action string the workflow dispatches on via request.getAction(). Optional — omitted means the workflow sees null.",
+          "description": "Value returned by request.getAction(); omitted means null.",
           "type": "string"
         },
         "payload": {
-          "description": "JSON payload object — TOP-LEVEL keys are readable in the workflow via request.getPayload().get(key); nested objects do not survive the wire. Default: {}.",
+          "description": "Top-level payload values; nested objects do not survive the wire.",
           "type": "object",
           "propertyNames": {
             "type": "string"
@@ -173,15 +173,15 @@
           "additionalProperties": {}
         },
         "payloadFile": {
-          "description": "Path to a .json file to send as the payload (workspace-relative or absolute). Alternative to payload.",
+          "description": "JSON payload path; alternative to payload.",
           "type": "string"
         },
         "workflow": {
-          "description": "Tunnel workflow name, with or without .js (default: the pal's registered tunnelServiceWorkflow).",
+          "description": "Tunnel workflow name; default is the registered tunnel workflow.",
           "type": "string"
         },
         "askedUser": {
-          "description": "REQUIRED attestation: true means the action/workflow/payload values came from the USER in this conversation — their message specified them, or they answered your questions. NEVER set it alongside values you chose yourself.",
+          "description": "Required: values came from the user, not the agent.",
           "type": "boolean"
         }
       },
@@ -196,7 +196,7 @@
   {
     "name": "pal_debug",
     "title": "Read server debug output",
-    "description": "Retrieve the pal's server-side c.debug(...) output — the PalBuilder IDE debug feed; any workflow engine on a test pal writes to it when it executes. CONSUME-ONCE and SHARED: reading clears the buffer for every viewer, including a developer watching PalBuilder's debug view. pal_tunnel_test / pal_fetch / pal_preview (web) / pal_screenshot attach this automatically — call this directly after an opt-in browser preview or a manual run in the user's browser.",
+    "description": "Read and clear server c.debug output. The buffer is consume-once and shared with PalBuilder; reading clears it for everyone. Runtime tools attach debug automatically, so call this after a human preview/manual run or when an attached debug block was absent.",
     "inputSchema": {
       "type": "object",
       "properties": {},
@@ -211,7 +211,7 @@
   {
     "name": "pal_preview",
     "title": "Preview rendered pal",
-    "description": "See what the pal RENDERS. WEB pal: pass expect:[strings] for a found/missing verdict (token-efficient default), or selector/maxChars for markup; full HTML otherwise. CONSOLE/transaction pal: does NOT open a browser by default; pass open:true only at a human-review stop. Shows the LAST PUSHED version — pal_push first.",
+    "description": "Inspect the last-pushed render. WEB: expect returns found/missing verdicts; summary is the default and full returns capped HTML. CONSOLE/transaction: open:true opens a browser only for human review. Push first.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -223,23 +223,31 @@
             "transaction"
           ]
         },
+        "detail": {
+          "description": "summary (default) returns metadata and failure context; full includes capped HTML.",
+          "type": "string",
+          "enum": [
+            "summary",
+            "full"
+          ]
+        },
         "expect": {
-          "description": "Strings the rendered page must contain — returns a per-string found/missing verdict instead of the HTML (the default, token-efficient check).",
+          "description": "Required strings; returns found/missing verdicts without HTML.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "selector": {
-          "description": "Simple CSS selector (tag/.class/#id) to return only that region's markup.",
+          "description": "Simple tag, class, or id region selector.",
           "type": "string"
         },
         "maxChars": {
-          "description": "Cap the returned markup to this many characters.",
+          "description": "Maximum returned markup characters.",
           "type": "number"
         },
         "open": {
-          "description": "Console/transaction only: open the preview in the user's browser. Default false for auto mode.",
+          "description": "Open console/transaction preview for human review.",
           "type": "boolean"
         }
       },
@@ -254,27 +262,35 @@
   {
     "name": "pal_fetch",
     "title": "Fetch rendered web page",
-    "description": "Verify ONE page of a WEB pal renders. DEFAULT: pass expect:[strings] for a per-string found/missing verdict WITHOUT the body — the token-efficient post-push check. A successful push does NOT prove render (files missing from pal.json are silently skipped); this does. selector/maxChars return markup instead. path is site-root-relative, e.g. \"about.html\". Shows the LAST PUSHED version.",
+    "description": "Verify one last-pushed WEB page renders. expect returns found/missing verdicts without the body; summary is the default and full returns capped HTML. A successful push does not prove render. path is site-root-relative.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "path": {
           "type": "string",
-          "description": "Page path relative to the site root, e.g. \"about.html\""
+          "description": "Site-root-relative page path."
+        },
+        "detail": {
+          "description": "summary (default) returns metadata and failure context; full includes capped HTML.",
+          "type": "string",
+          "enum": [
+            "summary",
+            "full"
+          ]
         },
         "expect": {
-          "description": "Strings the served page must contain — returns a per-string found/missing verdict instead of the HTML (the default, token-efficient check).",
+          "description": "Required strings; returns found/missing verdicts without HTML.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "selector": {
-          "description": "Simple CSS selector (tag/.class/#id) to return only that region's markup.",
+          "description": "Simple tag, class, or id region selector.",
           "type": "string"
         },
         "maxChars": {
-          "description": "Cap the returned markup to this many characters.",
+          "description": "Maximum returned markup characters.",
           "type": "number"
         }
       },
@@ -292,20 +308,20 @@
   {
     "name": "pal_screenshot",
     "title": "Capture rendered pal screen",
-    "description": "Render the last-pushed pal for visual review, detect runtime errors, and return a browser-computed designAudit. Set imageless:true when only the designAudit verdict matters (re-checks after small fixes). Capture page UI at desktop and mobile; require designAudit.errors=0 and inspect pixels. WEB renders directly; CONSOLE/transaction use authenticated replay. Missing browser/auth returns unavailable, never a fake pass.",
+    "description": "Render the last-pushed pal, detect runtime errors, and return a browser-computed designAudit. Capture desktop and mobile; require zero audit errors and inspect pixels. imageless:true returns only the audit. Missing browser/auth is unavailable, never a pass.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "page": {
-          "description": "Page path under the site root, e.g. \"about.html\" (WEB only). Default: home page.",
+          "description": "WEB page path; default is home.",
           "type": "string"
         },
         "feature": {
-          "description": "Human label for the feature or flow being tested. Used to name the .agent-work-history run folder.",
+          "description": "Work-history feature label.",
           "type": "string"
         },
         "viewport": {
-          "description": "desktop (1280x800, default) or mobile (~390x844).",
+          "description": "desktop (default) or mobile.",
           "type": "string",
           "enum": [
             "desktop",
@@ -313,11 +329,11 @@
           ]
         },
         "fullPage": {
-          "description": "Capture the whole scroll height, not just the viewport.",
+          "description": "Capture the full scroll height.",
           "type": "boolean"
         },
         "imageless": {
-          "description": "Return the designAudit without capturing or returning image data.",
+          "description": "Return designAudit without image data.",
           "type": "boolean"
         }
       },
@@ -332,7 +348,7 @@
   {
     "name": "pal_exercise",
     "title": "Exercise pal behavior",
-    "description": "Functionally exercise actions end-to-end and assert rendered results — the proof above compile (pal_test) and render (pal_screenshot). Acts on the LAST PUSHED version; push first. Steps run in order and stop at the first failure. WEB uses action+params; CONSOLE/transaction fills inputs then clicks exact text. Scope duplicate controls with within and unique {{runId}} data. Use after create/edit/delete actions.",
+    "description": "Exercise last-pushed actions end-to-end and assert results. Read local markup first; do not discover fields or selectors by retries. Steps stop at the first failure. WEB uses action+params; console/transaction fills inputs and clicks exact text. Scope duplicate controls with within and unique {{runId}}. Use after create/edit/delete.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -344,15 +360,15 @@
             "type": "object",
             "properties": {
               "page": {
-                "description": "WEB only: page path under the site root to load first, e.g. \"equipment.html\".",
+                "description": "WEB page path to load first.",
                 "type": "string"
               },
               "action": {
-                "description": "WEB only: workflow action to invoke, e.g. \"saveEquipment\". Sent as ?action=<name> with params.",
+                "description": "WEB workflow action invoked with query params.",
                 "type": "string"
               },
               "params": {
-                "description": "WEB only: query params sent with the action, e.g. {\"name\":\"Camera\"}.",
+                "description": "WEB action query parameters.",
                 "type": "object",
                 "propertyNames": {
                   "type": "string"
@@ -369,7 +385,7 @@
                 }
               },
               "fill": {
-                "description": "Fill inputs by their name= attribute before clicking, e.g. {\"name\":\"Camera\",\"category\":\"AV\"}.",
+                "description": "Input name/value pairs to fill before clicking.",
                 "type": "object",
                 "propertyNames": {
                   "type": "string"
@@ -386,22 +402,22 @@
                 }
               },
               "click": {
-                "description": "EXACT visible text of the link/button to click (a c:a Save link), or a simple #id/.class selector.",
+                "description": "Exact visible text or simple selector to click.",
                 "type": "string"
               },
               "within": {
-                "description": "Browser mode: scope click to exactly one CSS/Playwright locator through its identifying cell, e.g. tr:has([data-label=\"Name\"]:has-text(\"{{runId}}\")). Required when the same action text appears in multiple rows/cards; shared-name :has-text() scopes are ambiguous.",
+                "description": "CSS scope when click text matches multiple elements.",
                 "type": "string"
               },
               "expect": {
-                "description": "Strings that MUST appear in visible rendered text after this step (for example, the saved value in the list). Hidden markup and input value= attributes do not count.",
+                "description": "Visible strings required after this step.",
                 "type": "array",
                 "items": {
                   "type": "string"
                 }
               },
               "absent": {
-                "description": "Full unique strings that must NOT appear in visible rendered text after this step. For edits, use unique old/new values where neither is a substring of the other; a stale old value proves a duplicate insert.",
+                "description": "Unique visible strings forbidden after this step.",
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -409,10 +425,10 @@
               }
             }
           },
-          "description": "Steps run in order; the run stops at the first failing step."
+          "description": "Ordered; stops at first failure."
         },
         "workflow": {
-          "description": "Engine to exercise (default: auto-detected).",
+          "description": "Engine; default auto-detected.",
           "type": "string",
           "enum": [
             "console",
@@ -421,7 +437,7 @@
           ]
         },
         "viewport": {
-          "description": "Browser-mode viewport (default desktop).",
+          "description": "Viewport; default desktop.",
           "type": "string",
           "enum": [
             "desktop",
@@ -443,7 +459,7 @@
   {
     "name": "pal_seo_audit",
     "title": "Audit web page SEO",
-    "description": "On-page SEO audit of a WEB pal's server-rendered page (last pushed): title/meta, canonical, og/twitter, single H1, JSON-LD, img alt, robots.txt/sitemap.xml/llms.txt. Returns each problem + its fix, plus what PASSED. Use after pushing a web page; fix every ERROR. Not for console pals. Read the palbuilder-seo skill BEFORE writing heads; this verifies the result.",
+    "description": "Audit last-pushed WEB pages for on-page SEO and crawler files. Returns every problem, fix, and passing check. Read the palbuilder-seo skill before writing heads; this verifies the result. Not for console pals.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -635,7 +651,7 @@
   {
     "name": "pal_push",
     "title": "Push pal changes",
-    "description": "Push local changes to the server (UPDATE). FIRST runs the pre-push gate — full lint of the files this push changes (blocking on errors your change introduces) plus cross-file contract checks; advisory warnings are surfaced but never block. Standalone pal_validate lints the WHOLE workspace and may report findings in files this push didn't touch. force:true is drift-only: it can overwrite a newer server marker, but it cannot bypass validation errors. Also refuses if the pal is locked by another person (typed confirmOverride). On success returns the server's save result plus any code WARNINGS.",
+    "description": "Push local changes after validating changed files and cross-file contracts. Validation errors cannot be bypassed; force:true handles server drift only. Warnings never block. Refuses locks unless the user supplies the exact typed override. Standalone pal_validate checks the whole workspace; this gate does not re-block pre-existing errors in untouched files.",
     "inputSchema": {
       "type": "object",
       "properties": {

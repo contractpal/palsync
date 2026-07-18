@@ -605,7 +605,7 @@ function formatExercise(res) {
         if (s.renderError) lines.push("      renderError: " + s.renderError.message + (s.renderError.workflow ? " (" + s.renderError.workflow + (s.renderError.line ? ":" + s.renderError.line : "") + ")" : ""));
         if (!s.pass && s.hints) lines.push("      " + formatScreenHints(s.hints));
     }
-    if (!res.pass && res.ran) lines.push("  Later steps were not run — inspect the current screen/test targeting first. Push again only after editing a pal file.");
+    if (!res.pass && res.ran) lines.push("  Later steps were not run. Do not probe labels/selectors by trial and error: read the local page/fragment markup and derive the exact name=, click text, and unique within selector. If only the exercise targeting was wrong, revise the steps and call again without pushing; edit and push first only when the pal behavior was wrong.");
     return lines.join("\n");
 }
 

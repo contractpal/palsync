@@ -1,6 +1,6 @@
 ---
 name: pal-spec
-description: "Interview the user and produce SPEC.md + EXECUTION.md, the two files that drive an autonomous pal build. Modes: FULL (production), LITE (prototype/MVP). Triggers: 'spec out', 'plan this pal', 'interview me', 'create a spec', or starting a new pal from a description. Not for bug fixes (pal-fix) or visual design (design-system-init)."
+description: "Interviews and produces SPEC.md + EXECUTION.md in FULL (production) or LITE (prototype/MVP) mode. Triggers: 'spec out', 'plan this pal', 'interview me', 'create a spec', or starting a new pal from a description. Not for bug fixes (pal-fix) or visual design (design-system-init)."
 ---
 
 # pal-spec — interview → SPEC.md + EXECUTION.md
@@ -143,10 +143,8 @@ and may be created before or alongside it). Existing pals that lack `styles.css`
 
 An approved spec is the contract, but reality can contradict it after the build starts
 (a type that won't create, a missing consumed field). The invariant: **the agent never silently self-amends.**
-The flow: pal-loop STOPS the affected task and writes an amendment
-proposal in Blockers → the human approves → pal-spec applies the minimal edit, bumps
-`spec version`, appends a §14 log entry, re-runs the reality check for the amended § only →
-pal-loop resumes. Full protocol: `references/amendment-path.md`.
+IF the build needs something SPEC.md doesn't say THEN follow `references/amendment-path.md` —
+propose, wait for approval, apply, re-gate. Never edit SPEC.md silently.
 
 ## What this skill does NOT do
 - Build anything — **pal-loop** executes EXECUTION.md.

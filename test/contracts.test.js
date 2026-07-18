@@ -162,7 +162,7 @@ test("reserved EL words cannot be c:list ids, c:set names, or c:fragment names",
     });
     const findings = lintContracts(dir).filter(f => f.rule === "reservedElWord");
     assert.equal(findings.length, 3);
-    assert.ok(findings.every(f => f.severity === "error"));
+    assert.ok(findings.every(f => f.severity === "warn"));
     assert.match(findings[0].message, /reserved EL operator/);
     fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -265,6 +265,7 @@ test("unwired dataset — datasets/foo.json with no pal.json entry (lintPalJson)
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /never be provisioned/);
+    assert.match(findings[0].message, /"Dataset": \{"name":"foo"/);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -334,6 +335,37 @@ test("malformedManifestEntry — properly wrapped entries produce no finding", (
     });
     const findings = lintPalJson(dir).filter(f => ["malformedManifestEntry", "missingPalJsonEntry"].includes(f.rule));
     assert.deepStrictEqual(findings.map(f => f.rule), []);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("pal.json findings report the offending manifest line and an exact four-line entry", () => {
+    const manifest = JSON.stringify({
+        pages: { entry: [{ string: "console", filename: "console.html" }] },
+        fragments: { entry: [] }, styles: { entry: [] }, scripts: { entry: [] }, images: { entry: [] },
+        emails: { entry: [] }, attachments: { entry: [] }, datasets: { entry: [] }
+    }, null, 2);
+    const dir = tmpWorkspace({ "pal.json": manifest, "pages/console.html": "<html></html>" });
+    const findings = lintPalJson(dir);
+    const malformed = findings.find(f => f.rule === "malformedManifestEntry");
+    const missing = findings.find(f => f.rule === "missingPalJsonEntry");
+    const expectedLine = manifest.slice(0, manifest.indexOf('"console"')).split("\n").length;
+    assert.equal(malformed.line, expectedLine);
+    assert.equal(missing.line, expectedLine);
+    assert.match(missing.message, /\{\n  "string": "console\.html",\n  "Page": \{ "name": "console", "filename": "console\.html" \}\n\}/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("multiple malformed entries retain their own pal.json line", () => {
+    const manifest = JSON.stringify({
+        pages: { entry: [{ string: "console.html", filename: "console.html" }] },
+        workflows: { entry: [{ string: "console.js", filename: "console.js" }] }
+    }, null, 2);
+    const dir = tmpWorkspace({ "pal.json": manifest });
+    const findings = lintPalJson(dir).filter(f => f.rule === "malformedManifestEntry");
+    assert.equal(findings.find(f => f.message.includes("console.html")).line,
+        manifest.slice(0, manifest.indexOf('"console.html"')).split("\n").length);
+    assert.equal(findings.find(f => f.message.includes("console.js")).line,
+        manifest.slice(0, manifest.indexOf('"console.js"')).split("\n").length);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -660,7 +692,7 @@ test("reserved EL words are checked before string-split c:list early return", ()
     });
     const findings = lintContracts(dir).filter(f => f.rule === "reservedElWord");
     assert.equal(findings.length, 1);
-    assert.equal(findings[0].severity, "error");
+    assert.equal(findings[0].severity, "warn");
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -986,6 +1018,20 @@ test("invalidPalJsonShape — DataList requires cols/recs serialized names and a
     assert.strictEqual(unevenFindings.length, 1);
     assert.match(unevenFindings[0].message, /must contain 2 cell/);
     fs.rmSync(uneven, { recursive: true, force: true });
+});
+
+test("duplicate invalid manifest values report their own entry lines", () => {
+    const manifest = JSON.stringify({
+        datalists: { entry: [
+            { string: "a", DataList: { name: "a", cols: {}, recs: {} } },
+            { string: "b", DataList: { name: "b", cols: {}, recs: {} } }
+        ] }
+    }, null, 2);
+    const dir = tmpWorkspace({ "pal.json": manifest });
+    const findings = lintPalJson(dir).filter(f => f.rule === "invalidPalJsonShape" && /cols\.string/.test(f.message));
+    assert.equal(findings.length, 2);
+    assert.notEqual(findings[0].line, findings[1].line);
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("invalidPalJsonShape — DesktopBinding requires wrapper, label, and icon", () => {

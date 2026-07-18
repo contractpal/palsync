@@ -11,11 +11,13 @@ const RULES_VERSION = 1;
 const WORKSPACE_RULE_VERSIONS = Object.freeze({
     "workspace-workflow": 1,
     "workspace-markup": 1,
-    "workspace-dataset": 1
+    "workspace-dataset": 1,
+    // Bump whenever contracts.js or palJson.js gains or changes a rule.
+    "workspace-contracts": 1
 });
 
 function pushGateRulesVersion(versions = WORKSPACE_RULE_VERSIONS) {
-    return ["workspace-workflow", "workspace-markup", "workspace-dataset"]
+    return ["workspace-workflow", "workspace-markup", "workspace-dataset", "workspace-contracts"]
         .map(mode => versions[mode])
         .join(".");
 }

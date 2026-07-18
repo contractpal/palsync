@@ -88,10 +88,20 @@ function buildEnvelope(source, options = {}) {
 }
 
 function serializeEnvelope(workspaceDir, tool, source, options = {}) {
-    const detailsRef = writeContentAddressedArtifact(workspaceDir, tool, source);
-    const envelope = buildEnvelope(Object.assign({}, source, { detailsRef }), options);
+    // One canonical serialization feeds both the content-addressed artifact and usage
+    // accounting. The envelope may use a smaller projection, but the artifact retains the
+    // complete tool result for line-addressed follow-up inspection.
+    const serializedSource = JSON.stringify(source, null, 2) + "\n";
+    const detailsRef = writeContentAddressedArtifact(workspaceDir, tool, serializedSource);
+    const envelopeSource = options.envelopeSource || source;
+    const envelope = buildEnvelope(Object.assign({}, envelopeSource, { detailsRef }), options);
     const trailer = "Full result: " + (detailsRef || "unavailable (artifact write failed)");
-    return { envelope, message: JSON.stringify(envelope) + "\n" + trailer, detailsRef };
+    return {
+        envelope,
+        message: JSON.stringify(envelope) + "\n" + trailer,
+        detailsRef,
+        rawBytes: Buffer.byteLength(serializedSource)
+    };
 }
 
 module.exports = { buildEnvelope, collapseFindings, serializeEnvelope };

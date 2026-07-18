@@ -102,6 +102,72 @@ test("valid JSON with an invalid cache envelope is recomputed", () => {
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
+test("workspace contract cache invalidates only for relevant validator inputs", () => {
+    const ws = tmpWorkspace({ "pal.json": "{}\n" });
+
+    validateWorkspace(ws);
+    const cold = readStats(ws);
+    validateWorkspace(ws);
+    const repeated = readStats(ws);
+    assert.equal(repeated.hits, cold.hits + 1, "identical workspace hits the contract cache");
+
+    fs.mkdirSync(path.join(ws, "workflows"), { recursive: true });
+    fs.writeFileSync(path.join(ws, "workflows", "main.js"), "function run(c) { return null; }\n");
+    validateWorkspace(ws);
+    const workflowEdit = readStats(ws);
+    assert.ok(workflowEdit.misses > repeated.misses, "workflow edit invalidates contracts");
+
+    fs.writeFileSync(path.join(ws, "notes.md"), "not a validator input\n");
+    validateWorkspace(ws);
+    const unrelatedEdit = readStats(ws);
+    assert.ok(unrelatedEdit.hits > workflowEdit.hits, "unrelated edit retains contract cache hit");
+    assert.equal(unrelatedEdit.misses, workflowEdit.misses, "unrelated edit causes no lint miss");
+
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("workspace contract cache invalidates when manifest-managed files appear", () => {
+    for (const [rel, manifest] of [
+        ["scripts/app.js", { scripts: { entry: [] } }],
+        ["datasets/new.json", { datasets: { entry: [] } }]
+    ]) {
+        const ws = tmpWorkspace({ "pal.json": JSON.stringify(manifest) });
+        validateWorkspace(ws);
+        validateWorkspace(ws);
+        fs.mkdirSync(path.dirname(path.join(ws, rel)), { recursive: true });
+        fs.writeFileSync(path.join(ws, rel), rel.startsWith("datasets/")
+            ? JSON.stringify({ name: "new", fields: { DatasetField: [] }, freeform: true })
+            : "init();\n");
+        const changed = validateWorkspace(ws);
+        assert.ok(changed.findings.some(f => f.rule === "missingPalJsonEntry" && f.message.includes(rel)), rel);
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("workspace contract cache invalidates when a missing dataset definition changes", () => {
+    const ws = tmpWorkspace({
+        "pal.json": JSON.stringify({ datasets: { entry: [] } }),
+        "datasets/new.json": JSON.stringify({
+            name: "new", fields: { DatasetField: [{ name: "oldField", fieldType: "String", primaryKey: true }] }, freeform: true
+        })
+    });
+    const first = validateWorkspace(ws);
+    const firstMessage = first.findings.find(f => f.rule === "missingPalJsonEntry").message;
+    assert.match(firstMessage, /oldField/);
+    validateWorkspace(ws);
+    const repeated = readStats(ws);
+
+    fs.writeFileSync(path.join(ws, "datasets/new.json"), JSON.stringify({
+        name: "new", fields: { DatasetField: [{ name: "newField", fieldType: "String", primaryKey: true }] }, freeform: true
+    }));
+    const changed = validateWorkspace(ws);
+    const changedMessage = changed.findings.find(f => f.rule === "missingPalJsonEntry").message;
+    assert.match(changedMessage, /newField/);
+    assert.doesNotMatch(changedMessage, /oldField/);
+    assert.ok(readStats(ws).misses > repeated.misses, "dataset content edit invalidates contracts");
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
 test("PALSYNC_NO_CACHE bypasses reads and writes", () => {
     const ws = tmpWorkspace();
     const before = process.env.PALSYNC_NO_CACHE;

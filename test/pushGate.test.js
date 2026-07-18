@@ -40,6 +40,30 @@ test("gateLint surfaces but does not block current workspace-level list/DataList
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("gateLint surfaces default-routed actions as advisory warnings", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": [
+            "function run(controller) {",
+            "    var action = controller.getRequest().getParameter('action');",
+            "    switch (action) {",
+            "        case 'list': break;",
+            "        default: break;",
+            "    }",
+            "}",
+        ].join("\n"),
+        "fragments/list.html": '<c:ignore xmlns:c="contractpal"><c:a action="edit">Edit</c:a></c:ignore>',
+    });
+    const record = { fileHashes: hashWorkspaceFiles(dir).files };
+    baseline.snapshot(dir, Object.keys(record.fileHashes));
+
+    const lint = gateLint(record, dir);
+    assert.equal(lint.errors, 0, "default routing is advisory and must not block push");
+    const finding = lint.findings.find(f => f.rule === "actionRouted");
+    assert.equal(finding?.severity, "warn");
+    assert.match(finding.message, /default/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("gateLint surfaces a workflow warning without increasing errors", () => {
     const dir = tmpWorkspace({
         "workflows/main.js": "function run(controller) { var s = controller.getName(); return s.length(); }",
@@ -102,6 +126,21 @@ test("gateLint baseline-diffs unknown pal.json keys instead of treating them as 
     assert.equal(lint.errors, 1);
     assert.equal(lint.findings[0].rule, "unknownPalJsonKey");
     assert.match(lint.findings[0].message, /INTRODUCED 1 new/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("gateLint baseline-diffs introduced manifest filename errors", () => {
+    const original = JSON.stringify({
+        fragments: { entry: [{ string: "x.html", Fragment: { name: "x", filename: "x.html" } }] }
+    });
+    const dir = tmpWorkspace({ "pal.json": original, "fragments/x.html": "<div>x</div>" });
+    const record = { fileHashes: hashWorkspaceFiles(dir).files };
+    baseline.snapshot(dir, Object.keys(record.fileHashes));
+    const changed = JSON.parse(original);
+    changed.fragments.entry[0].Fragment.filename = "fragments/x.html";
+    fs.writeFileSync(path.join(dir, "pal.json"), JSON.stringify(changed));
+    const lint = gateLint(record, dir);
+    assert.ok(lint.findings.some(f => f.rule === "bannedFilenamePrefix" && f.severity === "error"));
     fs.rmSync(dir, { recursive: true, force: true });
 });
 

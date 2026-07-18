@@ -14,6 +14,17 @@ function typeFindings(jsonText) {
     return lintDatasetDef("datasets/things.json", jsonText).filter(f => f.rule === "datasetFieldType");
 }
 
+test("dataset structural rules are directly covered", () => {
+    const cases = [
+        ["datasetJsonParse", "{"],
+        ["datasetNoFields", JSON.stringify({ name: "things", fields: { DatasetField: [] } })],
+        ["datasetNoPrimaryKey", ds([{ fieldName: "name", fieldType: "String" }])],
+    ];
+    for (const [rule, src] of cases) {
+        assert.ok(lintDatasetDef("datasets/things.json", src).some(f => f.rule === rule), rule + " should be emitted");
+    }
+});
+
 test("valid authoritative types do not warn", () => {
     for (const t of ["Number", "Big Number", "Decimal", "Text", "Medium text", "Boolean",
                      "Date", "DateOnly", "Encrypted", "Small integer", "Unsigned integer"]) {

@@ -1,5 +1,8 @@
 # Design Research Brief
 
+Contents: authority order · source findings · practical application
+Use the headings below to jump directly to the relevant evidence.
+
 This is the evidence layer behind Palsync's design rules. It is deliberately short and routed:
 use `design-principles.md` for build-time numbers and the checklist below for research tie-breakers.
 Do not copy a source's visual skin or install its framework.

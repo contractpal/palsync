@@ -18,7 +18,9 @@ test("envelope serialization is byte-identical and keeps the trailer last", () =
     const parsed = parseEnvelope(first.message);
     assert.deepStrictEqual(parsed.envelope, first.envelope);
     assert.equal(parsed.envelope.detailsRef, first.detailsRef);
-    assert.equal(fs.existsSync(path.join(ws, first.detailsRef)), true);
+    const artifact = path.join(ws, first.detailsRef);
+    assert.equal(fs.existsSync(artifact), true);
+    assert.equal(first.rawBytes, fs.statSync(artifact).size, "usage bytes share the artifact's canonical serialization");
     fs.rmSync(ws, { recursive: true, force: true });
 });
 

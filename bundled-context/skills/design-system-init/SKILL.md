@@ -1,6 +1,6 @@
 ---
 name: design-system-init
-description: "Establish or extract a world-class Palbuilder design system before UI work: asks for intent, palette, and reference photos when available; falls back to a strong default palette; writes DESIGN_SYSTEM.md + COMPONENTS.md + a Palbuilder-ready stack mapping enforced by design-build. Triggers: set up a design system, redesign, visual direction, color palette, reference screenshots, component library, make it look professional, or any non-trivial new pal UI."
+description: "Establishes or extracts a Palbuilder system and writes DESIGN_SYSTEM.md + COMPONENTS.md before UI work. Triggers: set up a design system, redesign, visual direction, color palette, reference screenshots, component library, make it look professional, or any non-trivial new pal UI. Does not build screens; design-build does."
 ---
 
 # Design System Init
@@ -122,39 +122,11 @@ Stop once you can state the design intent in 2-3 sentences and the user agrees. 
 palette and components from the existing pal.
 
 ## Presets
-
-The reference catalog contains a full token set plus six `:root[data-preset="..."]` examples.
-Select the closest palette and copy only its required base tokens into `styles.css`; do not copy all
-presets just to use one.
-
-When no user-provided design system or reference photos exist, pick exactly one shipped preset
-(`ink`, `indigo`, `emerald`, `amber`, `rose`, or `slate-dark`) and copy its
-`:root[data-preset=...]` token block verbatim from `design-system.css`. Do not invent palettes or
-hand-write token values. Record the chosen preset in `DESIGN_SYSTEM.md`. Reference-derived systems
-retain precedence over this fallback.
-
-- **ink** (default, no attribute needed) — near-black primary on cool white/light-gray surfaces.
-  Neutral, crisp, high-contrast; the primary action reads ink, accent color appears only for
-  highlights, charts, and product-specific moments. Fits almost any product.
-- **indigo** — deep indigo-violet primary. Confident, techy, SaaS.
-- **emerald** — deep green primary. Growth, trust, finance/health.
-- **amber** — warm amber-orange primary. Energetic, warm, retail/hospitality.
-- **rose** — bold rose-red primary. Bold, creative, consumer-facing.
-- **slate-dark** — dark navy surfaces with a periwinkle accent. Dark-first, technical/ops
-  dashboards.
-
-Set `data-preset="indigo|emerald|amber|rose|slate-dark"` on `<html>` in the page shell; omit the
-attribute entirely for `ink`. A brand color that doesn't match any preset is a small set of
-`--ds-*` values in `styles.css`, not a copy of every preset. Check `--ds-primary-text` for AA
-contrast whenever a primary color changes. The presets are convenient starting points, not a
-constraint that overrides the reference.
-
-Dark mode is opt-in: if required, copy the relevant `[data-theme="dark"]` rules and token
-dependencies into `styles.css`, and include the theme-toggle portion of `pb-ui.js` only when the UI
-offers a toggle. Do not ship unused dark-theme rules.
+**ink** — neutral/high-contrast default; **indigo** — confident SaaS; **emerald** — growth/trust;
+**amber** — warm/energetic; **rose** — bold/consumer; **slate-dark** — technical dark-first.
+Read `references/presets.md` and apply the chosen preset's full token table.
 
 ## Process
-
 Run these steps in order.
 
 ### 1. Persist references
@@ -177,74 +149,30 @@ visual observation step to a vision-capable model.
 
 ### 2. Synthesize foundations
 
-Curate the system. Do not transcribe every color from a screenshot — but when references exist they
-are the primary authority (see Reference precedence): distil their mood, composition, and density
-into coherent tokens rather than overruling them with a default.
+Curate the system. Do not transcribe every color from a screenshot; references remain the primary authority (see Reference precedence). Distil their mood, composition, and density into coherent tokens.
 
 Define:
-- Color roles: background, subtle background, surface, raised surface, text, muted text, soft text,
-  border, strong border, primary, primary hover, primary soft, primary text, accent, success,
-  warning, danger, info.
-- Type: UI family, optional display family, scale, weight range, numeric rules. Fonts must be
-  system fonts or Fontshare fonts. Palbuilder rejects remote page-head font resources; Fontshare
-  loads only through an `@import` kept as line 1 of the pal's `styles.css`. Copy that import from
-  the reference only when the chosen Fontshare family is used. Do not default to Google Fonts.
-  **Console system font rule:** if the pal is a console pal and no font is specified by the user, spec, or
-  references, use `--ds-font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-  sans-serif;` and do not add a Fontshare `@import`. Marketing/web pals keep the Satoshi/Fontshare
-  default. Record every explicit web-font decision and its source in `DESIGN_SYSTEM.md`.
-- Iconography: always grab the SVG version; never use icon fonts or JS icon replacers. Use one family
-  per pal from Iconoir (default), Heroicons, or Phosphor; see component-library.md Icons.
-- Runtime files: create one authored `styles/styles.css`, register it in `pal.json`, and link it
-  once. Use `references/design-system.css` only to select the smallest dependency-complete set of
-  tokens, base rules, and component recipes used by the pal. Never create/register/link a runtime
-  `design-system.css`. Add `references/spacing.css` only if its utility classes are actually used;
-  link order is `spacing.css` (if used) → `styles.css`. Add `pb-ui.js` and `pb-motion.js`
-  individually only when selected markup uses their documented behaviors; load each selected script
-  once as `<script type="module" src="...">`. `spacing.css` is the Bootstrap replacement for
-  spacing/layout utilities (container widths, `.row`/`.col-*`, flex/display helpers, gaps, margin,
-  padding, width/height, visibility) — do not use Bootstrap for spacing.
-- Optional charts: for showcase or chart-heavy pals only, add the platform resource
-  `<c:resource source="chartjs" version="4.0.0" name="chart.js" />` and load
-  `scripts/pb-charts.js` from `references/pb-charts.js`. This is opt-in and not part of the core
-  four-file byte-identity set.
+- Color roles: background, subtle background, surface, raised surface, text, muted text, soft text, border, strong border, primary, primary hover, primary soft, primary text, accent, success, warning, danger, info.
+- Type: UI family, optional display family, scale, weight range, numeric rules. Fonts are system or Fontshare; no remote page-head font or Google Fonts default. A used Fontshare import is line 1 of `styles.css`. **Console system font rule:** absent a user/spec/reference choice, use `--ds-font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;` with no Fontshare `@import`; record explicit web-font choices in `DESIGN_SYSTEM.md`.
+- Iconography: always grab the SVG version; use one family from Iconoir (default), Heroicons, or Phosphor; never use icon fonts or JS replacers. See component-library.md Icons.
+- Runtime files: create/register/link one authored `styles/styles.css`. `references/design-system.css` is reference-only: select only the smallest dependency-complete rules used by the pal; never create/register/link it as runtime CSS. Add `references/spacing.css` only with consumers, before `styles.css`; add `pb-ui.js` and `pb-motion.js` individually only with consumers, once as modules. `spacing.css` replaces Bootstrap for spacing/layout utilities.
+- Optional charts: for showcase/chart-heavy pals only, add `<c:resource source="chartjs" version="4.0.0" name="chart.js" />` and `scripts/pb-charts.js` from `references/pb-charts.js`; it is outside the core four-file byte-identity set.
 - Radius, border, shadow, elevation: select only the `--ds-radius-*` / `--ds-shadow-*` tokens used
   by copied component rules, then define them once in `styles.css`.
-- Motion: `scripts/pb-motion.js` is the only motion layer — `data-animate="fade-up|fade-in|
-  fade-left|fade-right|zoom-in|blur-in|scale-in|slide-up-lg|flip-up"` (+ `data-animate-delay`/`-duration`/`-stagger`),
-  `data-ticker`, `data-typewriter`, `data-tilt`, `data-spotlight`, `data-scroll-progress`. It is
-  data-attribute driven; include the script only when those attributes are present. See
-  `references/marketing-library.md` for marketing motion recipes and
-  `references/component-library.md`'s load-order note for app pals.
+- Motion: `scripts/pb-motion.js` is the only motion layer: `data-animate="fade-up|fade-in|fade-left|fade-right|zoom-in|blur-in|scale-in|slide-up-lg|flip-up"` (+ delay/duration/stagger), `data-ticker`, `data-typewriter`, `data-tilt`, `data-spotlight`, `data-scroll-progress`. Include it only with those attributes; see the marketing recipes and component-library load-order note.
 - Density: map the interview answer to tokens and write the numbers into DESIGN_SYSTEM.md — compact: section gap --ds-space-5 (20px), card padding --ds-space-4; balanced (default): section gap --ds-space-6 (24px), card padding --ds-space-5; spacious: section gap --ds-space-8 (32px), card padding --ds-space-6. Define only the selected spacing tokens in `styles.css`.
 - UX flow: primary path, hierarchy order, progressive disclosure, Fitts target rules, Gestalt
   grouping, and how complexity is staged.
 
 ### 3. Build the component inventory
 
-Use `references/component-library.md` as the canonical Palbuilder-ready library for app/console
-components, and `references/marketing-library.md` for marketing sections (hero, bento, pricing,
-testimonials, logo cloud, CTA band, stats/ticker, mockups, text effects) — load marketing-library
-only when the pal actually has marketing pages. Copy the dependency-complete CSS recipes for the
-components actually selected into readable `styles/styles.css`. Copy catalogued component recipes
-verbatim, with values unchanged. Custom CSS is only for page-level layout glue; justify any modified
-recipe in `DESIGN_SYSTEM.md`. In
-`COMPONENTS.md`, name only the components this pal
-needs now plus likely shared primitives, but do not copy CSS for a likely component until markup
-uses it. Every component must list variants, states, tokens, and
-the Palbuilder implementation pattern.
+Use `references/component-library.md` for app/console components and `references/marketing-library.md` for marketing sections; load the latter only for marketing pages. Copy selected dependency-complete recipes verbatim into readable `styles/styles.css`. Custom CSS is page-layout glue; justify recipe changes in `DESIGN_SYSTEM.md`. `COMPONENTS.md` names current components and likely shared primitives, but CSS ships only with a markup consumer. Record variants, states, tokens, and Palbuilder patterns.
 
 Required baseline for most pals:
-- Primitives: Button, IconButton, ButtonGroup, Field, Textarea, InputGroup, Select, Checkbox,
-  Toggle, Radio/ChoiceCard, SegmentedControl, Slider, Badge, Alert, Card, Divider, Skeleton,
-  Progress, Avatar/Initial, Tooltip/help text, Kbd, Spinner.
-- Data: Table, responsive record list, stat/KPI card, filter bar, pagination, empty state, error
-  state, data grid affordances, row actions, bulk action bar, charts, metrics panel.
-- Shells: page shell, topbar/sidebar/nav, toolbar, modal body, drawer/sheet, popover, command
-  palette, responsive mobile nav.
-- Domain composites: workflow stepper, activity feed, file upload, attachment list, data-detail row,
-  approval actions, CRUD form, review summary, comment thread, kanban/status board, calendar/list
-  schedule, settings page, onboarding checklist.
+- Primitives: Button, IconButton, ButtonGroup, Field, Textarea, InputGroup, Select, Checkbox, Toggle, Radio/ChoiceCard, SegmentedControl, Slider, Badge, Alert, Card, Divider, Skeleton, Progress, Avatar/Initial, Tooltip/help text, Kbd, Spinner.
+- Data: Table, responsive record list, stat/KPI card, filter bar, pagination, empty/error state, data-grid affordances, row/bulk actions, charts, metrics panel.
+- Shells: page shell, topbar/sidebar/nav, toolbar, modal body, drawer/sheet, popover, command palette, responsive mobile nav.
+- Domain composites: workflow stepper, activity feed, file upload/attachments, data-detail row, approval actions, CRUD form, review summary, comment thread, kanban/status board, calendar/list schedule, settings page, onboarding checklist.
 
 The inventory maps to Palbuilder fragments/classes, not React components. A primitive may be a CSS
 class plus a markup recipe. A composite may be a fragment under `fragments/common/` or a feature
@@ -252,109 +180,15 @@ fragment under `fragments/<area>/`.
 
 ### 4. Anti-slop check
 
-Before writing final tokens, call out collisions:
-- Purple/blue gradient hero with abstract blobs.
-- Cream/sage editorial palette when the product is not editorial.
-- Uniform pill-everything radius.
-- Three equal feature cards as the only layout idea.
-- Too many words, helper paragraphs, and redundant headings.
-- Saturated rainbow charts or status fills.
-- Generic Inter/Roboto + gray cards + blue primary with no reference rationale.
-- Flat teal-and-gray admin output with oversized headings, plain cards, no icons, no command/menu
-  affordances, and no motion layer.
-- Mobile as an afterthought.
-
-If the user explicitly wants one of these, keep the request but make it intentional and constrained.
-
-Extract mode: do not erase live slop. Document it in Do / Don't as observed reality and a future
-improvement candidate.
+Check anti-slop fingerprints: gradient-blob hero, uniform pill-everything radius, and generic
+Inter/Roboto + gray cards + blue primary. Read `../shared/references/anti-slop.md` for the full list.
+If requested, keep the choice intentional; in extract mode, document existing fingerprints.
 
 ### 5. Write DESIGN_SYSTEM.md
-
-Use this exact structure:
-
-```markdown
-# Design System - [project]
-
-## Intent
-[2-3 sentences: user, feeling, one job, and why the choices fit.]
-
-## References
-[Each reference: file/link, what we take, what we avoid.]
-
-## Research Translation
-[Brief note on which external systems informed this pal: e.g. shadcn-style owned code,
-Radix/Headless-style accessible states, Polaris-style dense tables, Carbon-style data viz.]
-
-## Foundations
-### Color
-[Semantic role -> value. Include default fallback or brand derivation notes.]
-### Type
-[Families, loading method, scale, weights, numeric rules.]
-Font decision: system (console default) | <font> (source: user/spec/reference)
-### Spacing
-[State whether `styles/spacing.css` is used and, if so, that it is linked before `styles.css` and
-owns the spacing/layout utility scale. State that `styles.css` contains the selected reference
-recipes and is the only design-system runtime stylesheet. Note any project values for `--space-unit`,
-`--container-*`, or `--gutter-*`.]
-### Radius / Border / Shadow / Motion
-[List the selected radius/border/shadow tokens in `styles.css`, plus which `pb-motion.js`
-data-attributes are used and where (omit the script when none are used).]
-
-## Density & Layout
-[Page rhythm, grid/shell posture, table/list density, mobile behavior.]
-
-## UX Flow & Hierarchy
-[Primary user path, first decision, primary action placement, feedback/next step, grouping,
-progressive disclosure, target sizing, and intentional hierarchy mechanisms.]
-
-## Accessibility
-[Contrast target, focus-visible style, keyboard expectations, reduced motion, error announcement.]
-
-## Do / Don't
-[Concrete, testable rules. Include anti-slop collisions.]
-
-## Stack Mapping
-[Palbuilder XHTML/CSS mapping: selected rules from the reference-only `design-system.css` live in
-registered `styles/styles.css`; optional `styles/spacing.css` loads before it only when used; and
-`scripts/pb-ui.js` / `scripts/pb-motion.js` load once only when selected behavior needs them. Include
-the chosen palette/preset source (or "ink,
-no attribute"), fragment naming, c: tag patterns, which recipes from
-references/component-library.md (and references/marketing-library.md if the pal has marketing
-pages) to use, SVG icon family, and Fontshare/system font choice.]
-```
+Copy the `DESIGN_SYSTEM.md` template from `references/output-templates.md` verbatim, then fill it.
 
 ### 6. Write COMPONENTS.md
-
-Use this exact structure:
-
-```markdown
-# Component Inventory - [project]
-
-## Token Contract
-[Names of runtime CSS files and selected token/class prefixes, e.g. `Styles/styles.css`, `--ds-*`,
-`.pb-*`; explicitly state that `design-system.css` is reference-only and not loaded.]
-
-## Primitives
-[For each: purpose, variants, states, tokens, Palbuilder markup recipe.]
-
-## Composites
-[For each: composed primitives, responsibility, fragment path if shared.]
-
-## Layout Shells
-[App shell, page header, nav, toolbars, modal shell, responsive behavior.]
-
-## Data & Workflow States
-[Loading, empty, error, success, validation, permissions, async/progress.]
-
-## Naming & Ownership
-[CSS class prefix, fragment placement, when to create shared vs feature-specific fragments.]
-
-## Recipe References
-[List relevant sections from `.agents/skills/design-system-init/references/component-library.md`
-or `.claude/skills/design-system-init/references/component-library.md`, plus
-`references/marketing-library.md` sections if the pal has marketing pages.]
-```
+Copy the `COMPONENTS.md` template from `references/output-templates.md` verbatim, then fill it.
 
 ### 7. Confirm
 
@@ -393,10 +227,7 @@ reality. A correction means re-check references or source files before editing t
 - Use system fonts or Fontshare fonts. Do not introduce a Google Fonts dependency by default.
 - Load Fontshare only through an `@import` at the top of `styles.css`; never add remote page-head
   font resources or copy unused font imports.
-- **Console system font rule:** if no font is specified by the user, spec, or references, use only
-  `system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif` and no `@import`.
-  Marketing/web pals keep the Satoshi/Fontshare default; record an explicit font and its source in
-  `DESIGN_SYSTEM.md`.
+- Font policy: see "Synthesize foundations" above — console pals = system stack, no Fontshare.
 - When motion is used, it is `scripts/pb-motion.js` data attributes only (`data-animate`, `data-ticker`,
   `data-typewriter`, `data-tilt`, `data-spotlight`, `data-scroll-progress`) — no other animation
   library. It delegates from `document` and rescans AJAX-swapped fragments itself; never add a
@@ -411,24 +242,19 @@ reality. A correction means re-check references or source files before editing t
       preset used only when they did not care or could not provide them.
 - [ ] Palette workflow used or explicitly skipped: generate options, narrow, refine harmony, check
       WCAG AA, preview on real UI, map onto a shipped preset (or override a few tokens on top).
-- [ ] Typography is system-stack or Fontshare; icons are inline SVG from one approved family.
 - [ ] `design/refs/` contains durable reference assets and notes.
 - [ ] `DESIGN_SYSTEM.md` exists with semantic tokens, density/layout, accessibility, Do / Don't,
       and Palbuilder stack mapping.
-- [ ] `styles/styles.css` is present, registered, human-readable, and contains only the tokens,
-      bases, and component recipes used by pal markup; `design-system.css` is absent from the pal,
-      `pal.json`, and page links.
-- [ ] Optional `spacing.css`, `pb-ui.js`, and `pb-motion.js` are present only when used; each selected
-      file is registered and loaded exactly once (`type="module"` for scripts).
+- [ ] `design-system.css` is reference-only and must never be copied, registered, linked, loaded, or shipped; only needed rules go to `styles/styles.css`.
 - [ ] Chosen `data-preset` is set on `<html>` (omitted entirely for `ink`).
 - [ ] No unused design-system component families, presets, dark-theme blocks, or behavior scripts
       were copied "just in case"; every included block has a markup/behavior consumer.
 - [ ] `COMPONENTS.md` exists with primitives, composites, layout shells, states, and recipe links,
       including `references/marketing-library.md` sections when the pal has marketing pages.
-- [ ] Direction was checked against anti-slop fingerprints.
 - [ ] Direction was checked against `references/design-principles.md`: user journey, hierarchy,
       grouping, Fitts target sizing, typography, color meaning, consistency, and simplicity.
 - [ ] Component choices point to Palbuilder-valid recipes in `references/component-library.md`
       (app/console) or `references/marketing-library.md` (marketing sections) — no invented CSS.
 - [ ] Extract mode only: every token cites a real source; inconsistencies are documented, not
       silently normalized.
+- [ ] Then run every item in `../shared/references/ui-acceptance.md`.

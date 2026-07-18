@@ -50,12 +50,52 @@ function envelopeOptions(args) {
     };
 }
 
-function envelopeFields(workspaceDir, tool, source, args) {
-    const serialized = serializeEnvelope(workspaceDir, tool, source, envelopeOptions(args));
+function envelopeFields(workspaceDir, tool, source, args, projection = source) {
+    const options = Object.assign(envelopeOptions(args), { envelopeSource: projection });
+    const serialized = serializeEnvelope(workspaceDir, tool, source, options);
     return {
         message: serialized.message,
         envelope: serialized.envelope,
-        _usage: { rawBytes: Buffer.byteLength(JSON.stringify(source, null, 2) + "\n") }
+        _usage: { rawBytes: serialized.rawBytes }
+    };
+}
+
+function testEnvelopeProjection(source) {
+    return {
+        ok: source.ok,
+        filesChecked: source.filesChecked,
+        findings: source.findings,
+        debug: source.debug
+    };
+}
+
+function testActionFields(source) {
+    return {
+        ran: !!source.ran,
+        validated: !!source.validated,
+        kind: source.kind || null,
+        compileOnly: true
+    };
+}
+
+function seoEnvelopeProjection(source) {
+    return {
+        ok: source.ok,
+        filesChecked: source.filesChecked,
+        findings: source.findings,
+        passing: source.passing,
+        debug: source.debug
+    };
+}
+
+function pushEnvelopeProjection(source) {
+    return {
+        ok: source.ok,
+        filesChecked: source.filesChecked,
+        cacheHits: source.cacheHits,
+        cacheMisses: source.cacheMisses,
+        findings: source.findings,
+        debug: source.debug
     };
 }
 
@@ -185,8 +225,7 @@ function renderNotVerifiedReminder(ctx) {
     // Full paragraph once per session; every repeat rides the context window for the rest of
     // the conversation, so later occurrences use the short form (same rule, fewer bytes).
     if (ctx.renderReminderShown) {
-        return "\n\n⚠ RENDER NOT VERIFIED — pal_screenshot (or pal_fetch/pal_preview expect:[strings]" +
-            " for WEB) before declaring done; never report unobserved page content or flows as fact.";
+        return "\n\n⚠ RENDER NOT VERIFIED — run pal_screenshot, or WEB pal_fetch/pal_preview with expect:[strings], before declaring done.";
     }
     ctx.renderReminderShown = true;
     return "\n\n⚠ RENDER NOT VERIFIED — this only proves the code compiles, not that it renders." +
@@ -221,6 +260,48 @@ function formatDesignAudit(audit) {
     if (typeof metrics.visibleH1s === "number") parts.push("H1s=" + metrics.visibleH1s);
     if (typeof metrics.visibleControls === "number") parts.push("controls=" + metrics.visibleControls);
     return parts.join("; ");
+}
+
+// The full browser audit and capture metadata live in work history. Keep the inline result to
+// the evidence an agent acts on; successful captures previously echoed browser internals beside
+// the image and made screenshot results dominate an otherwise compact tool session.
+function screenshotEnvelopeProjection(res, fields = {}) {
+    const style = res.styleStatus || null;
+    const audit = res.designAudit || null;
+    const metrics = audit && audit.metrics ? audit.metrics : {};
+    const compactMetrics = {};
+    for (const key of ["horizontalOverflow", "largestVerticalGap", "scrollHeight", "scrollWidth", "viewport", "visibleControls", "visibleH1s", "visibleTargets"]) {
+        if (metrics[key] !== undefined) compactMetrics[key] = metrics[key];
+    }
+    return Object.assign({
+        captured: res.captured === true,
+        available: res.available !== false,
+        kind: res.kind || null,
+        url: res.url || null,
+        viewportName: res.viewportName || null,
+        viewport: res.viewport || null,
+        renderError: res.renderError || null,
+        styleStatus: style ? {
+            inspected: !!style.inspected,
+            linked: style.linked,
+            loaded: style.loaded,
+            likelyLoaded: style.likelyLoaded,
+            inlineStyleTags: style.inlineStyleTags || 0,
+            missingStylesheets: style.missingStylesheets || [],
+            failedRequests: style.failedRequests || [],
+            error: style.error || null
+        } : null,
+        designAudit: audit ? {
+            inspected: !!audit.inspected,
+            pass: audit.pass,
+            errors: audit.errors,
+            warnings: audit.warnings,
+            metrics: compactMetrics,
+            findings: (audit.findings || []).filter(f => f.severity === "error" || f.severity === "warn"),
+            error: audit.error || null
+        } : null,
+        smallDims: res.smallDims || null
+    }, fields);
 }
 
 // A page-level visual gate is only complete after every route the agent has started reviewing has
@@ -334,9 +415,141 @@ function htmlRegionResult(res, { headline, filePrefix, guid, selector, maxChars,
     });
 }
 
+function failureLineSummary(text, contextLines = 2) {
+    const lines = String(text || "").split(/\r?\n/);
+    const keep = new Set();
+    for (let i = 0; i < lines.length; i++) {
+        if (!/(?:error|exception|fail)/i.test(lines[i])) continue;
+        for (let j = Math.max(0, i - contextLines); j <= Math.min(lines.length - 1, i + contextLines); j++) keep.add(j);
+    }
+    if (!keep.size) return "No error/exception/fail lines found in the rendered body.";
+    const out = [];
+    let previous = -2;
+    for (const index of Array.from(keep).sort((a, b) => a - b)) {
+        if (index > previous + 1) out.push("… omitted " + (index - previous - 1) + " non-matching line(s) …");
+        out.push((index + 1) + ": " + summaryLineExcerpt(lines[index], /(?:error|exception|fail)/i));
+        previous = index;
+    }
+    if (previous < lines.length - 1) out.push("… omitted " + (lines.length - previous - 1) + " non-matching line(s) …");
+    return out.join("\n");
+}
+
+function summaryLineExcerpt(line, needle, maxChars = 500) {
+    const text = String(line || "").trim();
+    if (text.length <= maxChars) return text;
+    const match = needle instanceof RegExp ? needle.exec(text) : null;
+    const literalAt = typeof needle === "string" ? text.indexOf(needle) : -1;
+    const center = match ? match.index + Math.floor(match[0].length / 2)
+        : literalAt >= 0 ? literalAt + Math.floor(needle.length / 2) : 0;
+    const start = Math.max(0, Math.min(text.length - maxChars, center - Math.floor(maxChars / 2)));
+    return (start ? "…" : "") + text.slice(start, start + maxChars) +
+        (start + maxChars < text.length ? "…" : "");
+}
+
+function addExpectContext(html, results, contextLines = 2) {
+    const lines = String(html || "").split(/\r?\n/);
+    return results.map(result => {
+        if (!result.found) return Object.assign({}, result, { context: [] });
+        const index = lines.findIndex(line => line.includes(result.string));
+        const context = index < 0 ? [] : lines
+            .slice(Math.max(0, index - contextLines), index + contextLines + 1)
+            .map((line, offset) => ({
+                line: Math.max(0, index - contextLines) + offset + 1,
+                text: summaryLineExcerpt(line, line.includes(result.string) ? result.string : null, 300)
+            }));
+        return Object.assign({}, result, { context });
+    });
+}
+
+function expectBodyBlock(html, detail) {
+    if (detail !== "full") return "\n\nFailure lines:\n" + failureLineSummary(html);
+    const shown = String(html || "").slice(0, PREVIEW_INLINE_CAP);
+    return "\n\n--- rendered HTML" + (String(html || "").length > shown.length
+        ? " (first " + PREVIEW_INLINE_CAP + " of " + String(html || "").length + " chars)" : "") + " ---\n" + shown;
+}
+
+function debugHasDiagnosticLines(text) {
+    return /(?:error|exception|fail|warn)/i.test(String(text || ""));
+}
+
+function saveSummaryBody(workspaceDir, tool, feature, res) {
+    let run = null;
+    let filePath = null;
+    try {
+        run = createWorkHistoryRun(workspaceDir, { tool, feature });
+        filePath = writeArtifactFile(run, "body.html", res.html, "utf8");
+        writeRunMetadata(run, {
+            status: res.status,
+            title: res.title,
+            bytes: res.bytes,
+            artifact: filePath ? pathMod.basename(filePath) : null
+        });
+        writeRunNotes(run, [
+            "# " + tool + " summary",
+            "",
+            "- Status: " + res.status,
+            "- Title: " + JSON.stringify(res.title),
+            "- Artifact: `" + (filePath ? pathMod.basename(filePath) : "not written") + "`"
+        ]);
+    } catch (e) { /* best-effort */ }
+    return { run, filePath };
+}
+
 // How much c.debug text to inline before truncating to the TAIL (the most recent lines matter
 // most when diagnosing the run that just happened).
 const DEBUG_INLINE_CAP = 8000;
+
+function debugFailed(out) {
+    return !!(out && (out.pass === false || out.validated === false || out.previewed === false ||
+        out.fetched === false || out.ran === false || out.emptyBody === true || out.renderError ||
+        Number(out.errors) > 0 || Number(out.designAudit && out.designAudit.errors) > 0 ||
+        Number(out.status) >= 400));
+}
+
+function saveServerDebug(workspaceDir, text) {
+    try {
+        const run = createWorkHistoryRun(workspaceDir, { tool: "pal_debug", feature: "auto-attached" });
+        const filePath = writeArtifactFile(run, "server-debug.txt", text, "utf8");
+        if (filePath) writeRunNotes(run, ["# Auto-attached server debug", "", "- Artifact: `server-debug.txt`"]);
+        return filePath;
+    } catch (e) {
+        return null;
+    }
+}
+
+function cappedFailureDebug(text) {
+    if (text.length <= DEBUG_INLINE_CAP) return { text, note: "" };
+    const lines = text.split(/\r?\n/);
+    const required = new Set();
+    for (let i = 0; i < lines.length; i++) {
+        if (/(?:error|exception|fail|warn)/i.test(lines[i])) required.add(i);
+    }
+    let budget = Math.max(0, DEBUG_INLINE_CAP - Array.from(required).reduce((n, i) => n + lines[i].length + 1, 0));
+    for (let i = lines.length - 1; i >= 0 && budget > 0; i--) {
+        if (required.has(i)) continue;
+        required.add(i);
+        budget -= lines[i].length + 1;
+    }
+    const kept = Array.from(required).sort((a, b) => a - b);
+    const shown = [];
+    let previous = -1;
+    let omitted = 0;
+    for (const index of kept) {
+        if (index > previous + 1) {
+            const count = index - previous - 1;
+            omitted += count;
+            shown.push("… omitted " + count + " line(s), none matching error/warn/fail …");
+        }
+        shown.push(lines[index]);
+        previous = index;
+    }
+    if (previous < lines.length - 1) {
+        const count = lines.length - previous - 1;
+        omitted += count;
+        shown.push("… omitted " + count + " line(s), none matching error/warn/fail …");
+    }
+    return { text: shown.join("\n"), note: "; omitted " + omitted + " non-diagnostic line(s)" };
+}
 
 // Auto-attach the server-side c.debug buffer to a tool result whose call actually EXECUTED a
 // workflow (tunnel call, server-rendered fetch/preview, screenshot) — the agent gets its debugs
@@ -349,11 +562,25 @@ async function withServerDebug(ctx, out) {
         const dbg = await retrieveServerDebug(ctx.session, ctx.record.palGuid, { palId: ctx.debugPalId });
         if (dbg.palId) ctx.debugPalId = dbg.palId;
         if (!dbg.retrieved || dbg.empty) return out;
-        out.serverDebug = dbg.text;
-        const truncated = dbg.text.length > DEBUG_INLINE_CAP;
-        const shown = truncated ? dbg.text.slice(-DEBUG_INLINE_CAP) : dbg.text;
+        const diagnosticLines = debugHasDiagnosticLines(dbg.text);
+        const failure = debugFailed(out) || diagnosticLines;
+        let shown;
+        let note = "";
+        if (failure) {
+            const capped = cappedFailureDebug(dbg.text);
+            shown = capped.text;
+            note = capped.note;
+        } else {
+            const lines = dbg.text.split(/\r?\n/);
+            shown = lines.slice(-10).join("\n");
+            note = lines.length > 10 ? "; last 10 of " + lines.length + " lines" : "";
+        }
+        const fullDebugFile = shown === dbg.text ? null : saveServerDebug(ctx.workspaceDir, dbg.text);
+        out.serverDebug = shown;
+        if (fullDebugFile) out.serverDebugFile = fullDebugFile;
         out.message = (out.message || "") +
-            "\n\n--- server debug (c.debug output" + (truncated ? "; LAST " + DEBUG_INLINE_CAP + " of " + dbg.text.length + " chars" : "") + ") ---\n" + shown;
+            "\n\n--- server debug (c.debug output" + note + ") ---\n" + shown +
+            (fullDebugFile ? "\nFull debug saved to: " + fullDebugFile : "");
     } catch (e) { /* the primary result matters more than the debug garnish */ }
     return out;
 }
@@ -422,7 +649,7 @@ const TOOLS = [
     },
     {
         name: "pal_validate",
-        description: "Check the pal's WHOLE workspace OFFLINE (no server/network) for the mistakes that silently break in PalBuilder: invalid workflow JS for the restricted engine, invalid c:/XHTML markup, and workspace contract violations. Returns each finding's file, line, ERROR/WARNING label, and the fix. Run once before finishing a task; pal_push only gates changed files plus narrow workspace contracts.",
+        description: "Offline-check the whole workspace for restricted workflow JS, c:/XHTML markup, and cross-file contract violations. Returns each finding's location, severity, and fix. Run before finishing. pal_push gates changed files and narrow workspace contracts only.",
         // Fully offline + read-only: validateWorkspace lints local files (fs/acorn only — no
         // CloudPiston call, no lock). Opt out of the ctx/login/lock lifecycle. The lifecycle guard
         // below already no-ops when ctx has no lifecycle, so the bare { workspaceDir } ctx is safe.
@@ -454,7 +681,7 @@ const TOOLS = [
     },
     {
         name: "pal_test",
-        description: "Validate a workflow ON THE SERVER and return the server's validation notes. Does NOT open a browser by default; pass preview:true only when the user has stopped for human review and wants a live browser preview. The preview URL carries the user's credentials, is NEVER returned to you, and you CANNOT see the rendered page — use pal_screenshot/pal_exercise for agent-visible verification.",
+        description: "Compile a workflow on the server and return validation notes. This does not render the pal; use pal_screenshot or pal_exercise for agent-visible verification. preview:true opens a credential-bearing URL only for human review; the URL is never returned.",
         inputShape: Object.assign({
             workflow: z.enum(["console", "web", "transaction"]).optional(),
             workflowName: z.string().optional(),
@@ -500,18 +727,20 @@ const TOOLS = [
                 findings: testEnvelopeFindings(safe, previewMsg, verdict),
                 debug: safe.serverDebug || null
             });
-            return Object.assign(safe, envelopeFields(ctx.workspaceDir, "pal_test", source, args));
+            const projection = testEnvelopeProjection(source);
+            return Object.assign(testActionFields(safe),
+                envelopeFields(ctx.workspaceDir, "pal_test", source, args, projection));
         }
     },
     {
         name: "pal_tunnel_test",
-        description: "Test a TUNNEL workflow (workflowType 15) by ACTUALLY CALLING it as a web service and returning its JSON response — the one tool where you get real DATA back from the server, not just a validation verdict. REQUIRES askedUser:true, which attests the action/workflow/payload values came from the USER (their message specified them, or they answered your questions) — a call without it returns the questions to relay to the user instead of running. NEVER invent an action or payload. Credentials are minted and refreshed automatically (~5 min expiry). Acts on the LAST PUSHED version — pal_push first. An empty response means the workflow THREW at runtime.",
+        description: "Call the last-pushed tunnel workflow and return its JSON response. askedUser:true is required and attests that action, workflow, and payload came from the user; never invent them. Credentials stay internal. An empty response indicates a likely runtime exception. Push first.",
         inputShape: {
-            action: z.string().optional().describe("Action string the workflow dispatches on via request.getAction(). Optional — omitted means the workflow sees null."),
-            payload: z.record(z.string(), z.any()).optional().describe("JSON payload object — TOP-LEVEL keys are readable in the workflow via request.getPayload().get(key); nested objects do not survive the wire. Default: {}."),
-            payloadFile: z.string().optional().describe("Path to a .json file to send as the payload (workspace-relative or absolute). Alternative to payload."),
-            workflow: z.string().optional().describe("Tunnel workflow name, with or without .js (default: the pal's registered tunnelServiceWorkflow)."),
-            askedUser: z.boolean().optional().describe("REQUIRED attestation: true means the action/workflow/payload values came from the USER in this conversation — their message specified them, or they answered your questions. NEVER set it alongside values you chose yourself.")
+            action: z.string().optional().describe("Value returned by request.getAction(); omitted means null."),
+            payload: z.record(z.string(), z.any()).optional().describe("Top-level payload values; nested objects do not survive the wire."),
+            payloadFile: z.string().optional().describe("JSON payload path; alternative to payload."),
+            workflow: z.string().optional().describe("Tunnel workflow name; default is the registered tunnel workflow."),
+            askedUser: z.boolean().optional().describe("Required: values came from the user, not the agent.")
         },
         async run(ctx, { action, payload, payloadFile, workflow, askedUser } = {}) {
             const disabled = testingDisabledResult(ctx, "pal_tunnel_test");
@@ -594,7 +823,7 @@ const TOOLS = [
     },
     {
         name: "pal_debug",
-        description: "Retrieve the pal's server-side c.debug(...) output — the PalBuilder IDE debug feed; any workflow engine on a test pal writes to it when it executes. CONSUME-ONCE and SHARED: reading clears the buffer for every viewer, including a developer watching PalBuilder's debug view. pal_tunnel_test / pal_fetch / pal_preview (web) / pal_screenshot attach this automatically — call this directly after an opt-in browser preview or a manual run in the user's browser.",
+        description: "Read and clear server c.debug output. The buffer is consume-once and shared with PalBuilder; reading clears it for everyone. Runtime tools attach debug automatically, so call this after a human preview/manual run or when an attached debug block was absent.",
         inputShape: {},
         async run(ctx) {
             const dbg = await retrieveServerDebug(ctx.session, ctx.record.palGuid, { palId: ctx.debugPalId });
@@ -613,15 +842,16 @@ const TOOLS = [
     },
     {
         name: "pal_preview",
-        description: "See what the pal RENDERS. WEB pal: pass expect:[strings] for a found/missing verdict (token-efficient default), or selector/maxChars for markup; full HTML otherwise. CONSOLE/transaction pal: does NOT open a browser by default; pass open:true only at a human-review stop. Shows the LAST PUSHED version — pal_push first.",
+        description: "Inspect the last-pushed render. WEB: expect returns found/missing verdicts; summary is the default and full returns capped HTML. CONSOLE/transaction: open:true opens a browser only for human review. Push first.",
         inputShape: {
             workflow: z.enum(["console", "web", "transaction"]).optional(),
-            expect: z.array(z.string()).optional().describe("Strings the rendered page must contain — returns a per-string found/missing verdict instead of the HTML (the default, token-efficient check)."),
-            selector: z.string().optional().describe("Simple CSS selector (tag/.class/#id) to return only that region's markup."),
-            maxChars: z.number().optional().describe("Cap the returned markup to this many characters."),
-            open: z.boolean().optional().describe("Console/transaction only: open the preview in the user's browser. Default false for auto mode.")
+            detail: z.enum(["summary", "full"]).optional().describe("summary (default) returns metadata and failure context; full includes capped HTML."),
+            expect: z.array(z.string()).optional().describe("Required strings; returns found/missing verdicts without HTML."),
+            selector: z.string().optional().describe("Simple tag, class, or id region selector."),
+            maxChars: z.number().optional().describe("Maximum returned markup characters."),
+            open: z.boolean().optional().describe("Open console/transaction preview for human review.")
         },
-        async run(ctx, { workflow, expect, selector, maxChars, open = false } = {}) {
+        async run(ctx, { workflow, detail = "summary", expect, selector, maxChars, open = false } = {}) {
             const disabled = testingDisabledResult(ctx, "pal_preview");
             if (disabled) return disabled;
             const res = await runPreview(ctx.session, ctx.record.palGuid, ctx.record, ctx.workspaceDir, { workflow });
@@ -641,9 +871,14 @@ const TOOLS = [
                 // Token-efficient default: verify expected strings, never return the page body.
                 if (expect && expect.length) {
                     const chk = checkExpect(res.html, expect);
+                    const saved = saveSummaryBody(ctx.workspaceDir, "pal_preview", "preview-expect", res);
                     const safe = Object.assign({}, res); delete safe.html;
-                    return withServerDebug(ctx, Object.assign(safe, { pass: chk.pass, results: chk.results,
-                        message: formatExpect("WEB preview (" + res.url + ")", { status: res.status, bytes: res.bytes }, chk) + dirtyNote }));
+                    const results = addExpectContext(res.html, chk.results);
+                    return withServerDebug(ctx, Object.assign(safe, { pass: chk.pass, results, htmlFile: saved.filePath,
+                        message: formatExpect("WEB preview (" + res.url + ")", { status: res.status, bytes: res.bytes }, chk) +
+                            "\n  title=" + JSON.stringify(res.title) + dirtyNote +
+                            (saved.filePath ? "\n  Full body saved to: " + saved.filePath : "") +
+                            expectBodyBlock(res.html, detail) }));
                 }
                 // Narrowed markup: one region and/or a char cap when the agent genuinely needs HTML.
                 if (selector || maxChars) {
@@ -686,8 +921,11 @@ const TOOLS = [
                         "- Artifact: `" + (filePath ? pathMod.basename(filePath) : "not written") + "`"
                     ]);
                 } catch (e) { /* best-effort */ }
-                const truncated = res.html.length > PREVIEW_INLINE_CAP;
-                const shown = truncated ? res.html.slice(0, PREVIEW_INLINE_CAP) : res.html;
+                const full = detail === "full";
+                const truncated = full && res.html.length > PREVIEW_INLINE_CAP;
+                const shown = full
+                    ? (truncated ? res.html.slice(0, PREVIEW_INLINE_CAP) : res.html)
+                    : failureLineSummary(res.html);
                 const safe = Object.assign({}, res); delete safe.html; // don't double-include in structured result
                 return withServerDebug(ctx, Object.assign(safe, {
                     htmlFile: filePath,
@@ -695,7 +933,8 @@ const TOOLS = [
                         "  url=" + res.url + "  content-type=" + res.contentType + "  title=" + JSON.stringify(res.title) + "  size=" + res.bytes + " bytes" + dirtyNote +
                         (run ? "\n  Work-history run: " + run.dir : "") +
                         (filePath ? "\n  Full HTML saved to: " + filePath + " (Read it to inspect the whole page)." : "") +
-                        "\n\n--- rendered HTML" + (truncated ? " (first " + PREVIEW_INLINE_CAP + " of " + res.bytes + " bytes — read the file for the rest)" : "") + " ---\n" + shown
+                        "\n\n--- " + (full ? "rendered HTML" : "summary (failure lines with 2 lines of context)") +
+                        (truncated ? " (first " + PREVIEW_INLINE_CAP + " of " + res.bytes + " bytes — read the file for the rest)" : "") + " ---\n" + shown
                 }));
             }
             // console/transaction — optionally open in the user's browser; the agent cannot see it.
@@ -715,14 +954,15 @@ const TOOLS = [
     },
     {
         name: "pal_fetch",
-        description: "Verify ONE page of a WEB pal renders. DEFAULT: pass expect:[strings] for a per-string found/missing verdict WITHOUT the body — the token-efficient post-push check. A successful push does NOT prove render (files missing from pal.json are silently skipped); this does. selector/maxChars return markup instead. path is site-root-relative, e.g. \"about.html\". Shows the LAST PUSHED version.",
+        description: "Verify one last-pushed WEB page renders. expect returns found/missing verdicts without the body; summary is the default and full returns capped HTML. A successful push does not prove render. path is site-root-relative.",
         inputShape: {
-            path: z.string().describe("Page path relative to the site root, e.g. \"about.html\""),
-            expect: z.array(z.string()).optional().describe("Strings the served page must contain — returns a per-string found/missing verdict instead of the HTML (the default, token-efficient check)."),
-            selector: z.string().optional().describe("Simple CSS selector (tag/.class/#id) to return only that region's markup."),
-            maxChars: z.number().optional().describe("Cap the returned markup to this many characters.")
+            path: z.string().describe("Site-root-relative page path."),
+            detail: z.enum(["summary", "full"]).optional().describe("summary (default) returns metadata and failure context; full includes capped HTML."),
+            expect: z.array(z.string()).optional().describe("Required strings; returns found/missing verdicts without HTML."),
+            selector: z.string().optional().describe("Simple tag, class, or id region selector."),
+            maxChars: z.number().optional().describe("Maximum returned markup characters.")
         },
-        async run(ctx, { path, expect, selector, maxChars } = {}) {
+        async run(ctx, { path, detail = "summary", expect, selector, maxChars } = {}) {
             const disabled = testingDisabledResult(ctx, "pal_fetch");
             if (disabled) return disabled;
             const res = await fetchPagePath(ctx.session, ctx.record.palGuid, path);
@@ -735,9 +975,14 @@ const TOOLS = [
             // Token-efficient default: verify expected strings, never return the page body.
             if (expect && expect.length) {
                 const chk = checkExpect(res.html, expect);
+                const saved = saveSummaryBody(ctx.workspaceDir, "pal_fetch", "fetch-expect-" + path, res);
                 const safe = Object.assign({}, res); delete safe.html;
-                return withServerDebug(ctx, Object.assign(safe, { pass: chk.pass, results: chk.results,
-                    message: formatExpect("Fetched " + path, { status: res.status, bytes: res.bytes }, chk) }));
+                const results = addExpectContext(res.html, chk.results);
+                return withServerDebug(ctx, Object.assign(safe, { pass: chk.pass, results, htmlFile: saved.filePath,
+                    message: formatExpect("Fetched " + path, { status: res.status, bytes: res.bytes }, chk) +
+                        "\n  title=" + JSON.stringify(res.title) +
+                        (saved.filePath ? "\n  Full body saved to: " + saved.filePath : "") +
+                        expectBodyBlock(res.html, detail) }));
             }
             if (selector || maxChars) {
                 return withServerDebug(ctx, htmlRegionResult(res, {
@@ -777,8 +1022,11 @@ const TOOLS = [
                     "- Artifact: `" + (filePath ? pathMod.basename(filePath) : "not written") + "`"
                 ]);
             } catch (e) { /* best-effort */ }
-            const truncated = res.html.length > PREVIEW_INLINE_CAP;
-            const shown = truncated ? res.html.slice(0, PREVIEW_INLINE_CAP) : res.html;
+            const full = detail === "full";
+            const truncated = full && res.html.length > PREVIEW_INLINE_CAP;
+            const shown = full
+                ? (truncated ? res.html.slice(0, PREVIEW_INLINE_CAP) : res.html)
+                : failureLineSummary(res.html);
             const safe = Object.assign({}, res); delete safe.html;
             return withServerDebug(ctx, Object.assign(safe, {
                 htmlFile: filePath,
@@ -786,19 +1034,20 @@ const TOOLS = [
                     " title=" + JSON.stringify(res.title) + " size=" + res.bytes + " bytes" +
                     (run ? "\n  Work-history run: " + run.dir : "") +
                     (filePath ? "\n  Full body saved to: " + filePath : "") +
-                    "\n\n--- served body" + (truncated ? " (first " + PREVIEW_INLINE_CAP + " bytes — read the file for the rest)" : "") + " ---\n" + shown
+                    "\n\n--- " + (full ? "served body" : "summary (failure lines with 2 lines of context)") +
+                    (truncated ? " (first " + PREVIEW_INLINE_CAP + " bytes — read the file for the rest)" : "") + " ---\n" + shown
             }));
         }
     },
     {
         name: "pal_screenshot",
-        description: "Render the last-pushed pal for visual review, detect runtime errors, and return a browser-computed designAudit. Set imageless:true when only the designAudit verdict matters (re-checks after small fixes). Capture page UI at desktop and mobile; require designAudit.errors=0 and inspect pixels. WEB renders directly; CONSOLE/transaction use authenticated replay. Missing browser/auth returns unavailable, never a fake pass.",
+        description: "Render the last-pushed pal, detect runtime errors, and return a browser-computed designAudit. Capture desktop and mobile; require zero audit errors and inspect pixels. imageless:true returns only the audit. Missing browser/auth is unavailable, never a pass.",
         inputShape: {
-            page: z.string().optional().describe("Page path under the site root, e.g. \"about.html\" (WEB only). Default: home page."),
-            feature: z.string().optional().describe("Human label for the feature or flow being tested. Used to name the .agent-work-history run folder."),
-            viewport: z.enum(["desktop", "mobile"]).optional().describe("desktop (1280x800, default) or mobile (~390x844)."),
-            fullPage: z.boolean().optional().describe("Capture the whole scroll height, not just the viewport."),
-            imageless: z.boolean().optional().describe("Return the designAudit without capturing or returning image data.")
+            page: z.string().optional().describe("WEB page path; default is home."),
+            feature: z.string().optional().describe("Work-history feature label."),
+            viewport: z.enum(["desktop", "mobile"]).optional().describe("desktop (default) or mobile."),
+            fullPage: z.boolean().optional().describe("Capture the full scroll height."),
+            imageless: z.boolean().optional().describe("Return designAudit without image data.")
         },
         async run(ctx, { page, feature, viewport, fullPage, imageless } = {}) {
             const disabled = testingDisabledResult(ctx, "pal_screenshot");
@@ -886,10 +1135,14 @@ const TOOLS = [
                 (run ? "\n  Work-history run: " + run.dir : "") +
                 (filePath ? "\n  PNG saved to: " + filePath : "") +
                 (auditPath ? "\n  Design audit saved to: " + auditPath : "") + errBlock + auditBlock;
-            const safe = Object.assign({}, res); delete safe.pngBase64; delete safe.jpegSmallBase64; // don't double-include the base64 blobs
             // Attach the c.debug trail (prime evidence beside a renderError) BEFORE assembling the
             // content blocks, so the debug text rides the visible text block too.
-            const out = await withServerDebug(ctx, Object.assign(safe, { pngFile: filePath, visualGate, message: text }));
+            const out = await withServerDebug(ctx, screenshotEnvelopeProjection(res, {
+                pngFile: filePath,
+                designAuditFile: auditPath,
+                visualGate,
+                message: text
+            }));
             // Inline a downscaled JPEG so the render doesn't ride at full resolution in every
             // subsequent turn's context; the full-res PNG is still on disk at pngFile. Falls back
             // to the full PNG if the in-page re-encode failed.
@@ -909,20 +1162,20 @@ const TOOLS = [
     },
     {
         name: "pal_exercise",
-        description: "Functionally exercise actions end-to-end and assert rendered results — the proof above compile (pal_test) and render (pal_screenshot). Acts on the LAST PUSHED version; push first. Steps run in order and stop at the first failure. WEB uses action+params; CONSOLE/transaction fills inputs then clicks exact text. Scope duplicate controls with within and unique {{runId}} data. Use after create/edit/delete actions.",
+        description: "Exercise last-pushed actions end-to-end and assert results. Read local markup first; do not discover fields or selectors by retries. Steps stop at the first failure. WEB uses action+params; console/transaction fills inputs and clicks exact text. Scope duplicate controls with within and unique {{runId}}. Use after create/edit/delete.",
         inputShape: {
             steps: z.array(z.object({
-                page: z.string().optional().describe("WEB only: page path under the site root to load first, e.g. \"equipment.html\"."),
-                action: z.string().optional().describe("WEB only: workflow action to invoke, e.g. \"saveEquipment\". Sent as ?action=<name> with params."),
-                params: z.record(z.union([z.string(), z.number()])).optional().describe("WEB only: query params sent with the action, e.g. {\"name\":\"Camera\"}."),
-                fill: z.record(z.union([z.string(), z.number()])).optional().describe("Fill inputs by their name= attribute before clicking, e.g. {\"name\":\"Camera\",\"category\":\"AV\"}."),
-                click: z.string().optional().describe("EXACT visible text of the link/button to click (a c:a Save link), or a simple #id/.class selector."),
-                within: z.string().optional().describe("Browser mode: scope click to exactly one CSS/Playwright locator through its identifying cell, e.g. tr:has([data-label=\"Name\"]:has-text(\"{{runId}}\")). Required when the same action text appears in multiple rows/cards; shared-name :has-text() scopes are ambiguous."),
-                expect: z.array(z.string()).optional().describe("Strings that MUST appear in visible rendered text after this step (for example, the saved value in the list). Hidden markup and input value= attributes do not count."),
-                absent: z.array(z.string()).optional().describe("Full unique strings that must NOT appear in visible rendered text after this step. For edits, use unique old/new values where neither is a substring of the other; a stale old value proves a duplicate insert.")
-            })).min(1).max(10).describe("Steps run in order; the run stops at the first failing step."),
-            workflow: z.enum(["console", "web", "transaction"]).optional().describe("Engine to exercise (default: auto-detected)."),
-            viewport: z.enum(["desktop", "mobile"]).optional().describe("Browser-mode viewport (default desktop).")
+                page: z.string().optional().describe("WEB page path to load first."),
+                action: z.string().optional().describe("WEB workflow action invoked with query params."),
+                params: z.record(z.union([z.string(), z.number()])).optional().describe("WEB action query parameters."),
+                fill: z.record(z.union([z.string(), z.number()])).optional().describe("Input name/value pairs to fill before clicking."),
+                click: z.string().optional().describe("Exact visible text or simple selector to click."),
+                within: z.string().optional().describe("CSS scope when click text matches multiple elements."),
+                expect: z.array(z.string()).optional().describe("Visible strings required after this step."),
+                absent: z.array(z.string()).optional().describe("Unique visible strings forbidden after this step.")
+            })).min(1).max(10).describe("Ordered; stops at first failure."),
+            workflow: z.enum(["console", "web", "transaction"]).optional().describe("Engine; default auto-detected."),
+            viewport: z.enum(["desktop", "mobile"]).optional().describe("Viewport; default desktop.")
         },
         async run(ctx, { steps, workflow, viewport } = {}) {
             const disabled = testingDisabledResult(ctx, "pal_exercise");
@@ -936,7 +1189,7 @@ const TOOLS = [
     },
     {
         name: "pal_seo_audit",
-        description: "On-page SEO audit of a WEB pal's server-rendered page (last pushed): title/meta, canonical, og/twitter, single H1, JSON-LD, img alt, robots.txt/sitemap.xml/llms.txt. Returns each problem + its fix, plus what PASSED. Use after pushing a web page; fix every ERROR. Not for console pals. Read the palbuilder-seo skill BEFORE writing heads; this verifies the result.",
+        description: "Audit last-pushed WEB pages for on-page SEO and crawler files. Returns every problem, fix, and passing check. Read the palbuilder-seo skill before writing heads; this verifies the result. Not for console pals.",
         inputShape: diagnosticInputShape,
         async run(ctx, args = {}) {
             const disabled = testingDisabledResult(ctx, "pal_seo_audit");
@@ -958,7 +1211,14 @@ const TOOLS = [
                 passing: envelopeResults.passing,
                 debug: dirtyNote || null
             });
-            return Object.assign(res, envelopeFields(ctx.workspaceDir, "pal_seo_audit", source, args));
+            const projection = seoEnvelopeProjection(source);
+            return Object.assign({
+                audited: !!res.audited,
+                errors: res.errors || 0,
+                warnings: res.warnings || 0,
+                dirty: !!res.dirty,
+                dirtyFiles: res.dirtyFiles || []
+            }, envelopeFields(ctx.workspaceDir, "pal_seo_audit", source, args, projection));
         }
     },
     {
@@ -1107,7 +1367,7 @@ const TOOLS = [
     },
     {
         name: "pal_push",
-        description: "Push local changes to the server (UPDATE). FIRST runs the pre-push gate — full lint of the files this push changes (blocking on errors your change introduces) plus cross-file contract checks; advisory warnings are surfaced but never block. Standalone pal_validate lints the WHOLE workspace and may report findings in files this push didn't touch. force:true is drift-only: it can overwrite a newer server marker, but it cannot bypass validation errors. Also refuses if the pal is locked by another person (typed confirmOverride). On success returns the server's save result plus any code WARNINGS.",
+        description: "Push local changes after validating changed files and cross-file contracts. Validation errors cannot be bypassed; force:true handles server drift only. Warnings never block. Refuses locks unless the user supplies the exact typed override. Standalone pal_validate checks the whole workspace; this gate does not re-block pre-existing errors in untouched files.",
         // skipValidation is deliberately NOT in inputShape (the MCP layer strips unknown keys, so
         // agents cannot pass it). In the test-06 haiku run the agent read the "call pal_push with
         // skipValidation:true" hint in this tool's refusal message, decided the validator was
@@ -1123,7 +1383,9 @@ const TOOLS = [
             // Pre-push lint refusal: errors found, push not attempted.
             if (res.refused === "validation") {
                 const source = Object.assign({ ok: false, cacheHits: null, cacheMisses: null }, res.lint);
-                return Object.assign(res, envelopeFields(ctx.workspaceDir, "pal_push", source, args));
+                const projection = pushEnvelopeProjection(source);
+                return Object.assign({ pushed: false, refused: "validation" },
+                    envelopeFields(ctx.workspaceDir, "pal_push", source, args, projection));
             }
             if (res.pushed) {
                 ctx.pushRefusalStreak = null;
@@ -1157,7 +1419,15 @@ const TOOLS = [
                     findings,
                     debug: [folderBlock, skippedBlock, warnBlock, webBlock, consoleBlock].filter(Boolean).join("\n") || null
                 });
-                return Object.assign(res, envelopeFields(ctx.workspaceDir, "pal_push", source, args));
+                const projection = pushEnvelopeProjection(source);
+                return Object.assign({
+                    pushed: true,
+                    forced: !!res.forced,
+                    filesPushed: res.filesPushed,
+                    newMarker: res.newMarker,
+                    webRegistered: res.webRegistered || null,
+                    consoleRegistered: res.consoleRegistered || null
+                }, envelopeFields(ctx.workspaceDir, "pal_push", source, args, projection));
             }
             if (res.refused === "drift") {
                 return Object.assign(res, {
@@ -1197,10 +1467,14 @@ const TOOLS = [
                 const source = Object.assign({}, res, {
                     ok: false,
                     filesChecked: null,
-                    findings: serverFindings(res.validation, false),
+                    findings: serverFindings(res.validation, false).concat(repeatBlock ? [{
+                        severity: "error", code: "repeatedPushRefusal", message: repeatBlock
+                    }] : []),
                     debug: repeatBlock
                 });
-                return Object.assign(res, envelopeFields(ctx.workspaceDir, "pal_push", source, args));
+                const projection = pushEnvelopeProjection(source);
+                return Object.assign({ pushed: false, refused: "save-rejected" },
+                    envelopeFields(ctx.workspaceDir, "pal_push", source, args, projection));
             }
             return Object.assign(res, { message: "Push failed: " + (res.reason || res.refused || "unknown") });
         }
@@ -1285,4 +1559,7 @@ function safeTestResult(result) {
 
 module.exports = { TOOLS, overridePhrase, blockedMessage, formatExpect, formatValidation, isBenignServerNote,
     htmlRegionResult, recordScreenshotEvidence, safeTestResult, formatPushValidationRefusal, seoEnvelopeResults,
-    pushVisibilityFindings, testEnvelopeFindings, datasetSaveFindings };
+    pushVisibilityFindings, testEnvelopeFindings, datasetSaveFindings, testEnvelopeProjection,
+    seoEnvelopeProjection, pushEnvelopeProjection, testActionFields, failureLineSummary, addExpectContext,
+    expectBodyBlock, debugHasDiagnosticLines, debugFailed, screenshotEnvelopeProjection,
+    cappedFailureDebug };

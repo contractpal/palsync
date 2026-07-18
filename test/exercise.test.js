@@ -169,7 +169,8 @@ test("formatExercise: reports visible assertions, markup-only clues, screen hint
     assert.match(out, /absent "Camera": STILL PRESENT/);
     assert.match(out, /"Camera" appears 2 times on this page.*scope with `within:`.*unique \{\{runId\}\}/);
     assert.match(out, /headings: "Edit equipment"/);
-    assert.match(out, /Push again only after editing a pal file/);
+    assert.match(out, /read the local page\/fragment markup/);
+    assert.match(out, /revise the steps and call again without pushing/);
     assert.match(out, /renderError: NullPointerException.*equipment\.js:42/);
     assert.match(out, /Later steps were not run/);
 

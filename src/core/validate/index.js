@@ -16,39 +16,23 @@ const path = require("path");
 const { lintWorkflowJs } = require("./workflowJs");
 const { lintMarkup } = require("./markup");
 const { lintDatasetDef } = require("./datasetDef");
-const { lintPalJson, checkUnknownKeys } = require("./palJson");
+const { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryShape, checkEntryFilenames,
+    checkFolderRegistrations, lineForFinding } = require("./palJson");
 const { lintContracts, lintFileContracts } = require("./contracts");
+const { buildSnapshot } = require("./snapshot");
 const { cachedLint } = require("../lintCache");
 
 const MARKUP_EXT = new Set([".html", ".htm", ".xhtml"]);
 
 // Fragments flagged parseable:false in pal.json — the server skips tag processing for them,
 // so script/EL lint rules don't apply.
-function nonParseableSet(rootDir) {
-    try {
-        const pj = JSON.parse(require("fs").readFileSync(path.join(rootDir, "pal.json"), "utf8"));
-        const set = new Set();
-        for (const e of (((pj.fragments || {}).entry) || [])) {
-            if (e && e.Fragment && e.Fragment.parseable === false) set.add("fragments/" + e.string);
-        }
-        return set;
-    } catch (e) { return new Set(); }
-}
-
-function walkFiles(absDir, relBase, out) {
-    let entries;
-    try { entries = fs.readdirSync(absDir, { withFileTypes: true }); }
-    catch (e) { if (e.code === "ENOENT") return; throw e; }
-    for (const e of entries) {
-        const abs = path.join(absDir, e.name);
-        const rel = relBase + "/" + e.name;
-        if (e.isDirectory()) walkFiles(abs, rel, out);
-        else out.push({ abs, rel });
+function nonParseableSet(snapshot) {
+    const set = new Set();
+    const manifest = snapshot.palJson.parsed;
+    for (const e of (((manifest && manifest.fragments) || {}).entry || [])) {
+        if (e && e.Fragment && e.Fragment.parseable === false) set.add("fragments/" + e.string);
     }
-}
-
-function readUtf8(abs) {
-    try { return fs.readFileSync(abs, "utf8"); } catch (e) { return null; }
+    return set;
 }
 
 function hasDesignSystem(workspaceDir) {
@@ -63,19 +47,19 @@ function hasDesignSystem(workspaceDir) {
 //   violations in untouched files isn't blocked forever — that's not this push's responsibility).
 //   Omit `only` to lint the whole workspace (the standalone `validate` command / MCP tool).
 function validateWorkspace(workspaceDir, { only = null } = {}) {
+    const snapshot = buildSnapshot(workspaceDir);
     const findings = [];
-    const nonParseable = nonParseableSet(workspaceDir);
-    const designSystemPresent = hasDesignSystem(workspaceDir);
+    const nonParseable = nonParseableSet(snapshot);
+    const designSystemPresent = snapshot.allFiles.includes("DESIGN_SYSTEM.md") ||
+        snapshot.allFiles.includes("styles/design-system.css") ||
+        snapshot.allFiles.includes("Styles/design-system.css");
     let filesChecked = 0;
     const inScope = (rel) => !only || only.has(rel);
 
     // workflows/*.js (restricted engine)
-    const wf = [];
-    walkFiles(path.join(workspaceDir, "workflows"), "workflows", wf);
-    for (const f of wf) {
+    for (const f of snapshot.workflows) {
         if (!f.rel.endsWith(".js") || !inScope(f.rel)) continue;
-        const src = readUtf8(f.abs);
-        if (src == null) continue;
+        const src = f.content;
         filesChecked++;
         findings.push(...cachedLint(workspaceDir,
             { rel: f.rel, content: src, mode: "workspace-workflow" },
@@ -84,12 +68,10 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
 
     // pages/** and fragments/** (markup)
     for (const folder of ["pages", "fragments"]) {
-        const files = [];
-        walkFiles(path.join(workspaceDir, folder), folder, files);
-        for (const f of files) {
+        for (const f of snapshot.markup) {
+            if (!f.rel.startsWith(folder + "/")) continue;
             if (!MARKUP_EXT.has(path.extname(f.rel).toLowerCase()) || !inScope(f.rel)) continue;
-            const src = readUtf8(f.abs);
-            if (src == null) continue;
+            const src = f.content;
             filesChecked++;
             findings.push(...cachedLint(workspaceDir, {
                 rel: f.rel,
@@ -104,12 +86,9 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
     }
 
     // datasets/*.json (definition sanity — invalid fieldType, missing PK; all WARNINGS)
-    const dsFiles = [];
-    walkFiles(path.join(workspaceDir, "datasets"), "datasets", dsFiles);
-    for (const f of dsFiles) {
+    for (const f of snapshot.datasets) {
         if (!f.rel.endsWith(".json") || !inScope(f.rel)) continue;
-        const src = readUtf8(f.abs);
-        if (src == null) continue;
+        const src = f.content;
         filesChecked++;
         findings.push(...cachedLint(workspaceDir,
             { rel: f.rel, content: src, mode: "workspace-dataset" },
@@ -119,15 +98,27 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
     // pal.json manifest check (Check 2 — silent-push-skip incident).
     // Not scoped by `only` — a missing pal.json entry is a workspace-level problem regardless
     // of which files changed, and the check is cheap (no file parsing).
-    findings.push(...lintPalJson(workspaceDir));
-
     // Cross-file contract checks (c:list name/id, ajax-target, action routing, EL syntax,
     // href-action anti-pattern, fabricated API methods, dropped params, ajax transport).
     // Not scoped by `only` — these check a fragment/page against a workflow that may live in
     // a DIFFERENT file than the one this push changed, so limiting to changed files would miss
     // exactly the mismatches this exists to catch (e.g. a fragment edit that now names a
     // DataList the workflow never produces).
-    findings.push(...lintContracts(workspaceDir));
+    const contractInput = Object.entries(snapshot.contentHashByRel)
+        .filter(([rel]) => rel === "pal.json" || rel.startsWith("workflows/") ||
+            rel.startsWith("pages/") || rel.startsWith("fragments/") || rel.startsWith("datasets/") ||
+            /^(?:styles|Styles)\//.test(rel))
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([rel, hash]) => rel + ":" + hash)
+        .concat(snapshot.allFiles
+            .filter(rel => /^(?:pages|fragments|styles|Styles|scripts|images|emails|attachments|wizards|datasets)\//.test(rel))
+            .sort()
+            .map(rel => "manifest-path:" + rel))
+        .concat("DESIGN_SYSTEM.md:<" + (snapshot.allFiles.includes("DESIGN_SYSTEM.md") ? "present" : "absent") + ">")
+        .join("\n");
+    findings.push(...cachedLint(workspaceDir, {
+        rel: "<workspace>", content: contractInput, mode: "workspace-contracts"
+    }, () => [...lintPalJson(snapshot), ...lintContracts(snapshot)]));
 
     findings.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
     const errors = findings.filter(f => f.severity === "error").length;
@@ -156,23 +147,40 @@ function formatValidation(result, { context = "validate" } = {}) {
     const byRule = new Map();
     for (const finding of findings) {
         const rule = finding.rule || "unknown-rule";
-        if (!byRule.has(rule)) byRule.set(rule, []);
-        byRule.get(rule).push(finding);
+        const key = finding.severity + "\0" + rule;
+        if (!byRule.has(key)) byRule.set(key, { rule, severity: finding.severity, findings: [] });
+        byRule.get(key).findings.push(finding);
     }
     const blocks = [];
     let grouped = 0;
-    for (const [rule, ruleFindings] of byRule) {
-        const severity = ruleFindings.some(f => f.severity === "error") ? "ERROR" : "WARNING";
+    for (const group of byRule.values()) {
+        const { rule, findings: ruleFindings } = group;
+        const severity = group.severity === "error" ? "ERROR" : "WARNING";
         const byMessage = new Map();
         for (const finding of ruleFindings) {
-            if (!byMessage.has(finding.message)) byMessage.set(finding.message, []);
-            byMessage.get(finding.message).push(finding);
+            const shape = String(finding.message)
+                .replace(/(["'`])(?:\\.|(?!\1).)*\1/g, "$1<value>$1")
+                .replace(/\b\d+\b/g, "<number>");
+            if (!byMessage.has(shape)) byMessage.set(shape, []);
+            byMessage.get(shape).push(finding);
         }
         grouped += ruleFindings.length - byMessage.size;
         const lines = [severity + " " + rule + " — " + ruleFindings.length + " finding(s)"];
-        for (const [message, messageFindings] of byMessage) {
+        for (const messageFindings of byMessage.values()) {
+            const message = messageFindings[0].message;
             lines.push("   Fix: " + message);
-            lines.push("   At: " + messageFindings.map(f => f.file + ":" + f.line).join(", "));
+            if (messageFindings.length === 1 || messageFindings.every(f => f.message === message)) {
+                lines.push("   At: " + messageFindings.map(f => f.file + ":" + f.line).join(", "));
+                continue;
+            }
+            lines.push("   Values (apply the remediation above to each):");
+            const sampleTokens = String(message).match(/(["'`])(?:\\.|(?!\1).)*\1|\b\d+\b/g) || [];
+            for (const finding of messageFindings) {
+                const tokens = String(finding.message).match(/(["'`])(?:\\.|(?!\1).)*\1|\b\d+\b/g) || [];
+                const changed = tokens.filter((token, index) => token !== sampleTokens[index]);
+                lines.push("   " + finding.file + ":" + finding.line + " — " +
+                    (changed.length ? changed.join("; ") : tokens.join("; ")));
+            }
         }
         blocks.push(lines.join("\n"));
     }
@@ -190,7 +198,18 @@ function lintContent(rel, content, { designSystemPresent } = {}) {
     }
     if (rel.startsWith("datasets/") && rel.endsWith(".json")) return lintDatasetDef(rel, content);
     if (rel === "pal.json") {
-        try { return checkUnknownKeys(JSON.parse(content)); } catch (e) { return []; }
+        try {
+            const manifest = JSON.parse(content);
+            const findings = [
+                ...checkEntryShape(manifest),
+                ...checkEntryFilenames(manifest),
+                ...checkUnknownKeys(manifest),
+                ...checkDataStructures(manifest),
+                ...checkFolderRegistrations(manifest)
+            ];
+            for (const finding of findings) finding.line = lineForFinding(content, finding);
+            return findings;
+        } catch (e) { return []; }
     }
     return [];
 }

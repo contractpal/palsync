@@ -472,13 +472,18 @@ process.once("exit", () => {
 // Anthropic's image-token cost scales with pixel area, not just bytes, so this cuts the inline
 // copy that rides in the agent's context on every subsequent turn (the on-disk PNG stays full-res
 // for anyone who needs to zoom in). Zero new dependencies — no sharp, no canvas package.
-async function downscaleToJpeg(pg, pngBase64, scale = 0.625, quality = 0.6) {
+async function downscaleToJpeg(pg, pngBase64, scale = null, quality = 0.42) {
     try {
         return await pg.evaluate(({ pngBase64, scale, quality }) => new Promise((resolve, reject) => {
             const img = new Image();
             img.onload = () => {
-                const w = Math.max(1, Math.round(img.naturalWidth * scale));
-                const h = Math.max(1, Math.round(img.naturalHeight * scale));
+                // Keep the inline evidence legible while bounding both portrait and landscape
+                // captures. The full-resolution PNG remains on disk for pixel-level inspection.
+                const factor = scale == null
+                    ? Math.min(1, 480 / Math.max(img.naturalWidth, img.naturalHeight))
+                    : scale;
+                const w = Math.max(1, Math.round(img.naturalWidth * factor));
+                const h = Math.max(1, Math.round(img.naturalHeight * factor));
                 const canvas = document.createElement("canvas");
                 canvas.width = w; canvas.height = h;
                 canvas.getContext("2d").drawImage(img, 0, 0, w, h);
