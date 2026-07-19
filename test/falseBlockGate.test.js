@@ -47,3 +47,18 @@ test("malformed manifest fixture still trips the entry-shape gate", () => {
     assert.ok(lint.errors > 0);
     fs.rmSync(workspace, { recursive: true, force: true });
 });
+
+for (const [name, expected] of [
+    ["dataset-no-columns", ["datasetNoColumns"]],
+    ["dataset-wrong-keys", ["datasetWrongFieldKeys", "datasetFieldMissingName", "datasetFieldMissingType", "datasetNoColumns", "datasetNoPrimaryKey"]]
+]) {
+    test("bad dataset fixture is blocked: " + name, () => {
+        const workspace = copyFixture("badPals", name);
+        const lint = gateLint(null, workspace);
+        for (const rule of expected) {
+            assert.ok(lint.findings.some(finding => finding.rule === rule && finding.severity === "error"),
+                "expected " + rule + ", got: " + lint.findings.map(item => item.rule).join(", "));
+        }
+        fs.rmSync(workspace, { recursive: true, force: true });
+    });
+}

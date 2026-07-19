@@ -1,0 +1,116 @@
+{
+  "pages": {
+    "entry": [
+      {
+        "string": "console.html",
+        "Page": {
+          "name": "console",
+          "filename": "console.html",
+          "palType": "palTypeConsole"
+        }
+      }
+    ]
+  },
+  "fragments": {
+    "entry": [
+      {
+        "string": "navbar.html",
+        "Fragment": {
+          "name": "navbar",
+          "filename": "navbar.html",
+          "palType": "palTypeConsole",
+          "parseable": false
+        }
+      },
+      {
+        "string": "controls.html",
+        "Fragment": {
+          "name": "controls",
+          "filename": "controls.html",
+          "palType": "palTypeConsole",
+          "parseable": false
+        }
+      }
+    ]
+  },
+  "workflows": {
+    "entry": [
+      {
+        "string": "console.js",
+        "Workflow": {
+          "name": "console",
+          "filename": "console.js",
+          "workflowType": 7
+        }
+      }
+    ]
+  },
+  "styles": {
+    "entry": []
+  },
+  "scripts": {
+    "entry": []
+  },
+  "images": {
+    "entry": []
+  },
+  "emails": {
+    "entry": []
+  },
+  "attachments": {
+    "entry": []
+  },
+  "datasets": {
+    "entry": [
+      {
+        "string": "equipment",
+        "Dataset": {
+          "name": "equipment",
+          "freeform": true,
+          "fields": {
+            "DatasetField": [
+              {
+                "name": "equipmentId",
+                "type": "Primary key"
+              },
+              {
+                "fieldSize": 100,
+                "notNull": true,
+                "notEmpty": true,
+                "name": "name",
+                "type": "String"
+              },
+              {
+                "fieldSize": 50,
+                "name": "category",
+                "type": "String"
+              },
+              {
+                "fieldSize": 80,
+                "indexed": true,
+                "name": "serialNumber",
+                "type": "String"
+              },
+              {
+                "fieldSize": 20,
+                "indexed": true,
+                "defaultValue": "available",
+                "name": "status",
+                "type": "String"
+              },
+              {
+                "fieldSize": 100,
+                "name": "checkedOutTo",
+                "type": "String"
+              },
+              {
+                "name": "dueDate",
+                "type": "DateTimeMS"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

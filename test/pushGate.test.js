@@ -129,6 +129,37 @@ test("gateLint baseline-diffs unknown pal.json keys instead of treating them as 
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("gateLint baseline-diffs inline pal.json dataset shape errors", () => {
+    const valid = { datasets: { entry: [{ string: "things", Dataset: { name: "things", fields: {
+        DatasetField: [{ fieldName: "thingId", fieldType: "Primary key" }]
+    } } }] } };
+    const dir = tmpWorkspace({ "pal.json": JSON.stringify(valid) });
+    const record = { fileHashes: hashWorkspaceFiles(dir).files };
+    baseline.snapshot(dir, []);
+
+    const wrong = structuredClone(valid);
+    wrong.datasets.entry[0].Dataset.fields.DatasetField = [{ name: "thingId", type: "Primary key" }];
+    fs.writeFileSync(path.join(dir, "pal.json"), JSON.stringify(wrong));
+    const lint = gateLint(record, dir);
+    for (const rule of ["datasetWrongFieldKeys", "datasetFieldMissingName", "datasetFieldMissingType", "datasetNoColumns", "datasetNoPrimaryKey"]) {
+        assert.ok(lint.findings.some(finding => finding.rule === rule && /INTRODUCED 1 new/.test(finding.message)), rule);
+    }
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("gateLint does not re-block a pre-existing inline dataset shape error", () => {
+    const wrong = { datasets: { entry: [{ string: "things", Dataset: { name: "things", fields: {
+        DatasetField: [{ name: "thingId", type: "Primary key" }]
+    } } }] } };
+    const dir = tmpWorkspace({ "pal.json": JSON.stringify(wrong) });
+    const record = { fileHashes: hashWorkspaceFiles(dir).files };
+    baseline.snapshot(dir, []);
+
+    fs.writeFileSync(path.join(dir, "pal.json"), JSON.stringify(wrong, null, 2));
+    assert.equal(gateLint(record, dir).errors, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("gateLint baseline-diffs introduced manifest filename errors", () => {
     const original = JSON.stringify({
         fragments: { entry: [{ string: "x.html", Fragment: { name: "x", filename: "x.html" } }] }

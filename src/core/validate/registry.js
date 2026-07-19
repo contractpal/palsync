@@ -34,9 +34,12 @@ const RULE_REGISTRY = {
     unclosedTag: { severity: "error", category: "markup", gate: "per-file", evidence: "Live esign orphan-tag incident documented in tagBalance.js." },
 
     datasetJsonParse: { severity: "error", category: "dataset", gate: "per-file", evidence: "A dataset definition must be valid JSON before provisioning." },
-    datasetNoFields: { severity: "warn", category: "dataset", gate: "per-file", evidence: "Dataset-definition completeness advisory." },
-    datasetFieldType: { severity: "warn", category: "dataset", gate: "per-file", evidence: "Vendored DatasetFieldType.java constants." },
-    datasetNoPrimaryKey: { severity: "warn", category: "dataset", gate: "per-file", evidence: "Dataset-definition integrity advisory." },
+    datasetWrongFieldKeys: { severity: "error", category: "dataset", gate: "per-file", evidence: "Live 9df2c3e save attempt 383303c2d67253c1: name/type serialized as null and server rejected the dataset." },
+    datasetFieldMissingName: { severity: "error", category: "dataset", gate: "per-file", evidence: "Live 9df2c3e save attempt 383303c2d67253c1: server returned invalid name for field null." },
+    datasetFieldMissingType: { severity: "error", category: "dataset", gate: "per-file", evidence: "Live 9df2c3e save attempt 383303c2d67253c1: server returned invalid type for field null." },
+    datasetNoColumns: { severity: "error", category: "dataset", gate: "per-file", evidence: "Live 9df2c3e recovery attempts: zero-column definitions were save-rejected because dataset definitions must be saved first." },
+    datasetFieldType: { severity: "warn", category: "dataset", gate: "per-file", evidence: "Vendored DatasetField.java TYPE_* constants; advisory because unknown values lack a live rejection repro." },
+    datasetNoPrimaryKey: { severity: "error", category: "dataset", gate: "per-file", evidence: "Live 9df2c3e save attempt 383303c2d67253c1: server returned No primary key specified." },
 
     invalidPalJsonShape: { severity: "error", category: "manifest", gate: "per-file", evidence: "Vendored Pal/Layout serialized field shapes cited in palJson.js." },
     unknownPalJsonKey: { severity: "both", category: "manifest", gate: "per-file", evidence: "Vendored Pal/Layout serialized fields; aliases remain advisory." },

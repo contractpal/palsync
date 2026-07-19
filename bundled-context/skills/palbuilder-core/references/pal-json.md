@@ -83,6 +83,44 @@ https://secure.cloudpiston.com/cpal/cp-api/transaction/misc.html#wizards (see
 | `datalists.entry` | `{ "string":"offices", "DataList": { "name":"offices", "cols": {...}, "recs": {...} } }` | `pal.getDataList("offices")` |
 | `desktopBindings` | `{ "string":"equipment", "DesktopBinding": { "name":"Equipment", "icon":"bi-box-seam" } }` | Console home-screen tile |
 
+### Dataset field-object shape
+
+Dataset columns must use the serialized `fields.DatasetField` wrapper and the canonical
+`fieldName`/`fieldType` keys:
+
+```json
+{
+  "datasets": {
+    "entry": [{
+      "string": "equipment",
+      "Dataset": {
+        "name": "equipment",
+        "freeform": true,
+        "fields": {
+          "DatasetField": [
+            { "fieldName": "equipmentId", "fieldType": "Primary key" },
+            { "fieldName": "name", "fieldType": "String", "fieldSize": 100, "notNull": true, "notEmpty": true },
+            { "fieldName": "status", "fieldType": "String", "fieldSize": 20, "indexed": true, "defaultValue": "available" }
+          ]
+        }
+      }
+    }]
+  }
+}
+```
+
+**Do not guess this shape:** fields nest under `fields.DatasetField`; a bare `fields: []` is
+wrong. Each field uses `fieldName` and `fieldType`, **not** `name` and `type`. Every dataset needs a
+field whose `fieldType` is `"Primary key"`.
+
+The authoritative `fieldType` values from `com/contractpal/pal/DatasetField.java` are:
+`String`, `Text`, `Medium text`, `Char`, `Date`, `DateOnly`, `DateTimeMS`, `Boolean`,
+`Tiny integer`, `Small integer`, `Medium integer`, `Number`, `Big Number`,
+`Tiny unsigned integer`, `Small unsigned integer`, `Medium unsigned integer`, `Unsigned integer`,
+`Big unsigned integer`, `Decimal`, `Encrypted`, `File`, `File Encrypted`, `Remote File`,
+`Remote File Encrypted`, `Primary key`, `Pal id`, `Transaction id`, `Profile id`,
+`Pal id auto populate`, `Transaction id auto populate`, and `Profile id auto populate`.
+
 `data`, `datalists`, and `dataviews` are PalBuilder-provisioned manifest objects. Palsync preserves
 existing entries during pull/push but does not provision new ones via push. The examples below are
 the exact serialized shapes you will see in a pulled/exported pal and may safely maintain for an

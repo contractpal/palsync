@@ -41,29 +41,29 @@ values. The commonly-used types:
   console or transaction workflow. The standard way to stamp "who owns this row".
 
 **Strings**
-- **Varchar** — variable-length string, the everyday text column.
+- **String** — variable-length string, the everyday text column.
 - **Char** — fixed-size string.
 - **Text** — up to 65 KB.
 - **Medium text** — up to 16 MB.
 
 **Numbers**
-- **Tiny / Small / Medium / Integer / Big** — integer types of increasing range, each
-  **signed or unsigned**. Use unsigned when the value is never negative (ids, counts).
+- **Tiny integer**, **Small integer**, **Medium integer**, **Number**, and **Big Number** are
+  signed integer types of increasing range. Their unsigned forms are **Tiny unsigned integer**,
+  **Small unsigned integer**, **Medium unsigned integer**, **Unsigned integer**, and
+  **Big unsigned integer**.
 - **Decimal** — fixed-precision. The length is specified as `precision,scale` — e.g. `4,2`
   means 4 total digits with 2 after the decimal point (so up to `99.99`).
 
 **Dates / booleans**
-- **Date** — accepts `Date` objects from `dateUtil` (see
+- **Date**, **DateOnly**, and **DateTimeMS** accept date values from `dateUtil` (see
   `palbuilder-workflow/references/utilities.md`).
-- **DateTime** — same, with time component.
 - **Boolean** — stored and compared as the strings `"true"` / `"false"` (see the boolean
   gotcha throughout this reference).
 
 **Encrypted and files**
 - **Encrypted** — value encrypted at rest, decrypted on read.
-- **File** — a stored file.
-- **File encrypted** — a stored file, encrypted at rest.
-- **Remote file** / **Remote file encrypted** — a file held in remote storage, optionally
+- **File** / **File Encrypted** — a stored file, optionally encrypted at rest.
+- **Remote File** / **Remote File Encrypted** — a file held in remote storage, optionally
   encrypted.
 
 ### Keys, "foreign keys", and the unsigned-integer convention

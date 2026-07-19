@@ -121,6 +121,12 @@ test("pal-level manifest guidance no longer dead-ends on data and datalists", ()
     const contract = read("bundled-context/CLAUDE.md") + "\n" + read("src/launcher/contextInject.js");
 
     mustMatch(manifest, /^##+\s+`?data`?\b/im, "pal.json reference must document the data section");
+    mustMatch(manifest, /"fields"\s*:\s*\{\s*"DatasetField"\s*:\s*\[[\s\S]{0,500}"fieldName"\s*:\s*"equipmentId"[\s\S]{0,100}"fieldType"\s*:\s*"Primary key"/,
+        "pal.json reference must show the serialized fields.DatasetField shape");
+    mustMatch(manifest, /fieldName[\s\S]{0,100}fieldType[\s\S]{0,160}(?:not|NOT)[^\n]*name[^\n]*type/,
+        "pal.json reference must reject name/type aliases for dataset fields");
+    mustMatch(manifest, /bare `?fields:\s*\[\]`?[\s\S]{0,80}(?:wrong|invalid)/i,
+        "pal.json reference must warn against a bare fields array");
     mustMatch(manifest, /"Fragment"[\s\S]{0,260}"palType"\s*:\s*"palTypeConsole"[\s\S]{0,100}"parseable"\s*:\s*false/,
         "pal.json reference must show the typed console Fragment manifest shape");
     mustMatch(read("bundled-context/skills/pal-loop/SKILL.md"), /mandatory and non-skippable[\s\S]{0,500}"Fragment"[\s\S]{0,500}"Dataset"/i,

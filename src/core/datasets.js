@@ -147,7 +147,8 @@ async function syncDatasets(session, record, workspaceDir, { datasets, recreate 
         const serverNotes = (saveResult.validation || []).map(v => (v.group || "?") + "/" + (v.object || "-") + ": " + v.message);
         const why = saveResult.refused || (serverNotes.length ? "server rejected the save" : "unknown");
         return { synced: false, refused: "save-failed", saveResult, targets, schemas, serverNotes,
-                 reason: "Could not save the pal before syncing (" + why + "). The dataset definitions must be saved first." +
+                 reason: "Could not save the pal before syncing (" + why + "). The dataset definitions must be saved first. " +
+                     "Read the exact shape with pal_context section:\"datasets\" (or palbuilder-core/references/pal-json.md)." +
                      (serverNotes.length ? "\nServer said:\n   - " + serverNotes.join("\n   - ") : "") };
     }
 

@@ -5,7 +5,7 @@
 // Pure, no network. Run: npm test.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { lintDatasetDef } = require("../src/core/validate/datasetDef");
+const { lintDatasetDef, lintPalDatasets } = require("../src/core/validate/datasetDef");
 
 function ds(fields) {
     return JSON.stringify({ name: "things", fields: { DatasetField: fields } });
@@ -17,12 +17,37 @@ function typeFindings(jsonText) {
 test("dataset structural rules are directly covered", () => {
     const cases = [
         ["datasetJsonParse", "{"],
-        ["datasetNoFields", JSON.stringify({ name: "things", fields: { DatasetField: [] } })],
+        ["datasetNoColumns", JSON.stringify({ name: "things", fields: { DatasetField: [] } })],
         ["datasetNoPrimaryKey", ds([{ fieldName: "name", fieldType: "String" }])],
+        ["datasetWrongFieldKeys", JSON.stringify({ name: "things", fields: [] })],
+        ["datasetFieldMissingName", ds([{ fieldType: "Primary key" }])],
+        ["datasetFieldMissingType", ds([{ fieldName: "thingId" }])],
     ];
     for (const [rule, src] of cases) {
         assert.ok(lintDatasetDef("datasets/things.json", src).some(f => f.rule === rule), rule + " should be emitted");
     }
+});
+
+test("pal.json datasets reject name/type aliases with exact repairs", () => {
+    const findings = lintPalDatasets("pal.json", { datasets: { entry: [{
+        string: "things",
+        Dataset: { name: "things", fields: { DatasetField: [{ name: "thingId", type: "Primary key" }] } }
+    }] } });
+    for (const rule of ["datasetWrongFieldKeys", "datasetFieldMissingName", "datasetFieldMissingType", "datasetNoColumns", "datasetNoPrimaryKey"]) {
+        assert.ok(findings.some(f => f.rule === rule && f.severity === "error"), rule);
+    }
+    assert.match(findings.find(f => f.rule === "datasetWrongFieldKeys").message, /name→fieldName.*type→fieldType/);
+});
+
+test("canonical pal.json DatasetField shape has no errors", () => {
+    const findings = lintPalDatasets("pal.json", { datasets: { entry: [{
+        string: "things",
+        Dataset: { name: "things", freeform: true, fields: { DatasetField: [
+            { fieldName: "thingId", fieldType: "Primary key" },
+            { fieldName: "name", fieldType: "String", fieldSize: 100, notNull: true }
+        ] } }
+    }] } });
+    assert.deepStrictEqual(findings.filter(f => f.severity === "error"), []);
 });
 
 test("valid authoritative types do not warn", () => {

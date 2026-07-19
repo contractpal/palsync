@@ -15,7 +15,7 @@ const fs = require("fs");
 const path = require("path");
 const { lintWorkflowJs } = require("./workflowJs");
 const { lintMarkup } = require("./markup");
-const { lintDatasetDef } = require("./datasetDef");
+const { lintDatasetDef, lintPalDatasets } = require("./datasetDef");
 const { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryShape, checkEntryFilenames,
     checkFolderRegistrations, lineForFinding } = require("./palJson");
 const { lintContracts, lintFileContracts } = require("./contracts");
@@ -85,7 +85,7 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
         }
     }
 
-    // datasets/*.json (definition sanity — invalid fieldType, missing PK; all WARNINGS)
+    // Dataset definition files and the authoritative inline pal.json Dataset objects.
     for (const f of snapshot.datasets) {
         if (!f.rel.endsWith(".json") || !inScope(f.rel)) continue;
         const src = f.content;
@@ -93,6 +93,9 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
         findings.push(...cachedLint(workspaceDir,
             { rel: f.rel, content: src, mode: "workspace-dataset" },
             () => lintDatasetDef(f.rel, src)));
+    }
+    if (snapshot.palJson.raw !== null && inScope("pal.json")) {
+        findings.push(...lintPalDatasets("pal.json", snapshot.palJson.parsed));
     }
 
     // pal.json manifest check (Check 2 — silent-push-skip incident).
@@ -201,6 +204,7 @@ function lintContent(rel, content, { designSystemPresent } = {}) {
         try {
             const manifest = JSON.parse(content);
             const findings = [
+                ...lintPalDatasets(rel, manifest),
                 ...checkEntryShape(manifest),
                 ...checkEntryFilenames(manifest),
                 ...checkUnknownKeys(manifest),
