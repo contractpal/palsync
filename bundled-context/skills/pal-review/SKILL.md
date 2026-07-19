@@ -129,6 +129,7 @@ chat-only verdicts are invalid.
 ```
 # REVIEW — <project> — <date> — reviewer: fresh session
 verdict: PASS | CHANGES-NEEDED
+§12: <criteria met>/<criteria total>  — acceptance-criteria tally (count only criteria with cited evidence; feeds eval/scores.jsonl)
 pal_validate: <quote `ok` and `diagnosticCount` — required; missing fields make the review invalid>
 ## Proof ledger
 | proof id | tool/file evidence | proves |
