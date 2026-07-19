@@ -26,6 +26,21 @@ Process metadata only — §12 acceptance criteria unchanged, outcome scores rem
 
 ---
 
+## One-command Haiku recovery run
+
+After provisioning the existing eval pal with
+`CP_USER=you@example.com CP_PASS=... ./eval/setup-runs.sh --reset --setup`, launch scenario 01
+in Claude Code auto mode and append its evidence-derived score row with:
+
+```bash
+(cd eval/runs/01_crud_cheap && claude --model haiku --dangerously-skip-permissions -p "/pal-loop full" && node ../../../scripts/record-eval.js --dir . --model claude-haiku-4-5 --harness claude-code)
+```
+
+`record-eval.js` reads `EXECUTION.md`, `.palsync.usage.json`, optional
+`.palsync/session-cost.json`, and `REVIEW.md`; it appends one JSON object to
+`eval/scores.jsonl`. A run that produced no `REVIEW.md` is recorded as `BROKEN` with a null
+`score12`, rather than inventing unavailable evidence.
+
 ## 0. Goal metric
 
 > **Benchmark scores hold or improve at lower token and tool-call counts, across model tiers.**

@@ -13,8 +13,9 @@
 # STAGE overwrites the staged spec files but never touches pulled pal state unless you pass --setup.
 #
 # Usage:
-#   ./eval/setup-runs.sh                    # stage only (safe, offline)
-#   CP_USER=you@x.com CP_PASS=... ./eval/setup-runs.sh --setup   # stage + palsync setup
+#   ./eval/setup-runs.sh                              # stage only (safe, offline)
+#   ./eval/setup-runs.sh --reset                      # discard and re-stage local run workspaces
+#   CP_USER=you@x.com CP_PASS=... ./eval/setup-runs.sh --reset --setup
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,7 +25,14 @@ RUNS="$SCRIPT_DIR/runs"
 MAP="$SCRIPT_DIR/runs.map"
 
 DO_SETUP=0
-[ "${1:-}" = "--setup" ] && DO_SETUP=1
+DO_RESET=0
+for arg in "$@"; do
+  case "$arg" in
+    --setup) DO_SETUP=1 ;;
+    --reset) DO_RESET=1 ;;
+    *) echo "unknown argument: $arg (use --setup and/or --reset)" >&2; exit 1 ;;
+  esac
+done
 
 # folder prefix -> frozen scenario dir under eval/specs/
 scenario_for() {
@@ -39,6 +47,12 @@ scenario_for() {
 }
 
 [ -f "$MAP" ] || { echo "missing $MAP" >&2; exit 1; }
+
+if [ "$DO_RESET" -eq 1 ]; then
+  echo "== RESET =="
+  mkdir -p "$RUNS"
+  find "$RUNS" -mindepth 1 -maxdepth 1 ! -name README.md -exec rm -rf {} +
+fi
 
 # shared design files live once at eval/runs/ so every spec's ../DESIGN_SYSTEM.md resolves.
 mkdir -p "$RUNS"
@@ -64,8 +78,9 @@ STAGE complete. eval/runs/ has 10 workspaces with specs + shared design files.
 Remaining (needs your CloudPiston account — not doable offline):
   1. In PalBuilder, create one EMPTY pal per row in eval/runs.map (names as listed).
      Scenario 04 also needs the provider fixture pal named partner_catalog_static.
-  2. Re-run with creds to pull + inject skills:
-       CP_USER=you@example.com CP_PASS=... ./eval/setup-runs.sh --setup
+  2. Re-run with creds to pull + inject skills. Existing eval pals are reused; --reset
+     discards prior local run state so no PalBuilder UI recreation is needed:
+       CP_USER=you@example.com CP_PASS=... ./eval/setup-runs.sh --reset --setup
   3. Launch each: point your harness/model at the workspace and run in auto mode.
        See eval/runs/README.md and eval/run.md.
 EOF

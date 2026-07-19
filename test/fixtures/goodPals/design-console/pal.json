@@ -1,0 +1,34 @@
+{
+  "pages": { "entry": [] },
+  "fragments": {
+    "entry": [
+      {
+        "string": "controls.html",
+        "Fragment": {
+          "name": "controls",
+          "filename": "controls.html",
+          "palType": "palTypeConsole",
+          "parseable": false
+        }
+      }
+    ]
+  },
+  "workflows": {
+    "entry": [
+      {
+        "string": "duplicate-case.js",
+        "Workflow": {
+          "name": "duplicate-case",
+          "filename": "duplicate-case.js",
+          "workflowType": 7
+        }
+      }
+    ]
+  },
+  "styles": { "entry": [] },
+  "scripts": { "entry": [] },
+  "images": { "entry": [] },
+  "emails": { "entry": [] },
+  "attachments": { "entry": [] },
+  "datasets": { "entry": [] }
+}

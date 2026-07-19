@@ -22,7 +22,7 @@ if (argv.includes("--version") || argv.includes("-v")) {
 // Subcommands: `palsync push|pull|status` — headless sync that needs NO MCP server and NO agent
 // (the recovery path when a session ends before a push, and a plain terminal workflow). They
 // skip the launcher preflight entirely: no Claude/Codex required, just .palsync.json + keychain.
-const SUBCOMMANDS = ["push", "pull", "merge", "status", "test", "preview", "open", "fetch", "screenshot", "validate", "sync-datasets", "seo-audit", "exercise", "cost", "context", "review", "regression", "spec-lint", "task", "checkpoint"];
+const SUBCOMMANDS = ["push", "pull", "merge", "status", "test", "preview", "open", "fetch", "screenshot", "validate", "sync-datasets", "seo-audit", "exercise", "cost", "ctx", "review", "regression", "spec-lint", "task", "checkpoint"];
 // Normalize underscores so `palsync sync_datasets` runs sync-datasets instead of falling through.
 // In the test-07 run that fall-through opened the interactive launcher inside an agent's shell,
 // which hung on a prompt — and the agent's `pkill -f palsync` to unstick it killed the session's
@@ -36,6 +36,17 @@ if (SUBCOMMANDS.includes(subcmd)) {
             process.exit(1);
         });
     return; // launcher flow below never runs for subcommands
+}
+
+// `palsync context` was renamed to `palsync ctx` (2026-07-18) to end the name collision with the
+// MCP `pal_context` tool. Reject the retired name explicitly — without this it is not a known
+// subcommand and falls through to the interactive launcher, which hangs in an agent shell (the
+// exact test-07 failure mode noted above). A weak model reaching for `pal_context` must fail fast.
+if (subcmd === "context") {
+    process.stderr.write(
+        "`palsync context` was renamed to `palsync ctx` (the offline context-manifest inspector).\n" +
+        "For PalBuilder contract sections, call the MCP tool `pal_context` — not the CLI.\n");
+    process.exit(2);
 }
 
 // `palsync setup` — NON-INTERACTIVE workspace creation (headless / autonomous boxes). Has its

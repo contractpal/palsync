@@ -1,0 +1,14 @@
+{
+  "pages": {
+    "entry": [
+      { "string": "console.html", "filename": "console.html" }
+    ]
+  },
+  "fragments": { "entry": [] },
+  "styles": { "entry": [] },
+  "scripts": { "entry": [] },
+  "images": { "entry": [] },
+  "emails": { "entry": [] },
+  "attachments": { "entry": [] },
+  "datasets": { "entry": [] }
+}

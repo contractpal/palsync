@@ -335,7 +335,7 @@ Rules:
 ## Page / Fragment / Script / Style Entries — the `palType` field
 
 Pages, fragments, scripts, and styles carry a `palType` field mapping the resource to a workflow
-context. Full list of values in `SKILL.md`. Sample entry:
+context. Full list of values in `SKILL.md`. Sample page entry:
 
 ```json
 {
@@ -350,6 +350,54 @@ context. Full list of values in `SKILL.md`. Sample entry:
 }
 ```
 
+A new console fragment must use the typed `Fragment` wrapper; a flat `{string, filename}`
+entry is ignored by push:
+
+```json
+{
+  "string": "equipment/list.html",
+  "Fragment": {
+    "name": "equipment/list",
+    "filename": "equipment/list.html",
+    "content": "",
+    "contentType": "text/html",
+    "palType": "palTypeConsole",
+    "parseable": false
+  }
+}
+```
+
+Scripts and styles use the same typed-wrapper shape:
+
+```json
+{
+  "string": "equipment.js",
+  "Script": {
+    "name": "equipment",
+    "filename": "equipment.js",
+    "content": "",
+    "contentType": "text/javascript",
+    "palType": "palTypeConsole",
+    "bookmarks": ""
+  }
+}
+```
+
+```json
+{
+  "string": "equipment.css",
+  "Style": {
+    "name": "equipment",
+    "filename": "equipment.css",
+    "content": "",
+    "contentType": "text/css",
+    "palType": "palTypeConsole"
+  }
+}
+```
+
+Leave `content` empty for a new on-disk file; `pal_push` reads and base64-encodes the file.
+
 Additional notes:
 
 - **`hideConsoleMenu`** (pages) — if true, hides the console menu when this page renders.
@@ -361,10 +409,10 @@ Additional notes:
 ## Editing Rules
 
 - **JSON syntax is strict.** Trailing commas, comments, or unquoted keys break the file.
-- **The `content` field on every file entry is base64-encoded.** Decode it to read the file's
-  actual source; re-encode it after any edit. Never hand-write base64 directly.
-- **The `digest` field is a checksum** of the encoded content. If `content` changes, `digest`
-  must be regenerated to match, or the manifest will be inconsistent.
+- **Pulled `content` fields are base64-encoded.** Edit the decoded on-disk file, not this field;
+  `pal_push` reads and base64-encodes the file. New entries keep `content` empty.
+- **The `digest` field is a checksum** of encoded content. Do not hand-edit it; `pal_push`
+  regenerates payload content from disk.
 - **Order in arrays is preserved** but rarely load-bearing. Resources with load-order
   dependencies (e.g., certain scripts or styles) are the exception.
 - **Don't remove a registered file's entry without removing all references** (workflow

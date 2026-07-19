@@ -31,7 +31,7 @@ async function connect(workspaceDir) {
 }
 
 test("offline tool (pal_validate) runs WITHOUT resolving ctx and returns deterministic envelopes", async () => {
-    const ws = tmpWorkspace({ "pages/demo.html": "<c:debug />\n" });
+    const ws = tmpWorkspace({ "pages/demo.html": "<input name=\"demo\">\n" });
     const { client, calls } = await connect(ws);
     const first = await client.callTool({ name: "pal_validate", arguments: {} });
     const second = await client.callTool({ name: "pal_validate", arguments: {} });

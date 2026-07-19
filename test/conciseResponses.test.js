@@ -61,7 +61,7 @@ test("lint formatting preserves multiple and numeric deltas without mixing sever
 });
 
 test("pal_validate ends with a recoverable workspace-relative full-result artifact", async () => {
-    const ws = tmpWorkspace({ "pages/demo.html": "<c:debug />\n" });
+    const ws = tmpWorkspace({ "pages/demo.html": "<input name=\"demo\">\n" });
     const tool = TOOLS.find(value => value.name === "pal_validate");
     const result = await tool.run({ workspaceDir: ws }, {});
     const parsed = parseEnvelope(result.message);

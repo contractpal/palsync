@@ -173,7 +173,7 @@ test("gateLint still blocks a pre-existing cross-file contract error in current 
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("gateLint blocks a bare text input added to a design-system workspace", () => {
+test("gateLint warns on a bare text input added to a design-system workspace", () => {
     const dir = tmpWorkspace({ "DESIGN_SYSTEM.md": "# system" });
     const record = { fileHashes: hashWorkspaceFiles(dir).files };
     baseline.snapshot(dir, Object.keys(record.fileHashes));
@@ -183,8 +183,8 @@ test("gateLint blocks a bare text input added to a design-system workspace", () 
         '<c:ignore xmlns:c="contractpal"><input type="text" /></c:ignore>');
 
     const lint = gateLint(record, dir);
-    assert.equal(lint.errors, 1);
-    assert.ok(lint.findings.some(f => f.rule === "designClassRequired" && f.severity === "error"));
+    assert.equal(lint.errors, 0);
+    assert.ok(lint.findings.some(f => f.rule === "designClassRequired" && f.severity === "warn"));
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -202,7 +202,7 @@ test("gateLint permits the same bare text input without a design system", () => 
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("gateLint does not re-block a baseline design-class error in a modified file", () => {
+test("gateLint surfaces a baseline design-class warning in a modified file", () => {
     const original = '<c:ignore xmlns:c="contractpal"><input type="text" /></c:ignore>';
     const dir = tmpWorkspace({
         "DESIGN_SYSTEM.md": "# system",
@@ -215,8 +215,8 @@ test("gateLint does not re-block a baseline design-class error in a modified fil
         original.replace("</c:ignore>", "<p>Clean edit</p></c:ignore>"));
 
     const lint = gateLint(record, dir);
-    assert.equal(lint.errors, 0, "the pre-existing designClassRequired error must not block");
-    assert.equal(lint.findings.some(f => f.rule === "designClassRequired"), false);
+    assert.equal(lint.errors, 0, "designClassRequired must not block");
+    assert.ok(lint.findings.some(f => f.rule === "designClassRequired" && f.severity === "warn"));
     fs.rmSync(dir, { recursive: true, force: true });
 });
 

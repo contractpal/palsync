@@ -47,7 +47,7 @@ const USAGE = [
     "                                                               Exercise workflow actions end-to-end; assert expect/absent strings in the rendered result",
     "  palsync cost   [--dir <workspace>]                           palsync's own context contribution: tool calls + bytes returned + injected-block size (offline)",
     "  palsync cost record --model X --provider Y --in N --cached N --out N [--cost N] [--currency USD] [--phase build|review] [--dir <ws>]",
-    "  palsync context inspect|diff [--dir <workspace>]             Inspect locally stable context or compare the last changed generation (offline)",
+    "  palsync ctx inspect|diff [--dir <workspace>]                 Inspect locally stable context or compare the last changed generation (offline)",
     "  palsync review check|brief [--dir <workspace>]              Check REVIEW.md evidence or print the pre-review evidence ledger (offline)",
     "  palsync regression [--keep-lock] [--dir <ws>]                Brownfield regression vs baseline/baseline.json (freshness -> validate/test/H1; caused vs inherited)",
     "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Mechanical reality-check of a SPEC.md (offline): placeholders, dead links, §8a types, §12 floor",
@@ -245,7 +245,7 @@ async function run(cmd, argv) {
         return 0;
     }
 
-    if (cmd === "context") {
+    if (cmd === "ctx") {
         const manifest = require("../core/contextManifest");
         if (flags._positional === "inspect") {
             console.log(manifest.formatInspect(manifest.readManifest(dir)));
@@ -256,7 +256,7 @@ async function run(cmd, argv) {
             console.log(manifest.formatDiff(manifest.readManifest(dir, true), current));
             return current ? 0 : 1;
         }
-        console.error("Usage: palsync context inspect|diff [--dir <workspace>]");
+        console.error("Usage: palsync ctx inspect|diff [--dir <workspace>]");
         return 1;
     }
 

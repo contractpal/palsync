@@ -1,0 +1,54 @@
+{
+  "pages": {
+    "entry": [
+      {
+        "string": "console.html",
+        "Page": {
+          "name": "console",
+          "filename": "console.html",
+          "palType": "palTypeConsole"
+        }
+      }
+    ]
+  },
+  "fragments": {
+    "entry": [
+      {
+        "string": "navbar.html",
+        "Fragment": {
+          "name": "navbar",
+          "filename": "navbar.html",
+          "palType": "palTypeConsole",
+          "parseable": false
+        }
+      },
+      {
+        "string": "controls.html",
+        "Fragment": {
+          "name": "controls",
+          "filename": "controls.html",
+          "palType": "palTypeConsole",
+          "parseable": false
+        }
+      }
+    ]
+  },
+  "workflows": {
+    "entry": [
+      {
+        "string": "console.js",
+        "Workflow": {
+          "name": "console",
+          "filename": "console.js",
+          "workflowType": 7
+        }
+      }
+    ]
+  },
+  "styles": { "entry": [] },
+  "scripts": { "entry": [] },
+  "images": { "entry": [] },
+  "emails": { "entry": [] },
+  "attachments": { "entry": [] },
+  "datasets": { "entry": [] }
+}

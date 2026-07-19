@@ -121,6 +121,10 @@ test("pal-level manifest guidance no longer dead-ends on data and datalists", ()
     const contract = read("bundled-context/CLAUDE.md") + "\n" + read("src/launcher/contextInject.js");
 
     mustMatch(manifest, /^##+\s+`?data`?\b/im, "pal.json reference must document the data section");
+    mustMatch(manifest, /"Fragment"[\s\S]{0,260}"palType"\s*:\s*"palTypeConsole"[\s\S]{0,100}"parseable"\s*:\s*false/,
+        "pal.json reference must show the typed console Fragment manifest shape");
+    mustMatch(read("bundled-context/skills/pal-loop/SKILL.md"), /mandatory and non-skippable[\s\S]{0,500}"Fragment"[\s\S]{0,500}"Dataset"/i,
+        "pal-loop must eagerly carry fragment and dataset entry shapes");
     mustMatch(manifest, /^##+\s+`?datalists`?\b/im, "pal.json reference must document the datalists section");
     mustMatch(manifest, /pal\.getData\s*\(/, "data section must connect manifest shape to runtime read API");
     mustMatch(manifest, /pal\.getDataList\s*\(/, "datalists section must connect manifest shape to runtime read API");

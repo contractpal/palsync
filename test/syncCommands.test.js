@@ -38,7 +38,8 @@ test("USAGE documents browser-open preview default and no-open escape hatch", ()
     assert.match(USAGE, /--no-open/);
     assert.match(USAGE, /palsync open/);
     assert.doesNotMatch(USAGE, /palsync scaffold/);
-    assert.match(USAGE, /palsync context inspect\|diff/);
+    assert.match(USAGE, /palsync ctx inspect\|diff/);
+    assert.doesNotMatch(USAGE, /palsync context inspect/);
     assert.match(USAGE, /palsync cost record --model X --provider Y/);
 });
 
@@ -73,7 +74,7 @@ test("cost record writes the sidecar and reports validation errors", async () =>
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("context inspect and diff run fully offline", async () => {
+test("ctx inspect and diff run fully offline", async () => {
     const ws = tmpWorkspace();
     await contextInject.inject(ws, { palName: "Alpha", agent: "codex" });
     await contextInject.inject(ws, { palName: "Beta", agent: "codex" });
@@ -82,8 +83,8 @@ test("context inspect and diff run fully offline", async () => {
     console.log = (...args) => output.push(args.join(" "));
     try {
         const syncCommands = require("../src/cli/syncCommands");
-        assert.equal(await syncCommands.run("context", ["inspect", "--dir", ws]), 0);
-        assert.equal(await syncCommands.run("context", ["diff", "--dir", ws]), 0);
+        assert.equal(await syncCommands.run("ctx", ["inspect", "--dir", ws]), 0);
+        assert.equal(await syncCommands.run("ctx", ["diff", "--dir", ws]), 0);
     } finally {
         console.log = originalLog;
         fs.rmSync(ws, { recursive: true, force: true });

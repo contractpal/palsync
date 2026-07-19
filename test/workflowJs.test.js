@@ -20,7 +20,7 @@ test("lintWorkflowJs: core restricted-JavaScript rules are directly covered", ()
     }
 });
 
-test("lintWorkflowJs: duplicate switch action labels are errors", () => {
+test("lintWorkflowJs: duplicate switch action labels are warnings", () => {
     const src = [
         "function main() {",
         "  var action = parameters.get('action');",
@@ -37,7 +37,7 @@ test("lintWorkflowJs: duplicate switch action labels are errors", () => {
     const findings = lintWorkflowJs("workflows/main.js", src);
     const dupes = findings.filter(f => f.rule === "duplicateCase");
     assert.equal(dupes.length, 1);
-    assert.equal(dupes[0].severity, "error");
+    assert.equal(dupes[0].severity, "warn");
     assert.equal(dupes[0].line, 8);
     assert.match(dupes[0].message, /duplicate case "save"/i);
     assert.match(dupes[0].message, /first defined on line 4/i);

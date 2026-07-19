@@ -8,6 +8,7 @@ const { checkWorkspace, formatReviewCheck, buildReviewBrief, formatReviewBrief }
 const { hashWorkspaceFiles } = require("../src/core/workspaceHash");
 const { version: PACKAGE_VERSION } = require("../package.json");
 const syncCommands = require("../src/cli/syncCommands");
+const contextInject = require("../src/launcher/contextInject");
 
 const REVIEW = `# REVIEW — demo
 verdict: PASS
@@ -32,8 +33,10 @@ test("PASS review with an empty ledger is flagged and capped", () => {
 });
 
 test("PASS review is clean with successful pal_exercise evidence", () => {
-    const ws = tmpWorkspace({ "REVIEW.md": REVIEW });
-    fs.writeFileSync(path.join(ws, ".palsync.usage.json"), JSON.stringify({ tools: { pal_exercise: { calls: 2, successfulCalls: 1 } } }));
+    const ws = tmpWorkspace({
+        ".palsync.usage.json": JSON.stringify({ tools: { pal_exercise: { calls: 2, successfulCalls: 1 } } })
+    });
+    fs.writeFileSync(path.join(ws, "REVIEW.md"), REVIEW);
     const result = checkWorkspace(ws);
     assert.equal(result.ok, true);
     assert.equal(result.flags.length, 0);
@@ -89,6 +92,21 @@ test("bias-capped PASS is detected under a decorated heading verdict", () => {
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
+test("review check rejects a REVIEW.md older than current evidence", () => {
+    const ws = tmpWorkspace({
+        ".palsync.usage.json": JSON.stringify({ tools: { pal_exercise: { calls: 1, successfulCalls: 1 } } }),
+        "REVIEW.md": REVIEW,
+    });
+    const later = new Date(Date.now() + 2000);
+    fs.utimesSync(path.join(ws, ".palsync.usage.json"), later, later);
+    const result = checkWorkspace(ws);
+    assert.equal(result.ok, false);
+    assert.equal(result.staleReview, true);
+    assert.match(formatReviewCheck(result), /REVIEW\.md is stale.*\.palsync\.usage\.json/s);
+    assert.match(formatReviewCheck(result), /result: FAIL/);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
 test("review check CLI returns nonzero when evidence is absent", async () => {
     const ws = tmpWorkspace({ "REVIEW.md": REVIEW, ".palsync.usage.json": JSON.stringify({ tools: {} }) });
     const oldLog = console.log;
@@ -98,6 +116,41 @@ test("review check CLI returns nonzero when evidence is absent", async () => {
     finally { console.log = oldLog; }
     assert.match(output.join("\n"), /result: FAIL/);
     fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("review completion gate is identical across claude-code, pi, and opencode", async () => {
+    const outputs = [];
+    const missingOutputs = [];
+    for (const agent of ["claude", "pi", "opencode"]) {
+        const ws = tmpWorkspace({});
+        await contextInject.inject(ws, { palName: "Demo", agent });
+        fs.writeFileSync(path.join(ws, ".palsync.usage.json"), JSON.stringify({
+            tools: { pal_exercise: { calls: 1, successfulCalls: 1 } }
+        }));
+        fs.writeFileSync(path.join(ws, "REVIEW.md"), REVIEW);
+        const managedDoc = fs.readFileSync(path.join(ws, agent === "claude" ? "CLAUDE.palsync.md" : "AGENTS.md"), "utf8");
+        assert.match(managedDoc, /Completion gate \(identical in Claude Code, Pi, and OpenCode\)[\s\S]*palsync review check/);
+
+        const oldLog = console.log;
+        const logged = [];
+        console.log = (...args) => logged.push(args.join(" "));
+        try { assert.equal(await syncCommands.run("review", ["check", "--dir", ws]), 0, agent); }
+        finally { console.log = oldLog; }
+        outputs.push(logged.join("\n"));
+
+        fs.rmSync(path.join(ws, "REVIEW.md"));
+        const missing = [];
+        console.log = (...args) => missing.push(args.join(" "));
+        try { assert.equal(await syncCommands.run("review", ["check", "--dir", ws]), 1, agent); }
+        finally { console.log = oldLog; }
+        missingOutputs.push(missing.join("\n"));
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+    assert.equal(new Set(outputs).size, 1);
+    assert.match(outputs[0], /result: PASS/);
+    assert.equal(new Set(missingOutputs).size, 1);
+    assert.match(missingOutputs[0], /REVIEW\.md not found/);
+    assert.match(missingOutputs[0], /result: FAIL/);
 });
 
 test("review brief renders sidecar evidence and explicit coverage gaps", () => {

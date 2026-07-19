@@ -58,12 +58,27 @@ function checkReview(review, ledger) {
     };
 }
 
+function mtimeMs(file) {
+    try { return fs.statSync(file).mtimeMs; }
+    catch (e) { return null; }
+}
+
 function checkWorkspace(workspaceDir) {
     const reviewPath = path.join(workspaceDir, "REVIEW.md");
     let review;
     try { review = fs.readFileSync(reviewPath, "utf8"); }
     catch (e) { return { ok: false, missingReview: true, reviewPath, exercises: 0, rows: [], flags: [], biasWarning: false, verdictMustChange: false }; }
     const result = Object.assign(checkReview(review, readJson(path.join(workspaceDir, USAGE_FILE))), { reviewPath });
+    const reviewMtimeMs = mtimeMs(reviewPath);
+    const freshnessSources = [PALSYNC_FILE, USAGE_FILE, "EXECUTION.md"]
+        .map(file => ({ file, mtimeMs: mtimeMs(path.join(workspaceDir, file)) }))
+        .filter(source => source.mtimeMs !== null);
+    const newestEvidence = freshnessSources.reduce((latest, source) =>
+        !latest || source.mtimeMs > latest.mtimeMs ? source : latest, null);
+    result.reviewMtimeMs = reviewMtimeMs;
+    result.newestEvidence = newestEvidence;
+    result.staleReview = !!(newestEvidence && reviewMtimeMs < newestEvidence.mtimeMs);
+    if (result.staleReview) result.ok = false;
     const localDrift = diffWorkspace(readJson(path.join(workspaceDir, PALSYNC_FILE)), workspaceDir);
     result.localDrift = localDrift;
     if (localDrift.dirty) result.ok = false;
@@ -73,6 +88,8 @@ function checkWorkspace(workspaceDir) {
 function formatReviewCheck(result) {
     const lines = ["palsync " + PACKAGE_VERSION + " review check", "successful pal_exercise calls: " + result.exercises];
     if (result.missingReview) lines.push("FAIL: REVIEW.md not found.");
+    if (result.staleReview) lines.push("FAIL: REVIEW.md is stale — " + result.newestEvidence.file +
+        " changed after the review. Re-run pal-review and overwrite REVIEW.md with fresh evidence.");
     for (const flag of result.flags) lines.push("FLAG line " + flag.line + ": " + flag.code + " — " + flag.label);
     if (result.biasWarning) lines.push("VERDICT CAP: BIAS WARNING present; self-review cannot receive PASS.");
     if (result.biasWarning && result.verdictMustChange) lines.push("REVIEW.md declares PASS while bias-capped — edit the verdict to CHANGES-NEEDED.");

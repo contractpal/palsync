@@ -127,8 +127,8 @@ function lintMarkup(rel, src, opts) {
         const lname = tag.name.toLowerCase();
 
         if (lname === "c:debug") {
-            add(lt, "error", "debugTagShipped",
-                "<c:debug/> must not ship in a page or fragment: it renders headerless platform tables that fail designAudit tableHeaders. Remove the debug tag before pushing. See the palbuilder-frontend skill debug guidance.");
+            add(lt, "warn", "debugTagShipped",
+                "<c:debug/> is valid PalBuilder markup, but it can render headerless platform tables that fail designAudit tableHeaders. Remove it from user-facing pages unless the debug output is intentionally required.");
         }
 
         if (designSystemPresent) {
@@ -145,14 +145,13 @@ function lintMarkup(rel, src, opts) {
             const nonInputClass = lname === "input" && [
                 "hidden", "checkbox", "radio", "range", "submit", "button", "reset", "image", "file", "color"
             ].includes((tag.attrs.find(a => a.name.toLowerCase() === "type")?.value || "").toLowerCase());
-            // Owner-approved policy gate (Sam, 2026-07-18): not a server rejection; blocks because
-            // a declared design system must own core controls consistently across the pal.
+            // Owner reversal (Sam, 2026-07-18): this is valid markup with no server rejection.
+            // Keep the design-system consistency check advisory until live rejection evidence exists.
             if (requiredClass && !nonInputClass && !new RegExp("(^|\\s)" + requiredClass + "(?:\\s|$)").test(
                 tag.attrs.find(a => a.name.toLowerCase() === "class")?.value || "")) {
-                add(lt, "error", "designClassRequired",
-                    "<" + tag.name + "> is missing the required ." + requiredClass + " class while a workspace design system is present. " +
-                    "Fix: add class=\"" + requiredClass + "\" and use the corresponding component recipe from component-library.md; " +
-                    "core-control classes are validation errors, not suggestions.");
+                add(lt, "warn", "designClassRequired",
+                    "<" + tag.name + "> is missing the recommended ." + requiredClass + " class while a workspace design system is present. " +
+                    "Add class=\"" + requiredClass + "\" and use the corresponding component recipe from component-library.md, or verify the intentional exception.");
             }
         }
 

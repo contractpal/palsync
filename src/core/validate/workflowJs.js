@@ -104,10 +104,9 @@ const RULES = {
             "then assign them at the top of run(). See palbuilder-core/references/es3-cheatsheet.md."
     },
     duplicateCase: {
-        severity: "error",
-        msg: "Duplicate switch case label — this action branch is defined more than once in the same switch. " +
-            "PalBuilder may compile it, but only one branch can be the intended handler and reviewers have already " +
-            "missed duplicate action code in passing builds. Fix: keep one case, merge any needed statements into it, " +
+        severity: "warn",
+        msg: "Duplicate switch case label — PalBuilder may compile this, but one branch is unreachable and the intended " +
+            "handler is ambiguous. Review the branches; normally keep one case, merge any needed statements into it, " +
             "and delete the duplicate branch."
     },
     fragClobber: {

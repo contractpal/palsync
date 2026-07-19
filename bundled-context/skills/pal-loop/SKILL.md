@@ -62,7 +62,19 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
    `references/delegation.md` first; required protocol.**)
 3. **Mark** `in_progress`: `palsync task <id> in_progress` — write state now, not later. **Done when:** disk state says `in_progress`.
 4. **Execute exactly as specced:**
-   - BEFORE writing your first page/fragment/style/workflow file, run `pal_context section:"creating-files"` — the manifest entry shapes are NOT guessable.
+   - **Before creating the first page, fragment, script, style, workflow, or dataset**, read
+     `../palbuilder-core/references/pal-json.md` through its entry examples. This step is
+     mandatory and non-skippable: every new file needs both the on-disk file and its typed
+     `pal.json` wrapper; flat `{string, filename}` entries ship nothing. For a console fragment:
+     ```json
+     { "string": "feature/list.html", "Fragment": { "name": "feature/list", "filename": "feature/list.html", "content": "", "contentType": "text/html", "palType": "palTypeConsole", "parseable": false } }
+     ```
+     For a dataset schema:
+     ```json
+     { "string": "items", "Dataset": { "name": "items", "fields": { "DatasetField": [ ... ] } } }
+     ```
+     Leave file-entry `content` empty; `pal_push` fills it from disk. After adding a CREATE
+     dataset schema, run `pal_sync_datasets`; never provision §8b consumed datasets.
    - Foundation task (T1): use bash `cp` to copy the matching pal-type template files and the
      runtime shell/styles plus ONLY the behavior scripts with real consumers in current markup;
      add a script later when a task introduces its consumer. Replace `{{PAL_NAME}}`/`YOUR-DOMAIN`
@@ -251,7 +263,9 @@ Trigger: every task `done`, or every remaining task is a `blocked`/`needs-fronti
    EVIDENCE LEDGER output, SPEC.md, EXECUTION.md, DESIGN_SYSTEM.md/COMPONENTS.md, `baseline/`
    (if any), and the pal's identity so it can `pal_fetch`/`pal_screenshot`/`pal_test` the real
    artifacts.
-4. **PASS** → the build is genuinely done; report it.
+4. **Reviewer says PASS** → run `palsync review check` yourself in the workspace. Missing or
+   stale `REVIEW.md`, or any `result: FAIL`, refuses completion identically in Claude Code, Pi,
+   and OpenCode. Only `result: PASS` means the build is genuinely done; otherwise re-dispatch.
 5. **CHANGES-NEEDED** → append each `## Fix tasks` item as a new EXECUTION.md task (next id,
    `spec ref` from the finding, `depends` per stated order, `todo`, tier `standard` unless it
    needs new structure); resume the task cycle on exactly those tasks.

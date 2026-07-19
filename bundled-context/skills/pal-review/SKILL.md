@@ -151,8 +151,11 @@ pal_validate: <quote `ok` and `diagnosticCount` — required; missing fields mak
 
 Cost recording — IF harness is claude-code THEN skip `palsync cost record` (agent cannot read its own spend); IF pi THEN run `palsync cost record --model <model> --phase <build|review>` using the user-supplied footer figures.
 Then run `palsync review check` from the pal workspace and paste
-its complete output into REVIEW.md. Any flag or verdict cap from that command forces
-`CHANGES-NEEDED`; do not write PASS until the check reports `result: PASS`.
+its complete output into REVIEW.md. Run it only after the latest push, task-state update, and
+review tool evidence: it rejects a missing or stale REVIEW.md. Any flag, stale-review failure,
+or verdict cap forces `CHANGES-NEEDED`; do not write PASS until the check reports `result: PASS`.
+The build session must run the same command before declaring PASS/done; this gate is identical in
+Claude Code, Pi, and OpenCode.
 
 ## Rules
 - **Never edit code or the spec.** Findings become fix tasks for pal-loop; a *spec* problem
