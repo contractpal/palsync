@@ -88,6 +88,7 @@ The agent calls these for you — you never run them by hand:
 | `pal_fetch` | Fetch a rendered page/endpoint for the agent to read. |
 | `pal_screenshot` | Screenshot the rendered pal (Chromium) so the agent can see its own UI. |
 | `pal_exercise` | Drive the rendered pal in a browser to exercise a user flow. |
+| `pal_context` | Load focused PalSync contract sections on demand for sync, file-creation, and dataset work. |
 | `pal_seo_audit` | On-page SEO audit of a web pal — title/description, canonical, `og:` tags, JSON-LD, H1, img alt, … Every finding carries the exact fix. |
 | `pal_sync_datasets` | Create/update dataset tables from `pal.json`. Never deletes data by default; destructive `recreate` requires an exact typed confirmation. |
 | `pal_regression` | Capture / compare a regression baseline. |
@@ -127,7 +128,9 @@ palsync upgrade         # self-update from the latest commit
 ```
 
 All take `--dir <workspace>` (default: current directory). Semantics are identical to the MCP tools
-— same drift guards, same preserve-on-pull.
+— same drift guards, same preserve-on-pull. Pi users do not register an MCP server manually: its
+native extension privately spawns `palsync-mcp` with the `pi-minimal` profile and activates tools
+lazily.
 
 ### `palsync cost` — context observability
 

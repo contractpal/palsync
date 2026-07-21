@@ -99,6 +99,58 @@ test("recordToolCall counts successful evidence separately from failed calls", (
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
+test("tool evidence round-trips exercise and push entries", () => {
+    const ws = tmpWorkspace();
+    assert.equal(usage.appendToolEvidence(ws, {
+        tool: "pal_exercise", palGuid: "PAL-1", marker: "M1",
+        runId: "run-1", kind: "console", mode: "browser"
+    }), true);
+    assert.equal(usage.appendToolEvidence(ws, {
+        tool: "pal_push", palGuid: "PAL-1", marker: "M1"
+    }), true);
+    const entries = usage.readToolEvidence(ws);
+    assert.equal(entries.length, 2);
+    assert.deepEqual(entries.map(entry => entry.tool), ["pal_exercise", "pal_push"]);
+    assert.ok(entries.every(entry => entry.schema === "palsync/tool-evidence/1"));
+    assert.ok(entries.every(entry => entry.successful === true && !Number.isNaN(Date.parse(entry.ts))));
+    assert.equal(entries[0].runId, "run-1");
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("tool evidence filters by tool, pal, and current marker", () => {
+    const entries = [
+        { schema: "palsync/tool-evidence/1", successful: true, tool: "pal_exercise", palGuid: "PAL-1", marker: "M1" },
+        { schema: "palsync/tool-evidence/1", successful: true, tool: "pal_exercise", palGuid: "PAL-1", marker: "OLD" },
+        { schema: "palsync/tool-evidence/1", successful: true, tool: "pal_push", palGuid: "PAL-1", marker: "M1" },
+        { schema: "palsync/tool-evidence/1", successful: true, tool: "pal_exercise", palGuid: "PAL-2", marker: "M1" },
+        { schema: "palsync/tool-evidence/1", successful: true, tool: "pal_exercise", palGuid: "PAL-1" }
+    ];
+    assert.equal(usage.filterToolEvidence(entries, "pal_exercise", "PAL-1", "M1").length, 1);
+    assert.equal(usage.filterToolEvidence(entries, "pal_push", "PAL-1", "M1").length, 1);
+    assert.equal(usage.filterToolEvidence(entries, "pal_exercise", "PAL-1", null).length, 0);
+});
+
+test("tool evidence reader preserves valid neighbors and ignores wrong schemas", () => {
+    const ws = tmpWorkspace();
+    const file = path.join(ws, usage.TOOL_EVIDENCE_FILE);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const valid = tool => JSON.stringify({
+        schema: "palsync/tool-evidence/1", successful: true, tool, palGuid: "PAL-1", marker: "M1"
+    });
+    fs.writeFileSync(file, [
+        valid("pal_exercise"), "{malformed", JSON.stringify({ schema: "other/1", tool: "pal_push" }),
+        valid("pal_push"), "{truncated"
+    ].join("\n"));
+    assert.deepEqual(usage.readToolEvidence(ws).map(entry => entry.tool), ["pal_exercise", "pal_push"]);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("tool evidence write failure returns false without throwing", () => {
+    const ws = tmpWorkspace({ ".palsync": "not a directory" });
+    assert.equal(usage.appendToolEvidence(ws, { tool: "pal_push", palGuid: "PAL-1", marker: "M1" }), false);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
 test("contentStats: text ≈ bytes/4, images priced by pixel area not payload bytes", () => {
     const text = "x".repeat(400);
     // Minimal PNG header claiming 800x500 (IHDR width/height only — enough for the parser)
@@ -283,9 +335,10 @@ test("formatCost merges Pi telemetry without treating estimates as billing", () 
     const file = path.join(ws, usage.PI_USAGE_FILE);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, [
-        { schema: "palsync/pi-usage/1", tool: "pal_validate", bytes: 100, tokenEstimate: 25, provider: null, model: null, cost: null },
-        { schema: "palsync/pi-usage/1", tool: "pal_test", bytes: 20, tokenEstimate: 5, provider: "anthropic", model: "m", cost: null }
-    ].map(entry => JSON.stringify(entry)).join("\n") + "\n");
+        JSON.stringify({ schema: "palsync/pi-usage/1", tool: "pal_validate", bytes: 100, tokenEstimate: 25, provider: null, model: null, cost: null }),
+        "{malformed Pi row",
+        JSON.stringify({ schema: "palsync/pi-usage/1", tool: "pal_test", bytes: 20, tokenEstimate: 5, provider: "anthropic", model: "m", cost: null })
+    ].join("\n") + "\n");
     assert.equal(usage.readPiUsage(ws).length, 2);
     const output = usage.formatCost(ws, []);
     assert.match(output, /Pi extension tool telemetry/);
