@@ -52,10 +52,12 @@ const BASE64_TYPES = [
 
 // Folders whose NEW local files palsync can legitimately push (and so whose pal.json entries
 // are worth carrying forward through a pull). Workflows are creatable too (well-formed, with a
-// workflowType). documents/fonts are server-rejected on create; datasets/dataviews/data/datalists
-// are PalBuilder-provisioned. Files of those types are still PRESERVED on disk (never destroy
-// local work) — they just can't ride a push.
-const CREATABLE_FOLDERS = new Set(["pages", "fragments", "scripts", "styles", "images", "emails", "attachments", "workflows", "wizards"]);
+// workflowType). documents/fonts are server-rejected on create; datasets/dataviews remain
+// PalBuilder-provisioned. data/datalists ARE creatable — see core/dataObjects.js, which is the
+// only supported way to create/update/delete them (never hand-edit pal.json's data/datalists
+// entries directly; the shape is easy to get subtly wrong). Files of the non-creatable types are
+// still PRESERVED on disk (never destroy local work) — they just can't ride a push.
+const CREATABLE_FOLDERS = new Set(["pages", "fragments", "scripts", "styles", "images", "emails", "attachments", "workflows", "wizards", "data", "datalists"]);
 
 // Compute the set of POSIX-style relative paths the current server manifest will write into
 // the workspace (everything inside the 14 manifest folders). Exposed for tests/diagnostics.
@@ -99,7 +101,11 @@ function mergePreservedEntries(pal, oldPalJson, toPreserve) {
     for (const rel of toPreserve) {
         const slash = rel.indexOf("/");
         const folder = rel.slice(0, slash);
-        const entryString = rel.slice(slash + 1); // fragments keep subpaths, e.g. contacts/list.html
+        const fileName = rel.slice(slash + 1); // fragments keep subpaths, e.g. contacts/list.html
+        // data/datalists entries are named WITHOUT the mirror file's ".json" suffix (see
+        // JSON_TYPES/writeJsonEntry above) — every other creatable folder's entry.string IS the
+        // on-disk filename. Same reason datasets needed special-casing in validate/palJson.js.
+        const entryString = (folder === "data" || folder === "datalists") ? fileName.replace(/\.json$/, "") : fileName;
         if (!CREATABLE_FOLDERS.has(folder)) {
             report.push({ rel, merged: false, note: "preserved on disk; this type can't be created via push — create it in PalBuilder first" });
             continue;

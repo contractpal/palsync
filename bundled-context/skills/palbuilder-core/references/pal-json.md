@@ -212,6 +212,10 @@ per key/value pair:
 The field is `values`, not a newline-delimited `data` string. Keep the wrapper `string` and
 `Data.name` identical. See `palbuilder-data/references/payloads.md` for runtime access.
 
+**Create/update/delete a `Data` entry with `pal_data_set` / `pal_data_delete`** — the palsync MCP
+builds this exact shape from a plain `{ key: value }` object, so you never hand-write
+`values.entry[].string`. Don't add or edit entries in this manifest section by hand.
+
 ---
 
 ## `datalists` — pal-level static tabular data
@@ -245,6 +249,10 @@ PalBuilder contract serializes column names under `cols.string` and rows under
 Every row must have exactly one cell per column. The serialized fields are `cols` and `recs`, not
 the tempting guesses `columns`, `records`, or `fields`. Keep the wrapper `string` and
 `DataList.name` identical.
+
+**Create/update/delete a `DataList` entry with `pal_datalist_set` / `pal_datalist_delete`** — pass
+plain `columns`/`rows` arrays and the MCP serializes the `cols.string` / `recs["string-array"]`
+shape for you. Don't add or edit entries in this manifest section by hand.
 
 **Every entry in `layout` that names a workflow file is a *default* registration** — the
 platform's fallback for that workflow type. Other workflow files of the same type can exist and

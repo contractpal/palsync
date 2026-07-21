@@ -1,7 +1,8 @@
 "use strict";
 // The palsync MCP tools. Each `run(ctx, args)` is a plain async function (so it's directly
 // testable); server.js wraps them for the MCP SDK. ctx = { session, record, workspaceDir,
-// lifecycle, persist() }. Datasets/dataviews are never created or destroyed by any tool.
+// lifecycle, persist() }. Datasets/dataviews are never created or destroyed by any tool; Data and
+// DataList ARE, via pal_data_set/pal_data_delete/pal_datalist_set/pal_datalist_delete (core/dataObjects.js).
 const { z } = require("zod");
 const { pull } = require("../core/pull");
 const { push } = require("../core/push");
@@ -16,6 +17,7 @@ const { runSeoAudit, formatSeoAudit } = require("../core/seoAudit");
 const { runRegression } = require("../core/regression");
 const { lintSpec, formatSpecLint } = require("../core/specLint");
 const { syncDatasets } = require("../core/datasets");
+const { upsertData, deleteData, upsertDataList, deleteDataList } = require("../core/dataObjects");
 const { validateWorkspace, formatValidation: formatLint } = require("../core/validate");
 const { cachedLint } = require("../core/lintCache");
 const palsyncfile = require("../core/palsyncfile");
@@ -1326,6 +1328,82 @@ const TOOLS = [
         }
     },
     {
+        name: "pal_data_set",
+        description: "Create or update a pal-level Data map (pal.getData(\"name\")) in pal.json — the MCP builds the correct serialized shape (values.entry[].string: [key, value]) so you never hand-write it. FULL REPLACE of that name's key/value set, not a delta. Local file edit only (no server call) — pal_push to send it.",
+        needsCtx: false,
+        inputShape: {
+            name: z.string().describe("The Data name, read on the server via pal.getData(\"<name>\")."),
+            values: z.record(z.string(), z.string()).describe("The complete key/value set for this Data — replaces any existing values under this name.")
+        },
+        async run(ctx, { name, values } = {}) {
+            let res;
+            try { res = upsertData(ctx.workspaceDir, name, values); }
+            catch (e) { return { ok: false, message: "REFUSED: " + e.message }; }
+            return Object.assign(res, {
+                ok: true,
+                message: (res.created ? "Created" : "Updated") + " Data \"" + res.name + "\" with " +
+                    res.entry.Data.values.entry.length + " key/value pair(s) in pal.json (and its data/" +
+                    res.name + ".json mirror). pal_push to send it."
+            });
+        }
+    },
+    {
+        name: "pal_data_delete",
+        description: "Delete a pal-level Data map by name from pal.json (and its data/<name>.json mirror). Local file edit only (no server call) — pal_push to send the removal.",
+        needsCtx: false,
+        inputShape: { name: z.string().describe("The Data name to delete.") },
+        async run(ctx, { name } = {}) {
+            let res;
+            try { res = deleteData(ctx.workspaceDir, name); }
+            catch (e) { return { ok: false, message: "REFUSED: " + e.message }; }
+            return Object.assign(res, {
+                ok: res.deleted,
+                message: res.deleted
+                    ? "Deleted Data \"" + res.name + "\" from pal.json. pal_push to send the removal."
+                    : "No Data named \"" + res.name + "\" was found in pal.json — nothing to delete."
+            });
+        }
+    },
+    {
+        name: "pal_datalist_set",
+        description: "Create or update a pal-level DataList (pal.getDataList(\"name\")) in pal.json — the MCP builds the correct serialized shape (cols.string / recs[\"string-array\"][].string) so you never hand-write it. FULL REPLACE of that name's columns and rows, not a delta. Local file edit only (no server call) — pal_push to send it.",
+        needsCtx: false,
+        inputShape: {
+            name: z.string().describe("The DataList name, read on the server via pal.getDataList(\"<name>\")."),
+            columns: z.array(z.string()).describe("Column names, in order."),
+            rows: z.array(z.array(z.string())).optional().describe("Each row is an array of cell values, one per column, in the same order as columns. Omit for an empty table.")
+        },
+        async run(ctx, { name, columns, rows = [] } = {}) {
+            let res;
+            try { res = upsertDataList(ctx.workspaceDir, name, columns, rows); }
+            catch (e) { return { ok: false, message: "REFUSED: " + e.message }; }
+            const list = res.entry.DataList;
+            return Object.assign(res, {
+                ok: true,
+                message: (res.created ? "Created" : "Updated") + " DataList \"" + res.name + "\" — " +
+                    list.cols.string.length + " column(s), " + list.recs["string-array"].length +
+                    " row(s) in pal.json (and its datalists/" + res.name + ".json mirror). pal_push to send it."
+            });
+        }
+    },
+    {
+        name: "pal_datalist_delete",
+        description: "Delete a pal-level DataList by name from pal.json (and its datalists/<name>.json mirror). Local file edit only (no server call) — pal_push to send the removal.",
+        needsCtx: false,
+        inputShape: { name: z.string().describe("The DataList name to delete.") },
+        async run(ctx, { name } = {}) {
+            let res;
+            try { res = deleteDataList(ctx.workspaceDir, name); }
+            catch (e) { return { ok: false, message: "REFUSED: " + e.message }; }
+            return Object.assign(res, {
+                ok: res.deleted,
+                message: res.deleted
+                    ? "Deleted DataList \"" + res.name + "\" from pal.json. pal_push to send the removal."
+                    : "No DataList named \"" + res.name + "\" was found in pal.json — nothing to delete."
+            });
+        }
+    },
+    {
         name: "pal_pull",
         description: "Pull (sync) the pal from the server. New un-pushed local files are preserved. Refuses if it would overwrite locally-modified server files (use force to override).",
         inputShape: { force: z.boolean().optional() },
@@ -1543,7 +1621,11 @@ const TOOL_HINTS = {
     pal_unlock: ["Release pal lock", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
     // Safe sync is additive, but recreate:true can drop every row, so the tool as a whole is
     // destructive and clients should present a confirmation affordance.
-    pal_sync_datasets: ["Synchronize pal datasets", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }]
+    pal_sync_datasets: ["Synchronize pal datasets", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
+    pal_data_set: ["Set pal Data map", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
+    pal_data_delete: ["Delete pal Data map", { readOnlyHint: false, destructiveHint: true, idempotentHint: true }],
+    pal_datalist_set: ["Set pal DataList", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
+    pal_datalist_delete: ["Delete pal DataList", { readOnlyHint: false, destructiveHint: true, idempotentHint: true }]
 };
 for (const tool of TOOLS) {
     const hint = TOOL_HINTS[tool.name];

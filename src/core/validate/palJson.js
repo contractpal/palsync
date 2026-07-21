@@ -620,6 +620,45 @@ function lintPalJson(snapshotOrDir) {
         }
     }
 
+    // data/datalists/*.json — same silent-skip failure as CREATABLE_FOLDERS/datasets above: the
+    // entry name is the basename without ".json", not a "filename" pointer, so it's handled
+    // separately for the same reason datasets is. Create/update/delete these through
+    // core/dataObjects.js (pal_data_set/pal_data_delete/pal_datalist_set/pal_datalist_delete) —
+    // never hand-write the entry shape.
+    for (const folder of ["data", "datalists"]) {
+        const prefix = folder + "/";
+        const diskFiles = snapshot.allFiles
+            .filter(rel => rel.startsWith(prefix) && rel.endsWith(".json") && !rel.slice(prefix.length).includes("/"))
+            .map(rel => rel.slice(prefix.length));
+        if (!diskFiles.length) continue;
+
+        const section = manifest[folder];
+        const registered = new Set();
+        if (section && Array.isArray(section.entry)) {
+            for (const entry of section.entry) {
+                if (typeof entry.string === "string") registered.add(entry.string);
+            }
+        }
+
+        const typeName = folder === "data" ? "Data" : "DataList";
+        for (const name of diskFiles) {
+            const baseName = name.slice(0, -".json".length);
+            if (!registered.has(baseName)) {
+                findings.push({
+                    file: "pal.json",
+                    line: 1,
+                    column: 0,
+                    severity: "error",
+                    rule: "missingPalJsonEntry",
+                    message: folder + "/" + name + " exists on disk but has NO pal.json entry — it will never " +
+                        "reach the server. Use the palsync MCP's create/update tool for " + typeName +
+                        " objects (pal_" + folder.replace(/s$/, "") + "_set) instead of hand-editing pal.json's \"" +
+                        folder + "\".entry array.",
+                });
+            }
+        }
+    }
+
     findings.push(...checkEntryShape(manifest));
     findings.push(...checkEntryFilenames(manifest));
     findings.push(...checkUnknownKeys(manifest));

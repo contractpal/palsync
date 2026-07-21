@@ -615,6 +615,127 @@
     }
   },
   {
+    "name": "pal_data_set",
+    "title": "Set pal Data map",
+    "description": "Create or update a pal-level Data map (pal.getData(\"name\")) in pal.json — the MCP builds the correct serialized shape (values.entry[].string: [key, value]) so you never hand-write it. FULL REPLACE of that name's key/value set, not a delta. Local file edit only (no server call) — pal_push to send it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The Data name, read on the server via pal.getData(\"<name>\")."
+        },
+        "values": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The complete key/value set for this Data — replaces any existing values under this name."
+        }
+      },
+      "required": [
+        "name",
+        "values"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_data_delete",
+    "title": "Delete pal Data map",
+    "description": "Delete a pal-level Data map by name from pal.json (and its data/<name>.json mirror). Local file edit only (no server call) — pal_push to send the removal.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The Data name to delete."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_datalist_set",
+    "title": "Set pal DataList",
+    "description": "Create or update a pal-level DataList (pal.getDataList(\"name\")) in pal.json — the MCP builds the correct serialized shape (cols.string / recs[\"string-array\"][].string) so you never hand-write it. FULL REPLACE of that name's columns and rows, not a delta. Local file edit only (no server call) — pal_push to send it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The DataList name, read on the server via pal.getDataList(\"<name>\")."
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Column names, in order."
+        },
+        "rows": {
+          "description": "Each row is an array of cell values, one per column, in the same order as columns. Omit for an empty table.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "name",
+        "columns"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_datalist_delete",
+    "title": "Delete pal DataList",
+    "description": "Delete a pal-level DataList by name from pal.json (and its datalists/<name>.json mirror). Local file edit only (no server call) — pal_push to send the removal.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The DataList name to delete."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true
+    }
+  },
+  {
     "name": "pal_pull",
     "title": "Pull pal changes",
     "description": "Pull (sync) the pal from the server. New un-pushed local files are preserved. Refuses if it would overwrite locally-modified server files (use force to override).",

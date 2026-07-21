@@ -72,7 +72,10 @@ and no Fontshare import; marketing/web pals keep the Satoshi/Fontshare default.
     workflows/                  # server-side JS — run(controller) entry points
     scripts/  styles/  images/  emails/  attachments/  documents/  wizards/
     datasets/                   # schema JSON — tables provisioned via pal_sync_datasets
-    dataviews/  data/  datalists/   # JSON passthrough
+    dataviews/                  # JSON passthrough — PalBuilder-provisioned, read-only here
+    data/  datalists/           # pal-level Data/DataList — create/update/delete via
+                                 #   pal_data_set/pal_data_delete/pal_datalist_set/pal_datalist_delete
+                                 #   (never hand-edit their pal.json entries — see pal-json.md)
     .palsync.json  .mcp.json  .claude/skills/  CLAUDE.md  CLAUDE.palsync.md   # palsync-managed
 ```
 
