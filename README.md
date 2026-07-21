@@ -91,6 +91,10 @@ The agent calls these for you — you never run them by hand:
 | `pal_context` | Load focused PalSync contract sections on demand for sync, file-creation, and dataset work. |
 | `pal_seo_audit` | On-page SEO audit of a web pal — title/description, canonical, `og:` tags, JSON-LD, H1, img alt, … Every finding carries the exact fix. |
 | `pal_sync_datasets` | Create/update dataset tables from `pal.json`. Never deletes data by default; destructive `recreate` requires an exact typed confirmation. |
+| `pal_data_set` | Create/update a pal-level Data map (`pal.getData("name")`) in `pal.json` — full replace of that name's key/value set. Local edit only; `pal_push` to send it. |
+| `pal_data_delete` | Delete a pal-level Data map by name from `pal.json`. Local edit only; `pal_push` to send the removal. |
+| `pal_datalist_set` | Create/update a pal-level DataList (`pal.getDataList("name")`) in `pal.json` — full replace of that name's columns and rows. Local edit only; `pal_push` to send it. |
+| `pal_datalist_delete` | Delete a pal-level DataList by name from `pal.json`. Local edit only; `pal_push` to send the removal. |
 | `pal_regression` | Capture / compare a regression baseline. |
 | `pal_spec_lint` | Lint a `SPEC.md` for the spec-to-ship workflow. |
 | `pal_status` | Server drift + un-pushed local changes + lock holder. |

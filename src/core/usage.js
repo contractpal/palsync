@@ -33,7 +33,7 @@ const flushTimers = new Map();
 // Soft threshold for palsync's OWN injected block (CLAUDE.palsync.md + skill descriptions + tool
 // defs). Not a hard limit — palsync can't see the model's actual context window — just a "this
 // has grown, go trim a skill description or a tool description" signal sized off the current
-// real total (~30KB across CLAUDE.palsync.md + 11 skills + 20 tools as of this writing).
+// real total (~30KB across CLAUDE.palsync.md + 11 skills + 24 tools as of this writing).
 const SOFT_THRESHOLD_BYTES = 64 * 1024;
 
 function usagePath(workspaceDir) { return path.join(workspaceDir, USAGE_FILE); }

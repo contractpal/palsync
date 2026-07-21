@@ -84,8 +84,9 @@ env:     PALSYNC_WORKSPACE=/home/you/pals/isr
 
 It exposes: `pal_status`, `pal_validate`, `pal_testing`, `pal_test`, `pal_tunnel_test`, `pal_debug`,
 `pal_preview`, `pal_fetch`, `pal_screenshot`, `pal_exercise`, `pal_seo_audit`, `pal_context`,
-`pal_spec_lint`, `pal_regression`, `pal_sync_datasets`, `pal_pull`, `pal_merge`, `pal_push`, `pal_lock`,
-`pal_unlock` (20 tools — a modest context cost; keep other heavy MCP servers off the same session if
+`pal_spec_lint`, `pal_regression`, `pal_sync_datasets`, `pal_data_set`, `pal_data_delete`,
+`pal_datalist_set`, `pal_datalist_delete`, `pal_pull`, `pal_merge`, `pal_push`, `pal_lock`,
+`pal_unlock` (24 tools — a modest context cost; keep other heavy MCP servers off the same session if
 context is tight).
 
 **OpenCode** — palsync registers itself when you run `palsync setup --agent opencode`, or add it
