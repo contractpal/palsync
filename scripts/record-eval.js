@@ -5,6 +5,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { parseTasks } = require("../src/core/taskState");
+const {
+    TOOL_EVIDENCE_FILE, readToolEvidence, filterToolEvidence
+} = require("../src/core/usage");
+const { FILENAME: PALSYNC_FILE } = require("../src/core/palsyncfile");
 
 const SCENARIOS = {
     "01": "01_crud_equipment_checkout",
@@ -56,6 +60,12 @@ function reviewFields(review) {
 function buildRow({ workspaceDir, model, harness, scenario, now = new Date(), repoDir = path.join(__dirname, "..") }) {
     workspaceDir = path.resolve(workspaceDir);
     const usage = readJson(path.join(workspaceDir, ".palsync.usage.json")) || {};
+    const record = readJson(path.join(workspaceDir, PALSYNC_FILE));
+    const evidenceFile = path.join(workspaceDir, TOOL_EVIDENCE_FILE);
+    const evidenceAvailable = fs.existsSync(evidenceFile);
+    const evidence = evidenceAvailable ? readToolEvidence(workspaceDir) : [];
+    const currentEvidence = (tool) => filterToolEvidence(
+        evidence, tool, record && record.palGuid, record && record.lastModifiedDate);
     const sessionCost = readJson(path.join(workspaceDir, ".palsync", "session-cost.json"));
     const costModel = sessionCost && Array.isArray(sessionCost.entries) && sessionCost.entries[0] && sessionCost.entries[0].model;
     const execution = fs.readFileSync(path.join(workspaceDir, "EXECUTION.md"), "utf8");
@@ -81,8 +91,12 @@ function buildRow({ workspaceDir, model, harness, scenario, now = new Date(), re
         verdict: reviewResult.verdict,
         tasksDone: tasks.rows.filter(row => row.status === "done").length,
         tasksTotal: tasks.rows.length,
-        pushOk: toolSuccessfulCalls(usage, "pal_push") > 0,
-        exerciseCount: toolSuccessfulCalls(usage, "pal_exercise"),
+        pushOk: evidenceAvailable
+            ? currentEvidence("pal_push").length > 0
+            : toolSuccessfulCalls(usage, "pal_push") > 0,
+        exerciseCount: evidenceAvailable
+            ? currentEvidence("pal_exercise").length
+            : toolSuccessfulCalls(usage, "pal_exercise"),
         score12: reviewResult.score12,
     };
 }

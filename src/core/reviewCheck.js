@@ -1,11 +1,14 @@
 "use strict";
 // Mechanical review-evidence gate. REVIEW.md remains human-authored; this only checks the
-// invariant the MCP ledger can prove honestly: PASS claims for behavior/action rows require at
-// least one successful pal_exercise call in the current session.
+// invariant durable tool evidence can prove honestly: PASS claims for behavior/action rows require
+// at least one successful pal_exercise run against the current pushed pal version.
 const fs = require("fs");
 const path = require("path");
 const { version: PACKAGE_VERSION } = require("../../package.json");
-const { USAGE_FILE, SESSION_COST_FILE, readSessionCost, phaseTotals } = require("./usage");
+const {
+    USAGE_FILE, TOOL_EVIDENCE_FILE, readSessionCost, phaseTotals,
+    readToolEvidence, filterToolEvidence
+} = require("./usage");
 const { parseTasks, STATUSES } = require("./taskState");
 const { diffWorkspace } = require("./localDrift");
 const { FILENAME: PALSYNC_FILE } = require("./palsyncfile");
@@ -17,9 +20,12 @@ function readJson(file) {
     catch (e) { return null; }
 }
 
-function successfulExerciseCalls(ledger) {
-    const tool = ledger && ledger.tools && ledger.tools.pal_exercise;
-    return tool && Number.isFinite(Number(tool.successfulCalls)) ? Number(tool.successfulCalls) : 0;
+function successfulEvidenceCalls(evidence, tool, palGuid, marker) {
+    return filterToolEvidence(evidence, tool, palGuid, marker).length;
+}
+
+function successfulExerciseCalls(evidence, palGuid, marker) {
+    return successfulEvidenceCalls(evidence, "pal_exercise", palGuid, marker);
 }
 
 function passRows(review) {
@@ -42,19 +48,39 @@ function passRows(review) {
     return rows;
 }
 
-function checkReview(review, ledger) {
-    const exercises = successfulExerciseCalls(ledger);
+function passDeclaration(line) {
+    const decoration = "(?:\\*{1,2}|_{1,2})?";
+    return new RegExp("^\\s*(?:#{1,6}\\s*)?" + decoration +
+        "(?:verdict|overall|result|status)\\s*:\\s*PASS\\b" + decoration + "[^\\w`]*$", "i").test(line);
+}
+
+function verdictPass(review) {
+    const lines = String(review || "").split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (passDeclaration(line) ||
+            /^\s*#{1,6}\s+(?:verdict\s*[-:—]\s*)?PASS\b[^\w`]*$/i.test(line)) return true;
+        if (!/^\s*#{1,6}\s+verdict\s*[^\w`]*$/i.test(line)) continue;
+        let next = i + 1;
+        while (next < lines.length && !lines[next].trim()) next++;
+        if (next < lines.length && (passDeclaration(lines[next]) ||
+            /^\s*(?:\*{1,2}|_{1,2})PASS(?:\*{1,2}|_{1,2})[^\w`]*$/i.test(lines[next]))) return true;
+    }
+    return false;
+}
+
+function checkReview(review, evidenceContext = {}) {
+    const exercises = successfulExerciseCalls(
+        evidenceContext.entries, evidenceContext.palGuid, evidenceContext.marker);
     const rows = passRows(review);
     const reviewText = String(review || "");
-    // [^\w]* tolerates trailing decoration — live REVIEW.md files write "## Verdict: PASS ✅".
-    const verdictPass = /^\s*(?:#{1,6}\s*)?verdict\s*:\s*PASS\b[^\w]*$/im.test(reviewText) ||
-        /^\s*#{1,6}\s+(?:verdict\s*[-:—]\s*)?PASS\b[^\w]*$/im.test(reviewText);
+    const declaresPass = verdictPass(reviewText);
     const biasWarning = /\bBIAS WARNING:/i.test(reviewText);
     const flags = exercises === 0 ? rows.map(r => Object.assign({ code: "PASS WITHOUT EXERCISE EVIDENCE" }, r)) : [];
     return {
-        ok: flags.length === 0 && !(verdictPass && exercises === 0) && !biasWarning,
+        ok: flags.length === 0 && !(declaresPass && exercises === 0) && !biasWarning,
         exercises, rows, flags, biasWarning,
-        verdictMustChange: verdictPass && (exercises === 0 || biasWarning)
+        verdictMustChange: declaresPass && (exercises === 0 || biasWarning)
     };
 }
 
@@ -68,9 +94,15 @@ function checkWorkspace(workspaceDir) {
     let review;
     try { review = fs.readFileSync(reviewPath, "utf8"); }
     catch (e) { return { ok: false, missingReview: true, reviewPath, exercises: 0, rows: [], flags: [], biasWarning: false, verdictMustChange: false }; }
-    const result = Object.assign(checkReview(review, readJson(path.join(workspaceDir, USAGE_FILE))), { reviewPath });
+    const record = readJson(path.join(workspaceDir, PALSYNC_FILE));
+    const evidence = readToolEvidence(workspaceDir);
+    const result = Object.assign(checkReview(review, {
+        entries: evidence,
+        palGuid: record && record.palGuid,
+        marker: record && record.lastModifiedDate
+    }), { reviewPath });
     const reviewMtimeMs = mtimeMs(reviewPath);
-    const freshnessSources = [PALSYNC_FILE, USAGE_FILE, "EXECUTION.md"]
+    const freshnessSources = [PALSYNC_FILE, USAGE_FILE, TOOL_EVIDENCE_FILE, "EXECUTION.md"]
         .map(file => ({ file, mtimeMs: mtimeMs(path.join(workspaceDir, file)) }))
         .filter(source => source.mtimeMs !== null);
     const newestEvidence = freshnessSources.reduce((latest, source) =>
@@ -79,7 +111,7 @@ function checkWorkspace(workspaceDir) {
     result.newestEvidence = newestEvidence;
     result.staleReview = !!(newestEvidence && reviewMtimeMs < newestEvidence.mtimeMs);
     if (result.staleReview) result.ok = false;
-    const localDrift = diffWorkspace(readJson(path.join(workspaceDir, PALSYNC_FILE)), workspaceDir);
+    const localDrift = diffWorkspace(record, workspaceDir);
     result.localDrift = localDrift;
     if (localDrift.dirty) result.ok = false;
     return result;
@@ -109,10 +141,7 @@ function formatReviewCheck(result) {
 function toolCalls(ledger, name) {
     if (!ledger) return null;
     const tool = ledger.tools && ledger.tools[name];
-    return {
-        successful: tool && Number.isFinite(Number(tool.successfulCalls)) ? Number(tool.successfulCalls) : 0,
-        total: tool && Number.isFinite(Number(tool.calls)) ? Number(tool.calls) : 0
-    };
+    return tool && Number.isFinite(Number(tool.calls)) ? Number(tool.calls) : 0;
 }
 
 function taskEvidence(workspaceDir) {
@@ -129,8 +158,18 @@ function taskEvidence(workspaceDir) {
 
 function buildReviewBrief(workspaceDir) {
     const usage = readJson(path.join(workspaceDir, USAGE_FILE));
+    const evidencePath = path.join(workspaceDir, TOOL_EVIDENCE_FILE);
+    const evidence = readToolEvidence(workspaceDir);
+    const record = readJson(path.join(workspaceDir, PALSYNC_FILE));
+    const palGuid = record && record.palGuid;
+    const marker = record && record.lastModifiedDate;
     const cost = readSessionCost(workspaceDir);
     return {
+        evidenceAvailable: fs.existsSync(evidencePath),
+        evidence: {
+            pal_exercise: successfulEvidenceCalls(evidence, "pal_exercise", palGuid, marker),
+            pal_push: successfulEvidenceCalls(evidence, "pal_push", palGuid, marker)
+        },
         usageAvailable: usage !== null,
         tools: Object.fromEntries(REVIEW_TOOLS.map(name => [name, toolCalls(usage, name)])),
         cost: cost ? Object.assign({ available: true, entries: cost.entries }, phaseTotals(cost.entries)) : { available: false },
@@ -145,11 +184,15 @@ function formatAccumulator(acc, currency) {
 
 function formatReviewBrief(brief) {
     const lines = ["palsync " + PACKAGE_VERSION + " review brief", "EVIDENCE LEDGER"];
-    lines.push("usage sidecar: " + (brief.usageAvailable ? "available" : "not available"));
-    lines.push("tool calls (successful/total):");
+    lines.push("tool evidence sidecar: " + (brief.evidenceAvailable ? "available" : "not available"));
+    lines.push("current-version successful evidence:");
+    lines.push("  pal_exercise: " + brief.evidence.pal_exercise);
+    lines.push("  pal_push: " + brief.evidence.pal_push);
+    lines.push("MCP usage sidecar: " + (brief.usageAvailable ? "available" : "not available"));
+    lines.push("MCP attempts this session:");
     for (const name of REVIEW_TOOLS) {
         const calls = brief.tools[name];
-        lines.push("  " + name + ": " + (calls ? calls.successful + "/" + calls.total : "not available"));
+        lines.push("  " + name + ": " + (calls === null ? "not available" : calls));
     }
     lines.push("session cost sidecar: " + (brief.cost.available ? "available" : "not available"));
     if (brief.cost.available) {
@@ -174,6 +217,6 @@ function formatReviewBrief(brief) {
 }
 
 module.exports = {
-    successfulExerciseCalls, passRows, checkReview, checkWorkspace, formatReviewCheck,
+    successfulExerciseCalls, passRows, verdictPass, checkReview, checkWorkspace, formatReviewCheck,
     buildReviewBrief, formatReviewBrief
 };

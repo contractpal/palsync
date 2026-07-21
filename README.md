@@ -88,8 +88,13 @@ The agent calls these for you — you never run them by hand:
 | `pal_fetch` | Fetch a rendered page/endpoint for the agent to read. |
 | `pal_screenshot` | Screenshot the rendered pal (Chromium) so the agent can see its own UI. |
 | `pal_exercise` | Drive the rendered pal in a browser to exercise a user flow. |
+| `pal_context` | Load focused PalSync contract sections on demand for sync, file-creation, and dataset work. |
 | `pal_seo_audit` | On-page SEO audit of a web pal — title/description, canonical, `og:` tags, JSON-LD, H1, img alt, … Every finding carries the exact fix. |
 | `pal_sync_datasets` | Create/update dataset tables from `pal.json`. Never deletes data by default; destructive `recreate` requires an exact typed confirmation. |
+| `pal_data_set` | Create/update a pal-level Data map (`pal.getData("name")`) in `pal.json` — full replace of that name's key/value set. Local edit only; `pal_push` to send it. |
+| `pal_data_delete` | Delete a pal-level Data map by name from `pal.json`. Local edit only; `pal_push` to send the removal. |
+| `pal_datalist_set` | Create/update a pal-level DataList (`pal.getDataList("name")`) in `pal.json` — full replace of that name's columns and rows. Local edit only; `pal_push` to send it. |
+| `pal_datalist_delete` | Delete a pal-level DataList by name from `pal.json`. Local edit only; `pal_push` to send the removal. |
 | `pal_regression` | Capture / compare a regression baseline. |
 | `pal_spec_lint` | Lint a `SPEC.md` for the spec-to-ship workflow. |
 | `pal_status` | Server drift + un-pushed local changes + lock holder. |
@@ -127,7 +132,9 @@ palsync upgrade         # self-update from the latest commit
 ```
 
 All take `--dir <workspace>` (default: current directory). Semantics are identical to the MCP tools
-— same drift guards, same preserve-on-pull.
+— same drift guards, same preserve-on-pull. Pi users do not register an MCP server manually: its
+native extension privately spawns `palsync-mcp` with the `pi-minimal` profile and activates tools
+lazily.
 
 ### `palsync cost` — context observability
 

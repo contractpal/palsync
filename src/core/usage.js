@@ -21,6 +21,8 @@ const { contentStats: sharedContentStats } = require("./piHelpers");
 const USAGE_FILE = ".palsync.usage.json";
 const SESSION_COST_FILE = ".palsync/session-cost.json";
 const PI_USAGE_FILE = ".palsync/pi-usage.jsonl";
+const TOOL_EVIDENCE_FILE = ".palsync/tool-evidence.jsonl";
+const TOOL_EVIDENCE_SCHEMA = "palsync/tool-evidence/1";
 const SESSION_COST_LOCK = ".palsync/session-cost.lock";
 const LOCK_RETRIES = 20;
 const LOCK_RETRY_MS = 25;
@@ -31,7 +33,7 @@ const flushTimers = new Map();
 // Soft threshold for palsync's OWN injected block (CLAUDE.palsync.md + skill descriptions + tool
 // defs). Not a hard limit — palsync can't see the model's actual context window — just a "this
 // has grown, go trim a skill description or a tool description" signal sized off the current
-// real total (~30KB across CLAUDE.palsync.md + 11 skills + 13 tools as of this writing).
+// real total (~30KB across CLAUDE.palsync.md + 11 skills + 24 tools as of this writing).
 const SOFT_THRESHOLD_BYTES = 64 * 1024;
 
 function usagePath(workspaceDir) { return path.join(workspaceDir, USAGE_FILE); }
@@ -383,12 +385,49 @@ function formatSessionCost(workspaceDir) {
     return L;
 }
 
-function readPiUsage(workspaceDir) {
+function readJsonLines(file, schema) {
+    let lines;
+    try { lines = fs.readFileSync(file, "utf8").split(/\r?\n/); }
+    catch (e) { return []; }
+    const entries = [];
+    for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+            const entry = JSON.parse(line);
+            if (entry && typeof entry === "object" && !Array.isArray(entry) && entry.schema === schema) entries.push(entry);
+        } catch (e) { /* preserve valid neighboring rows */ }
+    }
+    return entries;
+}
+
+// Durable cross-process completion evidence. Only successful pal_exercise and pal_push handlers
+// call this writer; failures remain non-fatal to the underlying tool operation.
+function appendToolEvidence(workspaceDir, entry) {
     try {
-        return fs.readFileSync(path.join(workspaceDir, PI_USAGE_FILE), "utf8").split(/\r?\n/)
-            .filter(Boolean).map(line => JSON.parse(line))
-            .filter(entry => entry && entry.schema === "palsync/pi-usage/1");
-    } catch (e) { return []; }
+        const file = path.join(workspaceDir, TOOL_EVIDENCE_FILE);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.appendFileSync(file, JSON.stringify(Object.assign({}, entry, {
+            schema: TOOL_EVIDENCE_SCHEMA,
+            successful: true,
+            ts: entry && entry.ts ? entry.ts : new Date().toISOString()
+        })) + "\n", "utf8");
+        return true;
+    } catch (e) { return false; }
+}
+
+function readToolEvidence(workspaceDir) {
+    return readJsonLines(path.join(workspaceDir, TOOL_EVIDENCE_FILE), TOOL_EVIDENCE_SCHEMA);
+}
+
+function filterToolEvidence(entries, tool, palGuid, marker) {
+    if (!tool || !palGuid || !marker) return [];
+    return (Array.isArray(entries) ? entries : []).filter(entry =>
+        entry.successful === true && entry.tool === tool &&
+        entry.palGuid === palGuid && entry.marker === marker);
+}
+
+function readPiUsage(workspaceDir) {
+    return readJsonLines(path.join(workspaceDir, PI_USAGE_FILE), "palsync/pi-usage/1");
 }
 
 function formatPiUsage(workspaceDir) {
@@ -487,5 +526,6 @@ function formatCost(workspaceDir, tools) {
 
 module.exports = { recordToolCall, recordContextGeneration, contentBytes, contentStats, injectedContext,
     formatCost, skillDescription, readSessionCost, recordSessionCost, readPiUsage, formatPiUsage,
-    phaseTotals, normalizeV2, USAGE_FILE, SESSION_COST_FILE, PI_USAGE_FILE,
+    appendToolEvidence, readToolEvidence, filterToolEvidence,
+    phaseTotals, normalizeV2, USAGE_FILE, SESSION_COST_FILE, PI_USAGE_FILE, TOOL_EVIDENCE_FILE,
     SOFT_THRESHOLD_BYTES };

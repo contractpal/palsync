@@ -20,6 +20,7 @@ const { syncDatasets } = require("../core/datasets");
 const { upsertData, deleteData, upsertDataList, deleteDataList } = require("../core/dataObjects");
 const { validateWorkspace, formatValidation: formatLint } = require("../core/validate");
 const { cachedLint } = require("../core/lintCache");
+const { appendToolEvidence } = require("../core/usage");
 const palsyncfile = require("../core/palsyncfile");
 const { onDemandSyncSections } = require("../launcher/contextInject");
 const { routeItems } = require("../core/piHelpers");
@@ -1186,7 +1187,21 @@ const TOOLS = [
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             // Functional exercise proves behavior, not responsive visual quality. Only paired,
             // audited pal_screenshot captures can satisfy the page-level render gate.
-            return Object.assign({}, res, { message: formatExercise(res) });
+            const out = Object.assign({}, res, { message: formatExercise(res) });
+            if (res.ran === true && res.pass === true) {
+                out.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, {
+                    tool: "pal_exercise",
+                    palGuid: ctx.record.palGuid,
+                    marker: ctx.record.lastModifiedDate,
+                    runId: res.runId,
+                    kind: res.kind,
+                    mode: res.mode
+                });
+                if (!out.evidenceRecorded) out.message +=
+                    "\n\n⚠ Behavior passed, but exercise evidence persistence failed. " +
+                    "palsync review check will not count this run.";
+            }
+            return out;
         }
     },
     {
@@ -1498,7 +1513,7 @@ const TOOLS = [
                     debug: [folderBlock, skippedBlock, warnBlock, webBlock, consoleBlock].filter(Boolean).join("\n") || null
                 });
                 const projection = pushEnvelopeProjection(source);
-                return Object.assign({
+                const out = Object.assign({
                     pushed: true,
                     forced: !!res.forced,
                     filesPushed: res.filesPushed,
@@ -1506,6 +1521,15 @@ const TOOLS = [
                     webRegistered: res.webRegistered || null,
                     consoleRegistered: res.consoleRegistered || null
                 }, envelopeFields(ctx.workspaceDir, "pal_push", source, args, projection));
+                out.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, {
+                    tool: "pal_push",
+                    palGuid: ctx.record.palGuid,
+                    marker: ctx.record.lastModifiedDate
+                });
+                if (!out.evidenceRecorded) out.message +=
+                    "\n\n⚠ Push succeeded, but eval evidence persistence failed. " +
+                    "This successful push will not be recorded by eval telemetry.";
+                return out;
             }
             if (res.refused === "drift") {
                 return Object.assign(res, {

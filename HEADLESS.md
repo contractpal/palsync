@@ -82,10 +82,12 @@ env:     PALSYNC_WORKSPACE=/home/you/pals/isr
          CP_PASS=your-password
 ```
 
-It exposes: `pal_status`, `pal_validate`, `pal_test`, `pal_tunnel_test`, `pal_debug`, `pal_preview`,
-`pal_fetch`, `pal_screenshot`, `pal_seo_audit`, `pal_spec_lint`, `pal_regression`, `pal_sync_datasets`,
-`pal_pull`, `pal_merge`, `pal_push`, `pal_lock`, `pal_unlock` (17 tools — a modest context cost; keep
-other heavy MCP servers off the same session if context is tight).
+It exposes: `pal_status`, `pal_validate`, `pal_testing`, `pal_test`, `pal_tunnel_test`, `pal_debug`,
+`pal_preview`, `pal_fetch`, `pal_screenshot`, `pal_exercise`, `pal_seo_audit`, `pal_context`,
+`pal_spec_lint`, `pal_regression`, `pal_sync_datasets`, `pal_data_set`, `pal_data_delete`,
+`pal_datalist_set`, `pal_datalist_delete`, `pal_pull`, `pal_merge`, `pal_push`, `pal_lock`,
+`pal_unlock` (24 tools — a modest context cost; keep other heavy MCP servers off the same session if
+context is tight).
 
 **OpenCode** — palsync registers itself when you run `palsync setup --agent opencode`, or add it
 manually to a project `opencode.json` (or the global `~/.config/opencode/opencode.json`):
@@ -125,9 +127,9 @@ command + env above. Hermes connects to any MCP server; it owns the model (OpenR
 DeepSeek / local) and the human-approval gateway (Telegram, etc.).
 
 **Pi** — `palsync setup --agent pi` (or `palsync --agent pi`) prepares the workspace with the
-`.agents/skills/` + `AGENTS.md` open standard and launches `pi`. Pi has **no MCP server** — it drives
-sync through the shell-out subcommands below, which its `AGENTS.md` instructs it to use. Nothing to
-register.
+`.agents/skills/` + `AGENTS.md` open standard and launches `pi`. Users do not register a Pi MCP
+server manually: the native extension privately spawns `palsync-mcp` with the `pi-minimal` profile
+and activates tools lazily. Shell-out subcommands remain available for direct CLI use.
 
 ### Shell-out (no MCP)
 

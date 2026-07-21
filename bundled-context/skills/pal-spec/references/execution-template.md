@@ -22,6 +22,10 @@ its requirement. `success condition` must be behavioral AND tool-checkable. `sta
 **Task granularity** — one task = one verify cycle. A page is a task; a workflow action is a task; a
 dataset is a task. "Build the site" is not. If the success condition can't be a tool output plus an
 exact string/state, split the task. LITE allows coarser tasks but still one verify cycle each.
+Every §5 write/action task names its `pal_exercise` flow and exact persisted state/string: require
+`expect` for the new/correct value and, for edits/deletes, `absent` for the old/deleted value. Keep
+the row compact; use the canonical `../../shared/references/exercise-authoring.md` for full authoring
+rules rather than copying them here.
 
 **Tier marks** — mark honestly:
 - `cheap` = mechanical edits from exact copy; cloning an established page.
@@ -59,7 +63,7 @@ Checkpoints: <natural human review points — pal-loop also pauses per SPEC.md `
 | id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |
 | T1 | copy/adapt shell, styles.css, and workflow foundation | cheap | §3, §6 | — | todo | Page shell and matching templates are copied with bash `cp`, shell/styles plus only runtime scripts with real consumers are present and registered in pal.json, readable `styles/styles.css` and (for console) the documented `run()` skeleton are present; `pal_validate` and `pal_test` both return `ok:true`, `diagnosticCount:0` on the foundation |
 | T2 | first page (composition) | frontier | §4, §6 | T1 | todo | validate 0; push OK; preview "<H1>" |
-| T3 | <action with logic> | standard | §5 | T1 | todo | When <input>, <result>; pal_test VALIDATED |
+| T3 | <action with logic> | standard | §5 | T1 | todo | `pal_test` VALIDATED; `pal_exercise` runs <create/edit/delete flow>, `expect` finds <exact persisted new value>, and `absent` confirms <exact old/deleted value> is gone |
 
 ## Checkpoints (append-only, one line per completed task)
 ## Blockers (what needs the human — be exact)

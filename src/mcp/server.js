@@ -83,7 +83,6 @@ function createServer(getCtx, workspaceDir, options = {}) {
                     if (ctx && ctx.workspaceDir) {
                         const stats = usage.contentStats(content);
                         usage.recordToolCall(ctx.workspaceDir, t.name, stats.bytes, stats.tokens, {
-                            successful: t.name === "pal_exercise" && res && res.ran === true && res.pass === true,
                             rawBytes: res && res._usage && res._usage.rawBytes != null ? res._usage.rawBytes : stats.bytes,
                             returnedBytes: stats.bytes,
                             resultCacheHits: Math.max(0, lintCache.readStats(workspaceDir).hits - cacheBefore.hits),

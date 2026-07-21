@@ -5,7 +5,48 @@
 // the report format, and the no-server invalid path of runExercise.
 const { test } = require("node:test");
 const assert = require("node:assert");
+const fs = require("node:fs");
+const path = require("node:path");
+const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
+const { InMemoryTransport } = require("@modelcontextprotocol/sdk/inMemory.js");
+const { tmpWorkspace } = require("./helpers");
+const usage = require("../src/core/usage");
 const { runExercise, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, browserFailureMessage, MAX_STEPS } = require("../src/core/exercise");
+
+function loadStubbedTools({ exerciseResult, pushResult }) {
+    const toolsPath = require.resolve("../src/mcp/tools");
+    const exercisePath = require.resolve("../src/core/exercise");
+    const pushPath = require.resolve("../src/core/push");
+    const saved = new Map([[toolsPath, require.cache[toolsPath]], [exercisePath, require.cache[exercisePath]], [pushPath, require.cache[pushPath]]]);
+    require.cache[exercisePath] = { id: exercisePath, filename: exercisePath, loaded: true, exports: {
+        runExercise: async () => Object.assign({}, exerciseResult),
+        formatExercise: result => result.pass ? "pal_exercise — PASS" : "pal_exercise — FAIL"
+    } };
+    require.cache[pushPath] = { id: pushPath, filename: pushPath, loaded: true, exports: {
+        push: async (session, record) => {
+            const result = Object.assign({}, pushResult);
+            if (result.pushed && result.newMarker) record.lastModifiedDate = result.newMarker;
+            return result;
+        }
+    } };
+    delete require.cache[toolsPath];
+    const loaded = require("../src/mcp/tools");
+    return {
+        tools: loaded.TOOLS,
+        restore() {
+            for (const [file, cached] of saved) {
+                if (cached) require.cache[file] = cached;
+                else delete require.cache[file];
+            }
+        }
+    };
+}
+
+function findTool(tools, name) {
+    const found = tools.find(tool => tool.name === name);
+    assert.ok(found, "missing tool " + name);
+    return found;
+}
 
 // ---- validateSteps ---------------------------------------------------------
 
@@ -469,4 +510,149 @@ test("formatExercise: reports warnings alongside invalid steps", () => {
     assert.match(out, /invalid steps/);
     assert.match(out, /warnings:/);
     assert.match(out, /brittle/);
+});
+
+// ---- shared-handler durable evidence wiring --------------------------------
+
+test("pal_exercise handler records exactly one passing run and no failed run", async () => {
+    const ws = tmpWorkspace();
+    let loaded = loadStubbedTools({
+        exerciseResult: { ran: true, pass: true, runId: "run-1", kind: "console", mode: "browser" }
+    });
+    try {
+        const result = await findTool(loaded.tools, "pal_exercise").run({
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", lastModifiedDate: "M1" }
+        }, { steps: [{ expect: ["saved"] }] });
+        assert.equal(result.pass, true);
+        assert.equal(result.evidenceRecorded, true);
+        assert.equal(usage.readToolEvidence(ws).length, 1);
+        assert.deepEqual(usage.readToolEvidence(ws)[0], {
+            schema: "palsync/tool-evidence/1", tool: "pal_exercise", successful: true,
+            palGuid: "PAL-1", marker: "M1", ts: usage.readToolEvidence(ws)[0].ts,
+            runId: "run-1", kind: "console", mode: "browser"
+        });
+    } finally { loaded.restore(); }
+
+    loaded = loadStubbedTools({ exerciseResult: { ran: true, pass: false, kind: "console", mode: "browser" } });
+    try {
+        await findTool(loaded.tools, "pal_exercise").run({
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", lastModifiedDate: "M1" }
+        }, { steps: [{ expect: ["missing"] }] });
+        assert.equal(usage.readToolEvidence(ws).length, 1);
+    } finally {
+        loaded.restore();
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("pal_exercise evidence failure stays PASS and warns that review will not count it", async () => {
+    const ws = tmpWorkspace({ ".palsync": "not a directory" });
+    const loaded = loadStubbedTools({
+        exerciseResult: { ran: true, pass: true, runId: "run-1", kind: "web", mode: "fetch" }
+    });
+    try {
+        const result = await findTool(loaded.tools, "pal_exercise").run({
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", lastModifiedDate: "M1" }
+        }, { steps: [{ expect: ["saved"] }] });
+        assert.equal(result.pass, true);
+        assert.equal(result.evidenceRecorded, false);
+        assert.match(result.message, /Behavior passed.*evidence persistence failed.*review check will not count/s);
+    } finally {
+        loaded.restore();
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("pal_push handler records the persisted new marker and refused pushes record nothing", async () => {
+    const ws = tmpWorkspace();
+    const success = {
+        pushed: true, newMarker: "M2", serverPaths: [], filesPushed: 1,
+        lint: { errors: 0, warnings: 0, findings: [], filesChecked: 0 }, validation: []
+    };
+    let loaded = loadStubbedTools({ pushResult: success });
+    let persisted = false;
+    try {
+        const ctx = {
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", palName: "Demo", lastModifiedDate: "M1" },
+            async persist() { persisted = true; assert.equal(this.record.lastModifiedDate, "M2"); }
+        };
+        const result = await findTool(loaded.tools, "pal_push").run(ctx, {});
+        assert.equal(result.pushed, true);
+        assert.equal(result.evidenceRecorded, true);
+        assert.equal(persisted, true);
+        const entries = usage.readToolEvidence(ws);
+        assert.equal(entries.length, 1);
+        assert.equal(entries[0].tool, "pal_push");
+        assert.equal(entries[0].marker, "M2");
+    } finally { loaded.restore(); }
+
+    loaded = loadStubbedTools({ pushResult: { pushed: false, refused: "drift", storedMarker: "M1", liveMarker: "M2" } });
+    try {
+        await findTool(loaded.tools, "pal_push").run({
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", palName: "Demo", lastModifiedDate: "M1" },
+            async persist() { throw new Error("refused push must not persist"); }
+        }, {});
+        assert.equal(usage.readToolEvidence(ws).length, 1);
+    } finally {
+        loaded.restore();
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("pal_push evidence failure stays successful and warns eval telemetry", async () => {
+    const ws = tmpWorkspace({ ".palsync": "not a directory" });
+    const loaded = loadStubbedTools({ pushResult: {
+        pushed: true, newMarker: "M2", serverPaths: [], filesPushed: 1,
+        lint: { errors: 0, warnings: 0, findings: [], filesChecked: 0 }, validation: []
+    } });
+    try {
+        const result = await findTool(loaded.tools, "pal_push").run({
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", palName: "Demo", lastModifiedDate: "M1" },
+            async persist() {}
+        }, {});
+        assert.equal(result.pushed, true);
+        assert.equal(result.evidenceRecorded, false);
+        assert.match(result.message, /Push succeeded.*eval evidence persistence failed/s);
+    } finally {
+        loaded.restore();
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("one passing MCP pal_exercise records one evidence row without usage success double-counting", async () => {
+    const ws = tmpWorkspace();
+    const loaded = loadStubbedTools({
+        exerciseResult: { ran: true, pass: true, runId: "run-mcp", kind: "console", mode: "browser" }
+    });
+    const serverPath = require.resolve("../src/mcp/server");
+    const priorServer = require.cache[serverPath];
+    delete require.cache[serverPath];
+    try {
+        const { createServer } = require("../src/mcp/server");
+        const server = createServer(async () => ({
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", palName: "Demo", lastModifiedDate: "M1" }
+        }), ws);
+        const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+        const client = new Client({ name: "evidence-test", version: "0" });
+        await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+        await client.callTool({ name: "pal_exercise", arguments: { steps: [{ expect: ["saved"] }] } });
+        assert.equal(usage.readToolEvidence(ws).length, 1);
+        usage.formatCost(ws, []);
+        const ledger = JSON.parse(fs.readFileSync(path.join(ws, usage.USAGE_FILE), "utf8"));
+        assert.equal(ledger.tools.pal_exercise.calls, 1);
+        assert.equal(ledger.tools.pal_exercise.successfulCalls, undefined);
+        await client.close();
+    } finally {
+        loaded.restore();
+        if (priorServer) require.cache[serverPath] = priorServer;
+        else delete require.cache[serverPath];
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
 });
