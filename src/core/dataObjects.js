@@ -22,6 +22,12 @@ function nonEmptyString(value) {
     return typeof value === "string" && value.trim() !== "";
 }
 
+// A null/undefined cell is CloudPiston's genuine "empty" wire value (serialized as <null/>, not
+// an empty <string></string>) — String(null) would instead write the literal text "null".
+function cellToWireValue(cell) {
+    return (cell === null || cell === undefined) ? null : String(cell);
+}
+
 function readManifest(workspaceDir) {
     const filePath = path.join(workspaceDir, "pal.json");
     let raw;
@@ -54,7 +60,7 @@ function buildDataEntry(name, values) {
     if (!nonEmptyString(name)) throw new Error("Data name must be a non-empty string.");
     const trimmed = name.trim();
     const src = values && typeof values === "object" ? values : {};
-    const entry = Object.keys(src).map(key => ({ string: [String(key), String(src[key])] }));
+    const entry = Object.keys(src).map(key => ({ string: [String(key), cellToWireValue(src[key])] }));
     return { string: trimmed, Data: { name: trimmed, values: { entry } } };
 }
 
@@ -106,7 +112,7 @@ function buildDataListEntry(name, columns, rows) {
                 " cell(s), one per column (got " + (Array.isArray(row) ? row.length : typeof row) + ").");
         }
     });
-    const recs = list.map(row => ({ string: row.map(String) }));
+    const recs = list.map(row => ({ string: row.map(cellToWireValue) }));
     return { string: trimmed, DataList: { name: trimmed, cols: { string: cols }, recs: { "string-array": recs } } };
 }
 

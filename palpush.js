@@ -12,7 +12,7 @@
 // --dry-run the default until step 4 designates a throwaway test pal for the first real push.
 const zlib = require("zlib");
 const { Pal } = require("./lib/pal");
-const { CloudPistonXMLBuilder } = require("./lib/xmlParser");
+const { buildOrderSensitiveShapes } = require("./lib/xmlParser");
 const { CloudPistonAPIManager } = require("./lib/apiManager");
 const { buildSaveTask, normalizeValidation } = require("./src/core/push");
 const { resolveServerPalByGuid, enumerateServerPals } = require("./src/core/resolve");
@@ -206,7 +206,7 @@ async function main() {
 
         // Serialize the exact task that would be POSTed.
         const task = buildSaveTask(pal);
-        const taskXml = CloudPistonXMLBuilder(false).build(task);
+        const taskXml = buildOrderSensitiveShapes(task, false);
         const xmlBytes = Buffer.byteLength(taskXml, "utf8");
         const gzBytes = zlib.gzipSync(taskXml).length;
 
