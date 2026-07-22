@@ -4,7 +4,7 @@
 // change-nothing-on-parse-failure guarantee. All pure (no fs).
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { parseTasks, listTasks, setStatus, appendCheckpoint } = require("../src/core/taskState");
+const { parseTasks, listTasks, setStatus, setStatusWithReason, appendCheckpoint, terminalReasonState, MAX_BLOCKER_REASON } = require("../src/core/taskState");
 
 // Template shape: NO |---| separator row (matches execution-template.md).
 const EXEC = `# EXECUTION — demo
@@ -130,4 +130,39 @@ test("checkpoint with an accurate done count and non-claim prose: accepted", () 
     assert.ok(appendCheckpoint(EXEC, "== session 1: 1 done, 2 todo").ok);
     assert.ok(appendCheckpoint(EXEC, "T2 in progress: wiring the console page").ok);
     assert.ok(appendCheckpoint(EXEC, "T1 done earlier; dataset synced").ok); // T1 is done in the table
+});
+
+test("blocked-style transitions atomically require and record normalized reasons", () => {
+    for (const status of ["blocked", "needs-human", "needs-frontier"]) {
+        assert.equal(setStatusWithReason(EXEC, "T2", status).ok, false);
+        assert.equal(setStatusWithReason(EXEC, "T2", status, "  \n ").ok, false);
+        const r = setStatusWithReason(EXEC, "T2", status, "Provider offline\nneeds owner action");
+        assert.ok(r.ok);
+        assert.match(r.text, new RegExp("\\|\\s*" + status.replace("-", "\\-") + "\\s*\\|"));
+        assert.match(r.text, new RegExp("- BLOCKED T2 \\[" + status + "\\]: Provider offline needs owner action"));
+        assert.equal(terminalReasonState(r.text).complete, true);
+    }
+});
+
+test("reason append is atomic, bounded, preserves checkpoints, and avoids duplicates", () => {
+    const noCheckpoints = EXEC.replace("## Checkpoints (append-only, one line per completed task)", "## Notes");
+    const failed = setStatusWithReason(noCheckpoints, "T2", "blocked", "waiting");
+    assert.equal(failed.ok, false);
+    assert.match(noCheckpoints, /\| T2 .*\| todo \|/);
+
+    const long = "x".repeat(MAX_BLOCKER_REASON + 50);
+    const first = setStatusWithReason(EXEC, "T2", "blocked", long);
+    assert.equal(first.reason.length, MAX_BLOCKER_REASON);
+    assert.match(first.text, /- T1 scaffolded/);
+    const second = setStatusWithReason(first.text, "T2", "blocked", long);
+    assert.equal(second.unchanged, true);
+    assert.equal((second.text.match(/- BLOCKED T2/g) || []).length, 1);
+});
+
+test("ordinary statuses reject reasons and remain backward compatible without one", () => {
+    assert.equal(setStatusWithReason(EXEC, "T2", "done", "not allowed").ok, false);
+    const r = setStatusWithReason(EXEC, "T2", "in_progress");
+    assert.ok(r.ok);
+    assert.equal(listTasks(r.text).tasks.find(task => task.id === "T2").status, "in_progress");
+    assert.equal(terminalReasonState(setStatus(EXEC, "T2", "blocked").text).complete, false);
 });

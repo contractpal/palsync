@@ -3,7 +3,8 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import metadata from "./tools.json";
 import helpers from "./helpers.js";
 
-const { routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision, appendPiUsage } = helpers;
+const { routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision, appendPiUsage,
+  isPalsyncWorkspace, completionFingerprint, completionFollowUp } = helpers;
 
 class PalsyncClient {
   private child: ChildProcessWithoutNullStreams | null = null;
@@ -67,6 +68,7 @@ class PalsyncClient {
 
 export default function palsyncExtension(pi: ExtensionAPI): void {
   let client: PalsyncClient | null = null;
+  let lastCompletionFingerprint: string | null = null;
   const registered = new Set<string>();
 
   const registerMcpTool = (tool: any) => {
@@ -116,6 +118,30 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
       }
     });
     pi.setActiveTools(activateAdditively(pi.getActiveTools(), ["pal_tools"]));
+  });
+
+  pi.on("agent_settled", async (_event, ctx) => {
+    if (!isPalsyncWorkspace(ctx.cwd)) return;
+    try {
+      const result = await pi.exec("palsync", ["hook", "completion", "--mode", "json", "--dir", ctx.cwd], { timeout: 5000 });
+      if (result.code !== 0 || !result.stdout.trim()) return;
+      const gate = JSON.parse(result.stdout.trim());
+      const fingerprint = completionFingerprint(ctx.cwd, gate);
+      if (gate.allow) lastCompletionFingerprint = null;
+      const followUp = completionFollowUp(gate, fingerprint, lastCompletionFingerprint);
+      if (followUp) {
+        lastCompletionFingerprint = followUp.fingerprint;
+        pi.sendUserMessage(followUp.message, { deliverAs: "followUp" });
+      }
+      if (gate.state === "BLOCKED_HANDOFF" || gate.state === "FRONTIER_HANDOFF") {
+        ctx.ui.setStatus("palsync-completion", "PalSync: blocked handoff recorded");
+        ctx.ui.notify(gate.message, "warning");
+      } else {
+        ctx.ui.setStatus("palsync-completion", undefined);
+      }
+    } catch (error) {
+      ctx.ui.notify("PalSync completion check skipped (fail open): " + (error instanceof Error ? error.message : String(error)), "warning");
+    }
   });
 
   pi.on("session_shutdown", () => client?.close());

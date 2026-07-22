@@ -4,7 +4,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
-const { parseFlags, defaultPreviewOpen, USAGE } = require("../src/cli/syncCommands");
+const { parseFlags, defaultPreviewOpen, USAGE, run } = require("../src/cli/syncCommands");
 const contextInject = require("../src/launcher/contextInject");
 const { tmpWorkspace } = require("./helpers");
 
@@ -41,6 +41,35 @@ test("USAGE documents browser-open preview default and no-open escape hatch", ()
     assert.match(USAGE, /palsync ctx inspect\|diff/);
     assert.doesNotMatch(USAGE, /palsync context inspect/);
     assert.match(USAGE, /palsync cost record --model X --provider Y/);
+});
+
+test("task CLI requires blocker reasons and writes status plus checkpoint once", async () => {
+    const ws = tmpWorkspace({ "EXECUTION.md": `## Tasks
+| id | task | status |
+| T1 | Build | todo |
+
+## Checkpoints
+- existing
+` });
+    const oldLog = console.log, oldError = console.error; const logs = [];
+    console.log = (...args) => logs.push(args.join(" ")); console.error = () => {};
+    try {
+        assert.equal(await run("task", ["T1", "blocked", "--dir", ws]), 1);
+        const before = fs.readFileSync(require("node:path").join(ws, "EXECUTION.md"), "utf8");
+        assert.match(before, /\| T1 \| Build \| todo \|/);
+        assert.equal(await run("task", ["T1", "blocked", "--reason", "Waiting\nfor owner", "--dir", ws]), 0);
+        assert.equal(await run("task", ["T1", "blocked", "--reason", "Waiting\nfor owner", "--dir", ws]), 0);
+        assert.equal(await run("task", ["T1", "blocked", "--reason", "Still waiting", "--dir", ws]), 0);
+        const after = fs.readFileSync(require("node:path").join(ws, "EXECUTION.md"), "utf8");
+        assert.match(after, /\| T1 \| Build \| blocked \|/);
+        assert.equal((after.match(/BLOCKED T1 \[blocked\]: Waiting for owner/g) || []).length, 1);
+        assert.equal((after.match(/BLOCKED T1 \[blocked\]: Still waiting/g) || []).length, 1);
+        assert.match(logs.at(-1), /T1: blocked -> blocked/);
+        assert.doesNotMatch(logs.join("\n"), /undefined/);
+    } finally {
+        console.log = oldLog; console.error = oldError;
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
 });
 
 test("parseFlags parses cost record fields", () => {

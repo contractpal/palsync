@@ -609,6 +609,6 @@ async function runScreenshot(session, guid, { page, viewport, fullPage, imageles
 
 module.exports = {
     runScreenshot, detectRenderError, sanitizeUrl, sanitizeResourceUrl, isLoginRedirect, loadChromium,
-    getBrowser, releaseBrowser, downscaleToJpeg, waitForStyles, inspectStyleStatus,
+    getBrowser, releaseBrowser, downscaleToJpeg, waitForStyles, waitForRenderablePage, inspectStyleStatus,
     inspectDesignQuality, VIEWPORTS
 };

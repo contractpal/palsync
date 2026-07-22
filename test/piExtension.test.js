@@ -7,7 +7,8 @@ const path = require("node:path");
 const os = require("node:os");
 const { spawnSync } = require("node:child_process");
 const metadata = require("../src/mcp/pi-tools.json");
-const { routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision, piUsageEntry, appendPiUsage } = require("../src/core/piHelpers");
+const { routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision, piUsageEntry, appendPiUsage,
+    isPalsyncWorkspace, completionFingerprint, completionFollowUp } = require("../src/core/piHelpers");
 const { TOOLS } = require("../src/mcp/tools");
 const { serializeToolDefinitions } = require("../src/mcp/toolSchema");
 const registerPi = require("../src/mcp/registerPi");
@@ -84,6 +85,31 @@ test("Pi usage telemetry is local, schema-stable, and never estimates cost", () 
     assert.equal(stored.model, "model-x");
     assert.equal(stored.cost, null);
     assert.equal(appendPiUsage(ws, { toolName: "bash", content: [] }, null), null);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("Pi completion handling is settled, workspace-scoped, and loop-resistant", () => {
+    const source = fs.readFileSync(path.join(__dirname, "..", "pi-extension", "index.ts"), "utf8");
+    assert.match(source, /pi\.on\("agent_settled"/);
+    assert.doesNotMatch(source, /pi\.on\("agent_end"/);
+    assert.match(source, /sendUserMessage\(followUp\.message, \{ deliverAs: "followUp" \}\)/);
+
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-pi-completion-"));
+    assert.equal(isPalsyncWorkspace(ws), false);
+    fs.writeFileSync(path.join(ws, "EXECUTION.md"), "tasks");
+    assert.equal(isPalsyncWorkspace(ws), true);
+    const gate = { code: "REVIEW_FAILED", allow: false, message: "Review missing" };
+    const fingerprint = completionFingerprint(ws, gate);
+    const first = completionFollowUp(gate, fingerprint, null);
+    assert.ok(first);
+    assert.equal(completionFollowUp(gate, fingerprint, first.fingerprint), null, "unchanged failure does not loop");
+    fs.writeFileSync(path.join(ws, "REVIEW.md"), "changed");
+    const changed = completionFingerprint(ws, gate);
+    assert.notEqual(changed, fingerprint);
+    assert.ok(completionFollowUp(gate, changed, first.fingerprint), "changed state can trigger correction");
+    for (const allowed of [
+        { code: "COMPLETE", allow: true }, { code: "NOT_APPLICABLE", allow: true }, { code: "BLOCKED_HANDOFF", allow: true }
+    ]) assert.equal(completionFollowUp(allowed, completionFingerprint(ws, allowed), null), null);
     fs.rmSync(ws, { recursive: true, force: true });
 });
 

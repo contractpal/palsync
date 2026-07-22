@@ -18,7 +18,7 @@
 // SECURITY: console URLs are credential-bearing — results only ever carry sanitizeUrl()'d URLs.
 const { runTest } = require("./test");
 const { checkExpect } = require("./preview");
-const { detectRenderError, sanitizeUrl, loadChromium, getBrowser, releaseBrowser, VIEWPORTS } = require("./screenshot");
+const { detectRenderError, sanitizeUrl, loadChromium, getBrowser, releaseBrowser, waitForRenderablePage, VIEWPORTS } = require("./screenshot");
 
 const MAX_STEPS = 10;
 
@@ -337,6 +337,11 @@ function isLoginRedirect(url) {
     catch (e) { return false; }
 }
 
+function pageIsLoginRedirect(page) {
+    try { return !!page && isLoginRedirect(page.url()); }
+    catch (e) { return false; }
+}
+
 function browserFailureMessage(error, page, isWeb, kind) {
     let landed = "";
     try { landed = page && page.url ? page.url() : ""; } catch (e) { /* unavailable */ }
@@ -412,44 +417,64 @@ function formatScreenHints(h) {
 //   workflow: "console" | "web" | "transaction" (optional — auto-detected)
 //   viewport: "desktop" | "mobile" (browser mode only)
 // Stops at the first failing step (later steps usually depend on earlier writes).
-async function runExercise(session, guid, { steps, workflow, viewport } = {}) {
+async function runExercise(session, guid, { steps, workflow, viewport } = {}, deps = {}) {
     const runId = makeRunId();
     const problems = validateSteps(steps);
     const lint = lintSteps(steps);
     const allProblems = problems.concat(lint.errors);
-    if (allProblems.length) return { ran: false, invalid: true, problems: allProblems, runId, warnings: lint.warnings };
+    if (allProblems.length) return { ran: false, invalid: true, status: "invalid", category: "steps", problems: allProblems, runId, warnings: lint.warnings };
 
     steps = applyRunId(steps, runId);
+    const testFn = deps.runTest || runTest;
+    const browserFn = deps.exerciseByBrowser || exerciseByBrowser;
+    let retryAttempted = false;
 
-    const t = await runTest(session, guid, { kind: workflow });
-    if (!t.ran) {
-        return { ran: false, blocked: t.blocked, holder: t.holder, runId,
-                 reason: t.blocked === "no-testable-workflow"
-                     ? "This pal has no runnable workflow to exercise."
-                     : "Could not start a test instance (" + (t.blocked || "unknown") + ")." };
-    }
-    if (!t.validated) {
-        return { ran: false, kind: t.kind, validation: t.validation, runId,
-                 reason: "The pal did not validate on the server, so it can't be exercised. Fix the validation notes, push, and exercise again." };
-    }
+    for (let attempt = 0; attempt < 2; attempt++) {
+        const t = await testFn(session, guid, { kind: workflow });
+        if (!t.ran) {
+            return { ran: false, blocked: t.blocked, holder: t.holder, runId,
+                     status: "blocked", category: "environment", retryAttempted,
+                     potentialMutationStarted: false,
+                     reason: t.blocked === "no-testable-workflow"
+                         ? "This pal has no runnable workflow to exercise."
+                         : "Could not start a test instance (" + (t.blocked || "unknown") + ").",
+                     remediation: "Resolve the test environment, then run a new exercise." };
+        }
+        if (!t.validated) {
+            return { ran: false, kind: t.kind, validation: t.validation, runId,
+                     status: "blocked", category: "environment", retryAttempted,
+                     potentialMutationStarted: false,
+                     reason: "The pal did not validate on the server, so it can't be exercised. Fix the validation notes, push, and exercise again." };
+        }
 
-    const isWeb = t.kind === "web";
-    if (!isWeb && !needsBrowser(steps) && steps.some(s => s.action || s.page)) {
-        return { ran: false, kind: t.kind, invalid: true, runId,
-                 problems: ["a " + t.kind + " pal's actions run through the console screen — write steps as fill (inputs by name) + click (the action link/button text), not action/page"] };
-    }
+        const isWeb = t.kind === "web";
+        if (!isWeb && !needsBrowser(steps) && steps.some(s => s.action || s.page)) {
+            return { ran: false, kind: t.kind, invalid: true, status: "invalid", category: "steps", runId,
+                     problems: ["a " + t.kind + " pal's actions run through the console screen — write steps as fill (inputs by name) + click (the action link/button text), not action/page"] };
+        }
 
-    const res = isWeb && !needsBrowser(steps) ? await exerciseByFetch(t, steps) : await exerciseByBrowser(t, steps, viewport);
-    res.runId = runId;
-    res.warnings = lint.warnings;
-    return res;
+        const res = isWeb && !needsBrowser(steps)
+            ? await exerciseByFetch(t, steps)
+            : await browserFn(t, steps, viewport, deps);
+        if (res.status === "blocked" && !res.potentialMutationStarted && attempt === 0 &&
+            (res.category === "auth" || res.category === "navigation")) {
+            retryAttempted = true;
+            const wait = deps.wait || (ms => new Promise(resolve => setTimeout(resolve, ms)));
+            await wait(100);
+            continue;
+        }
+        res.retryAttempted = retryAttempted;
+        res.runId = runId;
+        res.warnings = lint.warnings;
+        return res;
+    }
 }
 
 // WEB fast path: plain fetches against the activated test session, no browser.
 async function exerciseByFetch(t, steps) {
     const { openInstanceSessionFromTest } = require("./preview");
     const inst = await openInstanceSessionFromTest(t);
-    if (!inst.opened) return { ran: false, kind: "web", reason: inst.reason };
+    if (!inst.opened) return { ran: false, kind: "web", status: "blocked", category: "environment", potentialMutationStarted: false, reason: inst.reason };
     const results = [];
     for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
@@ -462,40 +487,40 @@ async function exerciseByFetch(t, steps) {
         try { r = await inst.fetchPath(path); }
         catch (e) {
             results.push({ step: i + 1, label: stepLabel(step), pass: false, error: "fetch failed: " + (e && e.message ? e.message : String(e)) });
-            return { ran: true, kind: "web", mode: "fetch", pass: false, failedStep: i + 1, steps: results };
+            return { ran: true, kind: "web", mode: "fetch", pass: false, status: "failed", category: "behavior", failedStep: i + 1, steps: results };
         }
         const renderError = detectRenderError(r.html);
         const chk = checkStep(r.html, step);
         const pass = chk.pass && !renderError && r.status < 400;
         results.push({ step: i + 1, label: stepLabel(step), status: r.status, pass,
                        expect: chk.expect, absent: chk.absent, renderError });
-        if (!pass) return { ran: true, kind: "web", mode: "fetch", pass: false, failedStep: i + 1, steps: results };
+        if (!pass) return { ran: true, kind: "web", mode: "fetch", pass: false, status: "failed", category: "behavior", failedStep: i + 1, steps: results };
     }
-    return { ran: true, kind: "web", mode: "fetch", pass: true, steps: results };
+    return { ran: true, kind: "web", mode: "fetch", pass: true, status: "passed", category: "behavior", steps: results };
 }
 
 // Browser path: drive the real screen (console/transaction always; web when steps fill/click).
-async function exerciseByBrowser(t, steps, viewport) {
-    const chromium = loadChromium();
+async function exerciseByBrowser(t, steps, viewport, deps = {}) {
+    const chromium = (deps.loadChromium || loadChromium)();
     if (!chromium) {
-        return { ran: false, available: false,
+        return { ran: false, available: false, status: "blocked", category: "environment", potentialMutationStarted: false,
                  reason: "Playwright/Chromium is not installed in this runtime, and these steps need a real browser (console screen or fill/click). Enable with: npm i playwright && npx playwright install chromium — or verify this behavior at the human eyeball gate." };
     }
     const isWeb = t.kind === "web";
     const target = isWeb ? t.rawToken : t._previewUrl;
     if (!target) {
-        return { ran: false, kind: t.kind,
+        return { ran: false, kind: t.kind, status: "blocked", category: "navigation", potentialMutationStarted: false,
                  reason: "No runnable URL for this " + t.kind + " pal — can't drive the screen." };
     }
     const vp = VIEWPORTS[viewport] ? VIEWPORTS[viewport] : VIEWPORTS.desktop;
     let browser;
-    try { browser = await getBrowser(); }
+    try { browser = await (deps.getBrowser || getBrowser)(); }
     catch (e) {
-        return { ran: false, available: false,
+        return { ran: false, available: false, status: "blocked", category: "environment", potentialMutationStarted: false,
                  reason: "Playwright is installed but its Chromium browser is not — install it with: npx playwright install chromium (" + (e && e.message ? e.message.split("\n")[0] : String(e)) + ")" };
     }
     const results = [];
-    let bctx, pg;
+    let bctx, pg, potentialMutationStarted = false;
     try {
         bctx = await browser.newContext({ viewport: vp });
         pg = await bctx.newPage();
@@ -504,11 +529,11 @@ async function exerciseByBrowser(t, steps, viewport) {
             acceptedDialogs.push(dialog.type() + (dialog.message() ? ": " + dialog.message() : ""));
             try { await dialog.accept(); } catch (e) { /* dialog may already be gone */ }
         });
-        await pg.goto(target, { waitUntil: "networkidle" });
+        await (deps.waitForRenderablePage || waitForRenderablePage)(pg, target);
         if (!isWeb && isLoginRedirect(pg.url())) {
-            return { ran: false, kind: t.kind,
-                     reason: "console session expired / not authenticated — re-auth and retry",
-                     steps: results };
+            return { ran: false, kind: t.kind, status: "blocked", category: "auth",
+                     potentialMutationStarted, reason: "console session expired / not authenticated",
+                     remediation: "Refresh authentication before trying again.", steps: results };
         }
         // Web base for page/action navigation — same derivation screenshot.js uses.
         let base = null;
@@ -521,16 +546,17 @@ async function exerciseByBrowser(t, steps, viewport) {
             const step = steps[i];
             const fail = (why) => {
                 results.push({ step: i + 1, label: stepLabel(step), pass: false, error: why, url: sanitizeUrl(pg.url()) });
-                return { ran: true, kind: t.kind, mode: "browser", pass: false, failedStep: i + 1, steps: results };
+                return { ran: true, kind: t.kind, mode: "browser", pass: false, status: "failed", category: "behavior", potentialMutationStarted, failedStep: i + 1, steps: results };
             };
             try {
                 if (isWeb && (step.page || step.action)) {
                     let path = step.page || "";
                     if (step.action) {
+                        potentialMutationStarted = true;
                         const qs = new URLSearchParams(Object.assign({ action: step.action }, step.params || {}));
                         path += (path.indexOf("?") === -1 ? "?" : "&") + qs.toString();
                     }
-                    await pg.goto(base + String(path).replace(/^\/+/, ""), { waitUntil: "networkidle" });
+                    await (deps.waitForRenderablePage || waitForRenderablePage)(pg, base + String(path).replace(/^\/+/, ""));
                 }
                 if (step.fill) {
                     for (const [name, value] of Object.entries(step.fill)) {
@@ -550,10 +576,20 @@ async function exerciseByBrowser(t, steps, viewport) {
                     const target = await resolveClickTarget(pg, step);
                     if (target.error) return fail(target.error + "." + formatScreenHints(await screenHints(pg)));
                     const before = await screenFingerprint(pg);
+                    potentialMutationStarted = true;
                     await target.locator.click();
                     await waitForScreenSettle(pg, before);
                 }
             } catch (e) {
+                if (step.page || step.action || step.click) {
+                    const category = !isWeb && pageIsLoginRedirect(pg) ? "auth" : "navigation";
+                    return { ran: potentialMutationStarted, kind: t.kind, mode: "browser", pass: false,
+                        status: "blocked", category, potentialMutationStarted,
+                        reason: browserFailureMessage(e, pg, isWeb, t.kind), steps: results,
+                        remediation: potentialMutationStarted
+                            ? "Data may already have changed. Inspect current state before deciding whether to run anything again."
+                            : "Refresh navigation/authentication before trying again." };
+                }
                 return fail(browserFailureMessage(e, pg, isWeb, t.kind));
             }
             let text = "";
@@ -569,25 +605,32 @@ async function exerciseByBrowser(t, steps, viewport) {
             const hints = pass ? null : await screenHints(pg);
             results.push({ step: i + 1, label: stepLabel(step), pass,
                            expect: chk.expect, absent: chk.absent, renderError, dialogs, hints, url: sanitizeUrl(pg.url()) });
-            if (!pass) return { ran: true, kind: t.kind, mode: "browser", pass: false, failedStep: i + 1, steps: results };
+            if (!pass) return { ran: true, kind: t.kind, mode: "browser", pass: false, status: "failed", category: "behavior", potentialMutationStarted, failedStep: i + 1, steps: results };
         }
-        return { ran: true, kind: t.kind, mode: "browser", pass: true, steps: results };
+        return { ran: true, kind: t.kind, mode: "browser", pass: true, status: "passed", category: "behavior", potentialMutationStarted, steps: results };
     } catch (e) {
-        return { ran: false, kind: t.kind,
+        const category = !isWeb && pageIsLoginRedirect(pg) ? "auth" : "navigation";
+        return { ran: false, kind: t.kind, status: "blocked", category, potentialMutationStarted,
                  reason: browserFailureMessage(e, pg, isWeb, t.kind),
-                 steps: results };
+                 remediation: "Refresh navigation/authentication before trying again.", steps: results };
     } finally {
         try { if (bctx) await bctx.close(); }
-        finally { releaseBrowser(); }
+        finally { (deps.releaseBrowser || releaseBrowser)(); }
     }
 }
 
 // Human/agent-readable report. Never includes raw HTML or credential URLs.
 function formatExercise(res) {
-    if (res.invalid) return "pal_exercise: invalid steps —\n  - " + res.problems.join("\n  - ") +
+    if (res.status === "invalid" || res.invalid) return "pal_exercise — INVALID STEPS — fix the request:\n  - " + res.problems.join("\n  - ") +
         (res.warnings && res.warnings.length ? "\n  warnings:\n  - " + res.warnings.join("\n  - ") : "");
-    if (!res.ran) return "pal_exercise did not run: " + (res.reason || res.blocked || "unknown");
-    const lines = ["pal_exercise (" + res.kind + ", " + res.mode + " mode) — " + (res.pass ? "PASS" : "FAIL at step " + res.failedStep)];
+    if (res.status === "blocked" || (!res.ran && !res.invalid)) {
+        return "pal_exercise — BLOCKED — Pal result unknown; do not mark done\n  category: " + (res.category || "environment") +
+            "\n  retry attempted: " + (res.retryAttempted ? "yes" : "no") +
+            "\n  potential mutation started: " + (res.potentialMutationStarted ? "yes" : "no") +
+            "\n  reason: " + (res.reason || res.blocked || "unknown") +
+            (res.remediation ? "\n  next: " + res.remediation : "");
+    }
+    const lines = ["pal_exercise (" + res.kind + ", " + res.mode + " mode) — " + (res.pass ? "PASS" : "BEHAVIOR FAIL — fix the Pal or targeting as directed (step " + res.failedStep + ")")];
     if (res.runId) lines.push("  runId: " + res.runId + " ({{runId}} placeholders in steps were replaced with this value)");
     if (res.warnings && res.warnings.length) lines.push("  warnings:\n  - " + res.warnings.join("\n  - "));
     for (const s of res.steps || []) {
@@ -609,4 +652,4 @@ function formatExercise(res) {
     return lines.join("\n");
 }
 
-module.exports = { runExercise, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, browserFailureMessage, MAX_STEPS };
+module.exports = { runExercise, exerciseByFetch, exerciseByBrowser, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, browserFailureMessage, MAX_STEPS };

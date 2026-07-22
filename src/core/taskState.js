@@ -9,6 +9,8 @@
 const fs = require("fs");
 
 const STATUSES = ["todo", "in_progress", "done", "blocked", "needs-frontier", "needs-human"];
+const BLOCKED_STATUSES = ["blocked", "needs-frontier", "needs-human"];
+const MAX_BLOCKER_REASON = 240;
 
 function isSeparatorRow(t) { return /^\|[\s:|-]+\|?\s*$/.test(t); }
 function splitCells(t) { return t.replace(/^\|/, "").replace(/\|\s*$/, "").split("|").map(c => c.trim()); }
@@ -113,26 +115,71 @@ function completionClaimError(text, clean) {
 }
 
 // append a checkpoint line to the end of the "## Checkpoints" section. Returns { ok, text } or error.
-function appendCheckpoint(text, line) {
-    const clean = String(line || "").replace(/[\r\n]+/g, " ").trim();
-    if (!clean) return { ok: false, error: "Checkpoint line is empty." };
-    const claimError = completionClaimError(text, clean);
-    if (claimError) return { ok: false, error: claimError };
+function appendCleanCheckpoint(text, clean) {
     const lines = text.split(/\r?\n/);
     const start = lines.findIndex(l => /^##\s+Checkpoints\b/i.test(l.trim()));
     if (start === -1) return { ok: false, error: "No \"## Checkpoints\" section found in EXECUTION.md." };
-    // Find the end of the section (next "## " heading, or EOF), then insert before it.
     let end = lines.length;
     for (let i = start + 1; i < lines.length; i++) { if (/^##\s+/.test(lines[i].trim())) { end = i; break; } }
-    // Trim trailing blank lines inside the section so the append sits right after the last content.
     let insertAt = end;
     while (insertAt - 1 > start && lines[insertAt - 1].trim() === "") insertAt--;
     lines.splice(insertAt, 0, "- " + clean);
     return { ok: true, text: lines.join("\n") };
 }
 
+function appendCheckpoint(text, line) {
+    const clean = String(line || "").replace(/[\r\n]+/g, " ").trim();
+    if (!clean) return { ok: false, error: "Checkpoint line is empty." };
+    const claimError = completionClaimError(text, clean);
+    if (claimError) return { ok: false, error: claimError };
+    return appendCleanCheckpoint(text, clean);
+}
+
+function normalizeBlockerReason(reason) {
+    return String(reason || "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, MAX_BLOCKER_REASON);
+}
+
+function blockerReasons(text) {
+    const reasons = new Map();
+    for (const line of String(text || "").split(/\r?\n/)) {
+        const match = line.match(/^\s*-\s+BLOCKED\s+(\S+)\s+\[(blocked|needs-human|needs-frontier)\]:\s+(.+)\s*$/i);
+        if (match && normalizeBlockerReason(match[3])) reasons.set(match[1].toLowerCase(), {
+            id: match[1], status: match[2].toLowerCase(), reason: normalizeBlockerReason(match[3])
+        });
+    }
+    return reasons;
+}
+
+function terminalReasonState(text) {
+    const parsed = parseTasks(text);
+    if (!parsed.ok) return parsed;
+    const reasons = blockerReasons(text);
+    const missing = parsed.rows.filter(row => BLOCKED_STATUSES.includes(row.status) &&
+        (!reasons.has(row.id.toLowerCase()) || reasons.get(row.id.toLowerCase()).status !== row.status));
+    return { ok: true, reasons, missing, complete: missing.length === 0 };
+}
+
+function setStatusWithReason(text, id, status, reason) {
+    const blockedStyle = BLOCKED_STATUSES.includes(status);
+    const cleanReason = normalizeBlockerReason(reason);
+    if (blockedStyle && !cleanReason) return { ok: false, error: "Status \"" + status + "\" requires --reason with a non-empty explanation." };
+    if (!blockedStyle && reason !== undefined) return { ok: false, error: "Status \"" + status + "\" does not accept --reason." };
+    const updated = setStatus(text, id, status);
+    if (!updated.ok) return updated;
+    if (!blockedStyle) return updated;
+    const checkpoint = "BLOCKED " + updated.id + " [" + status + "]: " + cleanReason;
+    if (String(text).split(/\r?\n/).some(line => line.trim() === "- " + checkpoint)) {
+        return Object.assign({}, updated, { unchanged: updated.unchanged === true, reason: cleanReason });
+    }
+    const appended = appendCleanCheckpoint(updated.text, checkpoint);
+    if (!appended.ok) return appended;
+    return Object.assign({}, updated, { text: appended.text, unchanged: false, reason: cleanReason, to: status });
+}
+
 // --- thin file wrappers used by the CLI ---
 function readExecution(file) { return fs.readFileSync(file, "utf8"); }
 function writeExecution(file, text) { fs.writeFileSync(file, text, "utf8"); }
 
-module.exports = { STATUSES, parseTasks, listTasks, setStatus, appendCheckpoint, replaceCell, readExecution, writeExecution };
+module.exports = { STATUSES, BLOCKED_STATUSES, MAX_BLOCKER_REASON, parseTasks, listTasks, setStatus,
+    setStatusWithReason, appendCheckpoint, blockerReasons, terminalReasonState, normalizeBlockerReason,
+    replaceCell, readExecution, writeExecution };

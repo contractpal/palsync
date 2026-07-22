@@ -122,8 +122,9 @@ palsync seo-audit       # on-page SEO audit of a web pal
 palsync sync-datasets   # provision dataset tables from pal.json (safe by default)
 palsync regression      # capture/compare a regression baseline
 palsync spec-lint       # lint SPEC.md
-palsync task            # spec-to-ship task operations
+palsync task            # spec-to-ship task operations (`--reason` required for blocked states)
 palsync checkpoint      # spec-to-ship checkpointing
+palsync completion check # offline all-done review / reasoned-handoff gate
 palsync cost            # palsync's own context footprint (offline; see below)
 palsync ctx inspect     # stable-prefix sizes and largest generated sections
 palsync ctx diff        # first section changed since the previous generation

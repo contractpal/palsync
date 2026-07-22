@@ -117,15 +117,18 @@ test("tool evidence round-trips exercise and push entries", () => {
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("tool evidence filters by tool, pal, and current marker", () => {
+test("tool evidence prefers source digest and safely falls back to legacy markers", () => {
     const entries = [
         { schema: "palsync/tool-evidence/1", successful: true, tool: "pal_exercise", palGuid: "PAL-1", marker: "M1" },
-        { schema: "palsync/tool-evidence/1", successful: true, tool: "pal_exercise", palGuid: "PAL-1", marker: "OLD" },
+        { schema: "palsync/tool-evidence/1", successful: true, tool: "pal_exercise", palGuid: "PAL-1", marker: "CHANGED", sourceDigest: "D1" },
+        { schema: "palsync/tool-evidence/1", successful: true, tool: "pal_exercise", palGuid: "PAL-1", marker: "M1", sourceDigest: "OTHER" },
         { schema: "palsync/tool-evidence/1", successful: true, tool: "pal_push", palGuid: "PAL-1", marker: "M1" },
-        { schema: "palsync/tool-evidence/1", successful: true, tool: "pal_exercise", palGuid: "PAL-2", marker: "M1" },
-        { schema: "palsync/tool-evidence/1", successful: true, tool: "pal_exercise", palGuid: "PAL-1" }
+        { schema: "palsync/tool-evidence/1", successful: true, tool: "pal_exercise", palGuid: "PAL-2", marker: "M1", sourceDigest: "D1" }
     ];
-    assert.equal(usage.filterToolEvidence(entries, "pal_exercise", "PAL-1", "M1").length, 1);
+    const matching = usage.filterToolEvidence(entries, "pal_exercise", "PAL-1", "M1", "D1");
+    assert.equal(matching.length, 2, "same digest plus marker-only legacy row apply");
+    assert.equal(matching.some(entry => entry.sourceDigest === "OTHER"), false);
+    assert.equal(usage.filterToolEvidence(entries, "pal_exercise", "PAL-2", "M1", "D1").length, 1);
     assert.equal(usage.filterToolEvidence(entries, "pal_push", "PAL-1", "M1").length, 1);
     assert.equal(usage.filterToolEvidence(entries, "pal_exercise", "PAL-1", null).length, 0);
 });

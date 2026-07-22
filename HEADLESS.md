@@ -151,7 +151,9 @@ palsync regression --dir ~/pals/isr          # brownfield: check against baselin
 palsync spec-lint SPEC.md --dir ~/pals/isr   # offline mechanical reality-check of a spec
 palsync task list --ready --dir ~/pals/isr   # next runnable EXECUTION.md task (deps satisfied)
 palsync task T3 done --dir ~/pals/isr        # set exactly one task's status
+palsync task T4 blocked --reason "provider unavailable" --dir ~/pals/isr
 palsync checkpoint "T3 done: preview OK" --dir ~/pals/isr
+palsync completion check --dir ~/pals/isr    # all-done review / reasoned-handoff gate
 palsync ctx inspect --dir ~/pals/isr          # inspect stable generated-context sections
 palsync ctx diff --dir ~/pals/isr             # compare the last two context generations
 ```

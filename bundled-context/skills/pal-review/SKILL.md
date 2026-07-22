@@ -151,12 +151,13 @@ pal_validate: <quote `ok` and `diagnosticCount` — required; missing fields mak
 ```
 
 Cost recording — IF harness is claude-code THEN skip `palsync cost record` (agent cannot read its own spend); IF pi THEN run `palsync cost record --model <model> --phase <build|review>` using the user-supplied footer figures.
-Then run `palsync review check` from the pal workspace and paste
-its complete output into REVIEW.md. Run it only after the latest push, task-state update, and
-review tool evidence: it rejects a missing or stale REVIEW.md. Any flag, stale-review failure,
-or verdict cap forces `CHANGES-NEEDED`; do not write PASS until the check reports `result: PASS`.
-The build session must run the same command before declaring PASS/done; this gate is identical in
-Claude Code, Pi, and OpenCode.
+Run every evidence-producing tool before the final REVIEW.md write. Then run `palsync review check`
+from the pal workspace and paste its complete output into REVIEW.md. It reports descriptive,
+source-bound exercise evidence rather than a call count; behavior evidence is required only when
+§5/action-trace/happy-path PASS rows declare testable behavior. Any flag, stale-review failure, or
+verdict cap forces `CHANGES-NEEDED`; do not write PASS until the check reports `result: PASS`.
+The build session runs `palsync completion check`: Claude blocks Stop, Pi queues a corrective
+follow-up, and other harnesses invoke the same CLI gate manually.
 
 ## Rules
 - **Never edit code or the spec.** Findings become fix tasks for pal-loop; a *spec* problem
@@ -166,8 +167,9 @@ Claude Code, Pi, and OpenCode.
 - **Evidence classes — PASS requires the matching evidence, or it's fabrication:**
   rendered-output criteria need `pal_screenshot`/`pal_fetch` evidence taken from a state where
   the criterion is observable (a data-effects criterion cannot PASS from an empty-list
-  screenshot); behavior criteria need the complete hop-by-hop trace row; write/data-effect
-  criteria need live `pal_exercise` evidence when the tool is available. Anything you cannot
+  screenshot); behavior criteria need the complete hop-by-hop trace row; declared runnable
+  write/data-effect behavior needs live `pal_exercise` evidence when the tool is available, while
+  copy/layout-only criteria do not require a ritual exercise call. Anything you cannot
   verify with the tools at hand goes under `## NOT VERIFIED — human gate`, never an assumed
   pass. **A fabricated PASS is worse than an honest CHANGES-NEEDED.**
 - **Proof ledger required.** Every PASS row must cite a proof id from `## Proof ledger`. Tool

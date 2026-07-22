@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 
 const CORE_TOOLS = ["pal_validate", "pal_spec_lint", "pal_context"];
 
@@ -94,5 +95,24 @@ function appendPiUsage(workspaceDir, event, model) {
     } catch (e) { return null; }
 }
 
+function isPalsyncWorkspace(workspaceDir) {
+    return !!workspaceDir && [".palsync.json", "EXECUTION.md"].some(file => fs.existsSync(path.join(workspaceDir, file)));
+}
+
+function completionFingerprint(workspaceDir, gate) {
+    const hash = crypto.createHash("sha256").update(String(gate && gate.code || "UNKNOWN"));
+    for (const file of [".palsync.json", "EXECUTION.md", "REVIEW.md", ".palsync/tool-evidence.jsonl"]) {
+        try { hash.update("\0" + file + "\0").update(fs.readFileSync(path.join(workspaceDir, file))); }
+        catch (e) { hash.update("\0" + file + ":missing"); }
+    }
+    return hash.digest("hex");
+}
+
+function completionFollowUp(gate, fingerprint, previousFingerprint) {
+    if (!gate || gate.allow !== false || fingerprint === previousFingerprint) return null;
+    return { fingerprint, message: "PalSync completion correction required: " + gate.message };
+}
+
 module.exports = { CORE_TOOLS, routeItems, routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision,
-    imageTokens, contentStats, piUsageEntry, appendPiUsage };
+    imageTokens, contentStats, piUsageEntry, appendPiUsage, isPalsyncWorkspace,
+    completionFingerprint, completionFollowUp };

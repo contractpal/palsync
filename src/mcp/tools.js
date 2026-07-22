@@ -1189,13 +1189,28 @@ const TOOLS = [
             // audited pal_screenshot captures can satisfy the page-level render gate.
             const out = Object.assign({}, res, { message: formatExercise(res) });
             if (res.ran === true && res.pass === true) {
+                const boundedUnique = values => [...new Set(values.map(value => String(value).slice(0, 80)))].slice(0, 10);
+                const summary = {
+                    stepCount: Math.min(10, steps.length),
+                    webActions: boundedUnique(steps.map(step => step && step.action).filter(Boolean)),
+                    browserInteractionCount: Math.min(30, steps.reduce((count, step) =>
+                        count + (step && step.page ? 1 : 0) + (step && step.click ? 1 : 0) +
+                        (step && step.fill ? Object.keys(step.fill).length : 0), 0)),
+                    filledFields: boundedUnique(steps.flatMap(step => step && step.fill ? Object.keys(step.fill) : [])),
+                    positiveAssertionCount: Math.min(100, steps.reduce((count, step) => count + ((step && step.expect) || []).length, 0)),
+                    absenceAssertionCount: Math.min(100, steps.reduce((count, step) => count + ((step && step.absent) || []).length, 0)),
+                    workflow: String(res.kind || workflow || "unknown").slice(0, 40),
+                    viewport: String(viewport || "desktop").slice(0, 40)
+                };
                 out.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, {
                     tool: "pal_exercise",
                     palGuid: ctx.record.palGuid,
                     marker: ctx.record.lastModifiedDate,
+                    sourceDigest: ctx.record.localHash || undefined,
                     runId: res.runId,
                     kind: res.kind,
-                    mode: res.mode
+                    mode: res.mode,
+                    summary
                 });
                 if (!out.evidenceRecorded) out.message +=
                     "\n\n⚠ Behavior passed, but exercise evidence persistence failed. " +
@@ -1634,7 +1649,7 @@ const TOOL_HINTS = {
     pal_preview: ["Preview rendered pal", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_fetch: ["Fetch rendered web page", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_screenshot: ["Capture rendered pal screen", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
-    pal_exercise: ["Exercise pal behavior", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_exercise: ["Exercise pal behavior", { readOnlyHint: false, destructiveHint: false, idempotentHint: false }],
     pal_seo_audit: ["Audit web page SEO", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_spec_lint: ["Lint pal specification", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_regression: ["Run regression check", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],

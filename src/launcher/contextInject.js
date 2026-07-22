@@ -15,6 +15,7 @@
 const fs = require("fs/promises");
 const path = require("path");
 const { writeIfChanged } = require("../core/atomicWrite");
+const claudeHooks = require("./claudeHooks");
 
 const BUNDLE_DIR = path.join(__dirname, "..", "..", "bundled-context");
 const VERSION = require("../../package.json").version;
@@ -300,9 +301,9 @@ function syncSection(palName, { cli = false, skillsDir = ".claude/skills" } = {}
         "4. After workflow/UI pushes, run " + T.test + " for server compile and " + T.screenshot + " for",
         "   actual render evidence. Compile success never proves the UI rendered or behavior worked.",
         "5. Runtime checks inspect the last pushed version. Never narrate UI/data a tool did not show.",
-        "6. Completion gate (identical in Claude Code, Pi, and OpenCode): after a fresh reviewer",
-        "   overwrites `REVIEW.md`, run `palsync review check`. Missing/stale review evidence or a",
-        "   non-PASS result means the build is not PASS/done; never claim completion until it passes.",
+        "6. Completion gate: after a fresh reviewer overwrites `REVIEW.md`, run `palsync completion check`.",
+        "   Missing/stale review evidence or a non-PASS result means the build is not done. Claude",
+        "   blocks Stop, Pi queues a corrective follow-up, and other harnesses call this CLI manually.",
         "",
         (cli ? "Use the owning bundled skill references" : "Use `pal_context`") + " for the detailed `sync-workflow`, `creating-files`, or `datasets` contract",
         "before those operations. It includes drift/lock handling, browser/runtime verification, exact",
@@ -632,6 +633,7 @@ async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
         const existingAgents = await readIfExists(agentsPath);
         const mergedAgents = mergeManaged(existingAgents, agentsBlock(agentsDoc));
         await writeIfChanged(agentsPath, mergedAgents.content);
+        const hookSettings = await claudeHooks.configure(workspaceDir, { install: false });
         const cleanedClaude = await cleanClaudeArtifacts(workspaceDir);
         const result = {
             agent,
@@ -640,6 +642,7 @@ async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
             agentsMd: { path: "AGENTS.md", mode: mergedAgents.mode, userContentPreserved: existingAgents != null },
             prunedSkills: prunedAgents,
             cleanedClaudeSkills: cleanedClaude,
+            hookSettings,
             openCodeCommands,
             version: VERSION
         };
@@ -662,6 +665,7 @@ async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
     await writeIfChanged(claudePath, mergedClaude.content);
     const cleanedAgents = await cleanAgentsArtifacts(workspaceDir);
     const cleanedOpenCodeCommands = await cleanOpenCodeCommands(workspaceDir);
+    const hookSettings = await claudeHooks.configure(workspaceDir, { install: true });
     const result = {
         agent,
         skills: skillNames.map(name => path.join(".claude/skills", name, "SKILL.md")),
@@ -671,6 +675,7 @@ async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
         prunedSkills: prunedClaude,
         cleanedAgentsSkills: cleanedAgents,
         cleanedOpenCodeCommands,
+        hookSettings,
         version: VERSION
     };
     result.contextManifest = await require("../core/contextManifest").emitManifest(workspaceDir, {

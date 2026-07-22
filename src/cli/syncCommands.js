@@ -49,10 +49,11 @@ const USAGE = [
     "  palsync cost record --model X --provider Y --in N --cached N --out N [--cost N] [--currency USD] [--phase build|review] [--dir <ws>]",
     "  palsync ctx inspect|diff [--dir <workspace>]                 Inspect locally stable context or compare the last changed generation (offline)",
     "  palsync review check|brief [--dir <workspace>]              Check REVIEW.md evidence or print the pre-review evidence ledger (offline)",
+    "  palsync completion check [--dir <workspace>]                Enforce all-done independent review or allow a reasoned handoff (offline)",
     "  palsync regression [--keep-lock] [--dir <ws>]                Brownfield regression vs baseline/baseline.json (freshness -> validate/test/H1; caused vs inherited)",
     "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Mechanical reality-check of a SPEC.md (offline): placeholders, dead links, §8a types, §12 floor",
     "  palsync task list [--ready] [--dir <ws>]                     List EXECUTION.md tasks; --ready prints the first todo whose depends are all done",
-    "  palsync task <id> <status> [--dir <ws>]                      Set exactly one task's status (todo|in_progress|done|blocked|needs-frontier|needs-human)",
+    "  palsync task <id> <status> [--reason \"<why>\"] [--dir <ws>] Set one task status; reason is required for blocked|needs-frontier|needs-human",
     "  palsync checkpoint \"<line>\" [--dir <ws>]                     Append a line to EXECUTION.md's Checkpoints section",
     "  palsync sync-datasets [--datasets a,b] [--recreate] [--keep-lock] [--dir <ws>]",
     "                                                               Provision dataset tables from pal.json (safe by default)",
@@ -157,12 +158,14 @@ async function buildCliContext(dir) {
 // aren't the shared --force/--workflow set, so they get their own tolerant parsing.
 async function runTaskCommand(cmd, argv) {
     const ts = require("../core/taskState");
-    let dir = process.cwd(); const pos = []; let ready = false;
+    let dir = process.cwd(); const pos = []; let ready = false; let reason;
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--dir") dir = argv[++i];
         else if (a.startsWith("--dir=")) dir = a.slice("--dir=".length);
         else if (a === "--ready") ready = true;
+        else if (a === "--reason") { reason = argv[++i]; if (reason === undefined) { console.error("--reason requires a value"); return 1; } }
+        else if (a.startsWith("--reason=")) reason = a.slice("--reason=".length);
         else pos.push(a);
     }
     const file = path.join(path.resolve(dir), "EXECUTION.md");
@@ -191,23 +194,64 @@ async function runTaskCommand(cmd, argv) {
         return 0;
     }
     if (pos.length >= 2) {
-        const r = ts.setStatus(text, pos[0], pos[1]);
+        const r = ts.setStatusWithReason(text, pos[0], pos[1], reason);
         if (!r.ok) { console.error("task update failed: " + r.error + " (nothing changed)"); return 1; }
         if (r.unchanged) { console.log(r.id + " already " + pos[1] + " — no change."); return 0; }
         ts.writeExecution(file, r.text);
         console.log(r.id + ": " + r.from + " -> " + r.to);
         return 0;
     }
-    console.error("Usage: palsync task list [--ready] | palsync task <id> <status> | palsync checkpoint \"<line>\"");
+    console.error("Usage: palsync task list [--ready] | palsync task <id> <status> [--reason \"<why>\"] | palsync checkpoint \"<line>\"");
     return 1;
+}
+
+function readStdin() {
+    return new Promise((resolve, reject) => {
+        let input = "";
+        process.stdin.setEncoding("utf8");
+        process.stdin.on("data", chunk => { input += chunk; });
+        process.stdin.on("end", () => resolve(input));
+        process.stdin.on("error", reject);
+    });
+}
+
+async function runHookCommand(argv, inputText) {
+    try {
+        if (argv[0] !== "completion") throw new Error("unknown hook adapter");
+        let mode = "json", dir;
+        for (let i = 1; i < argv.length; i++) {
+            if (argv[i] === "--mode") mode = argv[++i];
+            else if (argv[i].startsWith("--mode=")) mode = argv[i].slice(7);
+            else if (argv[i] === "--dir") dir = argv[++i];
+            else if (argv[i].startsWith("--dir=")) dir = argv[i].slice(6);
+            else throw new Error("unknown hook flag " + argv[i]);
+        }
+        if (mode !== "claude" && mode !== "json") throw new Error("unsupported hook mode " + mode);
+        let event = null;
+        if (mode === "claude") event = JSON.parse(inputText === undefined ? await readStdin() : inputText);
+        const evaluated = require("../core/completionHook").evaluate({ mode, cwd: dir, event });
+        if (evaluated.output) console.log(JSON.stringify(evaluated.output));
+        return 0;
+    } catch (e) {
+        console.error("palsync completion hook skipped (fail open): " + (e && e.message ? e.message : e));
+        return 0;
+    }
 }
 
 // Returns the process exit code (0 ok, 1 refused/failed).
 async function run(cmd, argv) {
     if (cmd === "task" || cmd === "checkpoint") return runTaskCommand(cmd, argv);
+    if (cmd === "hook") return runHookCommand(argv);
     const flags = parseFlags(argv);
     if (flags.help) { console.log(USAGE); return 0; }
     const dir = path.resolve(flags.dir || process.cwd());
+
+    if (cmd === "completion") {
+        if (flags._positional !== "check") { console.error("Usage: palsync completion check [--dir <workspace>]"); return 1; }
+        const gate = require("../core/completionGate").checkWorkspace(dir);
+        console.log(require("../core/completionGate").formatCompletion(gate));
+        return gate.allow ? 0 : 1;
+    }
 
     if (cmd === "review") {
         const reviewCheck = require("../core/reviewCheck");
@@ -445,4 +489,4 @@ async function run(cmd, argv) {
     throw new Error("Unknown subcommand: " + cmd + "\n\n" + USAGE);
 }
 
-module.exports = { run, parseFlags, defaultPreviewOpen, USAGE };
+module.exports = { run, runHookCommand, parseFlags, defaultPreviewOpen, USAGE };

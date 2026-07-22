@@ -11,7 +11,8 @@ const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
 const { InMemoryTransport } = require("@modelcontextprotocol/sdk/inMemory.js");
 const { tmpWorkspace } = require("./helpers");
 const usage = require("../src/core/usage");
-const { runExercise, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, browserFailureMessage, MAX_STEPS } = require("../src/core/exercise");
+const { runExercise, exerciseByBrowser, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, browserFailureMessage, MAX_STEPS } = require("../src/core/exercise");
+const { waitForRenderablePage } = require("../src/core/screenshot");
 
 function loadStubbedTools({ exerciseResult, pushResult }) {
     const toolsPath = require.resolve("../src/mcp/tools");
@@ -77,6 +78,63 @@ test("validateSteps: rejects a do-nothing step, params without action, bad expec
 
 test("validateSteps: invalid click guidance points to within scoping", () => {
     assert.ok(validateSteps([{ click: "" }]).some(p => /if text appears more than once.*within/.test(p)));
+});
+
+test("render navigation requires domcontentloaded but tolerates networkidle timeout", async () => {
+    const seen = [];
+    const pg = {
+        async goto(_url, options) { seen.push(options.waitUntil); },
+        async waitForLoadState(state) { seen.push(state); if (state === "networkidle") throw new Error("long polling"); },
+        async waitForFunction() {}, async evaluate() {}, async waitForTimeout() {}
+    };
+    await waitForRenderablePage(pg, "https://example.test");
+    assert.deepEqual(seen, ["domcontentloaded", "load", "networkidle"]);
+});
+
+test("browser auth/navigation retries once before mutation and cleans both contexts", async () => {
+    let navigations = 0, contexts = 0, closes = 0, releases = 0, tests = 0;
+    const page = () => ({
+        on() {}, url: () => "https://example.test/app", innerText: async () => "ok", content: async () => "<body>ok</body>"
+    });
+    const deps = {
+        runTest: async () => { tests++; return { ran: true, validated: true, kind: "console", _previewUrl: "https://example.test/app" }; },
+        loadChromium: () => ({}),
+        getBrowser: async () => ({ newContext: async () => { contexts++; return { newPage: async () => page(), close: async () => { closes++; } }; } }),
+        releaseBrowser: () => { releases++; }, wait: async () => {},
+        waitForRenderablePage: async () => { if (++navigations === 1) throw new Error("temporary navigation failure"); }
+    };
+    const result = await runExercise(null, "PAL-X", { steps: [{ expect: ["ok"] }], workflow: "console" }, deps);
+    assert.equal(result.status, "passed");
+    assert.equal(result.retryAttempted, true);
+    assert.deepEqual({ tests, contexts, closes, releases }, { tests: 2, contexts: 2, closes: 2, releases: 2 });
+});
+
+test("second initial navigation failure is blocked after one retry", async () => {
+    let tests = 0;
+    const result = await runExercise(null, "PAL-X", { steps: [{ fill: { name: "x" } }], workflow: "console" }, {
+        runTest: async () => { tests++; return { ran: true, validated: true, kind: "console" }; },
+        exerciseByBrowser: async () => ({ status: "blocked", category: "navigation", potentialMutationStarted: false, ran: false, reason: "offline" }),
+        wait: async () => {}
+    });
+    assert.equal(result.status, "blocked");
+    assert.equal(result.retryAttempted, true);
+    assert.equal(tests, 2);
+});
+
+test("post-mutation block and behavior failure are never replayed", async () => {
+    for (const outcome of [
+        { status: "blocked", category: "navigation", potentialMutationStarted: true, ran: true },
+        { status: "failed", category: "behavior", potentialMutationStarted: false, ran: true, pass: false }
+    ]) {
+        let tests = 0;
+        const result = await runExercise(null, "PAL-X", { steps: [{ click: "Save" }], workflow: "console" }, {
+            runTest: async () => { tests++; return { ran: true, validated: true, kind: "console" }; },
+            exerciseByBrowser: async () => outcome, wait: async () => {}
+        });
+        assert.equal(result.status, outcome.status);
+        assert.equal(result.retryAttempted, false);
+        assert.equal(tests, 1);
+    }
 });
 
 // ---- checkStep -------------------------------------------------------------
@@ -204,7 +262,7 @@ test("formatExercise: reports visible assertions, markup-only clues, screen hint
         ]
     };
     const out = formatExercise(failing);
-    assert.match(out, /FAIL at step 2/);
+    assert.match(out, /BEHAVIOR FAIL.*step 2/);
     assert.match(out, /✓ step 1/);
     assert.match(out, /expect "deleted": MISSING from visible text \(string exists only in markup \(e\.g\. input value attribute\)/);
     assert.match(out, /absent "Camera": STILL PRESENT/);
@@ -216,7 +274,7 @@ test("formatExercise: reports visible assertions, markup-only clues, screen hint
     assert.match(out, /Later steps were not run/);
 
     const invalid = formatExercise({ ran: false, invalid: true, problems: ["step 1 does nothing"] });
-    assert.match(invalid, /invalid steps/);
+    assert.match(invalid, /INVALID STEPS/);
 
     const passing = formatExercise({ ran: true, kind: "web", mode: "fetch", pass: true, runId: "run123",
         steps: [{ step: 1, label: "action=list", pass: true, expect: [{ string: "Camera", found: true }], absent: [] }] });
@@ -507,7 +565,7 @@ test("formatExercise: reports preflight warnings on passing runs", () => {
 test("formatExercise: reports warnings alongside invalid steps", () => {
     const out = formatExercise({ ran: false, invalid: true, problems: ["step 1 does nothing"],
         warnings: ["step 1 absent check on \"Delete\" is brittle"] });
-    assert.match(out, /invalid steps/);
+    assert.match(out, /INVALID STEPS/);
     assert.match(out, /warnings:/);
     assert.match(out, /brittle/);
 });
@@ -522,29 +580,39 @@ test("pal_exercise handler records exactly one passing run and no failed run", a
     try {
         const result = await findTool(loaded.tools, "pal_exercise").run({
             session: {}, workspaceDir: ws,
-            record: { palGuid: "PAL-1", lastModifiedDate: "M1" }
-        }, { steps: [{ expect: ["saved"] }] });
+            record: { palGuid: "PAL-1", lastModifiedDate: "M1", localHash: "digest-1" }
+        }, { steps: [{ fill: { secret: "private-value" }, click: "Save", expect: ["saved"], absent: ["old"] }], viewport: "mobile" });
         assert.equal(result.pass, true);
         assert.equal(result.evidenceRecorded, true);
         assert.equal(usage.readToolEvidence(ws).length, 1);
         assert.deepEqual(usage.readToolEvidence(ws)[0], {
             schema: "palsync/tool-evidence/1", tool: "pal_exercise", successful: true,
-            palGuid: "PAL-1", marker: "M1", ts: usage.readToolEvidence(ws)[0].ts,
-            runId: "run-1", kind: "console", mode: "browser"
+            palGuid: "PAL-1", marker: "M1", sourceDigest: "digest-1", ts: usage.readToolEvidence(ws)[0].ts,
+            runId: "run-1", kind: "console", mode: "browser",
+            summary: {
+                stepCount: 1, webActions: [], browserInteractionCount: 2,
+                filledFields: ["secret"], positiveAssertionCount: 1, absenceAssertionCount: 1,
+                workflow: "console", viewport: "mobile"
+            }
         });
+        assert.doesNotMatch(JSON.stringify(usage.readToolEvidence(ws)[0].summary), /private-value|Save|saved|old|run-1/);
     } finally { loaded.restore(); }
 
-    loaded = loadStubbedTools({ exerciseResult: { ran: true, pass: false, kind: "console", mode: "browser" } });
-    try {
-        await findTool(loaded.tools, "pal_exercise").run({
-            session: {}, workspaceDir: ws,
-            record: { palGuid: "PAL-1", lastModifiedDate: "M1" }
-        }, { steps: [{ expect: ["missing"] }] });
-        assert.equal(usage.readToolEvidence(ws).length, 1);
-    } finally {
-        loaded.restore();
-        fs.rmSync(ws, { recursive: true, force: true });
+    for (const exerciseResult of [
+        { ran: true, pass: false, status: "failed", kind: "console", mode: "browser" },
+        { ran: false, pass: false, status: "blocked", category: "navigation" },
+        { ran: false, pass: false, status: "invalid", invalid: true, problems: ["bad"] }
+    ]) {
+        loaded = loadStubbedTools({ exerciseResult });
+        try {
+            await findTool(loaded.tools, "pal_exercise").run({
+                session: {}, workspaceDir: ws,
+                record: { palGuid: "PAL-1", lastModifiedDate: "M1" }
+            }, { steps: [{ expect: ["missing"] }] });
+            assert.equal(usage.readToolEvidence(ws).length, 1);
+        } finally { loaded.restore(); }
     }
+    fs.rmSync(ws, { recursive: true, force: true });
 });
 
 test("pal_exercise evidence failure stays PASS and warns that review will not count it", async () => {

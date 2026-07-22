@@ -419,11 +419,13 @@ function readToolEvidence(workspaceDir) {
     return readJsonLines(path.join(workspaceDir, TOOL_EVIDENCE_FILE), TOOL_EVIDENCE_SCHEMA);
 }
 
-function filterToolEvidence(entries, tool, palGuid, marker) {
-    if (!tool || !palGuid || !marker) return [];
-    return (Array.isArray(entries) ? entries : []).filter(entry =>
-        entry.successful === true && entry.tool === tool &&
-        entry.palGuid === palGuid && entry.marker === marker);
+function filterToolEvidence(entries, tool, palGuid, marker, sourceDigest) {
+    if (!tool || !palGuid) return [];
+    return (Array.isArray(entries) ? entries : []).filter(entry => {
+        if (entry.successful !== true || entry.tool !== tool || entry.palGuid !== palGuid) return false;
+        if (sourceDigest && entry.sourceDigest) return entry.sourceDigest === sourceDigest;
+        return !entry.sourceDigest && !!marker && entry.marker === marker;
+    });
 }
 
 function readPiUsage(workspaceDir) {

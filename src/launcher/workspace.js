@@ -169,6 +169,9 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
         (agent === "codex" ? " + AGENTS.md/.agents (Codex)" : agent === "pi" ? " + AGENTS.md/.agents (Pi)" :
          agent === "opencode" ? " + AGENTS.md/.agents (OpenCode)" : ""));
     const injected = await contextInject.inject(workspaceDir, { palName: sel.pal.name, agent });
+    if (injected.hookSettings && injected.hookSettings.skipped) {
+        log("  Claude hook settings skipped: " + injected.hookSettings.error + ". " + injected.hookSettings.manualRemediation);
+    }
 
     await palsyncfile.write(workspaceDir, record);
 

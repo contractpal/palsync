@@ -57,17 +57,17 @@ test("PASS review with no current-version evidence is flagged and capped", () =>
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("exact Haiku decorated verdict is detected and capped with zero evidence", () => {
+test("decorated PASS with no declared behavior needs no ritual exercise", () => {
     const ws = evidenceWorkspace({ review: "# Review\n\n## Verdict\n\n**result: PASS**\n" });
     const result = checkWorkspace(ws);
-    assert.equal(result.ok, false);
+    assert.equal(result.ok, true);
     assert.equal(result.flags.length, 0);
-    assert.equal(result.verdictMustChange, true);
-    assert.match(formatReviewCheck(result), /VERDICT CAP: zero successful pal_exercise calls/);
+    assert.equal(result.verdict, "PASS");
+    assert.match(formatReviewCheck(result), /exercise evidence for current pushed source: none/);
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("Pi-shaped CHANGES-NEEDED with §12 PASS cells still fails through passRows", () => {
+test("CHANGES-NEEDED fails even when visual §12 rows pass", () => {
     const review = `# REVIEW
 verdict: CHANGES-NEEDED
 ## §12 acceptance
@@ -78,8 +78,10 @@ verdict: CHANGES-NEEDED
     const ws = evidenceWorkspace({ review });
     const result = checkWorkspace(ws);
     assert.equal(result.ok, false);
+    assert.equal(result.verdict, "CHANGES-NEEDED");
     assert.equal(result.verdictMustChange, false);
-    assert.equal(result.flags.length, 1);
+    assert.equal(result.flags.length, 0);
+    assert.match(formatReviewCheck(result), /explicit independent PASS is required/);
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
@@ -91,7 +93,8 @@ test("incidental PASS prose and CHANGES-NEEDED discussion do not declare PASS", 
     ]) {
         const result = checkReview(review, { entries: [], palGuid: PAL_GUID, marker: MARKER });
         assert.equal(result.verdictMustChange, false, review);
-        assert.equal(result.ok, true, review);
+        assert.equal(result.verdict, "CHANGES-NEEDED", review);
+        assert.equal(result.ok, false, review);
     }
 });
 
@@ -163,15 +166,44 @@ test("bias-capped PASS is detected under a decorated heading verdict", () => {
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("evidence newer than REVIEW.md makes the review stale", () => {
-    const ws = evidenceWorkspace();
-    appendEvidence(ws);
+test("freshness ignores telemetry but tracks sync, execution, and tool evidence", () => {
+    for (const source of [usage.TOOL_EVIDENCE_FILE, ".palsync.json", "EXECUTION.md"]) {
+        const ws = evidenceWorkspace({ entries: [{ tool: "pal_exercise" }], files: source === "EXECUTION.md" ? { "EXECUTION.md": "## Tasks\n| id | status |\n| T1 | done |\n" } : {} });
+        if (source === usage.TOOL_EVIDENCE_FILE) appendEvidence(ws);
+        const later = new Date(Date.now() + 2000);
+        fs.utimesSync(path.join(ws, source), later, later);
+        const result = checkWorkspace(ws);
+        assert.equal(result.ok, false, source);
+        assert.equal(result.staleReview, true, source);
+        assert.match(formatReviewCheck(result), new RegExp("REVIEW\\.md is stale.*" + path.basename(source).replace(".", "\\."), "s"));
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+    const telemetry = evidenceWorkspace({ entries: [{ tool: "pal_exercise" }], usageLedger: { tools: {} } });
     const later = new Date(Date.now() + 2000);
-    fs.utimesSync(path.join(ws, usage.TOOL_EVIDENCE_FILE), later, later);
+    fs.utimesSync(path.join(telemetry, usage.USAGE_FILE), later, later);
+    assert.equal(checkWorkspace(telemetry).ok, true);
+    fs.rmSync(telemetry, { recursive: true, force: true });
+});
+
+test("source digest survives marker changes but never crosses Pal identity", () => {
+    const ws = evidenceWorkspace({
+        entries: [{ tool: "pal_exercise", marker: "OLD", sourceDigest: "DIGEST" }],
+        files: { ".palsync.json": JSON.stringify(record({ lastModifiedDate: "NEW", localHash: "DIGEST", fileHashes: {} })) }
+    });
+    assert.equal(checkWorkspace(ws).ok, true);
+    fs.writeFileSync(path.join(ws, usage.TOOL_EVIDENCE_FILE), "");
+    appendEvidence(ws, "pal_exercise", { palGuid: "PAL-2", marker: "NEW", sourceDigest: "DIGEST" });
+    fs.writeFileSync(path.join(ws, "REVIEW.md"), REVIEW);
+    assert.equal(checkWorkspace(ws).ok, false);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("missing reviewer verdict fails even without declared behavior", () => {
+    const ws = evidenceWorkspace({ review: "# REVIEW\n## §12 visual\n| criterion | result |\n|---|---|\n| copy | PASS |\n" });
     const result = checkWorkspace(ws);
+    assert.equal(result.verdict, "MISSING/UNKNOWN");
     assert.equal(result.ok, false);
-    assert.equal(result.staleReview, true);
-    assert.match(formatReviewCheck(result), /REVIEW\.md is stale.*tool-evidence\.jsonl/s);
+    assert.match(formatReviewCheck(result), /explicit independent PASS is required/);
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
@@ -196,7 +228,7 @@ test("review completion gate is identical across claude-code, pi, and opencode",
         appendEvidence(ws);
         fs.writeFileSync(path.join(ws, "REVIEW.md"), REVIEW);
         const managedDoc = fs.readFileSync(path.join(ws, agent === "claude" ? "CLAUDE.palsync.md" : "AGENTS.md"), "utf8");
-        assert.match(managedDoc, /Completion gate \(identical in Claude Code, Pi, and OpenCode\)[\s\S]*palsync review check/);
+        assert.match(managedDoc, /Completion gate[\s\S]*palsync completion check/);
 
         const oldLog = console.log;
         const logged = [];
@@ -214,7 +246,8 @@ test("review completion gate is identical across claude-code, pi, and opencode",
         fs.rmSync(ws, { recursive: true, force: true });
     }
     assert.equal(new Set(outputs).size, 1);
-    assert.match(outputs[0], /successful pal_exercise calls: 1/);
+    assert.match(outputs[0], /exercise evidence for current pushed source: available/);
+    assert.doesNotMatch(outputs[0], /successful pal_exercise calls|\b\d+\/\d+\b/);
     assert.match(outputs[0], /result: PASS/);
     assert.equal(new Set(missingOutputs).size, 1);
     assert.match(missingOutputs[0], /REVIEW\.md not found/);
@@ -250,7 +283,8 @@ test("review brief and check agree while CLI-only evidence never renders N/0", (
 EVIDENCE LEDGER
 tool evidence sidecar: available
 current-version successful evidence:
-  pal_exercise: 2
+  exercise evidence for current pushed source: available
+  legacy source marker: M1
   pal_push: 1
 MCP usage sidecar: available
 MCP attempts this session:
@@ -282,7 +316,7 @@ test("review brief reports evidence and usage sidecars independently", async () 
     const ws = tmpWorkspace({ ".palsync.json": JSON.stringify(record()) });
     const output = formatReviewBrief(buildReviewBrief(ws));
     assert.match(output, /tool evidence sidecar: not available/);
-    assert.match(output, /current-version successful evidence:\n  pal_exercise: 0\n  pal_push: 0/);
+    assert.match(output, /current-version successful evidence:\n  exercise evidence for current pushed source: none\n  pal_push: 0/);
     assert.match(output, /MCP usage sidecar: not available/);
     assert.match(output, /pal_exercise: not available/);
     assert.match(output, /session cost sidecar: not available/);

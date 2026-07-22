@@ -12,7 +12,8 @@ something you fix yourself. State lives ON DISK in EXECUTION.md, never only in y
 write every state change to the file the moment it happens.
 
 **EXECUTION.md edits go through the CLI**: `palsync task list [--ready]`,
-`palsync task <id> <status>`, `palsync checkpoint "<line>"`. These are OFFLINE local helpers —
+`palsync task <id> <status>`, `palsync checkpoint "<line>"`. Transitions to `blocked`,
+`needs-human`, or `needs-frontier` require `--reason "<why>"`. These are OFFLINE local helpers —
 the only `palsync` CLI you run from your shell (they have no MCP equivalent and touch no
 server). Everything else (push, pull, validate, test…) uses the `pal_*` MCP tools, never the
 CLI. Hand-edit the markdown only if the CLI is unavailable.
@@ -57,7 +58,8 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
 2. **Tier check.** Task tier `frontier` and you're not frontier-class (test: does it need NEW
    structure, not just following the spec?) → if an advisor capability exists (e.g.
    `/advisor`), call it with full context for the plan; you still execute, verify, commit. No
-   advisor → set `needs-frontier`, checkpoint, move to the next eligible task — don't attempt
+   advisor → run `palsync task <id> needs-frontier --reason "<why a stronger model is required>"`,
+   then move to the next eligible task — don't attempt
    it badly. (Orchestrators MAY dispatch tasks to sized subagents — **read
    `references/delegation.md` first; required protocol.**)
 3. **Mark** `in_progress`: `palsync task <id> in_progress` — write state now, not later. **Done when:** disk state says `in_progress`.
@@ -125,8 +127,9 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       - `captured:true` + `renderError` non-null → hard FAIL. The workflow compiled but threw
         while rendering. Fix, push, screenshot again — `pal_test` passing does NOT clear it.
       - `captured:true` + `renderError` null → judge the image against §12 VISUAL → `done`.
-      - `captured:false` → do NOT guess from HTML: set `needs-human` with a Blockers entry
-        prefixed `HUMAN GATE:` naming exactly what to eyeball. Continue with independent
+      - `captured:false` → do NOT guess from HTML: run
+        `palsync task <id> needs-human --reason "HUMAN GATE: <what the human must confirm>"`,
+        naming exactly what to eyeball. Continue with independent
         tasks. (Full rule: `../pal-review/references/console-render-verification.md`.)
    6. ANY write action (create/edit/delete), when the task includes behavior changes: `pal_exercise` — trigger the action and assert the
       result in the rendered output. For every §5 effect, read the record back and assert
@@ -173,10 +176,11 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
 6. **On pass:** first confirm there are no unhandled validation warnings from the push output
    (fixed, or each one checkpointed with a concrete reason it is safe). Then `palsync task <id> done`; `palsync checkpoint "<date>, <task id>,
    <tool-output summary>"`; `git add -A && git commit -m "<task id>: <task name>"`; continue.
-7. **On fail:** fix and re-verify, up to TWO attempts. Still failing → `palsync task <id>
-   blocked` with a Blockers entry naming what failed (exact tool output), what you tried, and
-   the decision you need; continue with the next INDEPENDENT task. Never skip verification;
-   never use force/bypass flags to bury a failure. **Bad change already pushed?** Restore the
+7. **On fail:** fix and re-verify, up to TWO attempts. Still failing →
+   `palsync task <id> blocked --reason "<result and required decision>"`. A BLOCKED exercise means the Pal result is
+   unknown, never PASS or done. Do not replay after an action/click may have changed data; inspect
+   state first. Continue only with an INDEPENDENT task. Never skip verification or use force/bypass
+   flags to bury a failure. **Bad change already pushed?** Restore the
    good local version (`git checkout` the file or prior commit) and **re-push** — git alone
    doesn't roll the server back; re-push refused for drift → `pal_pull`/`pal_merge`, then push.
 
@@ -259,17 +263,20 @@ Trigger: every task `done`, or every remaining task is a `blocked`/`needs-fronti
 
 1. `baseline/` exists → run the regression re-check above, unconditionally.
 2. Cost recording — IF harness is claude-code THEN skip `palsync cost record` (agent cannot read its own spend); IF pi THEN run `palsync cost record --model <model> --phase <build|review>` using the user-supplied footer figures.
-3. Run `palsync review brief`, then **dispatch pal-review in a fresh session/subagent** with its
+3. Write the final session summary/checkpoint now, before review. A proactive mid-build handoff also
+   writes its summary normally but does not invoke review.
+4. Run `palsync review brief`, then **dispatch pal-review in a fresh session/subagent** with its
    EVIDENCE LEDGER output, SPEC.md, EXECUTION.md, DESIGN_SYSTEM.md/COMPONENTS.md, `baseline/`
    (if any), and the pal's identity so it can `pal_fetch`/`pal_screenshot`/`pal_test` the real
    artifacts.
-4. **Reviewer says PASS** → run `palsync review check` yourself in the workspace. Missing or
-   stale `REVIEW.md`, or any `result: FAIL`, refuses completion identically in Claude Code, Pi,
-   and OpenCode. Only `result: PASS` means the build is genuinely done; otherwise re-dispatch.
-5. **CHANGES-NEEDED** → append each `## Fix tasks` item as a new EXECUTION.md task (next id,
+5. **Reviewer says PASS** → run `palsync completion check` yourself in the workspace. Missing or
+   stale `REVIEW.md`, missing source-bound behavior evidence when §5/action/happy-path rows declare
+   behavior, or any `result: FAIL` means the build is not complete. Claude blocks Stop, Pi queues a
+   corrective follow-up, and other harnesses call this same CLI gate manually.
+6. **CHANGES-NEEDED** → append each `## Fix tasks` item as a new EXECUTION.md task (next id,
    `spec ref` from the finding, `depends` per stated order, `todo`, tier `standard` unless it
    needs new structure); resume the task cycle on exactly those tasks.
-6. **Re-review** when the fix tasks are `done`; repeat until PASS. Every review pass, including a
+7. **Re-review** when the fix tasks are `done`; repeat until PASS. Every review pass, including a
    re-review after fixes, overwrites `REVIEW.md` with that pass's new verdict, its own complete
    `palsync review check` output, and fresh evidence. Chat-only verdicts are invalid. A `needs-human` verdict
    (console eyeball gate) routes like any other `needs-human` task, not a failure.
@@ -277,8 +284,11 @@ Trigger: every task `done`, or every remaining task is a `blocked`/`needs-fronti
 The build session may fix review findings, but it may **never convert its own fixes into PASS**.
 Every CHANGES-NEEDED cycle ends with another fresh pal-review dispatch and a new REVIEW.md verdict;
 the build-complete handoff is invalid unless REVIEW.md contains the pasted `palsync review check`
-output, including its successful-exercise count and final result.
-"the exercises pass now" is task evidence, not permission to skip the independent re-review.
+output, including its descriptive exercise summary for the current pushed source and final result.
+After reviewer dispatch, the builder performs no source, `.palsync.json`, EXECUTION, or
+evidence-producing action unless the verdict is CHANGES-NEEDED. Then update state, fix, push, and
+start a fresh review cycle. The reviewer runs all evidence-producing tools before its final
+`REVIEW.md` write. "the exercises pass now" never permits skipping independent re-review.
 
 ## Ending a session
 
@@ -289,7 +299,8 @@ several completed tasks, or when the session feels large, finish the current tas
 clean boundary (no task `in_progress`), and stop — a fresh session resuming from disk costs
 nothing; a compacted one is lossy.
 
-Write a session summary at the top of EXECUTION.md's Checkpoints:
+For a proactive handoff, write this session summary before stopping. On the completion path it was
+already written before reviewer dispatch; do not rewrite it after review:
 ```
 == session <n> (<date>), mode <full|lite>: <a> done, <b> blocked, <c> needs-frontier, <d> needs-human.
    Next: <task id or "review blockers / clear human gates">.
