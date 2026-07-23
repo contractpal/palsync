@@ -16,6 +16,21 @@ function serviceFor(url) {
     return SERVICE_PREFIX + url;
 }
 
+// Platform-specific hint for a keychain failure. macOS over SSH (a non-GUI "Background" security
+// session) refuses WRITES with "User interaction is not allowed" — the OS wants to show an
+// allow-access dialog and can't. The fix is to unlock the login keychain in that session. On Linux
+// the usual cause is no running Secret Service provider.
+function backendHint() {
+    if (process.platform === "darwin") {
+        return " On macOS over SSH the login keychain can't prompt — unlock it in this session with " +
+            "`security unlock-keychain ~/Library/Keychains/login.keychain-db`, or run from the Mac's own Terminal (a GUI login).";
+    }
+    if (process.platform === "linux") {
+        return " On Linux, ensure a Secret Service provider (e.g. gnome-keyring / KWallet, or `libsecret`) is installed and unlocked.";
+    }
+    return "";
+}
+
 // Wrap keyring calls so a missing OS backend yields a clear message (decision 4 / x-platform).
 function withBackend(action, fn) {
     try {
@@ -23,7 +38,7 @@ function withBackend(action, fn) {
     } catch (err) {
         throw new Error(
             "OS keychain unavailable (" + action + "): " + (err && err.message ? err.message : err) +
-            ". On Linux, ensure a Secret Service provider (e.g. gnome-keyring / KWallet, or `libsecret`) is installed and unlocked."
+            "." + backendHint()
         );
     }
 }
