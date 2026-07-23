@@ -78,6 +78,10 @@ test("Pi usage telemetry is local, schema-stable, and never estimates cost", () 
         schema: "palsync/pi-usage/1", tool: "pal_validate", bytes: 5, tokenEstimate: 2,
         provider: null, model: null, cost: null, currency: null, isError: false
     });
+    // Telemetry never writes outside a PalSync workspace — no stray .palsync/ in unrelated repos.
+    assert.equal(appendPiUsage(ws, event, null), null);
+    assert.equal(fs.existsSync(path.join(ws, ".palsync")), false);
+    fs.writeFileSync(path.join(ws, "EXECUTION.md"), "tasks");
     const file = appendPiUsage(ws, event, { provider: "anthropic", id: "model-x" });
     assert.ok(file);
     const stored = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -90,6 +94,8 @@ test("Pi usage telemetry is local, schema-stable, and never estimates cost", () 
 
 test("Pi completion handling is settled, workspace-scoped, and loop-resistant", () => {
     const source = fs.readFileSync(path.join(__dirname, "..", "pi-extension", "index.ts"), "utf8");
+    // session_start must bail out in non-workspace dirs — tools/client never activate outside a PalSync repo.
+    assert.match(source, /pi\.on\("session_start"[\s\S]{0,120}?if \(!isPalsyncWorkspace\(ctx\.cwd\)\) return;/);
     assert.match(source, /pi\.on\("agent_settled"/);
     assert.doesNotMatch(source, /pi\.on\("agent_end"/);
     assert.match(source, /sendUserMessage\(followUp\.message, \{ deliverAs: "followUp" \}\)/);

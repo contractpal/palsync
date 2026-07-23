@@ -97,6 +97,7 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
   };
 
   pi.on("session_start", (_event, ctx) => {
+    if (!isPalsyncWorkspace(ctx.cwd)) return;
     if (hasPiMcpCollision(pi.getActiveTools())) {
       ctx.ui.notify("PalSync native extension disabled: pi-mcp is already serving palsync. Configure that server with lifecycle:\"lazy\" or disable one integration.", "warning");
       return;

@@ -86,7 +86,7 @@ function piUsageEntry(event, model) {
 }
 
 function appendPiUsage(workspaceDir, event, model) {
-    if (!workspaceDir || !event || !/^pal_/.test(event.toolName || "")) return null;
+    if (!workspaceDir || !event || !/^pal_/.test(event.toolName || "") || !isPalsyncWorkspace(workspaceDir)) return null;
     try {
         const file = path.join(workspaceDir, ".palsync", "pi-usage.jsonl");
         fs.mkdirSync(path.dirname(file), { recursive: true });
