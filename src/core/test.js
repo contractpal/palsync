@@ -5,9 +5,9 @@
 // Confirmed live (scripts/test-workflow-probe*.js against ISR): Test<Console|Web|System|Pal>.do
 // returns { success, validated, token, validationResults, profileList }. The `token` is a
 // CreateTest<Type>.do URL; for console/console-system/transaction the runnable form appends
-// &cp-auth=base64(user:pass) &nxProfileId=<profile> &cp-workflow=<name-no-ext>. A CONSOLE pal
-// renders inside the platform console chrome via encrypted AJAX (so a real browser is needed to
-// SEE it — a plain fetch reaches only the host frame); a WEB pal renders directly.
+// &cp-auth=base64(user:pass) &nxProfileId=<profile> &cp-workflow=<name-no-ext>. A CONSOLE pal's
+// token URL is meant to be opened with a plain GET in a real browser (it navigates into the
+// platform console chrome) — it is not an AJAX/XHR endpoint; a WEB pal renders directly.
 //
 // SECURITY: the runnable URL embeds the password (base64). It is NEVER returned to the caller or
 // logged — buildPreviewUrl() is consumed only by an in-process browser-open. The agent gets the
