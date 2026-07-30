@@ -6,8 +6,7 @@
 const { CloudPistonAPIManager } = require("../../lib/apiManager");
 const { listKeys } = require("../core/createPal");
 const { timestampText } = require("../core/resolve");
-
-const BACK = "__back__";
+const { BACK } = require("../core/back");
 
 async function listProfiles(session) {
     const resp = await CloudPistonAPIManager.getProfileList(session);
@@ -42,8 +41,11 @@ function normalizePal(p) {
 // Walk profile -> [open existing | create new] with back support.
 //   open:   profile -> group (single) -> pal   -> { mode:"open",   profile, group, pal }
 //   create: profile -> groups (1+) -> details -> key -> { mode:"create", profile, groups, details, activationKey }
-// Returns null if the user cancels out. No mutations here — the orchestrator performs the
-// create (CreatePalFromBuilder) so this stays pure prompts + GET-list calls.
+// Returns null if the user cancels out, or BACK if they back out of the very first step
+// (profile) — there's no earlier step in here to fall back to; the caller (launcher/index.js)
+// re-enters the login flow at its last step so the whole thing feels like one continuous stack.
+// No mutations here — the orchestrator performs the create (CreatePalFromBuilder) so this stays
+// pure prompts + GET-list calls.
 // forceCreate skips the open/create mode prompt (eval-harness runs always create a fresh pal);
 // defaultName prefills the new-pal name prompt (from the eval spec's `pal:` line).
 async function runSelection(session, prompts, { forceCreate = false, defaultName } = {}) {
@@ -53,6 +55,7 @@ async function runSelection(session, prompts, { forceCreate = false, defaultName
         if (step === "profile") {
             const profiles = await listProfiles(session);
             const choice = await prompts.pickProfile(profiles);
+            if (choice === BACK) return BACK;
             if (!choice) return null;
             profile = choice;
             step = forceCreate ? "groups" : "mode";

@@ -10,6 +10,7 @@ const { selectionPrompts, driftPrompt, pickEvalSpec } = require("./prompts");
 const agents = require("./agents");
 const workspace = require("./workspace");
 const evalSpec = require("../core/evalSpec");
+const { BACK } = require("../core/back");
 
 async function defaultChooseDir(defaultDir) {
     const clack = await loadClack();
@@ -47,11 +48,24 @@ async function run({
     }
 
     // 1–2. cloud + login (cached creds skip the prompt)
-    const { session, cloudUrl } = await login({ prompts: loginPrompts });
+    let loginResult = await login({ prompts: loginPrompts });
+    if (loginResult === BACK) { log("cancelled at login"); return null; }
+    let { session, cloudUrl } = loginResult;
     log("logged in: " + session.username + " @ " + cloudUrl + " (userId=" + session.userId + ")");
 
-    // 3. profile → [open existing | create new]
-    let sel = await runSelection(session, selPrompts, spec ? { forceCreate: true, defaultName: spec.suggestedName } : undefined);
+    // 3. profile → [open existing | create new]. Backing out of the very first selection
+    //    screen (profile) re-enters login at its last step (password) — see selection.js's
+    //    "profile" step and credentials.js's resumable entry — so the whole login+selection
+    //    flow reads as one continuous back stack instead of two disconnected menus.
+    let sel;
+    while (true) {
+        sel = await runSelection(session, selPrompts, spec ? { forceCreate: true, defaultName: spec.suggestedName } : undefined);
+        if (sel !== BACK) break;
+        loginResult = await login({ prompts: loginPrompts, cloudUrl, username: session.username });
+        if (loginResult === BACK) { log("cancelled at login"); return null; }
+        ({ session, cloudUrl } = loginResult);
+        log("logged in: " + session.username + " @ " + cloudUrl + " (userId=" + session.userId + ")");
+    }
     if (!sel) { log("cancelled at selection"); return null; }
 
     // Create mode: mint the pal now (server returns its guid), then fall through to the same

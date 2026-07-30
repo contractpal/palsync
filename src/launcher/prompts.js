@@ -4,9 +4,38 @@
 // >=6, so it works on the team's Node range (18+) and doesn't touch the @clack pin. Returns the
 // chosen object, the BACK sentinel, or null on cancel — kept UI-agnostic from selection.js.
 const promptsLib = require("prompts");
-const { BACK } = require("./selection");
+const { BACK } = require("../core/back");
 const { loadClack } = require("../platform/uiPrompts");
 const { describeDiff } = require("../core/localDrift");
+
+// Monkey-patch `prompts`' AutocompletePrompt so Esc and the left arrow reliably resolve BACK
+// (when back-enabled), instead of the library's default behavior: Esc (`exit()`) RESOLVES
+// (doesn't reject/cancel) with whatever item is currently highlighted — so without this, Esc
+// after moving the cursor silently accepts the wrong item rather than going back — and left
+// arrow just moves the filter-text cursor. `prompts/lib/elements` is the exact object
+// `prompts/lib/prompts.js` reads `AutocompletePrompt` from (same require-cache entry, plain
+// CJS — no ESM live-binding issues), so reassigning it here is visible everywhere the package
+// constructs one.
+const elements = require("prompts/lib/elements");
+const OriginalAutocompletePrompt = elements.AutocompletePrompt;
+class BackableAutocompletePrompt extends OriginalAutocompletePrompt {
+    constructor(opts) {
+        super(opts);
+        this._backEnabled = !!opts.back;
+    }
+    exit() { this._backEnabled ? this._resolveBack() : super.exit(); }   // Esc
+    left() { this._backEnabled ? this._resolveBack() : super.left(); }  // left arrow
+    _resolveBack() {
+        this.value = BACK;
+        this.done = this.exited = true;
+        this.aborted = false;
+        this.fire();
+        this.render();
+        this.out.write("\n");
+        this.close();
+    }
+}
+elements.AutocompletePrompt = BackableAutocompletePrompt;
 
 // Case-insensitive SUBSTRING filter (more forgiving than prompts' default prefix match), so
 // typing "tracker" matches "Project Tracker", not just leading text.
@@ -20,20 +49,23 @@ async function autocompletePick(message, items, { back = false } = {}) {
     if (back) choices.push({ title: "← Back", value: BACK });
     for (const it of items) choices.push(it);
 
-    let cancelled = false;
+    // onCancel only fires on a real Ctrl+C/Ctrl+D (abort() rejects); Esc is handled by the
+    // BackableAutocompletePrompt patch above and never reaches here.
     const res = await promptsLib(
-        { type: "autocomplete", name: "value", message, choices, suggest, limit: 12 },
-        { onCancel: () => { cancelled = true; return false; } }
+        { type: "autocomplete", name: "value", message, choices, suggest, limit: 12, back },
+        { onCancel: () => false }
     );
-    if (cancelled || res.value === undefined) return null;
+    if (res.value === undefined) return null;
     return res.value;
 }
 
 const selectionPrompts = {
+    // Esc/left back out to the login flow's last step (see launcher/index.js's orchestration).
     async pickProfile(profiles) {
         return autocompletePick(
             "Select profile (type to filter)",
-            profiles.map(p => ({ title: p.profileName, value: p }))
+            profiles.map(p => ({ title: p.profileName, value: p })),
+            { back: true }
         );
     },
     // Open an existing pal, or create a new one. Esc goes back to the profile step.
