@@ -21,6 +21,7 @@ function shapePal(p, profile, group) {
         guid: p.guid,                              // stable — persisted in .palsync.json
         name: p.name,
         description: p.description,
+        branch: p.branchName || "",
         lastModifiedDate: timestampText(p.lastModifiedDate),  // drift marker
         profileId: profile.profileId,
         profileName: profile.profileName,

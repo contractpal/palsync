@@ -29,8 +29,11 @@ function slug(name) {
     return String(name).trim().replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "pal";
 }
 
-function defaultWorkspaceDir(palName) {
-    return path.join(os.homedir(), "PalBuilder", slug(palName));
+// branch is read-only display metadata from the pal list (never written back anywhere) — it
+// only affects the local folder name so two branches of the same pal don't collide on disk.
+function defaultWorkspaceDir(palName, branch) {
+    const dirName = branch ? slug(palName) + " (" + slug(branch) + ")" : slug(palName);
+    return path.join(os.homedir(), "PalBuilder", dirName);
 }
 
 // Resolve un-pushed local changes before the setup pull. Loops the injectable onDrift prompt

@@ -113,7 +113,7 @@ async function run(argv) {
         resolved = r;
     }
 
-    const workspaceDir = path.resolve(flags.dir || workspace.defaultWorkspaceDir(resolved.name));
+    const workspaceDir = path.resolve(flags.dir || workspace.defaultWorkspaceDir(resolved.name, resolved.branch));
     const log = flags.json ? () => {} : (m) => console.log("  " + m);
     if (!flags.json) console.log("palsync setup — " + resolved.name + " @ " + cloudUrl + " → " + workspaceDir + "\n");
 

@@ -34,6 +34,7 @@ function normalizePal(p) {
         guid: p.guid,                              // stable — persisted in .palsync.json
         name: p.name,
         description: p.description,
+        branch: p.branchName || "",
         lastModifiedDate: timestampText(p.lastModifiedDate)  // drift marker
     };
 }

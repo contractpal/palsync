@@ -106,7 +106,11 @@ const selectionPrompts = {
     async pickPal(pals) {
         return autocompletePick(
             "Select pal (type to filter)",
-            pals.map(p => ({ title: p.name, description: p.description || undefined, value: p })),
+            pals.map(p => ({
+                title: p.name + (p.branchName ? " (" + p.branchName + ")" : ""),
+                description: p.description || undefined,
+                value: p
+            })),
             { back: true }
         );
     }

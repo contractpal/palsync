@@ -83,7 +83,7 @@ async function run({
     log("agent: " + agent.label);
 
     // 5. workspace dir + setup (pull + lock + inject + .palsync.json + register MCP)
-    const dir = await chooseWorkspaceDir(workspace.defaultWorkspaceDir(sel.pal.name), sel.pal);
+    const dir = await chooseWorkspaceDir(workspace.defaultWorkspaceDir(sel.pal.name, sel.pal.branch), sel.pal);
     if (!dir) { log("cancelled at workspace dir"); return null; }
     const setupResult = await workspace.setup({ session, cloudUrl, sel, workspaceDir: dir, agent: agent.key, onDrift, log });
 
