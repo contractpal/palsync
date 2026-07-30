@@ -66,4 +66,4 @@ function deleteCredential(url, username) {
     });
 }
 
-module.exports = { setCredential, getPassword, listUsernames, deleteCredential, serviceFor };
+module.exports = { setCredential, getPassword, listUsernames, deleteCredential, serviceFor, backendHint };

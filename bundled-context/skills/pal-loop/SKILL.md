@@ -13,7 +13,10 @@ write every state change to the file the moment it happens.
 
 **EXECUTION.md edits go through the CLI**: `palsync task list [--ready]`,
 `palsync task <id> <status>`, `palsync checkpoint "<line>"`. Transitions to `blocked`,
-`needs-human`, or `needs-frontier` require `--reason "<why>"`. These are OFFLINE local helpers —
+`needs-human`, or `needs-frontier` require `--reason "<why>"`; `blocked` and `needs-human` also
+require `--tried "<workaround>"` — before either status, retry the failing step once, attempt one
+alternate path, and record the literal failing command and error text in `--tried`; only then set
+the status. (`needs-frontier` is a capability call and needs no `--tried`.) These are OFFLINE local helpers —
 the only `palsync` CLI you run from your shell (they have no MCP equivalent and touch no
 server). Everything else (push, pull, validate, test…) uses the `pal_*` MCP tools, never the
 CLI. Hand-edit the markdown only if the CLI is unavailable.
@@ -38,15 +41,19 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
    mechanism is available and the review provider credentials are present. If either check
    fails, add a Blockers entry prefixed `HUMAN GATE:` with the exact failure and surface it
    now; do not burn the full build before discovering that independent review cannot run.
-4. Not a git repo → `git init && git add -A && git commit -m "loop start"`. Commit after every
+4. **Environment doctor:** run `palsync doctor` from your shell — it is offline,
+   non-interactive, and always exits 0, so it is safe to call unconditionally. Print only the
+   non-ok rows (warn/fail) in your session-start note; skip the ok rows entirely. A fail row
+   that blocks the build (e.g. Node below the minimum) becomes a Blockers entry.
+5. Not a git repo → `git init && git add -A && git commit -m "loop start"`. Commit after every
    task. **git is a LOCAL checkpoint only** — the server is the source of truth; `git
    checkout` does NOT undo a pushed change (recovery: "On fail" below). Never push this repo.
-5. **Load exactly the skills SPEC.md §9 lists, just in time.** §9 is the manifest — don't
+6. **Load exactly the skills SPEC.md §9 lists, just in time.** §9 is the manifest — don't
    guess it (it may include palbuilder-workflow, palbuilder-data, or palbuilder-realtime).
    Load a listed skill when the first task requiring it starts, not all before coding.
    palbuilder-frontend and design-build still load before the first UI task. The restraint ladder below is the default discipline on every task.
-6. `pal_status`. Server newer than your last pull → `pal_pull` first.
-7. **Smoke-test before picking work:** `pal_validate`, plus `pal_test` on the workflow the
+7. `pal_status`. Server newer than your last pull → `pal_pull` first.
+8. **Smoke-test before picking work:** `pal_validate`, plus `pal_test` on the workflow the
    Checkpoints show as last touched — a prior session can leave the workspace broken despite
    what EXECUTION.md says. Either fails → fix that first.
 
@@ -128,7 +135,7 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
         while rendering. Fix, push, screenshot again — `pal_test` passing does NOT clear it.
       - `captured:true` + `renderError` null → judge the image against §12 VISUAL → `done`.
       - `captured:false` → do NOT guess from HTML: run
-        `palsync task <id> needs-human --reason "HUMAN GATE: <what the human must confirm>"`,
+        `palsync task <id> needs-human --reason "HUMAN GATE: <what the human must confirm>" --tried "<command + error>"`,
         naming exactly what to eyeball. Continue with independent
         tasks. (Full rule: `../pal-review/references/console-render-verification.md`.)
    6. ANY write action (create/edit/delete), when the task includes behavior changes: `pal_exercise` — trigger the action and assert the
@@ -177,7 +184,7 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
    (fixed, or each one checkpointed with a concrete reason it is safe). Then `palsync task <id> done`; `palsync checkpoint "<date>, <task id>,
    <tool-output summary>"`; `git add -A && git commit -m "<task id>: <task name>"`; continue.
 7. **On fail:** fix and re-verify, up to TWO attempts. Still failing →
-   `palsync task <id> blocked --reason "<result and required decision>"`. A BLOCKED exercise means the Pal result is
+   `palsync task <id> blocked --reason "<result and required decision>" --tried "<the two attempts: literal command + error>"`. A BLOCKED exercise means the Pal result is
    unknown, never PASS or done. Do not replay after an action/click may have changed data; inspect
    state first. Continue only with an INDEPENDENT task. Never skip verification or use force/bypass
    flags to bury a failure. **Bad change already pushed?** Restore the

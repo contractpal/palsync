@@ -56,6 +56,46 @@ test("browser design audit executes its real DOM, geometry, and accessibility ch
     }
 });
 
+test("design audit flags unstyled links and control typography, and spares styled markup", async (t) => {
+    const chromium = loadChromium();
+    if (!chromium) return t.skip("Playwright is unavailable");
+    let browser;
+    try { browser = await chromium.launch({ headless: true }); }
+    catch (e) { return t.skip("Chromium runtime is unavailable: " + e.message.split("\n")[0]); }
+
+    const warningRules = (audit) => new Set(audit.findings.filter(f => f.severity === "warning").map(f => f.rule));
+
+    try {
+        const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+        await page.setContent("<!doctype html><html><body style=\"font-family:'Pal Sans',sans-serif\">" +
+            "<main><h1>Equipment</h1><a href='/items'>All items</a>" +
+            "<button style='font-family:Courier;width:40px;height:40px'>Save</button>" +
+            "</main></body></html>");
+        const bad = await inspectDesignQuality(page, { kind: "web", viewportName: "desktop" });
+        assert.equal(bad.inspected, true);
+        const badRules = warningRules(bad);
+        assert.ok(badRules.has("unstyledLink"), "a raw underlined anchor outside prose must be flagged");
+        assert.ok(badRules.has("unstyledControlTypography"), "a control overriding the body font must be flagged");
+        const link = bad.findings.find(f => f.rule === "unstyledLink");
+        assert.equal(link.severity, "warning");
+        assert.equal(link.count, 1);
+        assert.equal(bad.findings.find(f => f.rule === "unstyledControlTypography").severity, "warning");
+
+        await page.setContent("<!doctype html><html><body style=\"font-family:'Pal Sans',sans-serif\">" +
+            "<main><h1>Equipment</h1><a class='pb-button' href='/items'>All items</a>" +
+            "<p>See the <a href='/help'>help guide</a> for details.</p>" +
+            "<button style='font-family:inherit;width:40px;height:40px'>Save</button>" +
+            "</main></body></html>");
+        const good = await inspectDesignQuality(page, { kind: "web", viewportName: "desktop" });
+        assert.equal(good.inspected, true);
+        const goodRules = warningRules(good);
+        assert.ok(!goodRules.has("unstyledLink"), "pb-* links and inline prose links must not be flagged");
+        assert.ok(!goodRules.has("unstyledControlTypography"), "controls inheriting the body font must not be flagged");
+    } finally {
+        await browser.close();
+    }
+});
+
 test("console audit samples identify #cp-root ancestry and scope note", async (t) => {
     const chromium = loadChromium();
     if (!chromium) return t.skip("Playwright is unavailable");

@@ -22,7 +22,7 @@ if (argv.includes("--version") || argv.includes("-v")) {
 // Subcommands: `palsync push|pull|status` — headless sync that needs NO MCP server and NO agent
 // (the recovery path when a session ends before a push, and a plain terminal workflow). They
 // skip the launcher preflight entirely: no Claude/Codex required, just .palsync.json + keychain.
-const SUBCOMMANDS = ["push", "pull", "merge", "status", "test", "preview", "open", "fetch", "screenshot", "validate", "sync-datasets", "seo-audit", "exercise", "cost", "ctx", "review", "completion", "hook", "regression", "spec-lint", "task", "checkpoint"];
+const SUBCOMMANDS = ["push", "pull", "merge", "status", "test", "preview", "open", "fetch", "screenshot", "validate", "doctor", "sync-datasets", "seo-audit", "exercise", "cost", "ctx", "review", "completion", "hook", "regression", "spec-lint", "task", "checkpoint"];
 // Normalize underscores so `palsync sync_datasets` runs sync-datasets instead of falling through.
 // In the test-07 run that fall-through opened the interactive launcher inside an agent's shell,
 // which hung on a prompt — and the agent's `pkill -f palsync` to unstick it killed the session's

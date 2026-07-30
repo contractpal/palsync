@@ -29,6 +29,7 @@ function askLine(question) {
 const USAGE = [
     "Usage:",
     "  palsync validate [--dir <workspace>]                         Offline code check (no server/login needed)",
+    "  palsync doctor                                               Offline environment report: Node, keychain, credentials, Chromium, git, gh (always exits 0)",
     "  palsync push   [--force] [--skip-validation] [--keep-lock] [--dir <ws>]   Push local changes (no MCP server needed)",
     "  palsync pull   [--force] [--dir <workspace>]                 Pull/sync from the server",
     "  palsync merge  [--keep-lock] [--dir <workspace>]            3-way merge local + server changes (keeps both where they don't collide)",
@@ -53,7 +54,9 @@ const USAGE = [
     "  palsync regression [--keep-lock] [--dir <ws>]                Brownfield regression vs baseline/baseline.json (freshness -> validate/test/H1; caused vs inherited)",
     "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Mechanical reality-check of a SPEC.md (offline): placeholders, dead links, §8a types, §12 floor",
     "  palsync task list [--ready] [--dir <ws>]                     List EXECUTION.md tasks; --ready prints the first todo whose depends are all done",
-    "  palsync task <id> <status> [--reason \"<why>\"] [--dir <ws>] Set one task status; reason is required for blocked|needs-frontier|needs-human",
+    "  palsync task <id> <status> [--reason \"<why>\"] [--tried \"<workaround>\"] [--dir <ws>]",
+    "                                                               Set one task status; --reason is required for blocked|needs-frontier|needs-human,",
+    "                                                               --tried (the automated workaround you attempted) also for blocked|needs-human",
     "  palsync checkpoint \"<line>\" [--dir <ws>]                     Append a line to EXECUTION.md's Checkpoints section",
     "  palsync sync-datasets [--datasets a,b] [--recreate] [--keep-lock] [--dir <ws>]",
     "                                                               Provision dataset tables from pal.json (safe by default)",
@@ -74,8 +77,8 @@ const USAGE = [
     "  --recreate         sync-datasets: DROP + REBUILD tables (DELETES ALL DATA) — asks for a typed YES",
     "  --dir <ws>         workspace directory (default: current directory)",
     "",
-    "validate needs only the local files (no .palsync.json, no login). The other commands need a",
-    "workspace set up once by `palsync` (.palsync.json + keychain login)."
+    "validate and doctor need only the local machine (no .palsync.json, no login). The other commands",
+    "need a workspace set up once by `palsync` (.palsync.json + keychain login)."
 ].join("\n");
 
 function parseFlags(argv) {
@@ -158,7 +161,7 @@ async function buildCliContext(dir) {
 // aren't the shared --force/--workflow set, so they get their own tolerant parsing.
 async function runTaskCommand(cmd, argv) {
     const ts = require("../core/taskState");
-    let dir = process.cwd(); const pos = []; let ready = false; let reason;
+    let dir = process.cwd(); const pos = []; let ready = false; let reason; let tried;
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--dir") dir = argv[++i];
@@ -166,6 +169,8 @@ async function runTaskCommand(cmd, argv) {
         else if (a === "--ready") ready = true;
         else if (a === "--reason") { reason = argv[++i]; if (reason === undefined) { console.error("--reason requires a value"); return 1; } }
         else if (a.startsWith("--reason=")) reason = a.slice("--reason=".length);
+        else if (a === "--tried") { tried = argv[++i]; if (tried === undefined) { console.error("--tried requires a value"); return 1; } }
+        else if (a.startsWith("--tried=")) tried = a.slice("--tried=".length);
         else pos.push(a);
     }
     const file = path.join(path.resolve(dir), "EXECUTION.md");
@@ -194,14 +199,14 @@ async function runTaskCommand(cmd, argv) {
         return 0;
     }
     if (pos.length >= 2) {
-        const r = ts.setStatusWithReason(text, pos[0], pos[1], reason);
+        const r = ts.setStatusWithReason(text, pos[0], pos[1], reason, tried);
         if (!r.ok) { console.error("task update failed: " + r.error + " (nothing changed)"); return 1; }
         if (r.unchanged) { console.log(r.id + " already " + pos[1] + " — no change."); return 0; }
         ts.writeExecution(file, r.text);
         console.log(r.id + ": " + r.from + " -> " + r.to);
         return 0;
     }
-    console.error("Usage: palsync task list [--ready] | palsync task <id> <status> [--reason \"<why>\"] | palsync checkpoint \"<line>\"");
+    console.error("Usage: palsync task list [--ready] | palsync task <id> <status> [--reason \"<why>\"] [--tried \"<workaround>\"] | palsync checkpoint \"<line>\"");
     return 1;
 }
 
@@ -273,6 +278,14 @@ async function run(cmd, argv) {
         console.log("palsync validate — " + dir + "\n");
         console.log(formatLint(lint, { context: "validate" }));
         return lint.errors > 0 ? 1 : 0;
+    }
+
+    // doctor is fully OFFLINE and workspace-independent: an informational environment health
+    // report (no .palsync.json, no login, no session, no lock). ALWAYS exits 0 — it informs,
+    // it never gates, whatever mix of ok/warn/fail statuses it finds.
+    if (cmd === "doctor") {
+        console.log(require("../core/doctor").runDoctor().text);
+        return 0;
     }
 
     // cost is OFFLINE: reads the per-session usage tally (.palsync.usage.json, written live by the

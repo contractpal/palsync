@@ -83,6 +83,12 @@ proof artifact for rendered output or data effects.
 Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per screen.
 - Review owns the responsive pair: capture the final pushed version at both desktop and mobile;
   pal-loop's per-task mobile capture is intentionally deferred to this final review.
+- **A PASS verdict requires a clean desktop AND mobile capture for every reviewed route, taken
+  BEFORE REVIEW.md is written** — capturing after the review is written makes the review stale and
+  fails the check a second time. `palsync review check` enforces this from durable evidence; the
+  review brief's `RESPONSIVE COVERAGE` block shows current per-route coverage. If capture is
+  unavailable on this machine (or automated testing is off), that is recorded and the requirement
+  downgrades to a human eyeball gate — never a silent pass.
 - Capture both desktop and mobile for every page-level screen. `designAudit.errors > 0` is a hard
   visual failure; list each rule and screenshot as evidence. Audit warnings must be fixed or
   individually justified, never silently ignored.
@@ -176,10 +182,11 @@ follow-up, and other harnesses invoke the same CLI gate manually.
   proofs name the tool and the relevant result (`pal_exercise step 2 PASS`,
   `pal_fetch expect all found`, `pal_screenshot captured:true renderError:null`). File proofs
   name exact `file:line`. A row with no proof id is not reviewed.
-- **Verdict gating — PASS only when all four hold:** `pal_validate` returns `ok:true` and
+- **Verdict gating — PASS only when all five hold:** `pal_validate` returns `ok:true` and
   `diagnosticCount:0` (quote both fields); every §5 action has a complete trace row; every runnable write/data-effect action
   has passing `pal_exercise` evidence; no §12 criterion sits in PASS without its evidence
-  class. Any one missing → CHANGES-NEEDED with fix tasks.
+  class; every reviewed route has a clean desktop and mobile `pal_screenshot` capture (or a
+  recorded capture-unavailable human gate). Any one missing → CHANGES-NEEDED with fix tasks.
 - **`pal_test` never outranks `pal_validate`.** pal_test proves the workflow COMPILES, nothing
   more; validate errors describe code that mis-renders or dies at runtime after a clean
   compile. "pal_test showed successful validation" is not a rebuttal to a validate error — the

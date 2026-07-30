@@ -10,6 +10,11 @@ const fs = require("fs");
 
 const STATUSES = ["todo", "in_progress", "done", "blocked", "needs-frontier", "needs-human"];
 const BLOCKED_STATUSES = ["blocked", "needs-frontier", "needs-human"];
+// A weak model's cheapest escape from a hard task is to declare it blocked. `blocked`/`needs-human`
+// therefore also demand durable evidence of the automated workaround already attempted — recorded
+// on the same Blockers line, so the next session (and the human) can see what was actually tried.
+// `needs-frontier` is exempt: "this needs a stronger model" is a capability call, not a failed attempt.
+const TRIED_STATUSES = ["blocked", "needs-human"];
 const MAX_BLOCKER_REASON = 240;
 
 function isSeparatorRow(t) { return /^\|[\s:|-]+\|?\s*$/.test(t); }
@@ -135,16 +140,23 @@ function appendCheckpoint(text, line) {
     return appendCleanCheckpoint(text, clean);
 }
 
+// " || " separates reason from tried on the Blockers line, so a field can never contain "||" itself.
 function normalizeBlockerReason(reason) {
-    return String(reason || "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, MAX_BLOCKER_REASON);
+    return String(reason || "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").replace(/\|\|/g, "/").trim().slice(0, MAX_BLOCKER_REASON);
+}
+
+function blockerLine(id, status, reason, tried) {
+    return "BLOCKED " + id + " [" + status + "]: " + reason + (tried ? " || tried: " + tried : "");
 }
 
 function blockerReasons(text) {
     const reasons = new Map();
     for (const line of String(text || "").split(/\r?\n/)) {
-        const match = line.match(/^\s*-\s+BLOCKED\s+(\S+)\s+\[(blocked|needs-human|needs-frontier)\]:\s+(.+)\s*$/i);
+        // The tried clause is optional: lines written before Track C still parse (tried === "").
+        const match = line.match(/^\s*-\s+BLOCKED\s+(\S+)\s+\[(blocked|needs-human|needs-frontier)\]:\s+(.+?)(?:\s+\|\|\s+tried:\s+(.+))?\s*$/i);
         if (match && normalizeBlockerReason(match[3])) reasons.set(match[1].toLowerCase(), {
-            id: match[1], status: match[2].toLowerCase(), reason: normalizeBlockerReason(match[3])
+            id: match[1], status: match[2].toLowerCase(), reason: normalizeBlockerReason(match[3]),
+            tried: normalizeBlockerReason(match[4])
         });
     }
     return reasons;
@@ -159,27 +171,32 @@ function terminalReasonState(text) {
     return { ok: true, reasons, missing, complete: missing.length === 0 };
 }
 
-function setStatusWithReason(text, id, status, reason) {
+function setStatusWithReason(text, id, status, reason, tried) {
     const blockedStyle = BLOCKED_STATUSES.includes(status);
     const cleanReason = normalizeBlockerReason(reason);
+    const cleanTried = normalizeBlockerReason(tried);
     if (blockedStyle && !cleanReason) return { ok: false, error: "Status \"" + status + "\" requires --reason with a non-empty explanation." };
+    if (blockedStyle && TRIED_STATUSES.includes(status) && !cleanTried) {
+        return { ok: false, error: "Status \"" + status + "\" requires --tried describing the automated workaround you attempted first." };
+    }
     if (!blockedStyle && reason !== undefined) return { ok: false, error: "Status \"" + status + "\" does not accept --reason." };
+    if (!blockedStyle && tried !== undefined) return { ok: false, error: "Status \"" + status + "\" does not accept --tried." };
     const updated = setStatus(text, id, status);
     if (!updated.ok) return updated;
     if (!blockedStyle) return updated;
-    const checkpoint = "BLOCKED " + updated.id + " [" + status + "]: " + cleanReason;
+    const checkpoint = blockerLine(updated.id, status, cleanReason, cleanTried);
     if (String(text).split(/\r?\n/).some(line => line.trim() === "- " + checkpoint)) {
-        return Object.assign({}, updated, { unchanged: updated.unchanged === true, reason: cleanReason });
+        return Object.assign({}, updated, { unchanged: updated.unchanged === true, reason: cleanReason, tried: cleanTried });
     }
     const appended = appendCleanCheckpoint(updated.text, checkpoint);
     if (!appended.ok) return appended;
-    return Object.assign({}, updated, { text: appended.text, unchanged: false, reason: cleanReason, to: status });
+    return Object.assign({}, updated, { text: appended.text, unchanged: false, reason: cleanReason, tried: cleanTried, to: status });
 }
 
 // --- thin file wrappers used by the CLI ---
 function readExecution(file) { return fs.readFileSync(file, "utf8"); }
 function writeExecution(file, text) { fs.writeFileSync(file, text, "utf8"); }
 
-module.exports = { STATUSES, BLOCKED_STATUSES, MAX_BLOCKER_REASON, parseTasks, listTasks, setStatus,
+module.exports = { STATUSES, BLOCKED_STATUSES, TRIED_STATUSES, MAX_BLOCKER_REASON, parseTasks, listTasks, setStatus,
     setStatusWithReason, appendCheckpoint, blockerReasons, terminalReasonState, normalizeBlockerReason,
     replaceCell, readExecution, writeExecution };

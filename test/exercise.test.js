@@ -14,11 +14,13 @@ const usage = require("../src/core/usage");
 const { runExercise, exerciseByBrowser, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, browserFailureMessage, MAX_STEPS } = require("../src/core/exercise");
 const { waitForRenderablePage } = require("../src/core/screenshot");
 
-function loadStubbedTools({ exerciseResult, pushResult }) {
+function loadStubbedTools({ exerciseResult, pushResult, screenshotResult }) {
     const toolsPath = require.resolve("../src/mcp/tools");
     const exercisePath = require.resolve("../src/core/exercise");
     const pushPath = require.resolve("../src/core/push");
-    const saved = new Map([[toolsPath, require.cache[toolsPath]], [exercisePath, require.cache[exercisePath]], [pushPath, require.cache[pushPath]]]);
+    const screenshotPath = require.resolve("../src/core/screenshot");
+    const debugPath = require.resolve("../src/core/debug");
+    const saved = new Map([[toolsPath, require.cache[toolsPath]], [exercisePath, require.cache[exercisePath]], [pushPath, require.cache[pushPath]], [screenshotPath, require.cache[screenshotPath]], [debugPath, require.cache[debugPath]]]);
     require.cache[exercisePath] = { id: exercisePath, filename: exercisePath, loaded: true, exports: {
         runExercise: async () => Object.assign({}, exerciseResult),
         formatExercise: result => result.pass ? "pal_exercise — PASS" : "pal_exercise — FAIL"
@@ -29,6 +31,13 @@ function loadStubbedTools({ exerciseResult, pushResult }) {
             if (result.pushed && result.newMarker) record.lastModifiedDate = result.newMarker;
             return result;
         }
+    } };
+    require.cache[screenshotPath] = { id: screenshotPath, filename: screenshotPath, loaded: true, exports: {
+        runScreenshot: async () => Object.assign({}, screenshotResult)
+    } };
+    // pal_screenshot wraps its result in withServerDebug; keep the stubbed handlers offline.
+    require.cache[debugPath] = { id: debugPath, filename: debugPath, loaded: true, exports: {
+        retrieveServerDebug: async () => ({ retrieved: false, reason: "stubbed" })
     } };
     delete require.cache[toolsPath];
     const loaded = require("../src/mcp/tools");
@@ -628,6 +637,126 @@ test("pal_exercise evidence failure stays PASS and warns that review will not co
         assert.equal(result.pass, true);
         assert.equal(result.evidenceRecorded, false);
         assert.match(result.message, /Behavior passed.*evidence persistence failed.*review check will not count/s);
+    } finally {
+        loaded.restore();
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+// A clean-render pal_screenshot capture is the durable responsive evidence the offline
+// `palsync review check` gate reads. The predicate is render cleanliness only — an audit ERROR
+// is reported in the row but never flips renderClean (advisory rules must not become walls).
+test("pal_screenshot handler records a durable render row with audit findings reported, not gated", async () => {
+    const ws = tmpWorkspace();
+    const loaded = loadStubbedTools({
+        screenshotResult: {
+            captured: true, available: true, kind: "web",
+            url: "https://example.test/p/board", viewportName: "mobile",
+            viewport: { width: 390, height: 844 },
+            renderError: null,
+            styleStatus: { inspected: true, linked: 1, loaded: 1, likelyLoaded: true },
+            designAudit: {
+                inspected: true, pass: false, errors: 1, warnings: 1, metrics: {},
+                findings: [
+                    { severity: "error", rule: "horizontalOverflow", message: "overflows" },
+                    { severity: "warning", rule: "targetSize", message: "small target" },
+                    { severity: "warning", rule: "targetSize", message: "second small target" },
+                    { severity: "info", rule: "advice", message: "not evidence" }
+                ]
+            }
+        }
+    });
+    try {
+        const result = await findTool(loaded.tools, "pal_screenshot").run({
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", palName: "Demo", lastModifiedDate: "M1", localHash: "digest-1" }
+        }, { page: "/board", imageless: true });
+        assert.equal(result.captured, true);
+        assert.equal(result.evidenceRecorded, true);
+        const rows = usage.readToolEvidence(ws);
+        assert.equal(rows.length, 1);
+        assert.deepEqual(rows[0], {
+            schema: "palsync/tool-evidence/1", tool: "pal_screenshot", successful: true,
+            palGuid: "PAL-1", marker: "M1", sourceDigest: "digest-1", ts: rows[0].ts,
+            route: "/board", viewportName: "mobile",
+            renderClean: true, // audit error present, render itself clean — NOT screenshotClean
+            auditErrors: 1,
+            auditRules: ["horizontalOverflow", "targetSize"] // both tiers, deduped, info dropped
+        });
+    } finally { loaded.restore(); fs.rmSync(ws, { recursive: true, force: true }); }
+});
+
+test("pal_screenshot render error and unavailable browser both leave durable rows", async () => {
+    const ws = tmpWorkspace();
+    let loaded = loadStubbedTools({
+        screenshotResult: {
+            captured: true, available: true, kind: "web",
+            url: "https://example.test/p", viewportName: "desktop",
+            viewport: { width: 1280, height: 800 },
+            renderError: { message: "boom at runtime" },
+            styleStatus: { inspected: true, linked: 1, loaded: 1, likelyLoaded: true },
+            designAudit: { inspected: true, pass: true, errors: 0, warnings: 0, metrics: {}, findings: [] }
+        }
+    });
+    try {
+        const result = await findTool(loaded.tools, "pal_screenshot").run({
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", palName: "Demo", lastModifiedDate: "M1" }
+        }, { imageless: true });
+        assert.equal(result.evidenceRecorded, true);
+        const rows = usage.readToolEvidence(ws);
+        assert.equal(rows.length, 1);
+        assert.equal(rows[0].viewportName, "desktop");
+        assert.equal(rows[0].route, "/");
+        assert.equal(rows[0].renderClean, false, "a runtime render error is never a clean render");
+    } finally { loaded.restore(); }
+
+    // No browser available: the row is a signal (viewportName:null), never a viewport pass.
+    loaded = loadStubbedTools({
+        screenshotResult: { captured: false, available: false, reason: "chromium missing" }
+    });
+    try {
+        const ctx = {
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", palName: "Demo", lastModifiedDate: "M1" }
+        };
+        const result = await findTool(loaded.tools, "pal_screenshot").run(ctx, { page: "/board" });
+        assert.equal(result.captured, false);
+        assert.equal(result.evidenceRecorded, true);
+        assert.equal(ctx.renderVerified, "unavailable");
+        const rows = usage.readToolEvidence(ws);
+        assert.equal(rows.length, 2);
+        assert.equal(rows[1].viewportName, null);
+        assert.equal(rows[1].renderClean, false);
+        assert.equal(rows[1].unavailable, true);
+        assert.equal(rows[1].testingDisabled, undefined);
+        assert.equal(rows[1].route, "/board");
+    } finally {
+        loaded.restore();
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("pal_screenshot evidence failure stays captured and warns that review will not count it", async () => {
+    const ws = tmpWorkspace({ ".palsync": "not a directory" });
+    const loaded = loadStubbedTools({
+        screenshotResult: {
+            captured: true, available: true, kind: "web",
+            url: "https://example.test/p", viewportName: "desktop",
+            viewport: { width: 1280, height: 800 },
+            renderError: null,
+            styleStatus: { inspected: true, linked: 1, loaded: 1, likelyLoaded: true },
+            designAudit: { inspected: true, pass: true, errors: 0, warnings: 0, metrics: {}, findings: [] }
+        }
+    });
+    try {
+        const result = await findTool(loaded.tools, "pal_screenshot").run({
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", palName: "Demo", lastModifiedDate: "M1" }
+        }, { imageless: true });
+        assert.equal(result.captured, true);
+        assert.equal(result.evidenceRecorded, false);
+        assert.match(result.message, /Render evidence persistence failed.*review check will not count/s);
     } finally {
         loaded.restore();
         fs.rmSync(ws, { recursive: true, force: true });

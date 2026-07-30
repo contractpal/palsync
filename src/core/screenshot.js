@@ -332,6 +332,33 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
             });
             if (bareActions.length) add("warning", "bareActionLink", "Action links render like body links; apply the documented button/action hierarchy.", bareActions);
 
+            // Evidence: the 2026-07-30 aggregate session insights — shipped pals carried default-UA
+            // underlined links past a PASS review. That is aggregate session evidence, not a live
+            // server rejection, so this ships advisory ("warning") per the designClassRequired
+            // precedent. Inline prose links keep the underline on purpose, so they are exempt the
+            // same way targetSize exempts inlineTextLink above.
+            const unstyledLinks = select("a[href]").filter(el => {
+                if (!visible(el)) return false;
+                const cs = window.getComputedStyle(el);
+                if (!String(cs.textDecorationLine || "").includes("underline")) return false;
+                if (Array.from(el.classList || []).some(c => c.startsWith("pb-"))) return false;
+                const inlineProseLink = cs.display === "inline" && !!el.closest("p,li,dd,figcaption");
+                return !inlineProseLink;
+            });
+            if (unstyledLinks.length) add("warning", "unstyledLink", "Links show the default browser underline with no pb-* class; apply the documented link/action styling.", unstyledLinks);
+
+            // Same 2026-07-30 aggregate session evidence, same advisory reasoning: form controls do
+            // not inherit font-family, so a control left unstyled renders in the UA font while the
+            // rest of the pal uses the design font. Body font is read here (this evaluate); the
+            // style-status pass's bodyComputed belongs to a different evaluate and is out of scope.
+            const normalizeFont = (value) => String(value || "").toLowerCase().replace(/["']/g, "").replace(/\s+/g, "");
+            const bodyFont = body ? normalizeFont(window.getComputedStyle(body).fontFamily) : "";
+            const mismatchedControlFonts = bodyFont
+                ? select("button,input,select,textarea").filter(el => visible(el)
+                    && normalizeFont(window.getComputedStyle(el).fontFamily) !== bodyFont)
+                : [];
+            if (mismatchedControlFonts.length) add("warning", "unstyledControlTypography", "Interactive controls render in a different font than the page body; set font-family (or font: inherit) on controls.", mismatchedControlFonts);
+
             const actionCells = select("td[data-label='Actions']").filter(visible);
             const ungroupedRowActions = actionCells.filter(cell => {
                 const actions = Array.from(cell.querySelectorAll("a[href],button,[role='button']")).filter(visible);

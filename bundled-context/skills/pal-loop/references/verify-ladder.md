@@ -2,7 +2,7 @@
 
 ## UI by task type
 
-UI-only: one desktop `pal_screenshot`. Behavior-only: one `pal_exercise`. Both: one of each. Merge same-page assertions into one flow. Mobile is final-review-only. A clean capture has `renderError:null`, loaded CSS, zero pal-content audit errors, and pixel critique. Apply `../../shared/references/console-chrome-exception.md` only with quoted sample evidence.
+UI-only: one desktop `pal_screenshot`. Behavior-only: one `pal_exercise`. Both: one of each. Merge same-page assertions into one flow. Mobile is final-review-only — but final review is refused without it (`palsync review check` requires clean desktop+mobile captures per reviewed route), so budget the mobile pass into the review phase, ahead of writing REVIEW.md. A clean capture has `renderError:null`, loaded CSS, zero pal-content audit errors, and pixel critique. Apply `../../shared/references/console-chrome-exception.md` only with quoted sample evidence.
 
 ## Console render
 

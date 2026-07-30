@@ -32,6 +32,43 @@ test("defaultPreviewOpen: true even when launched from a non-TTY runner", () => 
     }
 });
 
+test("doctor dispatches offline (no workspace context) and exits 0 with mixed statuses", async () => {
+    const syncPath = require.resolve("../src/cli/syncCommands");
+    const doctorPath = require.resolve("../src/core/doctor");
+    const oldDoctor = require.cache[doctorPath];
+    const oldSync = require.cache[syncPath];
+    // Stub the probe-backed doctor so the dispatch test never touches keychain/git/gh, and
+    // return a MIXED-status result to pin "always exit 0".
+    require.cache[doctorPath] = { id: doctorPath, filename: doctorPath, loaded: true, exports: {
+        runDoctor: () => ({ exitCode: 0, text: "palsync doctor — stub\n✖ node fail\n⚠ gh warn", checks: [
+            { name: "node", status: "fail", detail: "", remedy: "" },
+            { name: "gh", status: "warn", detail: "", remedy: "" }
+        ] })
+    } };
+    delete require.cache[syncPath];
+    const originalLog = console.log;
+    const output = [];
+    console.log = (...args) => output.push(args.join(" "));
+    try {
+        const syncCommands = require("../src/cli/syncCommands");
+        // No --dir, no .palsync.json anywhere near: doctor must not build a workspace context.
+        assert.equal(await syncCommands.run("doctor", []), 0);
+        assert.match(output.join("\n"), /palsync doctor — stub/);
+    } finally {
+        console.log = originalLog;
+        delete require.cache[syncPath];
+        if (oldDoctor) require.cache[doctorPath] = oldDoctor; else delete require.cache[doctorPath];
+        if (oldSync) require.cache[syncPath] = oldSync;
+    }
+});
+
+test("doctor is listed in USAGE and in the bin dispatcher's SUBCOMMANDS", () => {
+    assert.match(USAGE, /palsync doctor/);
+    assert.match(USAGE, /always exits 0/);
+    const bin = require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "bin", "palsync.js"), "utf8");
+    assert.match(bin, /"validate", "doctor", "sync-datasets"/);
+});
+
 test("USAGE documents browser-open preview default and no-open escape hatch", () => {
     assert.match(USAGE, /--open\|--no-open/);
     assert.match(USAGE, /browser by default/);
@@ -41,6 +78,7 @@ test("USAGE documents browser-open preview default and no-open escape hatch", ()
     assert.match(USAGE, /palsync ctx inspect\|diff/);
     assert.doesNotMatch(USAGE, /palsync context inspect/);
     assert.match(USAGE, /palsync cost record --model X --provider Y/);
+    assert.match(USAGE, /--tried .*automated workaround/);
 });
 
 test("task CLI requires blocker reasons and writes status plus checkpoint once", async () => {
@@ -55,15 +93,17 @@ test("task CLI requires blocker reasons and writes status plus checkpoint once",
     console.log = (...args) => logs.push(args.join(" ")); console.error = () => {};
     try {
         assert.equal(await run("task", ["T1", "blocked", "--dir", ws]), 1);
+        // Track C: a reason alone is not enough for blocked — --tried evidence is required too.
+        assert.equal(await run("task", ["T1", "blocked", "--reason", "Waiting", "--dir", ws]), 1);
         const before = fs.readFileSync(require("node:path").join(ws, "EXECUTION.md"), "utf8");
         assert.match(before, /\| T1 \| Build \| todo \|/);
-        assert.equal(await run("task", ["T1", "blocked", "--reason", "Waiting\nfor owner", "--dir", ws]), 0);
-        assert.equal(await run("task", ["T1", "blocked", "--reason", "Waiting\nfor owner", "--dir", ws]), 0);
-        assert.equal(await run("task", ["T1", "blocked", "--reason", "Still waiting", "--dir", ws]), 0);
+        assert.equal(await run("task", ["T1", "blocked", "--reason", "Waiting\nfor owner", "--tried", "pal_push\ntwice: 500", "--dir", ws]), 0);
+        assert.equal(await run("task", ["T1", "blocked", "--reason", "Waiting\nfor owner", "--tried=pal_push twice: 500", "--dir", ws]), 0);
+        assert.equal(await run("task", ["T1", "blocked", "--reason=Still waiting", "--tried=pal_validate: 0 errors", "--dir", ws]), 0);
         const after = fs.readFileSync(require("node:path").join(ws, "EXECUTION.md"), "utf8");
         assert.match(after, /\| T1 \| Build \| blocked \|/);
-        assert.equal((after.match(/BLOCKED T1 \[blocked\]: Waiting for owner/g) || []).length, 1);
-        assert.equal((after.match(/BLOCKED T1 \[blocked\]: Still waiting/g) || []).length, 1);
+        assert.equal((after.match(/BLOCKED T1 \[blocked\]: Waiting for owner \|\| tried: pal_push twice: 500/g) || []).length, 1);
+        assert.equal((after.match(/BLOCKED T1 \[blocked\]: Still waiting \|\| tried: pal_validate: 0 errors/g) || []).length, 1);
         assert.match(logs.at(-1), /T1: blocked -> blocked/);
         assert.doesNotMatch(logs.join("\n"), /undefined/);
     } finally {

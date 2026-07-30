@@ -7,6 +7,7 @@ const { tmpWorkspace } = require("./helpers");
 const completionGate = require("../src/core/completionGate");
 const { claudeStopOutput } = require("../src/core/completionHook");
 const { run, runHookCommand } = require("../src/cli/syncCommands");
+const usage = require("../src/core/usage");
 
 function execution(status = "done", checkpoint = "") {
     return `## Tasks
@@ -47,6 +48,14 @@ test("completion state machine preserves non-applicable and work-in-progress rep
 
 test("all-done completion requires a current explicit PASS review", () => {
     const ws = workspace();
+    // A PASS review also needs durable clean desktop+mobile render evidence; without these rows
+    // the gate would (correctly) stay REVIEW_FAILED even after the PASS verdict lands.
+    for (const viewportName of ["desktop", "mobile"]) {
+        assert.equal(usage.appendToolEvidence(ws, {
+            tool: "pal_screenshot", palGuid: "PAL-1", marker: "M1",
+            route: "/", viewportName, renderClean: true
+        }), true);
+    }
     assert.equal(completionGate.checkWorkspace(ws).state, "REVIEW_FAILED");
     writeReview(ws, "CHANGES-NEEDED");
     assert.equal(completionGate.checkWorkspace(ws).state, "REVIEW_FAILED");

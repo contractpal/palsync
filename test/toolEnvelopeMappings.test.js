@@ -107,6 +107,26 @@ test("screenshot projection drops browser internals but keeps visual failures", 
     assert.deepStrictEqual(projected.styleStatus.missingStylesheets, ["styles/missing.css"]);
 });
 
+test("screenshot projection keeps warning-tier audit findings beside errors", () => {
+    // inspectDesignQuality's advisory tier is "warning" (screenshot.js), not "warn" — the
+    // projection must surface both tiers or advisory rules are write-only in the envelope.
+    const projected = screenshotEnvelopeProjection({
+        captured: true,
+        available: true,
+        designAudit: {
+            inspected: true, pass: false, errors: 1, warnings: 1, metrics: {},
+            findings: [
+                { severity: "error", rule: "horizontalOverflow", message: "Page overflows" },
+                { severity: "warning", rule: "targetSize", message: "Tap target under minimum" },
+                { severity: "info", rule: "advice", message: "dropped from the envelope" }
+            ]
+        }
+    });
+    assert.deepStrictEqual(projected.designAudit.findings.map(f => [f.severity, f.rule]), [
+        ["error", "horizontalOverflow"], ["warning", "targetSize"]
+    ]);
+});
+
 test("summary and debug collapse preserve every failure line and context", () => {
     const summary = failureLineSummary(["header", "before", "ERROR exploded", "after", "tail"].join("\n"));
     assert.match(summary, /before/);

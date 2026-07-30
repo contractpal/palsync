@@ -300,7 +300,9 @@ function screenshotEnvelopeProjection(res, fields = {}) {
             errors: audit.errors,
             warnings: audit.warnings,
             metrics: compactMetrics,
-            findings: (audit.findings || []).filter(f => f.severity === "error" || f.severity === "warn"),
+            // The audit's severity vocabulary is "error" | "warning" (screenshot.js
+            // inspectDesignQuality) — a "warn" comparison silently dropped every advisory finding.
+            findings: (audit.findings || []).filter(f => f.severity === "error" || f.severity === "warning"),
             error: audit.error || null
         } : null,
         smallDims: res.smallDims || null
@@ -1053,15 +1055,44 @@ const TOOLS = [
             imageless: z.boolean().optional().describe("Return designAudit without image data.")
         },
         async run(ctx, { page, feature, viewport, fullPage, imageless } = {}) {
+            // Durable render evidence (.palsync/tool-evidence.jsonl), mirroring pal_exercise at
+            // its appendToolEvidence call: `palsync review check` is a separate offline process
+            // that cannot see ctx, so every path — clean capture, unavailable browser, testing
+            // switched off — must leave a row or the responsive gate is unenforceable there.
+            const evidenceBase = () => ({
+                tool: "pal_screenshot",
+                palGuid: ctx.record.palGuid,
+                marker: ctx.record.lastModifiedDate,
+                sourceDigest: ctx.record.localHash || undefined,
+                route: String(page || "/").slice(0, 200)
+            });
+            const persistWarning = "\n\n⚠ Render evidence persistence failed — " +
+                "palsync review check will not count this pal_screenshot call.";
             const disabled = testingDisabledResult(ctx, "pal_screenshot");
-            if (disabled) return disabled;
+            if (disabled) {
+                // Testing OFF returns before runScreenshot ever runs; ctx.testingEnabled is
+                // in-memory MCP state, so this signal row is the only durable trace of the
+                // human-gate fallback. viewportName:null keeps it out of any per-route viewport map.
+                disabled.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, Object.assign(evidenceBase(), {
+                    viewportName: null, renderClean: false, unavailable: true, testingDisabled: true
+                }));
+                if (!disabled.evidenceRecorded) disabled.message += persistWarning;
+                return disabled;
+            }
             const res = await runScreenshot(ctx.session, ctx.record.palGuid, { page, viewport, fullPage, imageless });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             if (!res.captured) {
-                if (res.available === false) ctx.renderVerified = "unavailable"; // accepted fallback: ask the user to eyeball it
+                let persistNote = "";
+                if (res.available === false) {
+                    ctx.renderVerified = "unavailable"; // accepted fallback: ask the user to eyeball it
+                    res.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, Object.assign(evidenceBase(), {
+                        viewportName: null, renderClean: false, unavailable: true
+                    }));
+                    if (!res.evidenceRecorded) persistNote = persistWarning;
+                }
                 return Object.assign(res, {
                     message: (res.available === false ? "Screenshot unavailable: " : "Could not screenshot: ") + res.reason +
-                        (res.validation ? "\n" + formatValidation(res.validation) : "")
+                        (res.validation ? "\n" + formatValidation(res.validation) : "") + persistNote
                 });
             }
             // A clean capture (no renderError) is the only thing that actually proves the UI renders —
@@ -1073,6 +1104,22 @@ const TOOLS = [
                 viewportName: res.viewportName,
                 clean: screenshotClean
             });
+            // Durable row for THIS capture. GATE PREDICATE is render cleanliness only —
+            // deliberately NOT screenshotClean above, which also requires designAudit.inspected &&
+            // errors === 0: reusing it would silently promote every advisory browser-audit rule to
+            // a hard completion blocker (owner decision 2026-07-30 #3). Audit results ride along
+            // as REPORTED fields. Severity vocabulary is "error" | "warning" (screenshot.js
+            // inspectDesignQuality), not "warn". Plain const — `out` does not exist yet here;
+            // the flag is folded into the response fields below, next to visualGate.
+            const evidenceRecorded = appendToolEvidence(ctx.workspaceDir, Object.assign(evidenceBase(), {
+                viewportName: res.viewportName,
+                renderClean: res.captured === true && !res.renderError &&
+                    (!res.styleStatus || res.styleStatus.likelyLoaded !== false),
+                auditErrors: (res.designAudit && res.designAudit.errors) || 0,
+                auditRules: [...new Set(((res.designAudit && res.designAudit.findings) || [])
+                    .filter(f => f.severity === "error" || f.severity === "warning")
+                    .map(f => String(f.rule).slice(0, 60)))].slice(0, 10)
+            }));
             // Save the PNG to a file the harness can Read, and return MCP image content so a
             // vision-capable model sees the render inline.
             let filePath = null;
@@ -1137,13 +1184,15 @@ const TOOLS = [
                 "\n  Visual gate: " + (visualGate.complete ? "complete" : "incomplete; clean desktop + mobile still required for " + visualGate.incomplete.join(", ")) +
                 (run ? "\n  Work-history run: " + run.dir : "") +
                 (filePath ? "\n  PNG saved to: " + filePath : "") +
-                (auditPath ? "\n  Design audit saved to: " + auditPath : "") + errBlock + auditBlock;
+                (auditPath ? "\n  Design audit saved to: " + auditPath : "") + errBlock + auditBlock +
+                (evidenceRecorded ? "" : persistWarning);
             // Attach the c.debug trail (prime evidence beside a renderError) BEFORE assembling the
             // content blocks, so the debug text rides the visible text block too.
             const out = await withServerDebug(ctx, screenshotEnvelopeProjection(res, {
                 pngFile: filePath,
                 designAuditFile: auditPath,
                 visualGate,
+                evidenceRecorded,
                 message: text
             }));
             // Inline a downscaled JPEG so the render doesn't ride at full resolution in every
