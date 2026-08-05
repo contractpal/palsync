@@ -107,6 +107,40 @@ Unchanged from the bundle README, restated for completeness:
 5. **Auto / full mode. ZERO mid-run intervention.** No hints, no answering questions, no nudging past a stuck point. If the agent stops to ask in auto mode, that is a hard-rule violation (count it, §4e) — you still do not answer.
 6. When the agent finishes, evaluate against the spec's §12 using `eval/scoring.md`. This is the post-hoc human evaluation — done once, at the end, never during.
 
+### Impact experiment recording
+
+Impact runs use the exact virtual scenario key and the launcher-written
+`.palsync/impact-start.json`. After the run:
+
+1. Save the raw transcript without rewriting it.
+2. Keep `oracle.json` blinded from the agent. The evaluator opens it only after the run, executes
+   its acceptance/regression commands, and manually codes the trajectory against its allowed-write
+   and first-correct-write definitions. Do not use an LLM or heuristic transcript parser.
+3. If no correct write occurred, set both pre-correct-write metrics to `null`. Preserve an on-arm
+   non-adoption as `targetCalls:0`, `targetBeforeFirstEdit:false`, and
+   `impactResponseBytes:null`. An off arm must use those same three uncontaminated values.
+4. Record the row with every pin and evidence path present:
+
+```sh
+node scripts/record-eval.js \
+  --dir <workspace> \
+  --scenario impact_01_shared_fragment-on \
+  --model <exact-model> \
+  --harness <harness> \
+  --variant on \
+  --pair impact01-r1 \
+  --pair-order off-first \
+  --orch-skills <branch@sha> \
+  --palbuilder-skills <name@sha-or-date> \
+  --trajectory <path-to-coded-trajectory.json> \
+  --transcript <path-to-raw-transcript>
+```
+
+The recorder validates and hashes evidence bytes; it never infers trajectory facts or estimates
+missing provider usage. After all twelve rows, run the deterministic pilot checker. A `fail` or
+`incomplete` result stops expansion. See [`impact/README.md`](impact/README.md) for the exact
+trajectory object, fixed pair order, checker command, and owner-only approval rule.
+
 ## 4. Cost capture (per run, MANDATORY)
 
 Fill these from the finished transcript. Record them in `eval/RESULTS.md`.

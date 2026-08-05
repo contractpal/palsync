@@ -12,7 +12,7 @@
 const fs = require("fs");
 const path = require("path");
 const { findSuggestion } = require("./suggest");
-const { buildSnapshot } = require("./snapshot");
+const { buildSnapshot, isUnsafeTarget } = require("./snapshot");
 const { analyzeFolderRegistrations } = require("../palFolders");
 
 // Folders whose files are pushed via pal.json entries. Matches the keys used in real pal.json
@@ -476,6 +476,213 @@ function checkEntryFilenames(manifest) {
 // every page/fragment/style/workflow; nothing ever reached the server.
 const SHAPE_CHECKED_FOLDERS = Object.assign({ workflows: "Workflow" }, FOLDER_TYPE);
 
+function entryWrapper(entry, typeName) {
+    if (isObject(entry) && isObject(entry[typeName])) {
+        return { key: typeName, body: entry[typeName], canonical: true };
+    }
+    const lowercase = typeName.toLowerCase();
+    if (isObject(entry) && isObject(entry[lowercase])) {
+        return { key: lowercase, body: entry[lowercase], canonical: false };
+    }
+    return { key: null, body: null, canonical: false };
+}
+
+function registrationEntries(manifest, section) {
+    const value = isObject(manifest) ? manifest[section] : null;
+    return isObject(value) && Array.isArray(value.entry) ? value.entry : null;
+}
+
+function pointerToken(value) {
+    return String(value).replace(/~/g, "~0").replace(/\//g, "~1");
+}
+
+function registrationPointer(tokens) {
+    return "/" + tokens.map(pointerToken).join("/");
+}
+
+function registrationNearMatches(entries, categoryRel, typeName) {
+    const extensionless = categoryRel.replace(/\.(?:html?|xhtml)$/i, "");
+    const otherType = typeName === "Page" ? "Fragment" : "Page";
+    const wrapperKeys = [typeName, typeName.toLowerCase(), otherType, otherType.toLowerCase()];
+    const matches = [];
+
+    for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        if (!isObject(entry)) continue;
+        if (entry.string === extensionless) matches.push(["entry", i, "string"]);
+        if (entry.filename === categoryRel) matches.push(["entry", i, "filename"]);
+        for (const key of wrapperKeys) {
+            const body = entry[key];
+            if (!isObject(body)) continue;
+            if (body.filename === categoryRel) matches.push(["entry", i, key, "filename"]);
+            if (body.name === categoryRel || body.name === extensionless) {
+                matches.push(["entry", i, key, "name"]);
+            }
+        }
+    }
+    return matches;
+}
+
+const REGISTRATION_CHECK_ORDER = [
+    "manifest-json",
+    "section-entry-array",
+    "entry-string-identity",
+    "entry-shape",
+    "fragment-filename-present",
+    "category-prefix-absent",
+    "local-file-present",
+    "unique-file-identity",
+];
+const REGISTRATION_OMISSION_ORDER = [
+    "server-save-validation",
+    "body-name-identity",
+    "page-wrapper-filename",
+    "fragment-filename-equals-entry",
+    "lowercase-fragment-filename-rules",
+];
+
+function analyzeMarkupRegistration(snapshot, targetRel, identityFiles) {
+    const section = targetRel.startsWith("pages/") ? "pages" : "fragments";
+    const typeName = section === "pages" ? "Page" : "Fragment";
+    const categoryRel = targetRel.slice(section.length + 1);
+    const applied = new Set();
+    const notApplied = new Set(["server-save-validation"]);
+    const reasons = [];
+    let status = "absent";
+    let pointer = null;
+    let evidence = [];
+
+    const finish = () => {
+        const pointers = [...new Set(evidence)].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+        return {
+            status,
+            section,
+            pointer,
+            checksApplied: REGISTRATION_CHECK_ORDER.filter(check => applied.has(check)),
+            checksNotApplied: REGISTRATION_OMISSION_ORDER.filter(check => notApplied.has(check)),
+            reasons: [...new Set(reasons)].sort((a, b) => a < b ? -1 : a > b ? 1 : 0),
+            evidencePointers: pointers.slice(0, 8),
+            evidenceOmitted: Math.max(0, pointers.length - 8),
+        };
+    };
+
+    if (!snapshot.palJson || snapshot.palJson.raw === null) {
+        reasons.push("manifest-absent");
+        return finish();
+    }
+
+    applied.add("manifest-json");
+    let manifest = snapshot.palJson.parsed;
+    if (manifest === null) {
+        try { manifest = JSON.parse(snapshot.palJson.raw); }
+        catch (e) {
+            status = "candidate";
+            reasons.push("manifest-unparseable");
+            return finish();
+        }
+    }
+
+    applied.add("section-entry-array");
+    if (!isObject(manifest)) {
+        status = "candidate";
+        reasons.push("section-malformed");
+        return finish();
+    }
+
+    const sectionValue = manifest[section];
+    if (sectionValue == null || sectionValue === "") {
+        reasons.push("section-absent");
+        return finish();
+    }
+    const entries = registrationEntries(manifest, section);
+    if (entries === null) {
+        status = "candidate";
+        reasons.push("section-malformed");
+        return finish();
+    }
+
+    applied.add("entry-string-identity");
+    const exactIndexes = [];
+    for (let i = 0; i < entries.length; i++) {
+        if (isObject(entries[i]) && entries[i].string === categoryRel) exactIndexes.push(i);
+    }
+
+    if (exactIndexes.length === 0) {
+        const near = registrationNearMatches(entries, categoryRel, typeName);
+        evidence = near.map(tokens => registrationPointer([section, ...tokens]));
+        if (near.length) {
+            status = "candidate";
+            reasons.push("near-match");
+        } else {
+            reasons.push("entry-absent");
+        }
+        return finish();
+    }
+
+    evidence = exactIndexes.map(index => registrationPointer([section, "entry", index]));
+    if (exactIndexes.length > 1) {
+        status = "candidate";
+        reasons.push("duplicate-entry-string");
+        return finish();
+    }
+
+    const index = exactIndexes[0];
+    pointer = registrationPointer([section, "entry", index]);
+    const wrapper = entryWrapper(entries[index], typeName);
+    applied.add("entry-shape");
+    notApplied.add("body-name-identity");
+    notApplied.add(section === "pages" ? "page-wrapper-filename" : "fragment-filename-equals-entry");
+
+    let locallyInvalid = false;
+    if (!wrapper.body) {
+        locallyInvalid = true;
+        reasons.push("entry-shape-invalid");
+    } else if (section === "fragments" && wrapper.canonical) {
+        applied.add("fragment-filename-present");
+        if (!nonEmptyString(wrapper.body.filename)) {
+            locallyInvalid = true;
+            reasons.push("fragment-filename-missing");
+        } else {
+            applied.add("category-prefix-absent");
+            if (wrapper.body.filename.startsWith("fragments/")) {
+                locallyInvalid = true;
+                reasons.push("fragment-filename-prefixed");
+            }
+        }
+    } else if (section === "fragments") {
+        notApplied.add("lowercase-fragment-filename-rules");
+        reasons.push("lowercase-fragment-wrapper");
+    }
+
+    applied.add("local-file-present");
+    const skipped = snapshot.skippedInputs || [];
+    const targetFile = (snapshot.markup || []).find(file => file.rel === targetRel);
+    if (isUnsafeTarget(skipped, targetRel)) {
+        locallyInvalid = true;
+        reasons.push("local-file-unsafe");
+    } else if (skipped.some(item => item.rel === targetRel &&
+        (item.reason === "notRegular" || item.reason === "invalidUtf8" || item.reason === "unreadable"))) {
+        locallyInvalid = true;
+        reasons.push("local-file-unreadable");
+    } else if (!targetFile) {
+        locallyInvalid = true;
+        reasons.push("local-file-absent");
+    } else {
+        applied.add("unique-file-identity");
+        const identity = targetRel.replace(/\.(?:html?|xhtml)$/i, "");
+        const files = identityFiles instanceof Map ? identityFiles.get(identity) || [] : [];
+        if (files.length > 1) reasons.push("duplicate-file-identity");
+    }
+
+    if (locallyInvalid) status = "locallyInvalid";
+    else if (reasons.includes("lowercase-fragment-wrapper") || reasons.includes("duplicate-file-identity")) {
+        status = "candidate";
+    } else {
+        status = "locallyValid";
+    }
+    return finish();
+}
+
 function checkEntryShape(manifest) {
     const findings = [];
     for (const folder of Object.keys(SHAPE_CHECKED_FOLDERS)) {
@@ -485,7 +692,7 @@ function checkEntryShape(manifest) {
         for (let i = 0; i < section.entry.length; i++) {
             const entry = section.entry[i];
             if (!isObject(entry) || typeof entry.string !== "string") continue;
-            if (isObject(entry[typeName]) || isObject(entry[typeName.toLowerCase()])) continue;
+            if (entryWrapper(entry, typeName).body) continue;
             findings.push({
                 file: "pal.json", line: 1, column: 0, severity: "error", rule: "malformedManifestEntry",
                 message: "pal.json " + folder + ".entry[" + i + "] (\"string\": \"" + entry.string + "\") has no \"" +
@@ -674,4 +881,4 @@ function lintPalJson(snapshotOrDir) {
 }
 
 module.exports = { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryShape, checkEntryFilenames,
-    checkFolderRegistrations, lineForFinding, listFilesRecursive };
+    checkFolderRegistrations, lineForFinding, listFilesRecursive, analyzeMarkupRegistration };

@@ -1,0 +1,16 @@
+{
+  "pages": { "entry": [
+    { "string": "report.html", "Page": { "name": "report", "filename": "report.html", "palType": "palTypeConsole" } }
+  ] },
+  "fragments": { "entry": [
+    { "string": "components/dynamic/summary.html", "Fragment": { "name": "summary", "filename": "components/dynamic/summary.html", "palType": "palTypeConsole", "parseable": false } }
+  ] },
+  "workflows": { "entry": [
+    { "string": "report.js", "Workflow": { "name": "report", "filename": "report.js", "workflowType": 7 } }
+  ] },
+  "styles": { "entry": [
+    { "string": "styles.css", "Style": { "name": "styles", "filename": "styles.css" } }
+  ] },
+  "scripts": { "entry": [] }, "images": { "entry": [] }, "emails": { "entry": [] },
+  "attachments": { "entry": [] }, "datasets": { "entry": [] }, "wizards": { "entry": [] }
+}

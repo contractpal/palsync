@@ -3,14 +3,21 @@ const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
-const { listSpecs, resolveSpec, injectSpec } = require("../src/core/evalSpec");
+const { listSpecs, resolveSpec, injectSpec, SPECS_DIR } = require("../src/core/evalSpec");
 const { tmpWorkspace } = require("./helpers");
 
-test("listSpecs returns the 5 frozen benchmark specs", () => {
-    const specs = listSpecs();
+test("listSpecs returns the 5 frozen benchmark specs in code-point order", () => {
+    const originalReaddirSync = fs.readdirSync;
+    let specs;
+    try {
+        fs.readdirSync = function(dir, options) {
+            const entries = originalReaddirSync.call(fs, dir, options);
+            return path.resolve(dir) === path.resolve(SPECS_DIR) ? entries.reverse() : entries;
+        };
+        specs = listSpecs();
+    } finally { fs.readdirSync = originalReaddirSync; }
     assert.equal(specs.length, 5);
-    const keys = specs.map(s => s.key).sort();
-    assert.deepEqual(keys, [
+    assert.deepEqual(specs.map(s => s.key), [
         "01_crud_equipment_checkout",
         "02_data_structures_company_directory",
         "03_console_tx_service_requests",
@@ -25,9 +32,10 @@ test("resolveSpec throws a helpful error on an unknown key", () => {
     assert.throws(() => resolveSpec("bogus"), /Unknown eval spec "bogus"\. Available: 01_/);
 });
 
-test("resolveSpec accepts a numeric prefix", () => {
-    const spec = resolveSpec("01");
-    assert.equal(spec.key, "01_crud_equipment_checkout");
+test("resolveSpec keeps exact, numeric, and suggested-name standard resolution", () => {
+    for (const key of ["01_crud_equipment_checkout", "01", "1", "equipment_checkout"]) {
+        assert.equal(resolveSpec(key).key, "01_crud_equipment_checkout");
+    }
 });
 
 test("injectSpec writes all 4 files flat, fills the placeholder, and rewrites relative paths", () => {

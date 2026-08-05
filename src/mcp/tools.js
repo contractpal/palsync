@@ -19,6 +19,13 @@ const { lintSpec, formatSpecLint } = require("../core/specLint");
 const { syncDatasets } = require("../core/datasets");
 const { upsertData, deleteData, upsertDataList, deleteDataList } = require("../core/dataObjects");
 const { validateWorkspace, formatValidation: formatLint } = require("../core/validate");
+const { buildImpactSnapshot } = require("../core/validate/snapshot");
+const {
+    buildStructuralImpact,
+    resolveImpactTarget,
+    formatImpactResult,
+    createImpactError,
+} = require("../core/impactContext");
 const { cachedLint } = require("../core/lintCache");
 const { appendToolEvidence } = require("../core/usage");
 const palsyncfile = require("../core/palsyncfile");
@@ -1304,15 +1311,27 @@ const TOOLS = [
     },
     {
         name: "pal_context",
-        description: "Load an on-demand PalSync contract section by id or keyword. Use before sync/drift/lock work, creating files or pal.json entries, and dataset provisioning.",
+        description: "Load an on-demand PalSync contract section, or inspect exact LOCAL structural impact before editing a page/fragment. For impact pass target alone. Impact does not check the live server or runtime-selected relationships.",
         needsCtx: false,
         inputShape: {
             section: z.enum(["sync-workflow", "creating-files", "datasets"]).optional(),
-            query: z.string().optional().describe("Keywords used when the exact section id is unknown.")
+            query: z.string().optional().describe("Keywords used when the exact section id is unknown."),
+            target: z.string().optional().describe("Exact POSIX workspace-relative page/fragment path for local structural impact, e.g. fragments/navbar.html. Use alone, not with section/query.")
         },
-        async run(ctx, { section, query } = {}) {
-            let palName = null;
-            try { palName = (await palsyncfile.read(ctx.workspaceDir)).palName; } catch (e) { /* optional context */ }
+        async run(ctx, { section, query, target } = {}) {
+            if (target !== undefined && (section !== undefined || query !== undefined)) {
+                return formatImpactResult(createImpactError("mixed-modes", target));
+            }
+
+            let record = null;
+            try { record = await palsyncfile.read(ctx.workspaceDir); } catch (e) { /* optional context */ }
+            if (target !== undefined) {
+                const snapshot = buildImpactSnapshot(ctx.workspaceDir);
+                const analysis = buildStructuralImpact(snapshot, record);
+                return formatImpactResult(resolveImpactTarget(analysis, target));
+            }
+
+            const palName = record && record.palName;
             const sections = onDemandSyncSections(palName, { cli: false, skillsDir: ".claude/skills" });
             let ids = section ? [section] : query ? routeItems(query, sections) : [];
             if (!ids.length && !section && !query) {

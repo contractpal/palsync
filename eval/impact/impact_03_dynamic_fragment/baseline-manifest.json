@@ -1,0 +1,17 @@
+{
+  "schema": "palsync/impact-baseline/1",
+  "fixtureDigest": "sha256:508d026bd35d651f49c2b55463767b9f4ea3d36370ff3aa202314b5835baf67a",
+  "files": {
+    "fragments/components/dynamic/summary.html": "6c4b9b390d2df0fb40e201b3804b604f8d04474e279add9dca4e196424645ed4",
+    "pages/report.html": "2e8b78e4a94eee89779190273db4ac47a96662936b822e15a0d40536feb1113e",
+    "pal.json": "093d3485dadf8d81c1930d5a0a1014511b0d89edb1658eb3ea909fe360a12b9a",
+    "styles/styles.css": "ce734a3d8744a0d8780e41838fd270f5e18b2e4795ccc9f84401f13ab2d4dd38",
+    "workflows/report.js": "32eb9e98e890d071817ea2be9e0b57310efb447869efb055ccaeca4840c7171f"
+  },
+  "expectedServerPaths": [
+    "fragments/components/dynamic/summary.html",
+    "pages/report.html",
+    "styles/styles.css",
+    "workflows/report.js"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "schema": "palsync/impact-pilot/1",
+  "model": null,
+  "pairs": [
+    { "pair": "impact01-r1", "taskKey": "impact_01_shared_fragment", "order": ["off", "on"] },
+    { "pair": "impact01-r2", "taskKey": "impact_01_shared_fragment", "order": ["on", "off"] },
+    { "pair": "impact02-r1", "taskKey": "impact_02_nested_fragment", "order": ["off", "on"] },
+    { "pair": "impact02-r2", "taskKey": "impact_02_nested_fragment", "order": ["on", "off"] },
+    { "pair": "impact03-r1", "taskKey": "impact_03_dynamic_fragment", "order": ["off", "on"] },
+    { "pair": "impact03-r2", "taskKey": "impact_03_dynamic_fragment", "order": ["on", "off"] }
+  ]
+}

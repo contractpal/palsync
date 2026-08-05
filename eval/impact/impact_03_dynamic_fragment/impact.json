@@ -1,0 +1,11 @@
+{
+  "schema": "palsync/impact-eval-spec/1",
+  "key": "impact_03_dynamic_fragment",
+  "suggestedName": "impact_03_dynamic_fragment",
+  "title": "Dynamic fragment rename under uncertainty",
+  "impactTarget": "fragments/components/dynamic/summary.html",
+  "baseline": "baseline",
+  "baselineManifest": "baseline-manifest.json",
+  "oracle": "oracle.json",
+  "variants": ["off", "on"]
+}

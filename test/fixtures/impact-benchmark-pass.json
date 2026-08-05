@@ -1,0 +1,15 @@
+{
+  "schema": "palsync/impact-benchmark/1",
+  "iterations": 50,
+  "p50Ms": 90,
+  "p95Ms": 100,
+  "factCounts": {
+    "dependencies": 0,
+    "dependents": 100,
+    "candidates": 0,
+    "unresolved": 0,
+    "possibleDynamicIncoming": 10
+  },
+  "messageBytes": 4096,
+  "withinByteBudget": true
+}

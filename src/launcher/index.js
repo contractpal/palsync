@@ -2,6 +2,8 @@
 // The palsync launcher: cloud → login → profile → group → pal → agent → setup → open Claude Code.
 // All interactive steps are injectable so the flow is testable headlessly; defaults use the real
 // @clack/prompts UI. autoLaunch=false stops before opening the agent (used by tests).
+const fs = require("fs");
+const path = require("path");
 const { loadClack } = require("../platform/uiPrompts");
 const { login } = require("../auth/credentials");
 const { runSelection } = require("./selection");
@@ -10,6 +12,8 @@ const { selectionPrompts, driftPrompt, pickEvalSpec } = require("./prompts");
 const agents = require("./agents");
 const workspace = require("./workspace");
 const evalSpec = require("../core/evalSpec");
+const { seedImpactBaseline } = require("../core/impactEval");
+const lock = require("../core/lock");
 const { BACK } = require("../core/back");
 
 async function defaultChooseDir(defaultDir) {
@@ -58,6 +62,7 @@ async function run({
     //    "profile" step and credentials.js's resumable entry — so the whole login+selection
     //    flow reads as one continuous back stack instead of two disconnected menus.
     let sel;
+    let createdPalGuid = null;
     while (true) {
         sel = await runSelection(session, selPrompts, spec ? { forceCreate: true, defaultName: spec.suggestedName } : undefined);
         if (sel !== BACK) break;
@@ -80,6 +85,7 @@ async function run({
             category: sel.details.category,
             activationKeyId: sel.activationKey
         });
+        createdPalGuid = created.guid;
         sel = { profile: sel.profile, pal: { guid: created.guid, name: created.name || sel.details.name } };
     }
     log("selected pal: " + sel.pal.name + " (" + sel.pal.guid + ")");
@@ -101,9 +107,36 @@ async function run({
     if (!dir) { log("cancelled at workspace dir"); return null; }
     const setupResult = await workspace.setup({ session, cloudUrl, sel, workspaceDir: dir, agent: agent.key, onDrift, log });
 
-    // 5b. eval-harness: inject the chosen spec's docs + auto-fill the placeholder header now
-    //     that we know the real cloud URL and pal name — workspace is then 100% ready to run.
-    if (spec) {
+    // 5b. eval-harness: impact evals first prove and push their fixed baseline under setup's lock,
+    //     then atomically inject the exact task arm. Standard eval injection remains unchanged.
+    if (spec && spec.kind === "impact") {
+        try {
+            const taskDocs = ["SPEC.md", "EXECUTION.md"].filter(name => {
+                try { fs.lstatSync(path.join(dir, name)); return true; }
+                catch (e) { if (e.code === "ENOENT") return false; throw e; }
+            });
+            if (taskDocs.length) {
+                throw new Error("workspace root already contains " + taskDocs.join(" or "));
+            }
+            await seedImpactBaseline({
+                session,
+                workspaceDir: dir,
+                createdPalGuid,
+                setupResult,
+                record: setupResult.record,
+                spec
+            });
+            const fillValue = cloudUrl + " (pal: " + sel.pal.name + ")";
+            const injectResult = evalSpec.injectImpactSpec(dir, spec, { fillValue });
+            log("impact eval seeded and injected: " + injectResult.written.join(", "));
+        } catch (e) {
+            if (setupResult.locked === true && setupResult.record && setupResult.record.palGuid) {
+                try { await lock.releaseByGuid(session, setupResult.record.palGuid); }
+                catch (releaseError) { log("impact eval lock release failed: " + releaseError.message); }
+            }
+            throw new Error("Impact eval setup failed after fresh Pal creation. The partial eval Pal must be discarded manually; no server Pal was deleted. " + e.message);
+        }
+    } else if (spec) {
         const fillValue = cloudUrl + " (pal: " + sel.pal.name + ")";
         const injectResult = evalSpec.injectSpec(dir, spec, { fillValue });
         log("eval spec injected: " + injectResult.written.join(", ") +

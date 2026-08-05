@@ -574,7 +574,7 @@
   {
     "name": "pal_context",
     "title": "Load PalSync context",
-    "description": "Load an on-demand PalSync contract section by id or keyword. Use before sync/drift/lock work, creating files or pal.json entries, and dataset provisioning.",
+    "description": "Load an on-demand PalSync contract section, or inspect exact LOCAL structural impact before editing a page/fragment. For impact pass target alone. Impact does not check the live server or runtime-selected relationships.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -588,6 +588,10 @@
         },
         "query": {
           "description": "Keywords used when the exact section id is unknown.",
+          "type": "string"
+        },
+        "target": {
+          "description": "Exact POSIX workspace-relative page/fragment path for local structural impact, e.g. fragments/navbar.html. Use alone, not with section/query.",
           "type": "string"
         }
       },

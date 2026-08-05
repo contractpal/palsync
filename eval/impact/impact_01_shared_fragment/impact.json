@@ -1,0 +1,11 @@
+{
+  "schema": "palsync/impact-eval-spec/1",
+  "key": "impact_01_shared_fragment",
+  "suggestedName": "impact_01_shared_fragment",
+  "title": "Shared fragment rename",
+  "impactTarget": "fragments/shared/navbar.html",
+  "baseline": "baseline",
+  "baselineManifest": "baseline-manifest.json",
+  "oracle": "oracle.json",
+  "variants": ["off", "on"]
+}

@@ -1,0 +1,11 @@
+{
+  "schema": "palsync/impact-eval-spec/1",
+  "key": "impact_02_nested_fragment",
+  "suggestedName": "impact_02_nested_fragment",
+  "title": "Nested component fragment rename",
+  "impactTarget": "fragments/components/profile/card.html",
+  "baseline": "baseline",
+  "baselineManifest": "baseline-manifest.json",
+  "oracle": "oracle.json",
+  "variants": ["off", "on"]
+}

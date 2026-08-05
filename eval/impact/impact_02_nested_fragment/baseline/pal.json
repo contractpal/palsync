@@ -1,0 +1,17 @@
+{
+  "pages": { "entry": [
+    { "string": "profile.html", "Page": { "name": "profile", "filename": "profile.html", "palType": "palTypeConsole" } }
+  ] },
+  "fragments": { "entry": [
+    { "string": "components/profile/card.html", "Fragment": { "name": "card", "filename": "components/profile/card.html", "palType": "palTypeConsole", "parseable": false } },
+    { "string": "layout/profile-shell.html", "Fragment": { "name": "profile-shell", "filename": "layout/profile-shell.html", "palType": "palTypeConsole", "parseable": false } }
+  ] },
+  "workflows": { "entry": [
+    { "string": "profile.js", "Workflow": { "name": "profile", "filename": "profile.js", "workflowType": 7 } }
+  ] },
+  "styles": { "entry": [
+    { "string": "styles.css", "Style": { "name": "styles", "filename": "styles.css" } }
+  ] },
+  "scripts": { "entry": [] }, "images": { "entry": [] }, "emails": { "entry": [] },
+  "attachments": { "entry": [] }, "datasets": { "entry": [] }, "wizards": { "entry": [] }
+}

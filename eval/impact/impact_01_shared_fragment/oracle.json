@@ -1,0 +1,22 @@
+{
+  "schema": "palsync/impact-oracle/1",
+  "allowedServerTrackedWrites": [
+    "fragments/shared/navbar.html",
+    "fragments/shared/header.html",
+    "fragments/layout/shell.html",
+    "pages/console.html",
+    "pages/settings.html",
+    "pal.json"
+  ],
+  "requiredPresent": ["fragments/shared/header.html"],
+  "requiredAbsent": ["fragments/shared/navbar.html"],
+  "requiredContentChecks": [
+    { "path": "pal.json", "includes": "shared/header.html", "excludes": ["shared/navbar.html", "\"name\": \"navbar\""] },
+    { "path": "pal.json", "includes": "\"name\": \"header\"" },
+    { "path": "pages/console.html", "includes": "shared/header" },
+    { "path": "pages/settings.html", "includes": "shared/header" },
+    { "path": "fragments/layout/shell.html", "includes": "shared/header" }
+  ],
+  "acceptanceCommands": ["pal_validate", "pal_test", "palsync regression"],
+  "firstCorrectWriteDefinition": "first write to an allowed path that advances a required check"
+}
