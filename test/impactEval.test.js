@@ -31,11 +31,44 @@ function copySpec(t, key = "impact_01_shared_fragment-on") {
     };
 }
 
+// What `pal_pull` actually writes for a freshly created Pal: the registration sections plus the
+// server-owned structure the fixture does not model. The old harness wrote the literal string
+// "old manifest\n" here, so no test ever constructed a real Pal from the staged workspace — which
+// is exactly why seeding could clobber layout/id and only fail against the live server.
+// Shapes copied from a real `pal_pull` of a freshly created Pal — note the sections the platform
+// serializes as an EMPTY STRING rather than { entry: [] } (fonts, automatedScripts,
+// mobileConfigurations, desktopBindings, trashCan, releaseNotes, secureFields) and folders as
+// { Folder: [] }. Guessing { entry: [] } for those trips the manifest shape validator, so this
+// mirrors the server verbatim instead.
+function pulledManifest(workspaceDir) {
+    const empty = () => ({ entry: [] });
+    return {
+        layout: {
+            name: "fresh", category: "fresh", description: "fresh",
+            inheritanceEnabled: false, inheritConsole: false, inheritWeb: false,
+            inheritTransaction: false, inheritUser: false, properties: "", roles: "",
+            auditDocumentView: false, workflowVersion: 1, consoleControlled: false,
+            mobileAccessType: 0, groupAccessOnly: false
+        },
+        documents: empty(), emails: empty(), images: empty(), pages: empty(), fragments: empty(),
+        styles: empty(), wizards: empty(), workflows: empty(), scripts: empty(),
+        fonts: "",
+        datasets: empty(), dataviews: empty(), data: empty(), datalists: empty(),
+        attachments: empty(),
+        automatedScripts: "", mobileConfigurations: "", desktopBindings: "",
+        folders: { Folder: [] },
+        trashCan: "", releaseNotes: "", secureFields: "",
+        id: "F".repeat(64),
+        path: workspaceDir,
+        environment: { url: "https://cloud.example.test", platformVersion: "" }
+    };
+}
+
 function makeSeedHarness(t) {
     const workspaceDir = tempDir(t, "palsync-impact-workspace-");
     fs.mkdirSync(path.join(workspaceDir, "fragments"), { recursive: true });
     fs.writeFileSync(path.join(workspaceDir, "fragments", "old.html"), "old tracked bytes\n");
-    fs.writeFileSync(path.join(workspaceDir, "pal.json"), "old manifest\n");
+    fs.writeFileSync(path.join(workspaceDir, "pal.json"), JSON.stringify(pulledManifest(workspaceDir), null, 2) + "\n");
     fs.writeFileSync(path.join(workspaceDir, "KEEP.md"), "untracked root file\n");
     const spec = copySpec(t);
     const manifest = JSON.parse(fs.readFileSync(spec.baselineManifestPath, "utf8"));
@@ -155,6 +188,57 @@ test("seedImpactBaseline verifies, stages, pushes, refreshes, persists, then ato
         assert.equal(serialized.includes(forbidden), false, "receipt must omit " + forbidden);
     }
     assert.equal(Object.prototype.hasOwnProperty.call(receipt, "workspaceDir"), false);
+});
+
+// Regression: the first live arm failed with `save-rejected` and an empty validation list because
+// seeding overwrote the 26-key pulled manifest with the fixture's 10 registration sections, leaving
+// the Pal with no layout and no id. Assert the merge from the workspace side — a real Pal must be
+// constructible from the staged manifest, the fixture's sections must be exact, and every
+// server-owned key must survive.
+test("seedImpactBaseline merges fixture sections onto the pulled manifest instead of replacing it", async t => {
+    const h = makeSeedHarness(t);
+    const pulled = JSON.parse(fs.readFileSync(path.join(h.workspaceDir, "pal.json"), "utf8"));
+    const fixture = JSON.parse(fs.readFileSync(path.join(h.spec.baselineDir, "pal.json"), "utf8"));
+
+    const receipt = await seedImpactBaseline(h.args());
+
+    const staged = JSON.parse(fs.readFileSync(path.join(h.workspaceDir, "pal.json"), "utf8"));
+    for (const key of ["layout", "id", "path", "environment", "folders", "trashCan", "secureFields"]) {
+        assert.deepEqual(staged[key], pulled[key], "seeding must preserve server-owned key " + key);
+    }
+    for (const key of Object.keys(fixture)) {
+        assert.deepEqual(staged[key], fixture[key], "seeding must apply fixture section " + key);
+    }
+    // The whole point: the staged manifest has to be a Pal the server can actually save, and it
+    // must track exactly the paths the fixture manifest promises.
+    const { Pal } = require("../lib/pal");
+    const { manifestPaths } = require("../src/core/pull");
+    const pal = await Pal.fromPath(h.workspaceDir);
+    assert.ok(pal.layout, "staged Pal must carry a layout or the server refuses the save");
+    assert.deepEqual([...manifestPaths(pal)].sort(), [...h.manifest.expectedServerPaths].sort());
+    assert.deepEqual(receipt.manifest.fixtureSections, Object.keys(fixture).sort());
+    assert.ok(receipt.manifest.preservedServerKeys.includes("layout"));
+    assert.equal(receipt.manifest.preservedServerKeys.includes("pages"), false);
+});
+
+test("seedImpactBaseline refuses a pulled manifest that is unusable or carries no server layout", async t => {
+    await t.test("unparseable", async t2 => {
+        const h = makeSeedHarness(t2);
+        fs.writeFileSync(path.join(h.workspaceDir, "pal.json"), "not json\n");
+        await expectSeedFailure(h, /parseable pulled pal\.json/);
+    });
+    await t.test("missing layout", async t2 => {
+        const h = makeSeedHarness(t2);
+        const pulled = JSON.parse(fs.readFileSync(path.join(h.workspaceDir, "pal.json"), "utf8"));
+        delete pulled.layout;
+        fs.writeFileSync(path.join(h.workspaceDir, "pal.json"), JSON.stringify(pulled) + "\n");
+        await expectSeedFailure(h, /server-owned layout/);
+    });
+    await t.test("absent", async t2 => {
+        const h = makeSeedHarness(t2);
+        fs.rmSync(path.join(h.workspaceDir, "pal.json"));
+        await expectSeedFailure(h, /freshly pulled pal\.json/);
+    });
 });
 
 test("seedImpactBaseline refuses unproved freshness, mismatched paths, or a missing setup lock before deletion", async t => {

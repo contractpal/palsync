@@ -172,6 +172,72 @@ function copyBaseline(workspaceDir, baselineDir, files) {
     }
 }
 
+// The freshly pulled manifest owns Pal structure the fixture deliberately does not model — layout,
+// id, path, environment, documents, folders, trashCan, releaseNotes, secureFields. Replacing
+// pal.json with the fixture's registration-only sections produced a Pal with no layout and no id:
+// push.js builds the save from `Pal.fromPath`, so the server got a structurally invalid Pal and
+// refused it as `save-rejected` with an EMPTY validation list, while ensureWebRegistration and
+// ensureConsoleRegistration both early-return on `!pal.layout` and so never wired an entry point.
+// The fixture therefore owns exactly the sections it declares; every other pulled key survives
+// verbatim.
+function readPulledManifest(workspaceDir) {
+    try {
+        return fs.readFileSync(path.join(workspaceDir, "pal.json"), "utf8");
+    } catch (e) {
+        throw new Error("Impact baseline seeding requires the freshly pulled pal.json: " + e.message);
+    }
+}
+
+function mergeBaselineManifest(pulledRaw, fixtureRaw) {
+    let pulled;
+    try { pulled = JSON.parse(pulledRaw); }
+    catch (e) { throw new Error("Impact baseline seeding requires a parseable pulled pal.json: " + e.message); }
+    if (!pulled || typeof pulled !== "object" || Array.isArray(pulled)) {
+        throw new Error("Impact baseline seeding requires a pulled pal.json object.");
+    }
+    if (!Object.prototype.hasOwnProperty.call(pulled, "layout")) {
+        throw new Error("Impact baseline seeding requires the pulled pal.json to carry a server-owned layout.");
+    }
+    const fixture = JSON.parse(fixtureRaw);
+    const owned = key => Object.prototype.hasOwnProperty.call(fixture, key);
+    return {
+        merged: { ...pulled, ...fixture },
+        pulled,
+        fixture,
+        fixtureSections: Object.keys(fixture).sort(codePointCompare),
+        preservedServerKeys: Object.keys(pulled).filter(key => !owned(key)).sort(codePointCompare)
+    };
+}
+
+// Verify what actually landed on disk, not what we intended to write: the fixture's sections must
+// survive byte-for-byte (the agent has to start from the frozen baseline) and no server-owned key
+// may be dropped (the defect above). manifestPaths on the merged Pal must still resolve to exactly
+// the fixture's declared paths, so a fresh Pal that unexpectedly tracks files fails loudly here
+// instead of pushing content the manifest never promised.
+function assertStagedManifest(workspaceDir, merge, expectedServerPaths) {
+    const written = fs.readFileSync(path.join(workspaceDir, "pal.json"), "utf8");
+    let parsed;
+    try { parsed = JSON.parse(written); }
+    catch (e) { throw new Error("Staged impact manifest is not parseable JSON: " + e.message); }
+    for (const key of merge.fixtureSections) {
+        if (JSON.stringify(parsed[key]) !== JSON.stringify(merge.fixture[key])) {
+            throw new Error("Staged impact manifest lost fixture section " + key + ".");
+        }
+    }
+    for (const key of merge.preservedServerKeys) {
+        if (JSON.stringify(parsed[key]) !== JSON.stringify(merge.pulled[key])) {
+            throw new Error("Staged impact manifest dropped server-owned key " + key + ".");
+        }
+    }
+    let palPaths;
+    try { palPaths = [...manifestPaths(Pal.fromJson(written))].sort(codePointCompare); }
+    catch (e) { throw new Error("Staged impact manifest is not a valid Pal: " + e.message); }
+    if (!sameArray(palPaths, expectedServerPaths)) {
+        throw new Error("Staged impact manifest tracks paths the fixture does not declare: " +
+            palPaths.join(", ") + ".");
+    }
+}
+
 function assertSeedPreconditions({ workspaceDir, createdPalGuid, setupResult, record, spec }) {
     if (!spec || spec.kind !== "impact") throw new Error("Impact baseline seeding requires an impact spec.");
     if (!createdPalGuid || !record || !setupResult || !setupResult.record ||
@@ -205,13 +271,26 @@ async function seedImpactBaseline({
 
     assertSeedPreconditions({ workspaceDir, createdPalGuid, setupResult, record, spec });
     const verified = readAndVerifyBaseline(spec, workspaceFileHash);
+    const pulledManifestRaw = readPulledManifest(workspaceDir);
 
     clearTrackedWorkspace(workspaceDir);
-    copyBaseline(workspaceDir, spec.baselineDir, verified.files);
+    copyBaseline(workspaceDir, spec.baselineDir, verified.files.filter(rel => rel !== "pal.json"));
 
+    const merge = mergeBaselineManifest(pulledManifestRaw,
+        fs.readFileSync(path.join(spec.baselineDir, "pal.json"), "utf8"));
+    fs.writeFileSync(path.join(workspaceDir, "pal.json"),
+        JSON.stringify(merge.merged, null, 2) + "\n", { flag: "wx" });
+    assertStagedManifest(workspaceDir, merge, verified.manifest.expectedServerPaths);
+
+    // pal.json intentionally differs from the frozen fixture now — it carries this Pal's
+    // server-owned identity — so the byte-equality guarantee covers every other staged file, with
+    // the manifest itself pinned structurally by assertStagedManifest above.
     const staged = workspaceFileHash(workspaceDir);
-    if (verified.manifest.fixtureDigest !== "sha256:" + staged.combined ||
-        !sameMap(staged.files, verified.manifest.files)) {
+    const expectedStaged = { ...verified.manifest.files };
+    const stagedTracked = { ...staged.files };
+    delete expectedStaged["pal.json"];
+    delete stagedTracked["pal.json"];
+    if (!sameMap(stagedTracked, expectedStaged)) {
         throw new Error("Staged impact baseline does not exactly match the verified fixture.");
     }
 
@@ -251,6 +330,11 @@ async function seedImpactBaseline({
         variant: spec.variant,
         fixtureDigest: verified.manifest.fixtureDigest,
         fixtureFiles: { ...verified.manifest.files },
+        manifest: {
+            mode: "fixture-sections-merged-onto-pulled",
+            fixtureSections: [...merge.fixtureSections],
+            preservedServerKeys: [...merge.preservedServerKeys]
+        },
         palGuid: record.palGuid,
         serverMarker: newMarker,
         serverPaths,
