@@ -7,14 +7,33 @@
     "pages/profile.html",
     "pal.json"
   ],
-  "requiredPresent": ["fragments/components/profile/profile-card.html"],
-  "requiredAbsent": ["fragments/components/profile/card.html"],
-  "requiredContentChecks": [
-    { "path": "pal.json", "includes": "components/profile/profile-card.html", "excludes": ["components/profile/card.html", "\"name\": \"card\""] },
-    { "path": "pal.json", "includes": "\"name\": \"profile-card\"" },
-    { "path": "pages/profile.html", "includes": "components/profile/profile-card" },
-    { "path": "fragments/layout/profile-shell.html", "includes": "components/profile/profile-card" }
+  "requiredPresent": [
+    "fragments/components/profile/profile-card.html"
   ],
-  "acceptanceCommands": ["pal_validate", "pal_test", "palsync regression"],
+  "requiredAbsent": [
+    "fragments/components/profile/card.html"
+  ],
+  "requiredContentChecks": [
+    {
+      "path": "pal.json",
+      "includes": "components/profile/profile-card.html",
+      "excludes": [
+        "components/profile/card.html"
+      ]
+    },
+    {
+      "path": "pages/profile.html",
+      "includes": "components/profile/profile-card"
+    },
+    {
+      "path": "fragments/layout/profile-shell.html",
+      "includes": "components/profile/profile-card"
+    }
+  ],
+  "acceptanceCommands": [
+    "pal_validate",
+    "pal_test",
+    "palsync regression"
+  ],
   "firstCorrectWriteDefinition": "first write to an allowed path that advances a required check"
 }

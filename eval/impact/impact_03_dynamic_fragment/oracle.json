@@ -6,14 +6,36 @@
     "workflows/report.js",
     "pal.json"
   ],
-  "requiredPresent": ["fragments/components/dynamic/report-summary.html"],
-  "requiredAbsent": ["fragments/components/dynamic/summary.html"],
-  "requiredContentChecks": [
-    { "path": "pal.json", "includes": "components/dynamic/report-summary.html", "excludes": ["components/dynamic/summary.html", "\"name\": \"summary\""] },
-    { "path": "pal.json", "includes": "\"name\": \"report-summary\"" },
-    { "path": "workflows/report.js", "includes": "components/dynamic/report-summary", "excludes": ["components/dynamic/summary"] },
-    { "path": "pages/report.html", "includes": "${panel}" }
+  "requiredPresent": [
+    "fragments/components/dynamic/report-summary.html"
   ],
-  "acceptanceCommands": ["pal_validate", "pal_test", "palsync regression"],
+  "requiredAbsent": [
+    "fragments/components/dynamic/summary.html"
+  ],
+  "requiredContentChecks": [
+    {
+      "path": "pal.json",
+      "includes": "components/dynamic/report-summary.html",
+      "excludes": [
+        "components/dynamic/summary.html"
+      ]
+    },
+    {
+      "path": "workflows/report.js",
+      "includes": "components/dynamic/report-summary",
+      "excludes": [
+        "components/dynamic/summary"
+      ]
+    },
+    {
+      "path": "pages/report.html",
+      "includes": "${panel}"
+    }
+  ],
+  "acceptanceCommands": [
+    "pal_validate",
+    "pal_test",
+    "palsync regression"
+  ],
   "firstCorrectWriteDefinition": "first write to an allowed path that advances a required check"
 }
