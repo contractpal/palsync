@@ -24,3 +24,20 @@ test("efficiency metrics are deterministic and the frozen baseline is valid", as
     assert.equal(baseline.schema, "palsync/efficiency-baseline/1");
     assert.ok(baseline.eagerContextBytes.total > 0);
 });
+
+// The baseline is the north-star efficiency metric, so it has to be a pin and not a decoration:
+// asserting only its schema let it drift silently (it once claimed toolSchemaBytes 19390 while the
+// real value was 19105, because nothing ever compared the file to a live measurement). Any change
+// to eager context, tool schemas, or lint-cache behavior now fails here until the recorded numbers
+// are regenerated with `node eval/benchmark-context.js --json > bench/efficiency-baseline.json`.
+test("the frozen baseline matches the live measurement byte for byte", async () => {
+    const baselinePath = path.join(__dirname, "..", "bench", "efficiency-baseline.json");
+    const recorded = fs.readFileSync(baselinePath, "utf8");
+    assert.deepEqual(
+        JSON.parse(await runJson()),
+        JSON.parse(recorded),
+        "bench/efficiency-baseline.json is stale — regenerate it with " +
+        "`node eval/benchmark-context.js --json > bench/efficiency-baseline.json` and review the delta."
+    );
+    assert.equal(recorded, await runJson(), "baseline file formatting must match the generator's output exactly.");
+});
