@@ -119,6 +119,9 @@ Impact runs use the exact virtual scenario key and the launcher-written
 3. If no correct write occurred, set both pre-correct-write metrics to `null`. Preserve an on-arm
    non-adoption as `targetCalls:0`, `targetBeforeFirstEdit:false`, and
    `impactResponseBytes:null`. An off arm must use those same three uncontaminated values.
+   `regression` is the verdict the agent's own `pal_regression` call returned — seeding leaves a real
+   `baseline/baseline.json`, but the freshness gate makes any post-push re-run return `{stale}`, so
+   the evaluator reads the agent's pre-push call instead of re-running it.
 4. Record the row with every pin and evidence path present:
 
 ```sh

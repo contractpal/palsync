@@ -158,15 +158,17 @@ test("seedImpactBaseline verifies, stages, pushes, refreshes, persists, then ato
         h.persisted.push({ dir, value: JSON.parse(JSON.stringify(record)) });
     };
     h.deps.writeIfChanged = async (file, content) => {
-        calls.push("receipt");
+        calls.push(file.endsWith(path.join("baseline", "baseline.json")) ? "regression baseline" : "receipt");
         return writeIfChanged(file, content);
     };
 
     const receipt = await seedImpactBaseline(h.args({ persist: h.persist }));
 
+    // The regression baseline is written after the record is persisted and before the receipt, so
+    // its `mapped` marker is the one the push actually returned.
     assert.deepEqual(calls, [
         "verify", "clear tracked", "copy", "hash", "validate", "push",
-        "refresh localHash", "refresh fileHashes", "persist", "receipt"
+        "refresh localHash", "refresh fileHashes", "persist", "regression baseline", "receipt"
     ]);
     assert.equal(fs.readFileSync(path.join(h.workspaceDir, "KEEP.md"), "utf8"), "untracked root file\n");
     assert.equal(h.persisted.length, 1);
@@ -219,6 +221,28 @@ test("seedImpactBaseline merges fixture sections onto the pulled manifest instea
     assert.deepEqual(receipt.manifest.fixtureSections, Object.keys(fixture).sort());
     assert.ok(receipt.manifest.preservedServerKeys.includes("layout"));
     assert.equal(receipt.manifest.preservedServerKeys.includes("pages"), false);
+});
+
+// pal_regression is one of the oracle's acceptance commands, so seeding must leave a baseline it
+// can actually read — otherwise it answers "does not apply" on every arm and the recorded verdict
+// would have to be invented.
+test("seedImpactBaseline writes a regression baseline pal_regression can read", async t => {
+    const h = makeSeedHarness(t);
+    const receipt = await seedImpactBaseline(h.args());
+
+    const { readBaseline } = require("../src/core/regression");
+    const baseline = readBaseline(h.workspaceDir);
+    assert.equal(baseline.mapped, "marker-after", "mapped must be the post-push server marker");
+    assert.deepEqual(baseline.validate, { errors: 0, warnings: 0 });
+    assert.deepEqual(baseline.known_issues, []);
+    // Deliberately absent: pre-push, the server still holds baseline code, so these arms would
+    // compare the baseline against itself and manufacture guaranteed passes.
+    assert.equal(Object.prototype.hasOwnProperty.call(baseline, "test"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(baseline, "pages"), false);
+    assert.deepEqual(receipt.regressionBaseline,
+        { path: "baseline/baseline.json", mapped: "marker-after", arms: ["validate"] });
+    // baseline/ is outside the pushed roots, so it must not have become a tracked server path.
+    assert.equal(receipt.serverPaths.some(p => p.startsWith("baseline/")), false);
 });
 
 test("seedImpactBaseline refuses a pulled manifest that is unusable or carries no server layout", async t => {

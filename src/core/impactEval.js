@@ -323,6 +323,28 @@ async function seedImpactBaseline({
     record.fileHashes = pathHashes(workspaceDir, pushResult.serverPaths);
     await persist(workspaceDir, record);
 
+    // These are brownfield tasks, so `palsync regression` is one of the oracle's acceptance
+    // commands — but it needs baseline/baseline.json (pal-init Step 3), which nothing here wrote,
+    // so it answered "regression does not apply" on every arm and left the recorder (which demands
+    // pass|fail) with nothing to record but an invented value. The moment right after the baseline
+    // push IS pal-init Step 3: the workspace is the pristine, freshly pushed baseline.
+    //
+    // Only the validate arm is recorded. pal_regression's freshness gate refuses to verdict once
+    // the server marker moves, so a meaningful call happens BEFORE the agent pushes (the order
+    // EXECUTION.md already prescribes) — and at that moment the server still holds baseline code,
+    // which makes the `test` and `pages` arms compare the baseline against itself. Recording them
+    // would manufacture guaranteed passes; validate runs against the agent's CURRENT local files
+    // and genuinely catches a regression. known_issues is empty because the seed gate proved the
+    // fixture lints 0/0 and pushed clean.
+    const regressionBaseline = {
+        mapped: newMarker,
+        validate: { errors: 0, warnings: 0 },
+        known_issues: []
+    };
+    fs.mkdirSync(path.join(workspaceDir, "baseline"), { recursive: true });
+    await atomicWrite(path.join(workspaceDir, "baseline", "baseline.json"),
+        JSON.stringify(regressionBaseline, null, 2) + "\n");
+
     const receipt = {
         schema: "palsync/impact-start/1",
         evalKey: spec.key,
@@ -342,6 +364,7 @@ async function seedImpactBaseline({
         fileHashes: { ...record.fileHashes },
         lint: { errors: 0, warnings: 0 },
         push: { pushed: true, newMarker },
+        regressionBaseline: { path: "baseline/baseline.json", mapped: newMarker, arms: ["validate"] },
         seededAt: new Date().toISOString()
     };
     await atomicWrite(path.join(workspaceDir, RECEIPT_PATH), JSON.stringify(receipt, null, 2) + "\n");

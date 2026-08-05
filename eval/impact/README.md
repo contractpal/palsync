@@ -47,6 +47,14 @@ Never inject `oracle.json` or `baseline-manifest.json` into an agent workspace.
 }
 ```
 
+`regression` records what the AGENT's own `pal_regression` call returned, read from the transcript —
+not a value the evaluator re-derives afterward. Seeding writes `baseline/baseline.json` (validate arm
+only) so the call has a real baseline, but `pal_regression`'s freshness gate refuses to verdict once
+the server marker moves, so re-running it after the agent's push returns `{stale}` by design. The
+task's `EXECUTION.md` already sequences regression before the push. An arm whose agent never called
+regression, or called it after pushing and got `{stale}`, has no regression verdict — treat that arm
+as incomplete rather than recording a guess.
+
 All counts are non-negative integers and `wallTimeMs` is positive. If no correct write occurred,
 both pre-correct-write metrics are `null`. Preserve on-arm non-adoption as
 `targetCalls:0`, `targetBeforeFirstEdit:false`, and `impactResponseBytes:null`; never rewrite it as
