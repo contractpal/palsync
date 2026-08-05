@@ -1,6 +1,6 @@
 {
   "schema": "palsync/impact-pilot/1",
-  "model": null,
+  "model": "claude-haiku-4-5-20251001",
   "pairs": [
     { "pair": "impact01-r1", "taskKey": "impact_01_shared_fragment", "order": ["off", "on"] },
     { "pair": "impact01-r2", "taskKey": "impact_01_shared_fragment", "order": ["on", "off"] },
