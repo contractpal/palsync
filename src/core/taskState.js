@@ -48,7 +48,10 @@ function parseTasks(text) {
         const depends = /^[—\-\s]*$/.test(depRaw) ? [] : depRaw.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
         rows.push({ lineIndex: i, cells, id, status: cells[cols.status] || "", depends });
     }
-    if (!inTasks) return { ok: false, error: "No \"## Tasks\" section found in EXECUTION.md." };
+    // missingSection distinguishes "this workspace does not use task tracking at all" from "it does
+    // but the table is broken". Only the latter is actionable by the agent, so only the latter may
+    // block completion — see completionGate.checkWorkspace.
+    if (!inTasks) return { ok: false, missingSection: true, error: "No \"## Tasks\" section found in EXECUTION.md." };
     if (!cols) return { ok: false, error: "The \"## Tasks\" section has no table (no header row)." };
     return { ok: true, lines, headerIdx, cols, rows };
 }

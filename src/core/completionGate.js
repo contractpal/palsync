@@ -20,6 +20,15 @@ function checkWorkspace(workspaceDir) {
         return result("MALFORMED_EXECUTION", false, false, "Cannot read EXECUTION.md: " + (e.message || e));
     }
     const parsed = parseTasks(text);
+    // An EXECUTION.md with no "## Tasks" section at all is not a malformed task table — it is a
+    // workspace that does not use task tracking, exactly like a Tasks table with no rows below.
+    // Blocking it created an UNSATISFIABLE gate: the section is evaluator-owned, so the agent
+    // cannot add it, and the Stop hook re-blocked every turn until the host force-overrode. The
+    // impact eval fixtures (a bounded rename, no task table) hit this on the first live arm.
+    if (!parsed.ok && parsed.missingSection) {
+        return result("NOT_APPLICABLE", true, false,
+            "EXECUTION.md has no \"## Tasks\" section; completion enforcement does not apply.");
+    }
     if (!parsed.ok) return result("MALFORMED_EXECUTION", false, false, parsed.error);
     if (!parsed.rows.length) return result("NOT_APPLICABLE", true, false, "EXECUTION.md has no task rows; completion enforcement does not apply.");
     const invalid = parsed.rows.filter(row => !STATUSES.includes(row.status));

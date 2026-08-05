@@ -35,6 +35,21 @@ test("completion state machine preserves non-applicable and work-in-progress rep
     assert.deepEqual(completionGate.checkWorkspace(absent).state, "NOT_APPLICABLE");
     const empty = tmpWorkspace({ "EXECUTION.md": "## Tasks\n| id | status |\n\n## Checkpoints\n" });
     assert.equal(completionGate.checkWorkspace(empty).state, "NOT_APPLICABLE");
+    // An EXECUTION.md that never declares a "## Tasks" section is a workspace without task
+    // tracking, not a broken table. Treating it as MALFORMED made the gate unsatisfiable — the
+    // section is evaluator-owned, so the agent could not add it, and the Stop hook re-blocked every
+    // turn until the host force-overrode. The impact eval fixtures (bounded rename, no task table)
+    // hit exactly this on the first live arm.
+    const noTasks = tmpWorkspace({ "EXECUTION.md": "# Execution\n\n1. Rename the fragment.\n2. Push.\n" });
+    const noTasksGate = completionGate.checkWorkspace(noTasks);
+    assert.equal(noTasksGate.state, "NOT_APPLICABLE");
+    assert.equal(noTasksGate.allow, true);
+    assert.equal(claudeStopOutput(noTasksGate), null, "a task-free EXECUTION.md must not block the Stop hook");
+    // A section that IS present but broken stays actionable, so it still blocks.
+    const broken = tmpWorkspace({ "EXECUTION.md": "## Tasks\nno table here\n" });
+    assert.equal(completionGate.checkWorkspace(broken).state, "MALFORMED_EXECUTION");
+    fs.rmSync(noTasks, { recursive: true, force: true });
+    fs.rmSync(broken, { recursive: true, force: true });
     for (const status of ["todo", "in_progress"]) {
         const ws = workspace(status);
         const gate = completionGate.checkWorkspace(ws);
