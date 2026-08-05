@@ -1,6 +1,6 @@
 {
   "schema": "palsync/impact-baseline/1",
-  "fixtureDigest": "sha256:ec186f6e4fad0470789ab7a924a89a0c23294a1f3e56fa7bbcafe67f3b0bae49",
+  "fixtureDigest": "sha256:0153bbac9272e9580140c2eb3f7b53ed85cea47f2f9a8a52a6719a28aeacfa5d",
   "files": {
     "fragments/layout/shell.html": "b4346e2171f4d500e1c6b6ce2ec3c92f701f0077d99576aa03c2dd3c0854802a",
     "fragments/shared/navbar.html": "019a2c86f3637b4a1d9c44cfc664875c3d9da68153f1c4961a4b1f6ad3166b94",
@@ -8,7 +8,7 @@
     "pages/settings.html": "46c62737d3254aa0dedf4466692c464e6d61ecd93d1ee46239bd62a58139503e",
     "pal.json": "cb92c26d8421309bdb5987a27bda511a9736b980203bb05eaa94aa2ad21cdc7b",
     "styles/styles.css": "5de5713f0497a0668f8ec7394a0ec6bb43a5f3cdcfd36b1c3d84800c8d631551",
-    "workflows/console.js": "f20e4d861e67815cfcca0f7049d2aa46ee4a9d3206d6ed28df615a445422c0e8"
+    "workflows/console.js": "c87b575151e248fc50d47239a4632b525ddaf3e1f7a015a804ab4692455fc587"
   },
   "expectedServerPaths": [
     "fragments/layout/shell.html",

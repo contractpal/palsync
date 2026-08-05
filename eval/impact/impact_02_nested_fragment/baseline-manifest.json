@@ -1,13 +1,13 @@
 {
   "schema": "palsync/impact-baseline/1",
-  "fixtureDigest": "sha256:67d62fdfe7abd989ac1f9e008f75cec02f066835a0dc659315f190d701ebd4dc",
+  "fixtureDigest": "sha256:f44e82058971f2feea58065a5c142ab5b0d381882871b0b9aa9a4f2a5991f67b",
   "files": {
     "fragments/components/profile/card.html": "0e85cb1d28f76142d197482d3754205039655f4ab1e08e0294df424abfa7382d",
     "fragments/layout/profile-shell.html": "66529d20d3b669f3a03f06c080bb172cc1112f80cb9b42977c170b5eb69e0940",
     "pages/profile.html": "a4119bd19804ed0b8ae6773071e6c29f1304e52d50bdade05d6289a255506233",
     "pal.json": "c297ce98b3f64fbd619bce00050a505b51ca730ddc11059567b0f127b9387f5a",
     "styles/styles.css": "389c07fdfce2e71cbf3f88d7d41d187f612c863e6529f50c7edefa5b3f4c344b",
-    "workflows/profile.js": "f20e4d861e67815cfcca0f7049d2aa46ee4a9d3206d6ed28df615a445422c0e8"
+    "workflows/profile.js": "960134b8b6b26dd29fd7714050b8c1be4b62d31b5c231027dfdf58d2557bc3b6"
   },
   "expectedServerPaths": [
     "fragments/components/profile/card.html",

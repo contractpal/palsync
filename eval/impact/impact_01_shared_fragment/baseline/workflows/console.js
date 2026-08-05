@@ -1,3 +1,4 @@
 function run(controller) {
-    return;
+    var page = controller.getPage("console");
+    return page;
 }

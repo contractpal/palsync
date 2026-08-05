@@ -3,5 +3,5 @@ function run(controller) {
     var payload = controller.createPayload();
     payload.set("panel", "components/dynamic/summary");
     page.addPayload(payload);
-    controller.setPage(page);
+    return page;
 }
