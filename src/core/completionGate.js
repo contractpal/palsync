@@ -56,8 +56,16 @@ function checkWorkspace(workspaceDir) {
     }
     const review = reviewCheck.checkWorkspace(workspaceDir);
     if (!review.ok || review.verdict !== "PASS") {
+        // Scope-aware on purpose. The bare imperative this replaced ("Run pal-review, then ... again")
+        // was read as an order by a session that had been asked to do something else entirely, and it
+        // started an unrequested review of a stale build. A gate must say what is unmet and what
+        // satisfies it; it must not conscript whatever session happens to end its turn in the workspace.
         return result("REVIEW_FAILED", false, false,
-            "All tasks are done, but independent review is not passing. Run pal-review, then `palsync completion check` again.",
+            "All tasks are done, but independent review is not passing: a fresh pal-review recording " +
+            "REVIEW.md result: PASS is required before this build can be called complete. " +
+            "If finishing this build IS your current task, run pal-review, then `palsync completion check` " +
+            "again. If it is not — you were asked to do something else, or you need an owner decision — " +
+            "report this blocker and stop. Do not start a review on your own initiative.",
             { review, reviewOutput: reviewCheck.formatReviewCheck(review) });
     }
     return result("COMPLETE", true, true, "All tasks are done and independent review PASS is current.", { review });

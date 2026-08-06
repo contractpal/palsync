@@ -121,10 +121,59 @@ test("Claude Stop output uses block decision JSON, while hook exceptions fail op
     const oldLog = console.log, oldError = console.error; const logged = [];
     console.log = value => logged.push(value); console.error = () => {};
     try {
-        assert.equal(await runHookCommand(["completion", "--mode", "claude"], JSON.stringify({ cwd: ws, stop_hook_active: true })), 0);
+        assert.equal(await runHookCommand(["completion", "--mode", "claude"], JSON.stringify({ cwd: ws })), 0);
         assert.deepEqual(JSON.parse(logged.pop()), { decision: "block", reason: completionGate.checkWorkspace(ws).message });
         assert.equal(await runHookCommand(["completion", "--mode", "claude"], "{bad"), 0);
     } finally {
         console.log = oldLog; console.error = oldError; fs.rmSync(ws, { recursive: true, force: true });
     }
+});
+
+// This REPLACES a test that pinned the opposite behavior (blocking again with stop_hook_active: true).
+// It was changed on evidence, not preference. Live incident: a `/doctor` session in a pal workspace hit
+// the gate on leftover state from an earlier build, correctly surfaced the blocker and asked the owner
+// two questions -- and because the hook re-fired anyway, the agent concluded the only way to end its
+// turn was to obey, then launched a fresh pal-review subagent that began running `palsync exercise`
+// against a build nobody had asked it to touch. Re-blocking did not buy enforcement; it coerced
+// unattended, lock-taking work and punished exactly the behavior the ethos asks for.
+test("the completion gate blocks once per stop chain, then yields without going silent", async () => {
+    const ws = workspace();
+    const message = completionGate.checkWorkspace(ws).message;
+    const oldLog = console.log, oldError = console.error; const logged = [];
+    console.log = value => logged.push(value); console.error = () => {};
+    try {
+        // Second and later fires: the host says it is ALREADY continuing because of a stop hook, which
+        // is the documented signal a hook must honour so it cannot run indefinitely.
+        assert.equal(await runHookCommand(["completion", "--mode", "claude"],
+            JSON.stringify({ cwd: ws, stop_hook_active: true })), 0);
+        const yielded = JSON.parse(logged.pop());
+        assert.equal(yielded.decision, undefined, "must not block a second time");
+        assert.equal(yielded.reason, undefined);
+        // Yielding must not read as passing: the unmet gate stays visible.
+        assert.match(yielded.systemMessage, /UNMET/);
+        assert.ok(yielded.systemMessage.includes(message));
+    } finally {
+        console.log = oldLog; console.error = oldError; fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("a passing gate stays silent whether or not the hook is already continuing", () => {
+    for (const alreadyContinuing of [false, true]) {
+        assert.equal(claudeStopOutput({ allow: true }, { alreadyContinuing }), null);
+    }
+});
+
+test("the review-failed message states scope so it cannot conscript an unrelated session", () => {
+    const ws = workspace();
+    const gate = completionGate.checkWorkspace(ws);
+    assert.equal(gate.state, "REVIEW_FAILED");
+    assert.equal(gate.allow, false);
+    // What is unmet, and what satisfies it.
+    assert.match(gate.message, /independent review is not passing/);
+    assert.match(gate.message, /REVIEW\.md result: PASS/);
+    // The anti-conscription clause: a session doing something else must report and stop, not start a
+    // review on its own initiative. This is the sentence whose absence caused the incident.
+    assert.match(gate.message, /If it is not/);
+    assert.match(gate.message, /Do not start a review on your own initiative/);
+    fs.rmSync(ws, { recursive: true, force: true });
 });
