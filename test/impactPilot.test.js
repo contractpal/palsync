@@ -48,12 +48,6 @@ function setPrimary(row, value) {
     row.experiment.primaryExplorationActions = value;
 }
 
-function setNonAdopted(row) {
-    row.experiment.trajectory.targetCalls = 0;
-    row.experiment.trajectory.targetBeforeFirstEdit = false;
-    row.experiment.trajectory.impactResponseBytes = null;
-}
-
 test("1. all-pass fixture returns pass and CLI exits 0", () => {
     const result = check();
     assert.strictEqual(result.status, "pass");

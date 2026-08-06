@@ -522,6 +522,35 @@ test("17. transcript and trajectory store basenames and sha256 hashes of exact b
     });
 });
 
+// The guard that makes the arm generation trustworthy: arms are SEEDED from the globally installed
+// palsync (eval/impact/ ships in package.json "files") but SCORED against this repo, so a stale install
+// serves the previous generation's arm text and silently reverts a facts-injected ON arm to a bare
+// mandate — the same class of undetectable on-arm-becomes-off-arm failure that invalidated the headless
+// runs. The receipt pins fixture files, not arm text, so nothing else would catch it.
+test("17b. arm text the workspace did not receive from this repo rejects the row", async t => {
+    const { ARM_BLOCK_START, ARM_BLOCK_END } = require("../src/core/evalSpec");
+    await t.test("a stale install's arm text", () => {
+        const h = impactWorkspace(t);
+        fs.writeFileSync(path.join(h.workspace, "EXECUTION.md"),
+            EXECUTION + "\n\n" + ARM_BLOCK_START + "\n## Evaluator-owned impact arm\n\n" +
+            "Impact-context experiment arm: ON.\nBefore the first edit to any server-tracked file, " +
+            "call pal_context once with target=\"fragments/shared/navbar.html\".\n" + ARM_BLOCK_END + "\n");
+        assert.throws(() => impactRow(h), /ran against a different palsync install/);
+    });
+    await t.test("no arm block at all", () => {
+        const h = impactWorkspace(t);
+        fs.writeFileSync(path.join(h.workspace, "EXECUTION.md"), EXECUTION + "\n");
+        assert.throws(() => impactRow(h), /missing the evaluator-owned arm block/);
+    });
+    await t.test("no EXECUTION.md", () => {
+        const h = impactWorkspace(t);
+        fs.rmSync(path.join(h.workspace, "EXECUTION.md"));
+        // Rejected upstream by the task reader, which opens EXECUTION.md before the arm check runs; the
+        // arm check keeps its own required-file branch so it cannot depend on that ordering.
+        assert.throws(() => impactRow(h), /ENOENT|EXECUTION\.md is required/);
+    });
+});
+
 test("18. missing receipt, transcript, or trajectory rejects an impact row", t => {
     const h = impactWorkspace(t);
     for (const [file, pattern] of [
