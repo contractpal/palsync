@@ -73,9 +73,40 @@ attached. Record rows with `--output eval/impact-results.jsonl`; the default out
 `eval/scores.jsonl`, which the pilot checker does not read.
 
 All counts are non-negative integers and `wallTimeMs` is positive. If no correct write occurred,
-both pre-correct-write metrics are `null`. Preserve on-arm non-adoption as
-`targetCalls:0`, `targetBeforeFirstEdit:false`, and `impactResponseBytes:null`; never rewrite it as
-adoption. The off arm requires those same three uncontaminated values.
+both pre-correct-write metrics are `null`. **Under generation v1 neither arm calls `pal_context`**, so
+both variants record `targetCalls:0`, `targetBeforeFirstEdit:false`, and `impactResponseBytes:null`.
+A treatment that called the tool anyway broke its own arm instruction: record the call honestly and
+let `facts-delivered` fail — never rewrite it.
+
+### Arm generations
+
+Generation v0's ON arm ORDERED the agent to call `pal_context` before its first edit. That made the
+`adoption` gate a **compliance** rate rather than a measure of the intervention, and a weak model
+ignored the order on half its ON arms. An ON arm that never calls the tool is an OFF arm with one
+extra sentence, so those pairs silently compared off-vs-off and the primary median reduction they fed
+was flattered. Because no arm may be re-run to chase a verdict, the gate's ceiling fell to exactly its
+own threshold.
+
+Generation v1 removes invocation from the experiment. `arms/on.md` **injects the facts `pal_context`
+would return**, and both arms forbid calling it, so the only difference between the two sides of a
+pair is whether the agent has the facts. This isolates the question the remaining slices depend on —
+do these facts reduce exploration — from the separate question of whether a weak model can invoke a
+deferred MCP tool. `adoption` is therefore replaced by `facts-delivered`, and `response-budget` now
+measures the injected payload rather than a tool response.
+
+Never hand-edit `arms/on.md`. Regenerate it from the frozen fixture, which keeps the injected block
+provably identical to the tool's own output:
+
+```sh
+node scripts/gen-impact-arm-facts.js          # rewrite every ON arm
+node scripts/gen-impact-arm-facts.js --check  # non-zero exit if any arm has drifted
+```
+
+**After changing any arm, reinstall the pinned tarball before running an arm.** `eval/impact/` ships
+in `package.json` `files`, so an arm is seeded from the *installed* palsync while it is scored against
+this repo — a repo-only edit changes nothing an arm sees. `record-eval` hard-fails a row whose
+workspace arm text does not match this repo's arm, so a stale install is caught at record time instead
+of silently reverting a v1 ON arm to a v0 mandate.
 
 5. From the repository root, record the row with the full command shape:
 
@@ -107,7 +138,10 @@ impact evidence. Missing usage stays null; never estimate it.
    activation key must carry the Console Workflow entitlement — the fixture ships
    `workflows/console.js`, and a key without it fails the baseline push as `save-rejected` after the
    fresh Pal already exists on the server.
-6. Use no mid-run intervention.
+6. Use no mid-run intervention. Before handing the agent its prompt, confirm the seeded
+   `EXECUTION.md` carries the arm the current generation expects — for an ON arm,
+   `rg -c '"schema":"palsync/impact/1"' <workspace>/EXECUTION.md` must be non-zero. A stale install
+   otherwise serves the previous generation's arm and wastes the whole run.
 7. Copy the raw transcript into `eval/runs/` — it is the only source of the arm's model spend and the
    host prunes transcripts on a retention timer.
 8. Score against the blinded oracle after completion.

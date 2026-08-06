@@ -67,28 +67,47 @@ test("1. all-pass fixture returns pass and CLI exits 0", () => {
     assert.strictEqual(JSON.parse(cli.stdout).status, "pass");
 });
 
-test("2. three of six adoptions fail", () => {
-    const result = check(input => treatments(input).slice(3).forEach(setNonAdopted));
-    assert.strictEqual(named(result, "adoption").status, "fail");
-    assert.strictEqual(named(result, "adoption").actual, 3);
+// Generation v1 replaced the `adoption` gate with `facts-delivered`. v0's ON arm ordered a
+// pal_context call, so adoption scored COMPLIANCE — and because no arm may be re-run, two ON arms that
+// ignored the order permanently capped that gate at exactly its own threshold. v1 injects the facts
+// into the arm text, so what has to be proven is that the treatment ran the facts-bearing arm.
+test("2. a treatment that called pal_context anyway is not a clean delivery", () => {
+    const result = check(input => {
+        // The v1 arm forbids the call on BOTH sides, so a call here means the arm was not honoured.
+        treatments(input)[0].experiment.trajectory.targetCalls = 1;
+        treatments(input)[0].experiment.trajectory.impactResponseBytes = 1800;
+    });
+    assert.strictEqual(named(result, "facts-delivered").status, "fail");
+    assert.strictEqual(named(result, "facts-delivered").actual, 5);
     assert.strictEqual(result.status, "fail");
     assert.strictEqual(exitCode(result), 1);
 });
 
-test("3. four of six exact-one-call adoptions pass", () => {
-    const result = check(input => treatments(input).slice(4).forEach(setNonAdopted));
-    assert.strictEqual(named(result, "adoption").status, "pass");
-    assert.strictEqual(named(result, "adoption").actual, 4);
+test("3. all six treatments delivering the injected facts passes", () => {
+    const result = check();
+    assert.strictEqual(named(result, "facts-delivered").status, "pass");
+    assert.strictEqual(named(result, "facts-delivered").actual, 6);
 });
 
-test("4. two target calls are non-adoption rather than discarded evidence", () => {
+test("4. an unpinned arm is missing delivery evidence, not a passing default", () => {
+    const result = check(input => { delete treatments(input)[0].experiment.armFile; });
+    assert.strictEqual(named(result, "facts-delivered").status, "fail");
+    assert.strictEqual(named(result, "facts-delivered").actual, 5);
+});
+
+test("4b. arm-constancy fails when a row ran arm text this repo no longer carries", () => {
     const result = check(input => {
-        const row = treatments(input)[0];
-        row.experiment.trajectory.targetCalls = 2;
+        treatments(input)[0].experiment.armFile.sha256 = "b".repeat(64);
     });
-    assert.strictEqual(named(result, "adoption").status, "pass");
-    assert.strictEqual(named(result, "adoption").actual, 4);
-    assert.notStrictEqual(result.status, "incomplete");
+    assert.strictEqual(named(result, "arm-constancy").status, "fail");
+    assert.strictEqual(named(result, "arm-constancy").actual, 1);
+    assert.strictEqual(result.status, "fail");
+});
+
+test("4c. arm-constancy is incomplete, never passing, when any row lacks an arm pin", () => {
+    const result = check(input => { delete controls(input)[0].experiment.armFile; });
+    assert.strictEqual(named(result, "arm-constancy").status, "incomplete");
+    assert.strictEqual(named(result, "arm-constancy").actual, null);
 });
 
 test("5. exactly twenty percent median primary reduction passes", () => {
@@ -277,17 +296,20 @@ test("19. any false exact reference fails", () => {
     assert.strictEqual(named(result, "false-exact-references").status, "fail");
 });
 
-test("20. adopted response bytes pass at 4096 and fail at 4097", () => {
-    const pass = check(input => treatments(input).filter(row => row.experiment.trajectory.targetCalls === 1)
-        .forEach(row => { row.experiment.trajectory.impactResponseBytes = 4096; }));
+// Measured on the injected arm payload, because under v1 no arm calls the tool: scoping this to rows
+// with a target call would leave the budget vacuously satisfied on every row.
+test("20. injected facts pass at 4096 bytes and fail at 4097", () => {
+    const pass = check(input => treatments(input).forEach(row => { row.experiment.armFile.factsBytes = 4096; }));
     assert.strictEqual(named(pass, "response-budget").status, "pass");
-    const fail = check(input => { treatments(input)[0].experiment.trajectory.impactResponseBytes = 4097; });
+    const fail = check(input => { treatments(input)[0].experiment.armFile.factsBytes = 4097; });
     assert.strictEqual(named(fail, "response-budget").status, "fail");
 });
 
-test("21. adopted null or non-integer response evidence is incomplete", async t => {
+test("21. a treatment arm carrying no facts payload is incomplete, not a pass", async t => {
+    // null is what an OFF arm and any pre-v1 ON arm record; on a treatment it means the arm the row
+    // ran carried no injected facts at all, which is missing evidence rather than a satisfied budget.
     for (const value of [null, 1.5]) await t.test(String(value), () => {
-        const result = check(input => { treatments(input)[0].experiment.trajectory.impactResponseBytes = value; });
+        const result = check(input => { treatments(input)[0].experiment.armFile.factsBytes = value; });
         assert.strictEqual(named(result, "response-budget").status, "incomplete");
         assert.strictEqual(result.status, "incomplete");
     });

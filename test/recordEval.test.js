@@ -97,6 +97,16 @@ function impactWorkspace(t, { variant = "on", trajectoryValue, usageValue, sessi
         seededAt: "2026-08-03T12:00:00.000Z",
     };
     writeJson(receiptPath, receipt);
+    // record-eval verifies the arm text the workspace actually received against this repo's arm for
+    // the scenario, because the arm is seeded from the INSTALLED palsync while scoring reads the repo:
+    // a stale install would otherwise serve the previous generation's arm and silently turn a
+    // facts-injected ON arm back into a bare mandate. Seed it exactly as evalSpec.injectImpactSpec
+    // does so the fixture exercises the real agreement rather than a restatement of it.
+    const { resolveSpec, ARM_BLOCK_START, ARM_BLOCK_END } = require("../src/core/evalSpec");
+    const armText = fs.readFileSync(resolveSpec(scenario).armPath, "utf8").trim();
+    fs.writeFileSync(path.join(workspace, "EXECUTION.md"),
+        EXECUTION + "\n\n" + ARM_BLOCK_START + "\n## Evaluator-owned impact arm\n\n" +
+        armText + "\n" + ARM_BLOCK_END + "\n");
     writeJson(trajectoryPath, trajectoryValue || (variant === "off" ? trajectory({
         targetCalls: 0, targetBeforeFirstEdit: false, impactResponseBytes: null
     }) : trajectory()));
@@ -252,6 +262,13 @@ test("1. complete impact off row records strict experiment and usage evidence", 
         startPalGuid: "PAL-1",
         trajectory: coded,
         primaryExplorationActions: 4,
+        armFile: {
+            name: "off.md",
+            sha256: digest(fs.readFileSync(require("../src/core/evalSpec")
+                .resolveSpec("impact_01_shared_fragment-off").armPath)),
+            // An OFF arm injects no facts, so there is no payload to size.
+            factsBytes: null,
+        },
         trajectoryFile: {
             name: "coded-trajectory.json",
             sha256: digest(fs.readFileSync(h.trajectoryPath)),
@@ -275,6 +292,11 @@ test("2. complete adopted impact on row remains standard-fields-first", t => {
         "pushOk", "exerciseCount", "score12"
     ]);
     assert.equal(row.experiment.variant, "on");
+    // The ON arm injects the facts, so the row carries the payload's byte size — that is what the
+    // response-budget gate measures now that no arm calls the tool.
+    assert.equal(row.experiment.armFile.name, "on.md");
+    assert.ok(row.experiment.armFile.factsBytes > 0);
+    assert.ok(row.experiment.armFile.factsBytes <= 4096);
     assert.equal(row.experiment.trajectory.targetCalls, 1);
     assert.equal(row.experiment.trajectory.targetBeforeFirstEdit, true);
     assert.equal(row.experiment.trajectory.impactResponseBytes, 1800);

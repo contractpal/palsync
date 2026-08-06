@@ -88,10 +88,24 @@ test("5. arm documents contain only the approved intervention", () => {
         assert.equal(fs.readFileSync(off.armPath, "utf8"),
             "Impact-context experiment arm: OFF.\n" +
             "Do not call pal_context with target during this run. All other PalSync tools and normal workflow remain unchanged.\n");
-        assert.equal(fs.readFileSync(on.armPath, "utf8"),
-            "Impact-context experiment arm: ON.\n" +
-            "Before the first edit to any server-tracked file, call pal_context once with target=\"" +
-            on.impactTarget + "\" and use its exact facts/unknowns. Then continue the normal workflow.\n");
+        // Pilot generation v1: the ON arm INJECTS the facts pal_context would return instead of
+        // ordering a call, because v0's mandate made `adoption` a compliance rate and haiku ignored it
+        // on half its ON arms. Pinned against the generator rather than a literal, so the arm is
+        // provably the tool's own output over the frozen fixture and cannot be hand-edited into a
+        // paraphrase.
+        const armText = fs.readFileSync(on.armPath, "utf8");
+        assert.equal(armText, require("../scripts/gen-impact-arm-facts").armText(taskKey));
+        assert.match(armText, /^Impact-context experiment arm: ON \(structural facts injected\)\.\n/);
+        assert.ok(armText.includes("\"schema\":\"palsync/impact/1\""));
+        assert.ok(armText.includes("\"target\":\"" + on.impactTarget + "\""));
+        // Neither arm may call the tool, so the pair contrast is exactly facts-vs-no-facts and the ON
+        // arm cannot add an MCP call its control has no way to make.
+        assert.ok(armText.includes("Do not call pal_context with target during this run."));
+        assert.ok(!/call pal_context once/.test(armText));
+        // freshness is provenance, not information, and is the only per-arm-variable content: leaving
+        // it in would make one static block wrong for every arm after the first.
+        assert.ok(!armText.includes("analysisFingerprint"));
+        assert.ok(!armText.includes("lastKnownServerModifiedDate"));
         assert.equal(off.dir, on.dir);
         assert.equal(off.baselineDir, on.baselineDir);
         assert.equal(off.oraclePath, on.oraclePath);

@@ -300,6 +300,14 @@ function validateModelUsage(result) {
     };
 }
 
+// The single line of an injected-facts arm that carries the pal_context payload. Matched on the
+// schema marker rather than "the JSON line" so prose that happens to contain braces cannot be
+// mistaken for the payload.
+function armFactsBytes(armText) {
+    const line = armText.split("\n").find(item => item.startsWith("{\"schema\":\"palsync/impact/1\""));
+    return line === undefined ? null : Buffer.byteLength(line, "utf8");
+}
+
 function sha256(bytes) {
     return crypto.createHash("sha256").update(bytes).digest("hex");
 }
@@ -349,6 +357,34 @@ function buildImpactFields({ workspaceDir, scenario, record, variant, pair, pair
         throw new Error("Impact start receipt must match the committed baseline manifest");
     }
 
+    // The arm is SEEDED from the globally installed palsync (eval/impact/ ships in package.json
+    // `files`), but scored against this repo. A repo-only arm edit therefore changes nothing an arm
+    // sees until the frozen tarball is reinstalled -- and a stale install would silently serve the
+    // previous generation's arm text, converting a facts-injected ON arm back into a bare mandate
+    // with nothing in the receipt to reveal it (the receipt pins fixture files, not arm text). That is
+    // the same silent on-arm-becomes-off-arm failure that invalidated the headless runs, so it is a
+    // hard error at record time rather than an operator checklist line.
+    const armBytes = strictFile(spec.armPath, "impact arm");
+    if (armBytes === null) throw new Error("Impact arm file is required");
+    const executionBytes = strictFile(path.join(workspaceDir, "EXECUTION.md"), "impact EXECUTION.md");
+    if (executionBytes === null) throw new Error("Impact workspace EXECUTION.md is required");
+    const { ARM_BLOCK_START, ARM_BLOCK_END } = require("../src/core/evalSpec");
+    const executionText = executionBytes.toString("utf8");
+    const blockStart = executionText.indexOf(ARM_BLOCK_START);
+    const blockEnd = executionText.indexOf(ARM_BLOCK_END);
+    if (blockStart === -1 || blockEnd === -1 || blockEnd < blockStart) {
+        throw new Error("Impact workspace EXECUTION.md is missing the evaluator-owned arm block");
+    }
+    const deliveredArm = executionText
+        .slice(blockStart + ARM_BLOCK_START.length, blockEnd)
+        .replace(/^\s*##\s*Evaluator-owned impact arm\s*/, "")
+        .trim();
+    if (deliveredArm !== armBytes.toString("utf8").trim()) {
+        throw new Error("Impact arm text delivered to the workspace does not match this repo's " +
+            spec.variant + " arm for " + spec.taskKey + ": the arm ran against a different palsync " +
+            "install. Reinstall the pinned tarball and re-run the arm; do not record this row.");
+    }
+
     const trajectoryResult = strictJson(path.resolve(trajectory), "impact trajectory");
     if (!trajectoryResult.exists) throw new Error("Impact trajectory file is required");
     const trajectoryValue = validateTrajectory(trajectoryResult.value);
@@ -379,6 +415,19 @@ function buildImpactFields({ workspaceDir, scenario, record, variant, pair, pair
             startPalGuid: receipt.palGuid,
             trajectory: trajectoryValue,
             primaryExplorationActions: primary,
+            // Pins WHICH arm text this row was produced under. The checker requires one arm sha per
+            // (taskKey, variant) across the run, so a mid-pilot arm edit shows up as a gate failure
+            // instead of as an unexplained shift in the metric.
+            armFile: {
+                name: path.basename(spec.armPath),
+                sha256: sha256(armBytes),
+                // Byte size of the injected impact payload, or null on an arm that carries none (every
+                // OFF arm, and any pre-v1 ON arm). This is what the response-budget gate measures now
+                // that no arm calls the tool: the facts still have to fit the 4096-byte budget the real
+                // pal_context response is held to, or the injected block is not what the tool would
+                // actually have delivered.
+                factsBytes: armFactsBytes(armBytes.toString("utf8")),
+            },
             trajectoryFile: { name: path.basename(path.resolve(trajectory)), sha256: sha256(trajectoryResult.bytes) },
             transcriptFile: { name: path.basename(path.resolve(transcript)), sha256: sha256(transcriptBytes) },
         },

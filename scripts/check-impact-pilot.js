@@ -3,6 +3,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 
 const PILOT_PATH = path.join(__dirname, "..", "eval", "impact", "pilot.json");
 const RESULT_SCHEMA = "palsync/impact-pilot-result/1";
@@ -85,6 +86,17 @@ function getPath(object, parts) {
     return value;
 }
 
+// The arm text a row ran under, read from THIS repo. `null` when the spec or file is unreadable, so a
+// checkout without eval/impact/ degrades to `incomplete` instead of throwing.
+function repoArm(taskKey, variant) {
+    try {
+        const spec = require("../src/core/evalSpec").resolveSpec(taskKey + "-" + variant);
+        const bytes = fs.readFileSync(spec.armPath);
+        // Bare hex, matching the sibling trajectoryFile/transcriptFile hashes record-eval writes.
+        return { sha256: crypto.createHash("sha256").update(bytes).digest("hex"), text: bytes.toString("utf8") };
+    } catch (e) { return null; }
+}
+
 function rowErrors(row, index) {
     const errors = [];
     const at = "row " + (index + 1);
@@ -133,6 +145,14 @@ function rowErrors(row, index) {
         if (exp && exp.variant === "off" && (trajectory.targetCalls !== 0 || trajectory.targetBeforeFirstEdit || trajectory.impactResponseBytes !== null)) {
             errors.push(at + " has contaminated off arm");
         }
+    }
+    // Optional so pilot-generation-v0 rows (recorded before arm text was pinned) stay checkable; the
+    // arm-constancy gate reports `incomplete` rather than passing when any row lacks it.
+    if (isObject(exp) && exp.armFile !== undefined &&
+        !(isObject(exp.armFile) && typeof exp.armFile.name === "string" && exp.armFile.name &&
+            /^[0-9a-f]{64}$/.test(exp.armFile.sha256) &&
+            (exp.armFile.factsBytes === null || nonNegativeInteger(exp.armFile.factsBytes)))) {
+        errors.push(at + " has invalid experiment.armFile");
     }
     if (!(row.modelUsage === null || (isObject(row.modelUsage) &&
         (row.modelUsage.totalTokens === null || nonNegativeNumber(row.modelUsage.totalTokens))))) {
@@ -322,10 +342,35 @@ function checkPilot(rows, benchmark, pilot) {
     checks.push({ id: "write-safety", status: pairs.length === 6 ? writeSafety ? "pass" : "fail" : "incomplete",
         actual: writeSafety, required: "treatment <= matched control for outside writes and hard-rule violations" });
 
-    const adopted = pairs.filter(pair => trajectory(pair.treatment).targetCalls === 1 &&
-        trajectory(pair.treatment).targetBeforeFirstEdit === true).length;
-    checks.push({ id: "adoption", status: pairs.length === 6 ? adopted >= 4 ? "pass" : "fail" : "incomplete",
-        actual: adopted, required: 4 });
+    // One arm sha per (taskKey, variant) across the whole run. An arm edited mid-pilot -- or an arm
+    // served by a stale install -- surfaces here instead of as an unexplained shift in the metric.
+    const armed = pairs.filter(pair => [pair.control, pair.treatment].every(row =>
+        isObject(row.experiment.armFile)));
+    const armDrift = armed.filter(pair => [pair.control, pair.treatment].some(row => {
+        const arm = repoArm(row.experiment.taskKey, row.experiment.variant);
+        return !arm || arm.sha256 !== row.experiment.armFile.sha256;
+    })).length;
+    checks.push({
+        id: "arm-constancy",
+        status: armed.length !== pairs.length || pairs.length !== 6 ? "incomplete" : armDrift === 0 ? "pass" : "fail",
+        actual: armed.length === pairs.length ? armDrift : null,
+        required: "every row's armFile matches this repo's arm for its task and variant"
+    });
+
+    // Replaces the retired `adoption` gate. v0's ON arm ORDERED a pal_context call, so adoption scored
+    // COMPLIANCE, and haiku ignored the order on half its ON arms -- an ON arm that never calls the
+    // tool is an OFF arm with one extra sentence, which silently turned two of three complete pairs
+    // into off-vs-off comparisons. Because no arm may be re-run (selecting arms by agent behavior
+    // biases the sample) the ceiling on that gate had already dropped to exactly its threshold.
+    // v1 injects the facts into the arm text, so delivery is structural: neither arm calls the tool,
+    // `targetCalls` is 0 on BOTH sides by design, and what must be proven is that the treatment ran
+    // the facts-bearing arm -- which armFile pins and record-eval verified byte-for-byte against the
+    // workspace copy. A treatment that called pal_context anyway broke its own arm instruction and is
+    // not a clean delivery.
+    const delivered = pairs.filter(pair => isObject(pair.treatment.experiment.armFile) &&
+        trajectory(pair.treatment).targetCalls === 0).length;
+    checks.push({ id: "facts-delivered", status: pairs.length === 6 ? delivered === 6 ? "pass" : "fail" : "incomplete",
+        actual: delivered, required: 6 });
 
     const primary = metricValues(pairs, ["experiment", "primaryExplorationActions"]);
     const primaryWins = primary ? primary.control.filter((value, index) => primary.treatment[index] < value).length : null;
@@ -354,13 +399,16 @@ function checkPilot(rows, benchmark, pilot) {
         medians[id] = values ? { control: values.controlMedian, treatment: values.treatmentMedian } : null;
     }
 
-    const adoptedRows = pairs.filter(pair => trajectory(pair.treatment).targetCalls === 1 &&
-        trajectory(pair.treatment).targetBeforeFirstEdit === true).map(pair => pair.treatment);
-    const responseIncomplete = adoptedRows.some(row => !Number.isInteger(row.experiment.trajectory.impactResponseBytes) ||
-        row.experiment.trajectory.impactResponseBytes < 0);
-    const responsePass = !responseIncomplete && adoptedRows.every(row => row.experiment.trajectory.impactResponseBytes <= 4096);
+    // Measured on the injected arm payload, not on a tool response: under v1 no arm calls pal_context,
+    // so scoping this to rows with targetCalls === 1 (as the adoption-era gate did) would leave it
+    // vacuously passing on every row. The budget still has to hold, or the injected facts are not what
+    // a real call would have returned.
+    const treatmentRows = pairs.map(pair => pair.treatment);
+    const responseIncomplete = treatmentRows.some(row => !isObject(row.experiment.armFile) ||
+        !Number.isInteger(row.experiment.armFile.factsBytes) || row.experiment.armFile.factsBytes < 0);
+    const responsePass = !responseIncomplete && treatmentRows.every(row => row.experiment.armFile.factsBytes <= 4096);
     checks.push({ id: "response-budget", status: responseIncomplete ? "incomplete" : responsePass ? "pass" : "fail",
-        actual: responseIncomplete ? null : Math.max(0, ...adoptedRows.map(row => row.experiment.trajectory.impactResponseBytes)), required: 4096 });
+        actual: responseIncomplete ? null : Math.max(0, ...treatmentRows.map(row => row.experiment.armFile.factsBytes)), required: 4096 });
 
     const benchmarkValid = benchmarkEvidence(benchmark);
     checks.push({ id: "benchmark-input", status: benchmarkValid ? "pass" : "incomplete",

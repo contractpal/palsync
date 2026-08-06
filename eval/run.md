@@ -126,9 +126,11 @@ Impact runs use the exact virtual scenario key and the launcher-written
    (first-correct-write, failed loops, hard-rule violations, false references) as separate
    ADJUDICATE lines for the evaluator to settle. Do not use an LLM or a heuristic parser, and do not
    hand-tally a 170-entry JSONL.
-4. If no correct write occurred, set both pre-correct-write metrics to `null`. Preserve an on-arm
-   non-adoption as `targetCalls:0`, `targetBeforeFirstEdit:false`, and
-   `impactResponseBytes:null`. An off arm must use those same three uncontaminated values.
+4. If no correct write occurred, set both pre-correct-write metrics to `null`. Under arm generation v1
+   the ON arm carries the injected `pal_context` facts and both arms forbid calling the tool, so every
+   row records `targetCalls:0`, `targetBeforeFirstEdit:false`, and `impactResponseBytes:null`. A
+   treatment that called it anyway broke its arm instruction — record the call and let
+   `facts-delivered` fail rather than rewriting the trajectory.
    `regression` is the verdict the agent's own `pal_regression` call returned — seeding leaves a real
    `baseline/baseline.json`, but the freshness gate makes any post-push re-run return `{stale}`, so
    the evaluator reads the agent's pre-push call instead of re-running it. An agent that pushed first
