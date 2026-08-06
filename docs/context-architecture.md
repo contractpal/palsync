@@ -5,7 +5,7 @@ deterministic name/description representation. Skill bodies are excluded from ea
 
 <!-- palsync generated: context measurement table (scripts/gen-context-architecture.js) -->
 
-Measured on PalSync 0.29.1 from `.palsync/context-manifest.json`, the artifact
+Measured on PalSync 0.30.0 from `.palsync/context-manifest.json`, the artifact
 `contextInject` emits for a real workspace. Token estimates are the manifest's own
 `estimatedTokens`. Regenerate with `node scripts/gen-context-architecture.js` — never hand-edit
 these numbers; a hand-edit is how this table came to claim 16,689 tool-definition bytes on a
