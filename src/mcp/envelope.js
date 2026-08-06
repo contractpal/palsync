@@ -9,6 +9,8 @@ function severity(value) {
     return text === "warning" ? "warn" : text;
 }
 
+function isObject(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
+
 function location(finding) {
     return {
         file: finding.file || null,
@@ -78,6 +80,16 @@ function buildEnvelope(source, options = {}) {
     };
     if (options.includePassing && Array.isArray(source.passing)) envelope.passing = source.passing;
     if (options.includeDebug && source.debug != null) envelope.debug = source.debug;
+    // Verdict fields that the fixed shape above cannot express. pal_regression needs them: `ok:false`
+    // with zero diagnostics is ambiguous between "failed, cause unlisted" and "STALE baseline, no
+    // verdict possible", and a weak model reads "REGRESSION FAIL" far more reliably than `ok:false`.
+    // Merged before the byte-budget loop so they are accounted for, and never allowed to overwrite a
+    // standard field -- the envelope contract stays the same for every tool that uses it.
+    if (isObject(options.extraFields)) {
+        for (const [key, value] of Object.entries(options.extraFields)) {
+            if (!(key in envelope)) envelope[key] = value;
+        }
+    }
     const maxBytes = Number.isFinite(options.maxBytes) ? Math.max(0, options.maxBytes) : Infinity;
     while (Buffer.byteLength(JSON.stringify(envelope)) > maxBytes) {
         const candidate = diagnostics.slice().reverse().find(item => item.locations.length > 1);

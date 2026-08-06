@@ -60,8 +60,8 @@ function envelopeOptions(args) {
     };
 }
 
-function envelopeFields(workspaceDir, tool, source, args, projection = source) {
-    const options = Object.assign(envelopeOptions(args), { envelopeSource: projection });
+function envelopeFields(workspaceDir, tool, source, args, projection = source, extraFields = null) {
+    const options = Object.assign(envelopeOptions(args), { envelopeSource: projection, extraFields });
     const serialized = serializeEnvelope(workspaceDir, tool, source, options);
     return {
         message: serialized.message,
@@ -85,6 +85,48 @@ function testActionFields(source) {
         validated: !!source.validated,
         kind: source.kind || null,
         compileOnly: true
+    };
+}
+
+// pal_regression wrote no durable artifact, so its verdict rested on reading the transcript -- the one
+// gate in the lifecycle with no evidence on disk. Its outcomes map cleanly onto findings: a CAUSED
+// failure is an error (this change broke it), an INHERITED one is informational (already broken at
+// baseline, never the agent's to fix), and a needs-human viewport is a warning that must not read as a
+// pass. A STALE baseline yields no findings at all and ok:false, because a stale run has no verdict to
+// report either way.
+function regressionEnvelopeProjection(source) {
+    const findings = [];
+    for (const item of source.caused || []) {
+        findings.push({ severity: "error", rule: "regressionCaused", file: item.subject, message: item.detail });
+    }
+    for (const item of source.inherited || []) {
+        findings.push({ severity: "info", rule: "regressionInherited", file: item.subject, message: item.detail });
+    }
+    for (const item of source.needs_human || []) {
+        findings.push({
+            severity: "warning", rule: "regressionNeedsHuman",
+            file: item.page, message: (item.viewport ? item.viewport + ": " : "") + item.reason
+        });
+    }
+    for (const note of source.notes || []) {
+        findings.push({ severity: "info", rule: "regressionNote", file: null, message: note });
+    }
+    return {
+        ok: source.ran === true && source.stale === false && source.pass === true,
+        filesChecked: Array.isArray(source.pages) ? source.pages.length : null,
+        findings
+    };
+}
+
+// Verdict fields the standard envelope shape cannot express. They travel INSIDE the envelope rather
+// than ahead of it: every other enveloped tool's message is exactly `JSON + "\n" + trailer`, and
+// prepending prose would make this the one tool whose message the standard parser cannot read.
+function regressionEnvelopeExtras(source) {
+    return {
+        summary: source.summary || null,
+        stale: !!source.stale,
+        mapped: source.mapped ?? null,
+        current: source.current ?? null
     };
 }
 
@@ -1368,12 +1410,18 @@ const TOOLS = [
         name: "pal_regression",
         description: "Brownfield regression check against baseline/baseline.json (pal-init Step 3). FIRST compares the baseline's mapped marker to the live server — moved => STALE, stops (never verdicts against a stale baseline). Then re-runs validate / pal_test / page-H1 checks vs the baseline, separating CAUSED failures from INHERITED (known_issues) ones; eyeball_only viewports are needs-human, never auto-passed.",
         inputShape: {},
-        async run(ctx) {
+        async run(ctx, args = {}) {
             const disabled = testingDisabledResult(ctx, "pal_regression");
             if (disabled) return disabled;
             const res = await runRegression(ctx.session, ctx.record, ctx.workspaceDir);
             if (ctx.lifecycle) ctx.lifecycle.onActivity(); // runs pal_test — takes the lock, re-arm idle
-            return Object.assign(res, { message: res.summary });
+            // A regression that never ran (no baseline, read error) has nothing to archive, so it keeps
+            // its plain summary rather than writing an empty artifact.
+            if (res.ran !== true) return Object.assign(res, { message: res.summary || res.reason || "" });
+            // The envelope exists so the verdict is verifiable from disk instead of by reading the
+            // transcript; the projection carries `summary` so the outcome is still the readable part.
+            return Object.assign(res, envelopeFields(ctx.workspaceDir, "pal_regression", res, args,
+                regressionEnvelopeProjection(res), regressionEnvelopeExtras(res)));
         }
     },
     {
