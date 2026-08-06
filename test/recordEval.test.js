@@ -327,6 +327,9 @@ test("6. malformed trajectory, exact-schema/type/coherence errors, and every num
         Object.assign(trajectory(), { extra: 1 }),
         Object.assign(trajectory(), { targetBeforeFirstEdit: "true" }),
         Object.assign(trajectory(), { acceptance: "unknown" }),
+        // acceptance has no third state; only regression does.
+        Object.assign(trajectory(), { acceptance: "stale" }),
+        Object.assign(trajectory(), { regression: "unknown" }),
         Object.assign(trajectory(), { readsBeforeFirstCorrectWrite: null }),
         Object.assign(trajectory(), { targetCalls: 0, targetBeforeFirstEdit: true, impactResponseBytes: null }),
         Object.assign(trajectory(), { calls: { mcp: 1, read: 1 } }),
@@ -335,6 +338,12 @@ test("6. malformed trajectory, exact-schema/type/coherence errors, and every num
         writeJson(h.trajectoryPath, value);
         assert.throws(() => impactRow(h), /impact trajectory/i);
     }
+
+    // A stale regression records: an agent that pushed before checking has no verdict, and
+    // discarding such arms would select for compliant runs.
+    writeJson(h.trajectoryPath, Object.assign(trajectory(), { regression: "stale" }));
+    assert.equal(impactRow(h).experiment.trajectory.regression, "stale");
+    writeJson(h.trajectoryPath, trajectory());
 
     const fields = [
         ["targetCalls"], ["readsBeforeFirstCorrectWrite"], ["searchesBeforeFirstCorrectWrite"],

@@ -112,10 +112,16 @@ function validateTrajectory(value) {
     ];
     requireExactKeys(value, fields, "impact trajectory");
     if (value.schema !== "palsync/impact-trajectory/1") throw new Error("Invalid impact trajectory schema");
-    for (const field of ["acceptance", "regression"]) {
-        if (value[field] !== "pass" && value[field] !== "fail") {
-            throw new Error("impact trajectory " + field + " must be pass or fail");
-        }
+    if (value.acceptance !== "pass" && value.acceptance !== "fail") {
+        throw new Error("impact trajectory acceptance must be pass or fail");
+    }
+    // "stale" is a real third outcome, not a missing value. pal_regression refuses to verdict once
+    // the server marker moves, so an agent that pushes before running it gets {stale} and the arm
+    // genuinely has no regression result. Forcing pass|fail here meant either inventing a verdict or
+    // discarding the arm — and discarding arms by how the agent behaved selects for compliant runs,
+    // which is the one bias that would invalidate the pilot. Record it honestly instead.
+    if (!["pass", "fail", "stale"].includes(value.regression)) {
+        throw new Error("impact trajectory regression must be pass, fail, or stale");
     }
     requireCount(value.targetCalls, "impact trajectory targetCalls");
     if (typeof value.targetBeforeFirstEdit !== "boolean") {

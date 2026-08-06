@@ -52,8 +52,25 @@ not a value the evaluator re-derives afterward. Seeding writes `baseline/baselin
 only) so the call has a real baseline, but `pal_regression`'s freshness gate refuses to verdict once
 the server marker moves, so re-running it after the agent's push returns `{stale}` by design. The
 task's `EXECUTION.md` already sequences regression before the push. An arm whose agent never called
-regression, or called it after pushing and got `{stale}`, has no regression verdict — treat that arm
-as incomplete rather than recording a guess.
+regression, or called it after pushing and got `{stale}`, has no verdict — record it as
+`regression: "stale"`. Do NOT re-run the arm to obtain a verdict: discarding arms by how the agent
+behaved selects for compliant runs, which is the one bias that would invalidate the pilot. A stale
+arm still satisfies `treatment-completion` (nothing regressed) and never counts as a pass (nothing
+was checked); the `regression-coverage` check reports how many arms went unverified.
+
+Coding the thirteen transcript-derived fields by hand is impractical — arm one's log is 171 entries.
+Use the deterministic extractor, which reads only exact facts from the structured log and derives
+first-correct-write and `writesOutsideOracle` by set membership against the oracle:
+
+```sh
+node scripts/extract-impact-trajectory.js \
+  --transcript <path-to-transcript.jsonl> \
+  --oracle eval/impact/<task>/oracle.json
+```
+
+It makes no judgment and prints what it cannot decide as adjudication lines with the evidence
+attached. Record rows with `--output eval/impact-results.jsonl`; the default output is
+`eval/scores.jsonl`, which the pilot checker does not read.
 
 All counts are non-negative integers and `wallTimeMs` is positive. If no correct write occurred,
 both pre-correct-write metrics are `null`. Preserve on-arm non-adoption as

@@ -110,7 +110,7 @@ function rowErrors(row, index) {
     }
     if (isObject(trajectory)) {
         if (trajectory.acceptance !== "pass" && trajectory.acceptance !== "fail") errors.push(at + " has invalid acceptance");
-        if (trajectory.regression !== "pass" && trajectory.regression !== "fail") errors.push(at + " has invalid regression");
+        if (!["pass", "fail", "stale"].includes(trajectory.regression)) errors.push(at + " has invalid regression");
         for (const field of ["targetCalls", "writesOutsideOracle", "pushes", "failedVerificationLoops", "hardRuleViolations", "wallTimeMs", "falseExactReferences"]) {
             if (!nonNegativeInteger(trajectory[field]) || (field === "wallTimeMs" && trajectory[field] === 0)) {
                 errors.push(at + " has invalid trajectory." + field);
@@ -273,11 +273,28 @@ function checkPilot(rows, benchmark, pilot) {
     });
 
     const trajectory = row => getPath(row, ["experiment", "trajectory"]) || {};
-    const treatmentComplete = pairs.length === 6 && pairs.every(pair =>
-        trajectory(pair.treatment).acceptance === "pass" && trajectory(pair.treatment).regression === "pass");
+    // A "stale" regression is an absent verdict, not a failure: it means the agent pushed before
+    // running the check, so the freshness gate refused to compare. Such an arm must not count as a
+    // regression FAILURE (nothing regressed) and must not silently count as a PASS (nothing was
+    // checked). Completion therefore requires acceptance to pass and regression to be anything but
+    // an outright fail, with coverage reported separately so a pilot cannot look green while most
+    // arms were never regression-checked at all.
+    const regressionOk = row => trajectory(row).acceptance === "pass" && trajectory(row).regression !== "fail";
+    const treatmentComplete = pairs.length === 6 && pairs.every(pair => regressionOk(pair.treatment));
     checks.push({ id: "treatment-completion", status: pairs.length === 6 ? treatmentComplete ? "pass" : "fail" : "incomplete",
-        actual: pairs.filter(pair => trajectory(pair.treatment).acceptance === "pass" && trajectory(pair.treatment).regression === "pass").length,
+        actual: pairs.filter(pair => regressionOk(pair.treatment)).length,
         required: 6 });
+
+    // Coverage is advisory-but-visible: it never fails the pilot on its own, yet it makes the size
+    // of the unchecked population explicit in the result rather than leaving it to be inferred.
+    const verdicts = rows.map(row => trajectory(row).regression);
+    const staleCount = verdicts.filter(v => v === "stale").length;
+    checks.push({
+        id: "regression-coverage",
+        status: rows.length === 12 ? (staleCount === 0 ? "pass" : "incomplete") : "incomplete",
+        actual: { verdicts: rows.length - staleCount, stale: staleCount, of: rows.length },
+        required: "every arm runs regression BEFORE its push (EXECUTION.md order); stale arms carry no verdict",
+    });
 
     const falseExactValues = rows.map(row => trajectory(row).falseExactReferences);
     const falseExact = falseExactValues.every(nonNegativeInteger)

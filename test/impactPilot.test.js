@@ -247,6 +247,31 @@ test("18. treatment acceptance or regression failure fails completion", async t 
     });
 });
 
+// A stale regression is an absent verdict, not a failure. pal_regression refuses to compare once
+// the server marker moves, so an arm whose agent pushed first genuinely has nothing to report. It
+// must not fail completion (nothing regressed) and must not vanish (nothing was checked) — coverage
+// carries the unchecked population so a pilot cannot read green while most arms went unverified.
+test("18b. a stale regression withholds a verdict without failing completion", async t => {
+    await t.test("completion still passes", () => {
+        const result = check(input => { treatments(input)[0].experiment.trajectory.regression = "stale"; });
+        assert.strictEqual(named(result, "treatment-completion").status, "pass");
+    });
+    await t.test("coverage reports it and goes incomplete", () => {
+        const result = check(input => { treatments(input)[0].experiment.trajectory.regression = "stale"; });
+        const coverage = named(result, "regression-coverage");
+        assert.strictEqual(coverage.status, "incomplete");
+        assert.deepEqual(coverage.actual, { verdicts: 11, stale: 1, of: 12 });
+    });
+    await t.test("a clean pilot reports full coverage", () => {
+        assert.strictEqual(named(check(), "regression-coverage").status, "pass");
+        assert.deepEqual(named(check(), "regression-coverage").actual, { verdicts: 12, stale: 0, of: 12 });
+    });
+    await t.test("an outright regression failure still fails completion", () => {
+        const result = check(input => { treatments(input)[0].experiment.trajectory.regression = "fail"; });
+        assert.strictEqual(named(result, "treatment-completion").status, "fail");
+    });
+});
+
 test("19. any false exact reference fails", () => {
     const result = check(input => { treatments(input)[0].experiment.trajectory.falseExactReferences = 1; });
     assert.strictEqual(named(result, "false-exact-references").status, "fail");
