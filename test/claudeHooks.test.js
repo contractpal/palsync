@@ -70,3 +70,49 @@ test("Claude context injection creates the owned Stop hook automatically", async
     assert.equal(value.hooks.Stop[0].hooks[0].command, hooks.COMPLETION_COMMAND);
     fs.rmSync(ws, { recursive: true, force: true });
 });
+
+test("the PreToolUse guard installs with its matcher and is idempotent", async () => {
+    const ws = tmpWorkspace();
+    await hooks.configure(ws, { install: true });
+    const first = fs.readFileSync(settingsPath(ws), "utf8");
+    const again = await hooks.configure(ws, { install: true });
+    const value = JSON.parse(first);
+    const group = value.hooks.PreToolUse.find(item => item.hooks.some(hook => hook.command === hooks.GUARD_COMMAND));
+    assert.ok(group, "guard group present");
+    // Without the matcher the guard would run on every tool call, not just the file-write tools.
+    assert.equal(group.matcher, hooks.GUARD_MATCHER);
+    assert.equal(again.changed, false);
+    assert.equal(fs.readFileSync(settingsPath(ws), "utf8"), first);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("switching away removes both owned hooks and leaves no empty scaffolding", async () => {
+    const ws = tmpWorkspace();
+    await hooks.configure(ws, { install: true });
+    const removed = await hooks.configure(ws, { install: false });
+    assert.equal(removed.changed, true);
+    // configure() deletes a settings file it has emptied, so absence is the correct end state here.
+    assert.equal(fs.existsSync(settingsPath(ws)), false);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("removing the guard preserves a user hook sharing its matcher group", async () => {
+    const userHook = { type: "command", command: "team-precheck" };
+    const ws = tmpWorkspace({ ".claude/settings.json": JSON.stringify({ hooks: { PreToolUse: [
+        { matcher: hooks.GUARD_MATCHER, hooks: [{ type: "command", command: hooks.GUARD_COMMAND }, userHook] },
+    ] } }, null, 2) + "\n" });
+    await hooks.configure(ws, { install: false });
+    const value = JSON.parse(fs.readFileSync(settingsPath(ws), "utf8"));
+    assert.deepEqual(value.hooks.PreToolUse, [{ matcher: hooks.GUARD_MATCHER, hooks: [userHook] }]);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("a non-array PreToolUse is structurally incompatible and changes nothing", async () => {
+    const raw = JSON.stringify({ hooks: { PreToolUse: {} } }) + "\n";
+    const ws = tmpWorkspace({ ".claude/settings.json": raw });
+    const result = await hooks.configure(ws, { install: true });
+    assert.equal(result.skipped, true);
+    assert.match(result.error, /settings\.hooks\.PreToolUse must be an array/);
+    assert.equal(fs.readFileSync(settingsPath(ws), "utf8"), raw);
+    fs.rmSync(ws, { recursive: true, force: true });
+});

@@ -60,6 +60,9 @@ const USAGE = [
     "  palsync checkpoint \"<line>\" [--dir <ws>]                     Append a line to EXECUTION.md's Checkpoints section",
     "  palsync sync-datasets [--datasets a,b] [--recreate] [--keep-lock] [--dir <ws>]",
     "                                                               Provision dataset tables from pal.json (safe by default)",
+    "  palsync hook completion|guard --mode claude|json [--dir <ws>]  Agent-harness hook adapters (read the event on stdin; always exit 0).",
+    "                                                               completion = Stop gate; guard = PreToolUse deny on writes to .palsync.json.",
+    "                                                               Installed into .claude/settings.json automatically for the claude agent.",
     "",
     "  --force            push: override the server-drift refusal · pull: overwrite locally-modified files",
     "  --skip-validation  push: push even if the offline code check finds errors (not recommended)",
@@ -222,7 +225,8 @@ function readStdin() {
 
 async function runHookCommand(argv, inputText) {
     try {
-        if (argv[0] !== "completion") throw new Error("unknown hook adapter");
+        const adapter = argv[0];
+        if (adapter !== "completion" && adapter !== "guard") throw new Error("unknown hook adapter");
         let mode = "json", dir;
         for (let i = 1; i < argv.length; i++) {
             if (argv[i] === "--mode") mode = argv[++i];
@@ -234,11 +238,16 @@ async function runHookCommand(argv, inputText) {
         if (mode !== "claude" && mode !== "json") throw new Error("unsupported hook mode " + mode);
         let event = null;
         if (mode === "claude") event = JSON.parse(inputText === undefined ? await readStdin() : inputText);
-        const evaluated = require("../core/completionHook").evaluate({ mode, cwd: dir, event });
+        const adapterModule = adapter === "guard" ? "../core/guardHook" : "../core/completionHook";
+        const evaluated = require(adapterModule).evaluate({ mode, cwd: dir, event });
         if (evaluated.output) console.log(JSON.stringify(evaluated.output));
         return 0;
     } catch (e) {
-        console.error("palsync completion hook skipped (fail open): " + (e && e.message ? e.message : e));
+        // Fail open, as the completion hook does: a hook that errors must never wedge a session. The
+        // cost of failing open here is that a malformed event lets a .palsync.json edit through, which
+        // is the status quo before this guard existed -- strictly better than blocking all work.
+        console.error("palsync " + (argv[0] || "") + " hook skipped (fail open): " +
+            (e && e.message ? e.message : e));
         return 0;
     }
 }
