@@ -103,12 +103,20 @@ impact evidence. Missing usage stays null; never estimate it.
 2. Choose one exact weak model and one harness exposing token usage.
 3. Run `node bench/impact-context.js --json > <benchmark.json>` once.
 4. Follow the fixed `pilot.json` pair order.
-5. For each arm, run the exact `palsync --eval <virtual-key>` flow, creating a fresh Pal.
+5. For each arm, run the exact `palsync --eval <virtual-key>` flow, creating a fresh Pal. The Pal's
+   activation key must carry the Console Workflow entitlement — the fixture ships
+   `workflows/console.js`, and a key without it fails the baseline push as `save-rejected` after the
+   fresh Pal already exists on the server.
 6. Use no mid-run intervention.
-7. Score against the blinded oracle after completion.
-8. Code trajectory JSON manually from the transcript.
-9. Call `record-eval` with all pins.
-10. After twelve rows, run:
+7. Copy the raw transcript into `eval/runs/` — it is the only source of the arm's model spend and the
+   host prunes transcripts on a retention timer.
+8. Score against the blinded oracle after completion.
+9. Extract, then adjudicate — never hand-tally:
+   `scripts/extract-session-cost.js --transcript <t> --dir <ws>` (must run BEFORE `record-eval`, or
+   `modelUsage` records as null) and `scripts/extract-impact-trajectory.js --transcript <t> --oracle <o>`.
+   The extractors compute only what follows mechanically; their ADJUDICATE lines are the operator's.
+10. Call `record-eval` with all pins, then assert the new row's `modelUsage` is non-null.
+11. After twelve rows, run:
 
 ```sh
 node scripts/check-impact-pilot.js \

@@ -478,4 +478,7 @@ if (require.main === module) {
     }
 }
 
-module.exports = { buildRow, inferScenario, reviewFields };
+// validateModelUsage is exported so the backfill of rows recorded before anything wrote
+// .palsync/session-cost.json builds its modelUsage through the SAME validator the recorder uses.
+// Hand-building that object would let backfilled rows drift in shape from freshly recorded ones.
+module.exports = { buildRow, inferScenario, reviewFields, validateModelUsage };

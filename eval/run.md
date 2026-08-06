@@ -112,11 +112,21 @@ Unchanged from the bundle README, restated for completeness:
 Impact runs use the exact virtual scenario key and the launcher-written
 `.palsync/impact-start.json`. After the run:
 
-1. Save the raw transcript without rewriting it.
-2. Keep `oracle.json` blinded from the agent. The evaluator opens it only after the run, executes
-   its acceptance/regression commands, and manually codes the trajectory against its allowed-write
-   and first-correct-write definitions. Do not use an LLM or heuristic transcript parser.
-3. If no correct write occurred, set both pre-correct-write metrics to `null`. Preserve an on-arm
+1. Save the raw transcript without rewriting it — copy it into `eval/runs/`. The host transcript is
+   the only source of an arm's model spend and Claude Code prunes transcripts on a retention timer,
+   so an uncopied arm becomes unrecordable.
+2. Extract model spend into the workspace sidecar, BEFORE `record-eval` looks for it:
+   `node scripts/extract-session-cost.js --transcript <t> --dir <workspace>`. It sums the provider's
+   own `usage` blocks (deduped by `requestId`) — never the status line, which is a hand-transcribed
+   self-report of the same ledger.
+3. Keep `oracle.json` blinded from the agent. The evaluator opens it only after the run and executes
+   its acceptance/regression commands. Extract the trajectory with
+   `node scripts/extract-impact-trajectory.js --transcript <t> --oracle <o>`: it computes only what
+   follows mechanically from the structured transcript and prints the genuine judgment calls
+   (first-correct-write, failed loops, hard-rule violations, false references) as separate
+   ADJUDICATE lines for the evaluator to settle. Do not use an LLM or a heuristic parser, and do not
+   hand-tally a 170-entry JSONL.
+4. If no correct write occurred, set both pre-correct-write metrics to `null`. Preserve an on-arm
    non-adoption as `targetCalls:0`, `targetBeforeFirstEdit:false`, and
    `impactResponseBytes:null`. An off arm must use those same three uncontaminated values.
    `regression` is the verdict the agent's own `pal_regression` call returned — seeding leaves a real
@@ -124,7 +134,7 @@ Impact runs use the exact virtual scenario key and the launcher-written
    the evaluator reads the agent's pre-push call instead of re-running it. An agent that pushed first
    gets `{stale}` and the arm records `regression: "stale"`; never re-run an arm to chase a verdict,
    because selecting arms by agent behavior biases the sample.
-4. Record the row with every pin and evidence path present:
+5. Record the row with every pin and evidence path present:
 
 ```sh
 node scripts/record-eval.js \
@@ -157,10 +167,16 @@ Fill these from the finished transcript. Record them in `eval/RESULTS.md`.
 - **other** — everything else (Edit, Write, Bash that isn't a read, etc.).
 
 **(b) Tokens in / out**, if the harness reports them. Per harness:
-- **Claude Code** — run `/cost` at end of session; record input + output tokens. (Also visible in the transcript's usage summary.)
+- **Claude Code** — extract them from the transcript, never from the status line or `/cost`:
+  `node scripts/extract-session-cost.js --transcript <t> --dir <workspace>` writes the
+  `.palsync/session-cost.json` sidecar that `record-eval` reads. It dedups by `requestId` (one API
+  response is logged as several assistant lines carrying the same `usage` object, so summing lines
+  overcounts about twofold), counts `tokensIn` as `input_tokens + cache_creation_input_tokens`, and
+  prices the 1h/5m cache-write split per message. Tokens are observed; cost is derived from a pinned
+  rate table and no gate reads it.
 - **Cursor / others** — record if surfaced; leave blank if the harness does not expose it. Blank is honest; a guess is not.
 
-When the harness exposes spend, also record it in the workspace sidecar:
+For a harness with no transcript, record spend by hand:
 `palsync cost record --model <id> --provider <p> --in N --cached N --out N [--cost N] --phase build|review`.
 Skip this only when the harness exposes no figures.
 
