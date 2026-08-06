@@ -320,3 +320,34 @@ test("23. checker output is byte-identical in-process and across CLI invocations
     assert.strictEqual(secondCli.status, 0, secondCli.stderr);
     assert.strictEqual(secondCli.stdout, firstCli.stdout);
 });
+
+// Arms recorded across a fix cannot share a repo HEAD: every between-arm commit in the real pilot
+// was scoring-only (record-eval, the trajectory extractor, this checker), none of which ships in the
+// installed harness the arm runs. Pinning `sha` made the pilot unfinishable. What must stay constant
+// is the harness, and orchSkills/palbuilderSkills pin that — so those two must still hard-fail.
+test("24. rows recorded at different repo shas still complete; harness pins still bind", async t => {
+    await t.test("differing sha across all rows is not an error", () => {
+        const result = check(input => {
+            input.forEach((row, index) => { row.sha = "abcdef" + index; });
+        });
+        assert.strictEqual(named(result, "evidence-completeness").status, "pass");
+        assert.strictEqual(result.status, "pass");
+    });
+
+    await t.test("differing sha within one pair is not an error", () => {
+        const result = check(input => { input[0].sha = "0000000"; });
+        assert.strictEqual(named(result, "evidence-completeness").status, "pass");
+    });
+
+    await t.test("sha is still required on every row", () => {
+        const result = check(input => { input[0].sha = ""; });
+        assert.strictEqual(named(result, "evidence-completeness").status, "incomplete");
+    });
+
+    for (const field of ["orchSkills", "palbuilderSkills"]) {
+        await t.test("differing " + field + " is still incomplete", () => {
+            const result = check(input => { input[0].experiment[field] = "main@0000000"; });
+            assert.strictEqual(named(result, "evidence-completeness").status, "incomplete");
+        });
+    }
+});

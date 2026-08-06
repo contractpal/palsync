@@ -195,8 +195,16 @@ function evidence(rows, pilot) {
             if (row.experiment.taskKey !== scheduled.taskKey) errors.push("pair " + scheduled.pair + " task does not match schedule");
             if (row.experiment.pairOrder !== expectedOrder) errors.push("pair " + scheduled.pair + " order does not match schedule");
         }
+        // `sha` is NOT pinned. It records the repo HEAD when the row was RECORDED, which moves with
+        // scoring-only commits (record-eval, the trajectory extractor, this checker) that cannot
+        // reach an arm: `package.json` "files" ships bin/ src/ lib/ pi-extension/ bundled-context/
+        // eval/specs/ eval/impact/ only, so scripts/ and test/ changes are absent from the install
+        // the arm actually runs. Pinning it made the pilot unfinishable — any fix between arm 1 and
+        // arm 12 permanently failed evidence-completeness, and a pilot whose whole premise is
+        // "expect to find bugs and fix them" cannot forbid commits. Harness constancy is pinned by
+        // orchSkills/palbuilderSkills (the frozen install); `sha` stays recorded as provenance.
         for (const parts of [
-            ["model"], ["harness"], ["sha"], ["experiment", "orchSkills"],
+            ["model"], ["harness"], ["experiment", "orchSkills"],
             ["experiment", "palbuilderSkills"], ["experiment", "fixtureDigest"], ["experiment", "pairOrder"]
         ]) {
             if (getPath(control, parts) !== getPath(treatment, parts)) {
@@ -209,8 +217,10 @@ function evidence(rows, pilot) {
         pairs.push({ scheduled, control, treatment });
     }
 
+    // Same reasoning as the per-pair list above: the harness the arms ran, not the repo HEAD they
+    // were scored at, is what must be constant across all twelve rows.
     const globalPins = [
-        ["model"], ["harness"], ["sha"], ["experiment", "orchSkills"], ["experiment", "palbuilderSkills"]
+        ["model"], ["harness"], ["experiment", "orchSkills"], ["experiment", "palbuilderSkills"]
     ];
     for (const parts of globalPins) {
         const values = new Set(rows.map(row => getPath(row, parts)));
