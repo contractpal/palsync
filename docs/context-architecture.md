@@ -5,7 +5,7 @@ deterministic name/description representation. Skill bodies are excluded from ea
 
 <!-- palsync generated: context measurement table (scripts/gen-context-architecture.js) -->
 
-Measured on PalSync 0.29.0 from `.palsync/context-manifest.json`, the artifact
+Measured on PalSync 0.29.1 from `.palsync/context-manifest.json`, the artifact
 `contextInject` emits for a real workspace. Token estimates are the manifest's own
 `estimatedTokens`. Regenerate with `node scripts/gen-context-architecture.js` — never hand-edit
 these numbers; a hand-edit is how this table came to claim 16,689 tool-definition bytes on a
@@ -54,8 +54,8 @@ the former file to `context-manifest.prev.json`; an identical generation writes 
 The manifest orders tool definitions, contract, skill catalog, sync tail, then the on-demand sync
 details and per-skill bodies; only the release-stable and workspace-stable sections above are eager.
 `palsync ctx inspect` reports release-stable bytes versus the workspace-stable tail; `palsync ctx diff`
-reports the first divergent section. Task files and live pal
-state are intentionally absent, so normal work cannot churn generated context.
+reports the first divergent section. Task files and live pal state are intentionally absent, so normal
+work cannot churn generated context.
 
 ## Runtime limits
 
