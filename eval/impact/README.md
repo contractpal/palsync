@@ -102,6 +102,26 @@ node scripts/gen-impact-arm-facts.js          # rewrite every ON arm
 node scripts/gen-impact-arm-facts.js --check  # non-zero exit if any arm has drifted
 ```
 
+Changing an arm also invalidates `test/fixtures/impact-pilot-pass.jsonl`, whose rows pin each arm's
+sha and injected payload size. Refresh them from the arms themselves:
+
+```sh
+node -e '
+const fs=require("fs"),path=require("path"),crypto=require("crypto");
+const {resolveSpec}=require("./src/core/evalSpec");
+const f="test/fixtures/impact-pilot-pass.jsonl";
+const rows=fs.readFileSync(f,"utf8").trim().split("\n").map(JSON.parse);
+for (const row of rows) {
+  const p=resolveSpec(row.experiment.taskKey+"-"+row.experiment.variant).armPath;
+  const text=fs.readFileSync(p,"utf8");
+  const line=text.split("\n").find(l=>l.startsWith("{\"schema\":\"palsync/impact/1\""));
+  row.experiment.armFile={ name:path.basename(p),
+    sha256:crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex"),
+    factsBytes:line===undefined?null:Buffer.byteLength(line,"utf8") };
+}
+fs.writeFileSync(f,rows.map(r=>JSON.stringify(r)).join("\n")+"\n");'
+```
+
 **After changing any arm, reinstall the pinned tarball before running an arm.** `eval/impact/` ships
 in `package.json` `files`, so an arm is seeded from the *installed* palsync while it is scored against
 this repo — a repo-only edit changes nothing an arm sees. `record-eval` hard-fails a row whose

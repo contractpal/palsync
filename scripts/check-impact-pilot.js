@@ -368,6 +368,8 @@ function checkPilot(rows, benchmark, pilot) {
     // workspace copy. A treatment that called pal_context anyway broke its own arm instruction and is
     // not a clean delivery.
     const delivered = pairs.filter(pair => isObject(pair.treatment.experiment.armFile) &&
+        nonNegativeInteger(pair.treatment.experiment.armFile.factsBytes) &&
+        pair.treatment.experiment.armFile.factsBytes > 0 &&
         trajectory(pair.treatment).targetCalls === 0).length;
     checks.push({ id: "facts-delivered", status: pairs.length === 6 ? delivered === 6 ? "pass" : "fail" : "incomplete",
         actual: delivered, required: 6 });
