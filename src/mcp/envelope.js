@@ -83,11 +83,24 @@ function buildEnvelope(source, options = {}) {
     // Verdict fields that the fixed shape above cannot express. pal_regression needs them: `ok:false`
     // with zero diagnostics is ambiguous between "failed, cause unlisted" and "STALE baseline, no
     // verdict possible", and a weak model reads "REGRESSION FAIL" far more reliably than `ok:false`.
-    // Merged before the byte-budget loop so they are accounted for, and never allowed to overwrite a
-    // standard field -- the envelope contract stays the same for every tool that uses it.
+    // Never allowed to overwrite a standard field -- the envelope contract stays the same for every
+    // tool that uses it -- and applied before the byte-budget loop so they are accounted for.
+    //
+    // Placed immediately after `ok`, NOT appended. Readers truncate: the trajectory extractor shows an
+    // operator the first 400 characters of a tool result, and a verdict sitting behind a diagnostics
+    // array would be cut off exactly when there are findings to explain. Front-loading it also puts the
+    // outcome first for a weak model.
     if (isObject(options.extraFields)) {
-        for (const [key, value] of Object.entries(options.extraFields)) {
-            if (!(key in envelope)) envelope[key] = value;
+        const extras = Object.entries(options.extraFields).filter(([key]) => !(key in envelope));
+        if (extras.length) {
+            const ordered = { ok: envelope.ok };
+            for (const [key, value] of extras) ordered[key] = value;
+            for (const [key, value] of Object.entries(envelope)) {
+                if (key !== "ok") ordered[key] = value;
+            }
+            // Re-seat in place so the byte-budget loop below still mutates the returned object.
+            for (const key of Object.keys(envelope)) delete envelope[key];
+            Object.assign(envelope, ordered);
         }
     }
     const maxBytes = Number.isFinite(options.maxBytes) ? Math.max(0, options.maxBytes) : Infinity;

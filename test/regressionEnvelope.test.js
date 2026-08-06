@@ -81,6 +81,12 @@ test("2. caused, inherited, needs-human and notes map onto distinct severities",
     const ctx = context();
     const { envelope } = parseEnvelope((await tool.run(ctx, {})).message);
     assert.equal(envelope.ok, false);
+    // The verdict must survive a reader that truncates: the trajectory extractor shows an operator only
+    // the first 400 characters of a tool result, so `summary` and `stale` cannot sit behind diagnostics.
+    const head = JSON.stringify(envelope).slice(0, 400);
+    assert.ok(head.includes("REGRESSION FAIL"), "verdict is inside the first 400 characters");
+    assert.ok(head.includes("\"stale\":false"));
+    assert.deepEqual(Object.keys(envelope).slice(0, 5), ["ok", "summary", "stale", "mapped", "current"]);
     const bySeverity = {};
     for (const item of envelope.diagnostics) bySeverity[item.severity] = (bySeverity[item.severity] || 0) + 1;
     // An INHERITED failure is never the agent's to fix, so it must not read as an error; a needs-human
