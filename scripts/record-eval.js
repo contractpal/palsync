@@ -176,9 +176,13 @@ function validateHashMap(value, label) {
 }
 
 function validateReceipt(receipt) {
+    // manifest and regressionBaseline are written by seedImpactBaseline: the first records that the
+    // fixture's sections were merged onto the pulled manifest rather than replacing it, the second
+    // that baseline/baseline.json was seeded so pal_regression has something real to verdict against.
     const fields = [
-        "schema", "evalKey", "taskKey", "variant", "fixtureDigest", "fixtureFiles",
-        "palGuid", "serverMarker", "serverPaths", "localHash", "fileHashes", "lint", "push", "seededAt"
+        "schema", "evalKey", "taskKey", "variant", "fixtureDigest", "fixtureFiles", "manifest",
+        "palGuid", "serverMarker", "serverPaths", "localHash", "fileHashes", "lint", "push",
+        "regressionBaseline", "seededAt"
     ];
     requireExactKeys(receipt, fields, "impact start receipt");
     if (receipt.schema !== "palsync/impact-start/1") throw new Error("Invalid impact start receipt schema");
@@ -194,17 +198,17 @@ function validateReceipt(receipt) {
     if (!/^[0-9a-f]{64}$/.test(receipt.localHash)) {
         throw new Error("impact start receipt localHash must be 64 lowercase hex");
     }
-    if (receipt.fixtureDigest !== "sha256:" + receipt.localHash) {
-        throw new Error("impact start receipt fixtureDigest and localHash must agree");
-    }
-
     validateHashMap(receipt.fixtureFiles, "impact start receipt fixtureFiles");
     validateHashMap(receipt.fileHashes, "impact start receipt fileHashes");
     const fixtureKeys = Object.keys(receipt.fixtureFiles).sort(codePointCompare);
     const fileHashKeys = Object.keys(receipt.fileHashes).sort(codePointCompare);
+    // pal.json is the one exemption: seeding merges the fixture's registration sections onto the
+    // pulled manifest, so the staged manifest legitimately carries this Pal's server identity
+    // (layout/id/environment) and cannot hash to the frozen fixture. Every other file — the agent's
+    // entire starting surface — must still match byte for byte, and the key sets must agree.
     if (!sameArray(fixtureKeys, fileHashKeys) ||
-        fixtureKeys.some(name => receipt.fixtureFiles[name] !== receipt.fileHashes[name])) {
-        throw new Error("impact start receipt fileHashes must deep-equal fixtureFiles");
+        fixtureKeys.some(name => name !== "pal.json" && receipt.fixtureFiles[name] !== receipt.fileHashes[name])) {
+        throw new Error("impact start receipt fileHashes must deep-equal fixtureFiles (pal.json excepted)");
     }
 
     if (!Array.isArray(receipt.serverPaths) ||
@@ -396,7 +400,13 @@ function buildRow({ workspaceDir, model, harness, scenario, variant, pair, pairO
         (sessionCost && Array.isArray(sessionCost.entries) ? sessionCost.entries[0] : sessionCost));
     const impactCostModel = impactCostEntry && impactCostEntry.model;
     const execution = fs.readFileSync(path.join(workspaceDir, "EXECUTION.md"), "utf8");
-    const tasks = parseTasks(execution);
+    let tasks = parseTasks(execution);
+    // An EXECUTION.md with no "## Tasks" section is a workspace without task tracking, not a broken
+    // table — the impact fixtures are bounded renames and carry a numbered list. Refusing to record
+    // them made the recorder unusable for the very rows it exists to capture. A section that IS
+    // present but malformed still throws, because that one is actionable. Same distinction the
+    // completion gate draws.
+    if (!tasks.ok && tasks.missingSection) tasks = { ok: true, rows: [] };
     if (!tasks.ok) throw new Error("Cannot parse EXECUTION.md: " + tasks.error);
     let review = "";
     try { review = fs.readFileSync(path.join(workspaceDir, "REVIEW.md"), "utf8"); } catch (error) {}

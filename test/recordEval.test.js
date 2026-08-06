@@ -81,6 +81,11 @@ function impactWorkspace(t, { variant = "on", trajectoryValue, usageValue, sessi
         variant,
         fixtureDigest: IMPACT_MANIFEST.fixtureDigest,
         fixtureFiles: { ...IMPACT_MANIFEST.files },
+        manifest: {
+            mode: "fixture-sections-merged-onto-pulled",
+            fixtureSections: ["fragments", "pages"],
+            preservedServerKeys: ["layout"]
+        },
         palGuid: "PAL-1",
         serverMarker: "START-MARKER",
         serverPaths: [...IMPACT_MANIFEST.expectedServerPaths],
@@ -88,6 +93,7 @@ function impactWorkspace(t, { variant = "on", trajectoryValue, usageValue, sessi
         fileHashes: { ...IMPACT_MANIFEST.files },
         lint: { errors: 0, warnings: 0 },
         push: { pushed: true, newMarker: "START-MARKER" },
+        regressionBaseline: { path: "baseline/baseline.json", mapped: "START-MARKER", arms: ["validate"] },
         seededAt: "2026-08-03T12:00:00.000Z",
     };
     writeJson(receiptPath, receipt);
@@ -523,9 +529,15 @@ test("19. receipt requires the exact canonical fields and scalar formats", t => 
 test("20. receipt hashes, server paths, lint, and push must remain coherent", t => {
     const h = impactWorkspace(t);
     const cases = [
-        ["digest/localHash relation", receipt => {
-            receipt.localHash = "0".repeat(64);
-        }, /fixtureDigest and localHash must agree/],
+        // localHash is deliberately NOT pinned to fixtureDigest any more: seeding merges the
+        // fixture's sections onto the pulled manifest, so the staged pal.json carries this Pal's
+        // server identity and hashes differently. Server-tracked files still must match exactly.
+        // localHash is deliberately NOT pinned to fixtureDigest any more, and pal.json may diverge:
+        // seeding merges the fixture's sections onto the pulled manifest, so the staged manifest
+        // carries this Pal's server identity. Every other file must still match exactly.
+        ["server-tracked file diverges from fixture", receipt => {
+            receipt.fileHashes = { ...receipt.fileHashes, "pages/console.html": "d".repeat(64) };
+        }, /fileHashes must deep-equal fixtureFiles/],
         ["empty fixtureFiles", receipt => {
             receipt.fixtureFiles = {};
         }, /fixtureFiles must be a non-empty object/],
@@ -535,8 +547,9 @@ test("20. receipt hashes, server paths, lint, and push must remain coherent", t 
         ["raw file hash", receipt => {
             receipt.fileHashes["pal.json"] = "sha256:" + receipt.fileHashes["pal.json"];
         }, /fileHashes hash/],
-        ["fileHashes equality", receipt => {
-            receipt.fileHashes["pal.json"] = "0".repeat(64);
+        // A divergent pal.json is now EXPECTED, so equality is asserted on the key set instead.
+        ["fileHashes key set", receipt => {
+            delete receipt.fileHashes["pal.json"];
         }, /fileHashes must deep-equal fixtureFiles/],
         ["serverPaths type", receipt => {
             receipt.serverPaths = "pages/console.html";
