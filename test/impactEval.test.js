@@ -334,6 +334,37 @@ test("seedImpactBaseline surfaces push validation refusal without persistence or
     assert.equal(fs.existsSync(receiptFile(h)), false);
 });
 
+// Finding #11: a save-rejected baseline push reported only `refused: "save-rejected"` and threw away the
+// server's own notes, while `palsync push` prints them in full. The failure lands AFTER a fresh Pal
+// exists on the server, so this one message is the whole diagnosis -- an activation key without the
+// Console Workflow entitlement rejects the fixture here and looked like every other refusal.
+test("seedImpactBaseline surfaces the server's validation notes on a save-rejected push", async t => {
+    const h = makeSeedHarness(t);
+    h.deps.push = async () => ({
+        pushed: false, refused: "save-rejected",
+        validation: [
+            { group: "Workflow", object: "console", message: "Activation key does not allow Console Workflow" },
+            { group: "Workflow", object: "console", message: "Activation key does not allow Console Workflow" },
+            { group: "Page", object: "settings", message: "Tag script is not allowed" },
+        ],
+        lint: { errors: 0, warnings: 2 },
+    });
+    await expectSeedFailure(h, /Activation key does not allow Console Workflow/);
+    await expectSeedFailure(h, /Tag script is not allowed/);
+    // Duplicate notes are grouped with a count rather than repeated, and the pre-push lint totals ride
+    // along so a warning-only push still explains itself.
+    await expectSeedFailure(h, /\(x2\)/);
+    await expectSeedFailure(h, /Pre-push lint: 0 error\(s\), 2 warning\(s\)/);
+    assert.equal(h.persisted.length, 0);
+    assert.equal(fs.existsSync(receiptFile(h)), false);
+});
+
+test("seedImpactBaseline reports a bare refusal when the push carries no diagnostics", async t => {
+    const h = makeSeedHarness(t);
+    h.deps.push = async () => ({ pushed: false, refused: "save-rejected" });
+    await expectSeedFailure(h, /push refused: save-rejected$/);
+});
+
 test("seedImpactBaseline refuses missing, incomplete, or extra authoritative server paths", async t => {
     const cases = [
         ["missing array", () => null, /authoritative serverPaths/],

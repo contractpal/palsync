@@ -50,6 +50,39 @@ function safeRelative(value, label) {
     return value;
 }
 
+// The server's own notes for a refused baseline push, formatted for a thrown Error. `push` returns
+// them in `validation` as { group, object, message } records; reporting only `refused` discarded the
+// one thing that explains WHY (finding #11). Deliberately local rather than reusing the MCP layer's
+// richer formatter -- core must not depend on src/mcp.
+function formatPushDiagnostics(pushResult) {
+    if (!pushResult) return "";
+    const parts = [];
+    const notes = Array.isArray(pushResult.validation) ? pushResult.validation : [];
+    if (notes.length) {
+        const seen = new Map();
+        for (const note of notes) {
+            const text = (note && note.group ? note.group : "?") + "/" +
+                (note && note.object ? note.object : "(general)") + ": " +
+                (note && note.message ? note.message : "(no message)");
+            seen.set(text, (seen.get(text) || 0) + 1);
+        }
+        parts.push("Server validation notes (" + notes.length + "):\n" +
+            Array.from(seen, ([text, count]) => "   - " + text + (count > 1 ? " (x" + count + ")" : "")).join("\n"));
+    }
+    const lint = pushResult.lint;
+    if (lint && (lint.errors || lint.warnings)) {
+        parts.push("Pre-push lint: " + (lint.errors || 0) + " error(s), " + (lint.warnings || 0) + " warning(s).");
+    }
+    if (pushResult.refused === "drift" && Array.isArray(pushResult.driftFiles)) {
+        parts.push("Drifted files: " + pushResult.driftFiles.join(", "));
+    }
+    if (pushResult.refused === "no-lock" || pushResult.holder) {
+        parts.push("Lock holder: " + (pushResult.holder || "(unknown)") +
+            (pushResult.since ? " since " + pushResult.since : ""));
+    }
+    return parts.length ? "\n" + parts.join("\n") : "";
+}
+
 function scanRegularBaseline(baselineDir) {
     const root = fs.lstatSync(baselineDir);
     if (!root.isDirectory() || root.isSymbolicLink()) {
@@ -303,8 +336,15 @@ async function seedImpactBaseline({
     const prePushMarker = record.lastModifiedDate;
     const pushResult = await pushBaseline(session, record, workspaceDir);
     if (!pushResult || pushResult.pushed !== true) {
+        // `push` already carries the server's validation notes on a save-rejected push, and reporting
+        // only `refused: "save-rejected"` threw them away -- the operator saw a bare refusal while
+        // `palsync push` prints the reason in full (finding #11). This is the seeding path, so the
+        // failure lands AFTER a fresh Pal exists on the server and the diagnosis has to come from this
+        // one message: an entitlement-less activation key rejects the fixture's Console Workflow here
+        // and looked identical to every other refusal.
         throw new Error("Impact baseline push refused" +
-            (pushResult && pushResult.refused ? ": " + pushResult.refused : "."));
+            (pushResult && pushResult.refused ? ": " + pushResult.refused : ".") +
+            formatPushDiagnostics(pushResult));
     }
     if (!Array.isArray(pushResult.serverPaths)) {
         throw new Error("Impact baseline push did not return authoritative serverPaths.");
