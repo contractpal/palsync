@@ -8,7 +8,8 @@ const os = require("node:os");
 const { spawnSync } = require("node:child_process");
 const metadata = require("../src/mcp/pi-tools.json");
 const { routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision, piUsageEntry, appendPiUsage,
-    isPalsyncWorkspace, completionFingerprint, completionFollowUp } = require("../src/core/piHelpers");
+    isPalsyncWorkspace, completionFingerprint, completionFollowUp,
+    piWriteEvent, piAppendContent } = require("../src/core/piHelpers");
 const { TOOLS } = require("../src/mcp/tools");
 const { serializeToolDefinitions } = require("../src/mcp/toolSchema");
 const registerPi = require("../src/mcp/registerPi");
@@ -116,6 +117,77 @@ test("Pi completion handling is settled, workspace-scoped, and loop-resistant", 
     for (const allowed of [
         { code: "COMPLETE", allow: true }, { code: "NOT_APPLICABLE", allow: true }, { code: "BLOCKED_HANDOFF", allow: true }
     ]) assert.equal(completionFollowUp(allowed, completionFingerprint(ws, allowed), null), null);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("Pi write events translate to the Claude shape the hook cores expect", () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-pi-write-"));
+    fs.writeFileSync(path.join(ws, ".palsync.json"), "{}");
+    // Pi names its editors in lowercase and its path field `path`; the cores read `file_path`.
+    for (const [toolName, expected] of [["edit", "Edit"], ["write", "Write"], ["EDIT", "Edit"]]) {
+        const event = piWriteEvent(ws, { toolName, input: { path: "pages/home.html" } });
+        assert.equal(event.tool_name, expected);
+        assert.equal(event.tool_input.file_path, "pages/home.html");
+        assert.equal(event.cwd, ws);
+    }
+    // Everything else is not a direct write, or has nothing to check. `bash` is absent for the same
+    // reason the Claude guard omits it: deciding which shell commands write means guessing.
+    for (const event of [{ toolName: "read", input: { path: "pages/home.html" } },
+        { toolName: "bash", input: { command: "sed -i s/a/b/ pages/home.html" } },
+        { toolName: "edit", input: {} }, { toolName: "edit" }, null]) {
+        assert.equal(piWriteEvent(ws, event), null, JSON.stringify(event));
+    }
+    // Outside a PalSync workspace the hooks must not fire at all.
+    const bare = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-pi-bare-"));
+    assert.equal(piWriteEvent(bare, { toolName: "edit", input: { path: "pages/home.html" } }), null);
+    assert.equal(piWriteEvent(null, { toolName: "edit", input: { path: "pages/home.html" } }), null);
+    fs.rmSync(ws, { recursive: true, force: true });
+    fs.rmSync(bare, { recursive: true, force: true });
+});
+
+test("Pi post-write feedback appends a block and preserves the original result", () => {
+    const original = { type: "tool_result", toolName: "edit", content: [{ type: "text", text: "edited" }],
+        details: { diff: "@@" }, isError: false };
+    const result = piAppendContent(original, "PalSync post-write check: ...");
+    assert.equal(result.content.length, 2);
+    assert.deepEqual(result.content[0], original.content[0], "the tool's own output must survive intact");
+    assert.equal(result.content[1].type, "text");
+    // The edit succeeded and stays succeeded -- advisory feedback must never flip isError.
+    assert.equal(result.isError, false);
+    assert.deepEqual(result.details, original.details);
+    // A failed edit keeps its failure, and no text means no result object at all (Pi leaves it alone).
+    assert.equal(piAppendContent({ ...original, isError: true }, "x").isError, true);
+    assert.equal(piAppendContent(original, null), null);
+    assert.equal(piAppendContent(original, ""), null);
+    // A result with no content array still yields exactly one appended block.
+    assert.equal(piAppendContent({ toolName: "write" }, "only").content.length, 1);
+});
+
+test("both Pi hooks reach the same cores through the CLI adapter's --event flag", () => {
+    // pi.exec has no stdin channel, so --event is the only way Pi can hand an event to a core. If this
+    // breaks, Pi silently loses the guard and post-write feedback while Claude keeps both.
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-pi-hooks-"));
+    fs.writeFileSync(path.join(ws, ".palsync.json"), JSON.stringify({ fileHashes: {} }));
+    const cli = path.join(__dirname, "..", "bin", "palsync.js");
+    const run = (adapter, event) => spawnSync(process.execPath,
+        [cli, "hook", adapter, "--mode", "json", "--dir", ws, "--event", JSON.stringify(event)],
+        { encoding: "utf8" });
+
+    const guard = run("guard", piWriteEvent(ws, { toolName: "edit", input: { path: ".palsync.json" } }));
+    assert.equal(guard.status, 0, "hook adapters always exit 0");
+    assert.equal(JSON.parse(guard.stdout.trim()).blocked, true);
+
+    const allowed = run("guard", piWriteEvent(ws, { toolName: "edit", input: { path: "pages/home.html" } }));
+    assert.equal(JSON.parse(allowed.stdout.trim()).blocked, false);
+
+    // A clean workspace has nothing to say, and malformed input fails open rather than erroring out.
+    const quiet = run("post-write", piWriteEvent(ws, { toolName: "edit", input: { path: "pages/home.html" } }));
+    assert.equal(quiet.status, 0);
+    assert.equal(JSON.parse(quiet.stdout.trim()).text, null);
+    const broken = spawnSync(process.execPath,
+        [cli, "hook", "post-write", "--mode", "json", "--dir", ws, "--event", "{not json"], { encoding: "utf8" });
+    assert.equal(broken.status, 0);
+    assert.equal(broken.stdout.trim(), "");
     fs.rmSync(ws, { recursive: true, force: true });
 });
 

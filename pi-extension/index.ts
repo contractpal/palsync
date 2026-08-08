@@ -4,7 +4,7 @@ import metadata from "./tools.json";
 import helpers from "./helpers.js";
 
 const { routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision, appendPiUsage,
-  isPalsyncWorkspace, completionFingerprint, completionFollowUp } = helpers;
+  isPalsyncWorkspace, completionFingerprint, completionFollowUp, piWriteEvent, piAppendContent } = helpers;
 
 class PalsyncClient {
   private child: ChildProcessWithoutNullStreams | null = null;
@@ -146,5 +146,41 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("session_shutdown", () => client?.close());
-  pi.on("tool_result", (event, ctx) => { appendPiUsage(ctx.cwd, event, ctx.model); });
+
+  // Both hooks below run the SAME cores Claude Code's settings hooks run, through the CLI adapter, so
+  // the two harnesses cannot drift in behaviour. `--event` carries the event because pi.exec has no
+  // stdin channel. Every failure path returns undefined: a hook that throws must never wedge a session.
+  const runHook = async (adapter: string, cwd: string, event: unknown): Promise<any | null> => {
+    const result = await pi.exec("palsync",
+      ["hook", adapter, "--mode", "json", "--dir", cwd, "--event", JSON.stringify(event)],
+      { timeout: 5000 });
+    if (result.code !== 0 || !result.stdout.trim()) return null;
+    return JSON.parse(result.stdout.trim());
+  };
+
+  // PreToolUse guard (finding #13): refuse edits to the workspace's own push-gate record.
+  pi.on("tool_call", async (event, ctx) => {
+    const hookEvent = piWriteEvent(ctx.cwd, event);
+    if (!hookEvent) return;
+    try {
+      const decision = await runHook("guard", ctx.cwd, hookEvent);
+      if (decision && decision.blocked) return { block: true, reason: decision.reason };
+    } catch (error) {
+      ctx.ui.notify("PalSync guard skipped (fail open): " + (error instanceof Error ? error.message : String(error)), "warning");
+    }
+  });
+
+  // C3: post-write diagnostics. Appends a text block; never touches isError, so the edit that just
+  // succeeded stays succeeded. Usage telemetry keeps running first and independently of it.
+  pi.on("tool_result", async (event, ctx) => {
+    appendPiUsage(ctx.cwd, event, ctx.model);
+    const hookEvent = piWriteEvent(ctx.cwd, event);
+    if (!hookEvent || event.isError) return;
+    try {
+      const feedback = await runHook("post-write", ctx.cwd, hookEvent);
+      if (feedback && feedback.text) return piAppendContent(event, feedback.text);
+    } catch (error) {
+      ctx.ui.notify("PalSync post-write check skipped (fail open): " + (error instanceof Error ? error.message : String(error)), "warning");
+    }
+  });
 }

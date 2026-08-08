@@ -60,7 +60,7 @@ const USAGE = [
     "  palsync checkpoint \"<line>\" [--dir <ws>]                     Append a line to EXECUTION.md's Checkpoints section",
     "  palsync sync-datasets [--datasets a,b] [--recreate] [--keep-lock] [--dir <ws>]",
     "                                                               Provision dataset tables from pal.json (safe by default)",
-    "  palsync hook completion|guard|post-write --mode claude|json [--dir <ws>]  Agent-harness hook adapters (read the event on stdin; always exit 0).",
+    "  palsync hook completion|guard|post-write --mode claude|json [--dir <ws>] [--event <json>]  Agent-harness hook adapters (event on stdin or --event; always exit 0).",
     "                                                               completion = Stop gate; guard = PreToolUse deny on writes to .palsync.json.",
     "                                                               Installed into .claude/settings.json automatically for the claude agent.",
     "",
@@ -232,17 +232,22 @@ async function runHookCommand(argv, inputText) {
             "post-write": "../core/postWriteHook",
         };
         if (!Object.prototype.hasOwnProperty.call(ADAPTERS, adapter)) throw new Error("unknown hook adapter");
-        let mode = "json", dir;
+        let mode = "json", dir, eventArg;
         for (let i = 1; i < argv.length; i++) {
             if (argv[i] === "--mode") mode = argv[++i];
             else if (argv[i].startsWith("--mode=")) mode = argv[i].slice(7);
             else if (argv[i] === "--dir") dir = argv[++i];
             else if (argv[i].startsWith("--dir=")) dir = argv[i].slice(6);
+            else if (argv[i] === "--event") eventArg = argv[++i];
+            else if (argv[i].startsWith("--event=")) eventArg = argv[i].slice(8);
             else throw new Error("unknown hook flag " + argv[i]);
         }
         if (mode !== "claude" && mode !== "json") throw new Error("unsupported hook mode " + mode);
+        // Claude delivers the event on stdin. Pi's `pi.exec` has no stdin channel (ExecOptions is
+        // signal/timeout/cwd only), so `--event` carries it as an argument; it wins if both appear.
         let event = null;
-        if (mode === "claude") event = JSON.parse(inputText === undefined ? await readStdin() : inputText);
+        if (eventArg !== undefined) event = JSON.parse(eventArg);
+        else if (mode === "claude") event = JSON.parse(inputText === undefined ? await readStdin() : inputText);
         const evaluated = require(ADAPTERS[adapter]).evaluate({ mode, cwd: dir, event });
         if (evaluated.output) console.log(JSON.stringify(evaluated.output));
         return 0;

@@ -99,6 +99,38 @@ function isPalsyncWorkspace(workspaceDir) {
     return !!workspaceDir && [".palsync.json", "EXECUTION.md"].some(file => fs.existsSync(path.join(workspaceDir, file)));
 }
 
+// Pi's built-in editors are lowercase and name their path field `path`; Claude's are capitalised and
+// use `file_path`. The hook CORES speak the Claude shape (they were written against that event first),
+// so translate here rather than teaching every core two dialects. Returns null when there is nothing
+// for a hook to look at -- wrong tool, no path, or not a PalSync workspace.
+//
+// Pi has no MultiEdit/NotebookEdit, and `bash` is deliberately absent for the same reason the Claude
+// guard omits it: deciding which shell invocations write means guessing.
+const PI_WRITE_TOOLS = { edit: "Edit", write: "Write" };
+
+function piWriteEvent(workspaceDir, event) {
+    if (!workspaceDir || !event) return null;
+    const toolName = PI_WRITE_TOOLS[String(event.toolName || "").toLowerCase()];
+    if (!toolName) return null;
+    const input = event.input && typeof event.input === "object" ? event.input : {};
+    const target = typeof input.path === "string" ? input.path : null;
+    if (!target || !isPalsyncWorkspace(workspaceDir)) return null;
+    return { cwd: workspaceDir, tool_name: toolName, tool_input: { file_path: target } };
+}
+
+// A ToolResultEventResult that ADDS a text block and changes nothing else. `isError` and `details`
+// are echoed back deliberately: post-write feedback must never turn a successful edit into a failure,
+// and Pi treats an omitted field as "no opinion" rather than "unchanged", so being explicit is safer.
+function piAppendContent(event, text) {
+    if (!event || !text) return null;
+    const content = Array.isArray(event.content) ? event.content : [];
+    return {
+        content: [...content, { type: "text", text }],
+        details: event.details,
+        isError: !!event.isError,
+    };
+}
+
 function completionFingerprint(workspaceDir, gate) {
     const hash = crypto.createHash("sha256").update(String(gate && gate.code || "UNKNOWN"));
     for (const file of [".palsync.json", "EXECUTION.md", "REVIEW.md", ".palsync/tool-evidence.jsonl"]) {
@@ -115,4 +147,4 @@ function completionFollowUp(gate, fingerprint, previousFingerprint) {
 
 module.exports = { CORE_TOOLS, routeItems, routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision,
     imageTokens, contentStats, piUsageEntry, appendPiUsage, isPalsyncWorkspace,
-    completionFingerprint, completionFollowUp };
+    completionFingerprint, completionFollowUp, piWriteEvent, piAppendContent, PI_WRITE_TOOLS };
