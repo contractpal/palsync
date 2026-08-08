@@ -60,7 +60,7 @@ const USAGE = [
     "  palsync checkpoint \"<line>\" [--dir <ws>]                     Append a line to EXECUTION.md's Checkpoints section",
     "  palsync sync-datasets [--datasets a,b] [--recreate] [--keep-lock] [--dir <ws>]",
     "                                                               Provision dataset tables from pal.json (safe by default)",
-    "  palsync hook completion|guard --mode claude|json [--dir <ws>]  Agent-harness hook adapters (read the event on stdin; always exit 0).",
+    "  palsync hook completion|guard|post-write --mode claude|json [--dir <ws>]  Agent-harness hook adapters (read the event on stdin; always exit 0).",
     "                                                               completion = Stop gate; guard = PreToolUse deny on writes to .palsync.json.",
     "                                                               Installed into .claude/settings.json automatically for the claude agent.",
     "",
@@ -226,7 +226,12 @@ function readStdin() {
 async function runHookCommand(argv, inputText) {
     try {
         const adapter = argv[0];
-        if (adapter !== "completion" && adapter !== "guard") throw new Error("unknown hook adapter");
+        const ADAPTERS = {
+            completion: "../core/completionHook",
+            guard: "../core/guardHook",
+            "post-write": "../core/postWriteHook",
+        };
+        if (!Object.prototype.hasOwnProperty.call(ADAPTERS, adapter)) throw new Error("unknown hook adapter");
         let mode = "json", dir;
         for (let i = 1; i < argv.length; i++) {
             if (argv[i] === "--mode") mode = argv[++i];
@@ -238,8 +243,7 @@ async function runHookCommand(argv, inputText) {
         if (mode !== "claude" && mode !== "json") throw new Error("unsupported hook mode " + mode);
         let event = null;
         if (mode === "claude") event = JSON.parse(inputText === undefined ? await readStdin() : inputText);
-        const adapterModule = adapter === "guard" ? "../core/guardHook" : "../core/completionHook";
-        const evaluated = require(adapterModule).evaluate({ mode, cwd: dir, event });
+        const evaluated = require(ADAPTERS[adapter]).evaluate({ mode, cwd: dir, event });
         if (evaluated.output) console.log(JSON.stringify(evaluated.output));
         return 0;
     } catch (e) {

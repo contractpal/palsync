@@ -86,6 +86,20 @@ test("the PreToolUse guard installs with its matcher and is idempotent", async (
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
+test("the PostToolUse post-write hook installs with its matcher and is idempotent", async () => {
+    const ws = tmpWorkspace();
+    await hooks.configure(ws, { install: true });
+    const first = fs.readFileSync(settingsPath(ws), "utf8");
+    const again = await hooks.configure(ws, { install: true });
+    const value = JSON.parse(first);
+    const group = value.hooks.PostToolUse.find(item => item.hooks.some(hook => hook.command === hooks.POST_WRITE_COMMAND));
+    assert.ok(group, "post-write group present");
+    assert.equal(group.matcher, hooks.POST_WRITE_MATCHER);
+    assert.equal(again.changed, false);
+    assert.equal(fs.readFileSync(settingsPath(ws), "utf8"), first);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
 test("switching away removes both owned hooks and leaves no empty scaffolding", async () => {
     const ws = tmpWorkspace();
     await hooks.configure(ws, { install: true });

@@ -10,8 +10,14 @@ const GUARD_HOOK = { type: "command", command: GUARD_COMMAND, timeout: 10 };
 // Only the tools that write a file at a caller-supplied path; the guard matches by resolved path and
 // deliberately does not inspect Bash commands (see src/core/guardHook.js).
 const GUARD_MATCHER = "Edit|Write|MultiEdit|NotebookEdit";
+// Post-write feedback (C3). Same matcher as the guard: the tools that write a caller-supplied path.
+// Advisory only -- src/core/postWriteHook.js never blocks, so this entry cannot wedge a session.
+const POST_WRITE_COMMAND = "palsync hook post-write --mode claude";
+const POST_WRITE_HOOK = { type: "command", command: POST_WRITE_COMMAND, timeout: 10 };
+const POST_WRITE_MATCHER = GUARD_MATCHER;
 const MANUAL_REMEDIATION = "Add these hooks manually to .claude/settings.json: Stop -> " +
-    COMPLETION_COMMAND + ", PreToolUse (matcher " + GUARD_MATCHER + ") -> " + GUARD_COMMAND;
+    COMPLETION_COMMAND + ", PreToolUse (matcher " + GUARD_MATCHER + ") -> " + GUARD_COMMAND +
+    ", PostToolUse (matcher " + POST_WRITE_MATCHER + ") -> " + POST_WRITE_COMMAND;
 
 // One entry per PalSync-owned hook. `event` is the settings.hooks key it installs under; `matcher` is
 // omitted for events that take none (Stop). Adding a hook means adding a row here -- the merge,
@@ -19,6 +25,7 @@ const MANUAL_REMEDIATION = "Add these hooks manually to .claude/settings.json: S
 const OWNED_HOOKS = [
     { event: "Stop", command: COMPLETION_COMMAND, hook: COMPLETION_HOOK, matcher: null },
     { event: "PreToolUse", command: GUARD_COMMAND, hook: GUARD_HOOK, matcher: GUARD_MATCHER },
+    { event: "PostToolUse", command: POST_WRITE_COMMAND, hook: POST_WRITE_HOOK, matcher: POST_WRITE_MATCHER },
 ];
 
 function isObject(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
@@ -92,5 +99,6 @@ module.exports = {
     configure, mergeSettings, owned, OWNED_HOOKS,
     COMPLETION_COMMAND, COMPLETION_HOOK,
     GUARD_COMMAND, GUARD_HOOK, GUARD_MATCHER,
+    POST_WRITE_COMMAND, POST_WRITE_HOOK, POST_WRITE_MATCHER,
     MANUAL_REMEDIATION,
 };
