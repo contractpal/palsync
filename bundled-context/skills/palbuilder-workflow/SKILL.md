@@ -42,6 +42,10 @@ workflow-JS workarounds (no object literals, no `.forEach`, etc.) that apply thr
   workflow: the XML dialect, `c:wizard`/`c:wizard-next`/`c:wizard-previous` tags, and the
   `Packet.addWizard`/`getWizard`/`deleteWizard` API. Read when a pal uses `<c:wizard>`, a
   `pal.json` `wizards` section, or any multi-step data-collection flow.
+- **`references/documents.md`** — HTML and PDF documents inside a transaction `Packet`:
+  `Packet.addDocument`/`getDocument`/`deleteDocument`, the `fields.Field`/`signatures.Signature`
+  manifest shape (differs by content type), click-signature flow, and the `c:document` tag. Read
+  when a pal creates, signs, or renders a packet `Document`.
 - **`references/console-system.md`** — `workflowType: 11`. Background jobs — pointer to
   `palbuilder-realtime` which owns this in depth.
 - **`references/webservices.md`** — `workflowType: 5` / `12` / `14`. Webservice endpoints

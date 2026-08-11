@@ -9,14 +9,15 @@ Companion:
 - `../SKILL.md` — the `run()` pattern, reserved globals (universal to all types)
 - `console.md` — one common way to reach a transaction workflow, not the only way
 - `wizards.md` — multi-dialog data-collection flows within a transaction
+- `documents.md` — HTML/PDF documents, fields, and the click-signature flow in depth
 
 **Official APIs:**
 - Transaction controller — https://secure.cloudpiston.com/cpal/cp-api/transaction/index.html
 - Packet — https://secure.cloudpiston.com/cpal/cp-api/transaction/Packet.html
 
-> **Coverage note.** Transaction packet APIs are extensive; documents (the primary auditing
-> surface) will get their own reference later. This file covers the recurring workflow
-> patterns and the packet-mutation model you need for any transaction workflow.
+> **Coverage note.** Transaction packet APIs are extensive. This file covers the recurring
+> workflow patterns and the packet-mutation model you need for any transaction workflow;
+> `documents.md` covers documents and signatures in depth.
 
 ---
 
@@ -210,8 +211,8 @@ DataLists and Data via `${var}` template syntax and render to HTML that can be:
 - Converted to PDF for signature or archival
 
 **Documents are the primary auditing surface** in a transaction — the rendered document is
-the record of what was agreed to at signing time. A future reference will cover documents
-in depth (rendering, versioning, PDF conversion, print styles).
+the record of what was agreed to at signing time. Rendering, fields, the click-signature flow,
+and the `c:document` tag: `documents.md`.
 
 ### Signatures
 
@@ -232,7 +233,8 @@ Design flow:
 - Post-signature edits to the underlying data may invalidate the signature (verify against
   the API for the specific invalidation rules)
 
-Document + signature details will be covered in the forthcoming documents reference.
+Full document + signature API, the `fields.Field`/`signatures.Signature` manifest shape, and a
+working end-to-end example: `documents.md`.
 
 ---
 

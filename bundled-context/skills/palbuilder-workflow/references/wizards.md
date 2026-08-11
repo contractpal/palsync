@@ -9,6 +9,7 @@ string you handle like any other `c.getAction()` case.
 Companion:
 - `../SKILL.md` — the `run()`/action-switch pattern the wizard hands back into
 - `transaction.md` — wizards are driven from a transaction `Packet`; read this first
+- `documents.md` — feeding a wizard's collected `Data` into a document at creation time
 - `palbuilder-frontend` — fragments/pages hosting the `c:wizard*` tags
 - `palbuilder-core/references/pal-structure.md` — the `wizards/` folder and manifest entry shape
 - `palbuilder-core/references/pal-json.md` — `wizards` section in `pal.json`
