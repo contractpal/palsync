@@ -3,36 +3,104 @@ const fs = require("fs/promises");
 const path = require("path");
 const { writeIfChanged } = require("../core/atomicWrite");
 
-const COMPLETION_COMMAND = "palsync hook completion --mode claude";
+// Deterministic hook commands: Claude Code executes hook commands through a shell, so a bare
+// `palsync hook ...` resolves through PATH and can execute the wrong binary. Instead the adapter
+// runs through the exact Node binary that is running this code plus the absolute script path, both
+// shell-quoted for the current platform so paths with spaces survive. The adapter tokens after the
+// script are static and unquoted.
+const NODE_EXECUTABLE = path.resolve(process.execPath);
+const HOOK_SCRIPT = path.resolve(__dirname, "..", "..", "bin", "palsync.js");
+function shq(value, platform = process.platform) {
+    return platform === "win32"
+        ? '"' + String(value) + '"'
+        : "'" + String(value).replace(/'/g, "'\\''") + "'";
+}
+function generateCommand(adapter, nodePath = NODE_EXECUTABLE, script = HOOK_SCRIPT, platform = process.platform) {
+    return shq(nodePath, platform) + " " + shq(script, platform) + " hook " + adapter + " --mode claude";
+}
+
+const COMPLETION_COMMAND = generateCommand("completion");
 const COMPLETION_HOOK = { type: "command", command: COMPLETION_COMMAND, timeout: 10 };
-const GUARD_COMMAND = "palsync hook guard --mode claude";
+const GUARD_COMMAND = generateCommand("guard");
 const GUARD_HOOK = { type: "command", command: GUARD_COMMAND, timeout: 10 };
 // Only the tools that write a file at a caller-supplied path; the guard matches by resolved path and
 // deliberately does not inspect Bash commands (see src/core/guardHook.js).
 const GUARD_MATCHER = "Edit|Write|MultiEdit|NotebookEdit";
 // Post-write feedback (C3). Same matcher as the guard: the tools that write a caller-supplied path.
 // Advisory only -- src/core/postWriteHook.js never blocks, so this entry cannot wedge a session.
-const POST_WRITE_COMMAND = "palsync hook post-write --mode claude";
+const POST_WRITE_COMMAND = generateCommand("post-write");
 const POST_WRITE_HOOK = { type: "command", command: POST_WRITE_COMMAND, timeout: 10 };
 const POST_WRITE_MATCHER = GUARD_MATCHER;
 const MANUAL_REMEDIATION = "Add these hooks manually to .claude/settings.json: Stop -> " +
-    COMPLETION_COMMAND + ", PreToolUse (matcher " + GUARD_MATCHER + ") -> " + GUARD_COMMAND +
-    ", PostToolUse (matcher " + POST_WRITE_MATCHER + ") -> " + POST_WRITE_COMMAND;
+    COMPLETION_COMMAND + ", PreToolUse (matcher " + GUARD_MATCHER + ") -> " +
+    GUARD_COMMAND + ", PostToolUse (matcher " + POST_WRITE_MATCHER + ") -> " +
+    POST_WRITE_COMMAND;
 
 // One entry per PalSync-owned hook. `event` is the settings.hooks key it installs under; `matcher` is
 // omitted for events that take none (Stop). Adding a hook means adding a row here -- the merge,
 // removal, and empty-key cleanup below are generic over this table.
 const OWNED_HOOKS = [
-    { event: "Stop", command: COMPLETION_COMMAND, hook: COMPLETION_HOOK, matcher: null },
-    { event: "PreToolUse", command: GUARD_COMMAND, hook: GUARD_HOOK, matcher: GUARD_MATCHER },
-    { event: "PostToolUse", command: POST_WRITE_COMMAND, hook: POST_WRITE_HOOK, matcher: POST_WRITE_MATCHER },
+    { event: "Stop", adapter: "completion", command: COMPLETION_COMMAND, hook: COMPLETION_HOOK, matcher: null },
+    { event: "PreToolUse", adapter: "guard", command: GUARD_COMMAND, hook: GUARD_HOOK, matcher: GUARD_MATCHER },
+    { event: "PostToolUse", adapter: "post-write", command: POST_WRITE_COMMAND, hook: POST_WRITE_HOOK, matcher: POST_WRITE_MATCHER },
 ];
 
 function isObject(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
-function ownedBy(command) {
-    return hook => isObject(hook) && hook.type === "command" && hook.command === command;
+
+// Split a hook command into shell tokens honoring single and double quotes (the two quote styles a
+// settings.json command can use), so a quoted path containing spaces stays one token. Concatenation
+// like 'a'"b" is supported; backslash escapes are not (paths containing a backslash-quote are not a
+// realistic settings form, and our own generated form uses platform-appropriate quotes).
+function tokenizeCommand(command) {
+    const tokens = [];
+    const s = String(command);
+    let i = 0;
+    while (i < s.length) {
+        while (i < s.length && /\s/.test(s[i])) i += 1;
+        if (i >= s.length) break;
+        let token = "";
+        while (i < s.length && !/\s/.test(s[i])) {
+            const ch = s[i];
+            if (ch === "'" || ch === '"') {
+                const quote = ch;
+                i += 1;
+                while (i < s.length && s[i] !== quote) { token += s[i]; i += 1; }
+                if (i < s.length) i += 1;
+            } else { token += ch; i += 1; }
+        }
+        tokens.push(token);
+    }
+    return tokens;
 }
-function owned(hook) { return OWNED_HOOKS.some(entry => ownedBy(entry.command)(hook)); }
+
+// Recognize the prior generated form "<node> <script> hook <adapter> --mode claude" (the previous
+// deterministic variant, seen in the wild before the bare `palsync` command). Anchored at exactly
+// six tokens and the trailing "--mode claude", so shell prefixes (`cd … &&`, `exec`), wrappers
+// (`env`, one-token absolute launchers) and suffixes like `--custom` never match; the executable must
+// be Node, the script token must end in `palsync.js` under either separator, and the adapter must be
+// one of PalSync's generated adapters. Returns the adapter token, or null.
+function parseGeneratedCommand(command) {
+    const tokens = tokenizeCommand(command);
+    if (tokens.length !== 6 || tokens[2] !== "hook" || tokens[4] !== "--mode" || tokens[5] !== "claude") return null;
+    const executable = String(tokens[0]).split(/[\\/]/).pop().toLowerCase();
+    if (!new Set(["node", "node.exe", "nodejs", "nodejs.exe"]).has(executable)) return null;
+    if (String(tokens[1]).split(/[\\/]/).pop() !== "palsync.js") return null;
+    if (!["completion", "guard", "post-write"].includes(tokens[3])) return null;
+    return tokens[3];
+}
+
+// Ownership covers every form PalSync has ever written: the current generated command, the exact
+// legacy bare command, and the anchored prior node+script form. `adapter` scopes ownership so a
+// guard command sitting under Stop (a user misconfiguration) is never mistaken for ours.
+function isOwnedCommand(command, adapter) {
+    return command === generateCommand(adapter, process.execPath, HOOK_SCRIPT)
+        || command === "palsync hook " + adapter + " --mode claude"
+        || parseGeneratedCommand(command) === adapter;
+}
+function ownedBy(adapter) {
+    return hook => isObject(hook) && hook.type === "command" && isOwnedCommand(hook.command, adapter);
+}
+function owned(hook) { return OWNED_HOOKS.some(entry => ownedBy(entry.adapter)(hook)); }
 
 function mergeSettings(settings, install) {
     if (!isObject(settings)) return { ok: false, error: "settings root must be a JSON object" };
@@ -47,19 +115,53 @@ function mergeSettings(settings, install) {
     for (const entry of OWNED_HOOKS) {
         const groups = next.hooks[entry.event] || [];
         if (install) {
-            const exists = groups.some(group => isObject(group) && Array.isArray(group.hooks) &&
-                group.hooks.some(ownedBy(entry.command)));
-            if (!exists) {
-                // A matcher-bearing group must carry its matcher, or the hook would fire for every tool.
-                groups.push(entry.matcher === null
-                    ? { hooks: [entry.hook] }
-                    : { matcher: entry.matcher, hooks: [entry.hook] });
+            // Migrate before existence detection: every owned form of the entry becomes the canonical
+            // command in place. The FIRST owned hook object survives (all its fields except command),
+            // later owned copies are dropped, and for matcher-bearing events an owned hook under a
+            // foreign matcher is stale and removed -- the guard/post-write may only live in a group
+            // carrying the canonical matcher. Stop needs no matcher, so it can remain in its group.
+            let surviving = false;
+            for (const group of groups) {
+                if (!isObject(group) || !Array.isArray(group.hooks)) continue;
+                const canonicalGroup = entry.matcher === null || group.matcher === entry.matcher;
+                const migrated = [];
+                for (const hook of group.hooks) {
+                    if (ownedBy(entry.adapter)(hook)) {
+                        if (canonicalGroup && !surviving) {
+                            migrated.push(Object.assign({}, hook, { command: entry.command }));
+                            surviving = true;
+                        }
+                    } else {
+                        migrated.push(hook);
+                    }
+                }
+                group.hooks = migrated;
+            }
+            // Current empty-group cleanup: drop a group only when nothing but our own key set is
+            // left, so a user's matcher or other bookkeeping on a shared group is never discarded.
+            for (let i = groups.length - 1; i >= 0; i--) {
+                const group = groups[i];
+                if (!isObject(group) || !Array.isArray(group.hooks)) continue;
+                const onlyOurKeys = Object.keys(group).every(key => key === "hooks" || key === "matcher");
+                if (!group.hooks.length && onlyOurKeys) groups.splice(i, 1);
+            }
+            // Nothing survived (fresh install, or stale entries were removed): reuse an existing
+            // canonical-matcher group for the matcher-bearing events, else create one.
+            if (!surviving) {
+                if (entry.matcher === null) {
+                    groups.push({ hooks: [entry.hook] });
+                } else {
+                    const canonical = groups.find(group =>
+                        isObject(group) && Array.isArray(group.hooks) && group.matcher === entry.matcher);
+                    if (canonical) canonical.hooks.push(entry.hook);
+                    else groups.push({ matcher: entry.matcher, hooks: [entry.hook] });
+                }
             }
         } else {
             for (let i = groups.length - 1; i >= 0; i--) {
                 const group = groups[i];
                 if (!isObject(group) || !Array.isArray(group.hooks)) continue;
-                group.hooks = group.hooks.filter(hook => !ownedBy(entry.command)(hook));
+                group.hooks = group.hooks.filter(hook => !ownedBy(entry.adapter)(hook));
                 // Drop a group only when nothing but our own key set is left, so a user's matcher or
                 // other bookkeeping on a shared group is never discarded.
                 const onlyOurKeys = Object.keys(group).every(key => key === "hooks" || key === "matcher");
@@ -96,7 +198,7 @@ async function configure(workspaceDir, { install }) {
 }
 
 module.exports = {
-    configure, mergeSettings, owned, OWNED_HOOKS,
+    configure, mergeSettings, owned, OWNED_HOOKS, generateCommand,
     COMPLETION_COMMAND, COMPLETION_HOOK,
     GUARD_COMMAND, GUARD_HOOK, GUARD_MATCHER,
     POST_WRITE_COMMAND, POST_WRITE_HOOK, POST_WRITE_MATCHER,
