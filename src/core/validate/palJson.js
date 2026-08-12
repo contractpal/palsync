@@ -17,7 +17,7 @@ const { analyzeFolderRegistrations } = require("../palFolders");
 
 // Folders whose files are pushed via pal.json entries. Matches the keys used in real pal.json
 // files (verified against V2-OE-Website).
-const CREATABLE_FOLDERS = ["pages", "fragments", "styles", "scripts", "images", "emails", "attachments", "wizards"];
+const CREATABLE_FOLDERS = ["pages", "fragments", "styles", "scripts", "images", "emails", "attachments", "wizards", "documents"];
 
 // Type hint for the error message so the agent knows which stanza to copy.
 const FOLDER_TYPE = {
@@ -29,6 +29,7 @@ const FOLDER_TYPE = {
     emails:      "Email",
     attachments: "Attachment",
     wizards:     "Wizard",
+    documents:   "Document",
 };
 
 function manifestEntryTemplate(rel, typeName) {

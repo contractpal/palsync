@@ -165,11 +165,11 @@ test("summary and debug collapse preserve every failure line and context", () =>
 test("push envelope warns for every unpushed stray and skipped file", () => {
     const findings = pushVisibilityFindings({
         strayCreatable: ["pages/unregistered.html"],
-        skipped: [{ type: "documents", file: "brief.pdf", reason: "new entry — not creatable via push (use PalBuilder)" }]
+        skipped: [{ type: "fonts", file: "brand.ttf", reason: "new entry — not creatable via push (use PalBuilder)" }]
     });
     assert.deepStrictEqual(findings.map(item => [item.severity, item.rule, item.file]), [
         ["warn", "strayCreatable", "pages/unregistered.html"],
-        ["warn", "pushSkipped", "documents/brief.pdf"]
+        ["warn", "pushSkipped", "fonts/brand.ttf"]
     ]);
     assert.match(findings[1].message, /not creatable via push/);
 });

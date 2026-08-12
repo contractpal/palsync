@@ -14,6 +14,9 @@ Companion:
 **Official APIs:**
 - Transaction controller — https://secure.cloudpiston.com/cpal/cp-api/transaction/index.html
 - Packet — https://secure.cloudpiston.com/cpal/cp-api/transaction/Packet.html
+- ProfileTxManager - https://secure.cloudpiston.com/cpal/cp-api/transaction/ProfileTxManager.html
+- ZoneAccess - https://secure.cloudpiston.com/cpal/cp-api/transaction/ZoneAccess.html
+- NavigatorResponse - https://secure.cloudpiston.com/cpal/cp-api/web/NavigatorResponse.html
 
 > **Coverage note.** Transaction packet APIs are extensive. This file covers the recurring
 > workflow patterns and the packet-mutation model you need for any transaction workflow;
@@ -38,7 +41,8 @@ Tradeoffs:
   audit-required forms — where the legal weight of the document + signature trail is the
   point.
 
-If you don't need documents or signatures, use pal datasets directly instead.
+Use ProfileTxManager for searching for existing transactions based on role or group permissions.
+You almost never need to use datasets or cubes for this purpose.
 
 ---
 
@@ -69,6 +73,11 @@ flow (a signing flow, a single data-collection form, etc.), with no console app 
 Pick the shape the pal actually needs — don't add a console workflow "to orchestrate" a
 transaction that doesn't need one, and don't assume an existing transaction-only pal is
 missing something.
+
+Although a TransactionPacket is exposed in the web pal API, avoid as much as possible using it there unless explicitly needed.
+You can direct access to a specific transaction or a new transaction from a web pal using the NavigatorResponse API.
+
+To access a transaction packet without the user having a role or group access, use ZoneAccess.
 
 ---
 

@@ -20,16 +20,14 @@ const baseline = require("./baseline");
 const lock = require("./lock");
 const drift = require("./drift");
 
-// Types that CANNOT be created via push: the server rejects a NEW entry of these types and the
-// rejection fails the WHOLE save transactionally (documents: need a description + valid XML;
-// fonts: rejected outright). Editing EXISTING ones is fine. CLAUDE.md tells Claude not to create
-// them — this is the backstop so a stray addition can't sink a push.
-// NOTE: workflows were once listed here, but that was a Base64 artifact, not a real ban —
-// Workflow.content is a byte[] and raw text sank the push. New workflows ARE creatable; see
-// guardWorkflows (it only strips malformed ones missing workflowType).
 // Creatable types: a file on disk in these folders with NO pal.json entry is NEVER pushed —
 // the #1 silent failure of the OBE smoke test (22 new pages "pushed OK" but absent). Push now
 // reports these loudly so the agent fixes pal.json instead of reporting false success.
+// NOTE: workflows and documents were once banned here too (see UNCREATABLE below), but that
+// turned out to be false for both: workflows was a Base64 artifact (Workflow.content is a
+// byte[]; raw text sank the push — see guardWorkflows), and documents was this same file's
+// non-array `entry` bug (see asArray below) letting a malformed new entry reach the server
+// unguarded, which read as a hard ban. Both create fine once pushed correctly.
 const CREATABLE = [
     { key: "pages", folder: "pages" },
     { key: "fragments", folder: "fragments" },
@@ -38,28 +36,39 @@ const CREATABLE = [
     { key: "images", folder: "images" },
     { key: "emails", folder: "emails" },
     { key: "attachments", folder: "attachments" },
-    { key: "wizards", folder: "wizards" }
+    { key: "wizards", folder: "wizards" },
+    { key: "documents", folder: "documents" }
 ];
 
 // Files on disk in creatable folders that have no pal.json entry → will NOT be pushed.
 function findStrayCreatable(pal, workspaceDir) {
     const stray = [];
     for (const t of CREATABLE) {
-        const manifest = new Set((((pal[t.key] && pal[t.key].entry)) || []).map(e => e.string));
+        const manifest = new Set(asArray(pal[t.key] && pal[t.key].entry).map(e => e.string));
         const files = listFilesRecursive(path.join(workspaceDir, t.folder));
         for (const f of files) if (!manifest.has(f)) stray.push(t.folder + "/" + f);
     }
     return stray;
 }
 
+// fonts: the server rejects a NEW entry outright and the rejection fails the WHOLE save
+// transactionally. Editing an EXISTING font is fine. This is the backstop so a stray addition
+// can't sink a push.
 const UNCREATABLE = [
-    { key: "documents", folder: "documents" },
     { key: "fonts", folder: "fonts" }
 ];
 
 // Valid workflowType numbers (from the platform's workflow-type enum). A new workflow with no
 // workflowType is the one malformed case that still sinks the whole transactional save.
 const WORKFLOW_TYPES = new Set([2, 3, 4, 5, 7, 9, 11, 12, 14, 15]);
+
+// pal.json (and getPal responses) serialize a single-entry section as a bare object rather than
+// a one-element array — the XML source has no way to distinguish "one repeated element" from
+// "a scalar". A brand-new document/workflow/creatable file is very often the ONLY entry in its
+// section, so every helper below that walks `section.entry` must normalize through this first;
+// skipping it either silently no-ops the uncreatable-type guard (letting a new document reach
+// the server, which then rejects the WHOLE transactional save) or throws (`.map` on a plain object).
+function asArray(v) { return v == null ? [] : (Array.isArray(v) ? v : [v]); }
 
 function isFile(p) { try { return fs.statSync(p).isFile(); } catch (e) { return false; } }
 
@@ -187,8 +196,8 @@ function serverKnownFrom(resp) {
         const sp = resp && resp.pal;
         if (!sp) return null;
         const setOf = (k) => new Set((((sp[k] && sp[k].entry)) ? (Array.isArray(sp[k].entry) ? sp[k].entry : [sp[k].entry]) : []).map(e => e.string));
-        // workflows: needed by guardWorkflows (new-vs-existing); documents/fonts: by guardUncreatableTypes.
-        return { workflows: setOf("workflows"), documents: setOf("documents"), fonts: setOf("fonts") };
+        // workflows: needed by guardWorkflows (new-vs-existing); fonts: by guardUncreatableTypes.
+        return { workflows: setOf("workflows"), fonts: setOf("fonts") };
     } catch (e) { return null; }
 }
 
@@ -198,18 +207,17 @@ function guardUncreatableTypes(pal, workspaceDir, serverKnown) {
     const skipped = [];
     for (const t of UNCREATABLE) {
         const known = (serverKnown && serverKnown[t.key]) || new Set();
-        const node = pal[t.key] && pal[t.key].entry;
         // (1) strip new entries (only when we have a baseline; otherwise leave them and let the
         //     server's transactional rejection protect us — never risk dropping a valid entry)
-        if (serverKnown && Array.isArray(node)) {
-            pal[t.key].entry = node.filter(e => {
+        if (serverKnown && pal[t.key]) {
+            pal[t.key].entry = asArray(pal[t.key].entry).filter(e => {
                 if (known.has(e.string)) return true;
                 skipped.push({ type: t.key, file: e.string, reason: "new entry — not creatable via push (use PalBuilder)" });
                 return false;
             });
         }
         // (2) report stray files on disk with no manifest entry (already excluded; informational)
-        const manifest = new Set(((pal[t.key] && pal[t.key].entry) || []).map(e => e.string));
+        const manifest = new Set(asArray(pal[t.key] && pal[t.key].entry).map(e => e.string));
         let files = [];
         try { files = fs.readdirSync(path.join(workspaceDir, t.folder)).filter(f => isFile(path.join(workspaceDir, t.folder, f))); } catch (e) {}
         for (const f of files) if (!manifest.has(f) && !known.has(f)) skipped.push({ type: t.key, file: f, reason: "stray file — not pushed (use PalBuilder)" });
@@ -224,10 +232,9 @@ function guardUncreatableTypes(pal, workspaceDir, serverKnown) {
 // Mutates pal. Returns [{type, file, reason}].
 function guardWorkflows(pal, serverKnown) {
     const skipped = [];
-    const node = pal.workflows && pal.workflows.entry;
-    if (!serverKnown || !Array.isArray(node)) return skipped; // no baseline -> let the server arbitrate
+    if (!serverKnown || !pal.workflows) return skipped; // no baseline -> let the server arbitrate
     const known = serverKnown.workflows || new Set();
-    pal.workflows.entry = node.filter(e => {
+    pal.workflows.entry = asArray(pal.workflows.entry).filter(e => {
         if (known.has(e.string)) return true;                 // existing workflow — edit is fine
         const obj = e.Workflow || e.workflow;
         const wt = obj && obj.workflowType;
@@ -327,9 +334,9 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
     const pal = await Pal.fromPath(workspaceDir);
     pal.id = id;
     const prunedFolders = prunePhantomFolderRegistrations(pal);
-    // Backstop: strip NEW entries of uncreatable types (documents/fonts) so they can't sink the
+    // Backstop: strip NEW entries of uncreatable types (fonts) so they can't sink the
     // whole push; report stray files. Plus strip only MALFORMED new workflows (no workflowType) —
-    // well-formed new workflows now push. Creatable types are never touched. Parsed from the
+    // well-formed new workflows now push. Creatable types (incl. documents) are never touched. Parsed from the
     // getPal response the lock acquisition already fetched — no second GetPal round-trip.
     const serverKnown = serverKnownFrom(lk.getPalResp);
     const skipped = guardUncreatableTypes(pal, workspaceDir, serverKnown)
@@ -375,4 +382,4 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
              serverPaths: pushedPaths, webRegistered, consoleRegistered, prunedFolders };
 }
 
-module.exports = { push, buildSaveTask, normalizeValidation, gateLint, guardWorkflows, ensureWebRegistration, ensureConsoleRegistration };
+module.exports = { push, buildSaveTask, normalizeValidation, gateLint, guardWorkflows, guardUncreatableTypes, findStrayCreatable, ensureWebRegistration, ensureConsoleRegistration };

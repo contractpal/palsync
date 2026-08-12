@@ -51,13 +51,14 @@ const BASE64_TYPES = [
 ];
 
 // Folders whose NEW local files palsync can legitimately push (and so whose pal.json entries
-// are worth carrying forward through a pull). Workflows are creatable too (well-formed, with a
-// workflowType). documents/fonts are server-rejected on create; datasets/dataviews remain
-// PalBuilder-provisioned. data/datalists ARE creatable — see core/dataObjects.js, which is the
-// only supported way to create/update/delete them (never hand-edit pal.json's data/datalists
-// entries directly; the shape is easy to get subtly wrong). Files of the non-creatable types are
-// still PRESERVED on disk (never destroy local work) — they just can't ride a push.
-const CREATABLE_FOLDERS = new Set(["pages", "fragments", "scripts", "styles", "images", "emails", "attachments", "workflows", "wizards", "data", "datalists"]);
+// are worth carrying forward through a pull). Workflows and documents are creatable too
+// (workflows need a well-formed workflowType). fonts are server-rejected on create; datasets/
+// dataviews remain PalBuilder-provisioned. data/datalists ARE creatable — see core/dataObjects.js,
+// which is the only supported way to create/update/delete them (never hand-edit pal.json's
+// data/datalists entries directly; the shape is easy to get subtly wrong). Files of the
+// non-creatable types are still PRESERVED on disk (never destroy local work) — they just can't
+// ride a push.
+const CREATABLE_FOLDERS = new Set(["pages", "fragments", "scripts", "styles", "images", "emails", "attachments", "workflows", "wizards", "documents", "data", "datalists"]);
 
 // Compute the set of POSIX-style relative paths the current server manifest will write into
 // the workspace (everything inside the 14 manifest folders). Exposed for tests/diagnostics.
