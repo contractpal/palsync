@@ -6,6 +6,7 @@ const assert = require("node:assert");
 const fs = require("node:fs");
 const { parseFlags, defaultPreviewOpen, USAGE, run } = require("../src/cli/syncCommands");
 const contextInject = require("../src/launcher/contextInject");
+const claudeHooks = require("../src/launcher/claudeHooks");
 const { tmpWorkspace } = require("./helpers");
 
 test("parseFlags: preview open is tri-state", () => {
@@ -202,4 +203,143 @@ test("open runs the core preview and opens the web raw token without printing it
     assert.equal(calls.released.length, 1);
     assert.match(output.join("\n"), /Opened the web preview in your browser/);
     assert.doesNotMatch(output.join("\n"), /raw-token/);
+});
+
+// --- `palsync hooks check|repair` (recovery surface for stale Claude Code hook settings) ---
+
+test("hooks check and repair run offline and migrate legacy entries without relaunching", async () => {
+    const ws = tmpWorkspace({ ".claude/settings.json": JSON.stringify({ hooks: {
+        Stop: [{ hooks: [{ type: "command", command: "palsync hook completion --mode claude" }] }],
+        PreToolUse: [{ matcher: "Edit|Write|MultiEdit|NotebookEdit", hooks: [{ type: "command", command: "palsync hook guard --mode claude" }] }],
+    } }, null, 2) + "\n" });
+    // A nonexistent fake home keeps the user-level scan hermetic (no real ~/.claude on the runner).
+    const fakeHome = ws + "/fake-home";
+    const originalLog = console.log;
+    const originalError = console.error;
+    const output = [];
+    console.log = (...args) => output.push(args.join(" "));
+    console.error = (...args) => output.push(args.join(" "));
+    try {
+        // No .palsync.json anywhere: hooks must dispatch fully offline.
+        assert.equal(await run("hooks", ["check", "--dir", ws], { homeDir: fakeHome }), 1);
+        assert.match(output.join("\n"), /stale/);
+        assert.match(output.join("\n"), /legacy form 'palsync hook guard --mode claude'/);
+        assert.match(output.join("\n"), /missing/);
+
+        assert.equal(await run("hooks", ["repair", "--dir", ws], { homeDir: fakeHome }), 0);
+        const value = JSON.parse(fs.readFileSync(require("node:path").join(ws, ".claude", "settings.json"), "utf8"));
+        assert.equal(value.hooks.Stop[0].hooks[0].command, claudeHooks.COMPLETION_COMMAND);
+        assert.equal(value.hooks.PreToolUse[0].hooks[0].command, claudeHooks.GUARD_COMMAND);
+        assert.equal(value.hooks.PostToolUse[0].hooks[0].command, claudeHooks.POST_WRITE_COMMAND, "missing hook installed by repair");
+
+        const after = [];
+        console.log = (...args) => after.push(args.join(" "));
+        assert.equal(await run("hooks", ["check", "--dir", ws], { homeDir: fakeHome }), 0);
+        assert.match(after.join("\n"), /ok/);
+        assert.doesNotMatch(after.join("\n"), /stale/);
+    } finally {
+        console.log = originalLog;
+        console.error = originalError;
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("hooks check and repair detect legacy entries in files PalSync never writes", async () => {
+    const ws = tmpWorkspace({ ".claude/settings.json": JSON.stringify({ hooks: {
+        Stop: [{ hooks: [{ type: "command", command: claudeHooks.COMPLETION_COMMAND }] }],
+        PreToolUse: [{ matcher: "Edit|Write|MultiEdit|NotebookEdit", hooks: [{ type: "command", command: claudeHooks.GUARD_COMMAND }] }],
+        PostToolUse: [{ matcher: "Edit|Write|MultiEdit|NotebookEdit", hooks: [{ type: "command", command: claudeHooks.POST_WRITE_COMMAND }] }],
+    } }, null, 2) + "\n" });
+    // User-level file with the failing bare form; project-local file with the pinned command
+    // (works, but unmanaged). Neither may ever be touched.
+    const home = tmpWorkspace({ ".claude/settings.json": JSON.stringify({ hooks: {
+        Stop: [{ hooks: [{ type: "command", command: "palsync hook completion --mode claude" }] }],
+    } }) + "\n" });
+    const local = require("node:path").join(ws, ".claude", "settings.local.json");
+    const localRaw = JSON.stringify({ hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: claudeHooks.GUARD_COMMAND }] }] } }) + "\n";
+    fs.writeFileSync(local, localRaw);
+    const originalLog = console.log;
+    const output = [];
+    console.log = (...args) => output.push(args.join(" "));
+    try {
+        // Workspace is healthy, but the user-level legacy entry keeps failing the hooks → exit 1.
+        assert.equal(await run("hooks", ["check", "--dir", ws], { homeDir: home }), 1);
+        assert.match(output.join("\n"), /~\/\.claude\/settings\.json/);
+        assert.match(output.join("\n"), /legacy form 'palsync hook completion --mode claude'/);
+        assert.match(output.join("\n"), /\.claude\/settings\.local\.json/);
+        assert.match(output.join("\n"), /pinned command \(works, but PalSync will not update it here\)/);
+
+        // Repair fixes the workspace file but cannot migrate the user-level entry → exit 1 + manual step.
+        output.length = 0;
+        assert.equal(await run("hooks", ["repair", "--dir", ws], { homeDir: home }), 1);
+        assert.match(output.join("\n"), /already healthy/);
+        assert.match(output.join("\n"), /Remove these entries manually/);
+        // Neither never-written file was modified.
+        assert.equal(fs.readFileSync(require("node:path").join(home, ".claude", "settings.json"), "utf8"),
+            JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: "palsync hook completion --mode claude" }] }] } }) + "\n");
+        assert.equal(fs.readFileSync(local, "utf8"), localRaw);
+    } finally {
+        console.log = originalLog;
+        fs.rmSync(ws, { recursive: true, force: true });
+        fs.rmSync(home, { recursive: true, force: true });
+    }
+});
+
+test("hooks check and repair refuse to touch a malformed workspace settings file", async () => {
+    const ws = tmpWorkspace({ ".claude/settings.json": "{broken\n" });
+    const fakeHome = ws + "/fake-home";
+    const originalLog = console.log;
+    const output = [];
+    console.log = (...args) => output.push(args.join(" "));
+    try {
+        assert.equal(await run("hooks", ["check", "--dir", ws], { homeDir: fakeHome }), 1);
+        assert.match(output.join("\n"), /malformed JSON/);
+        assert.match(output.join("\n"), /Add these hooks manually/);
+        assert.equal(await run("hooks", ["repair", "--dir", ws], { homeDir: fakeHome }), 1);
+        assert.match(output.join("\n"), /cannot repair automatically/);
+        assert.equal(fs.readFileSync(require("node:path").join(ws, ".claude", "settings.json"), "utf8"), "{broken\n");
+    } finally {
+        console.log = originalLog;
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("hooks check and repair are skipped for non-Claude workspaces", async () => {
+    const ws = tmpWorkspace({
+        ".palsync/context-manifest.json": JSON.stringify({ version: 1, agent: "pi", palName: "Demo" }) + "\n",
+    });
+    const output = [];
+    const originalLog = console.log;
+    console.log = (...args) => output.push(args.join(" "));
+    try {
+        // check: reports the agent, exit 0 — nothing to check.
+        assert.equal(await run("hooks", ["check", "--dir", ws], { homeDir: "/nonexistent" }), 0);
+        assert.match(output.join("\n"), /workspace agent is pi; Claude hooks not applicable/);
+        output.length = 0;
+        // repair: refuses without touching anything — no .claude/settings.json may appear.
+        assert.equal(await run("hooks", ["repair", "--dir", ws], { homeDir: "/nonexistent" }), 0);
+        assert.match(output.join("\n"), /workspace agent is pi; Claude hooks not applicable/);
+        assert.equal(fs.existsSync(require("node:path").join(ws, ".claude", "settings.json")), false);
+    } finally {
+        console.log = originalLog;
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("hooks requires check or repair and is registered in USAGE and SUBCOMMANDS", async () => {
+    assert.match(USAGE, /palsync hooks check\|repair/);
+    const bin = fs.readFileSync(require("node:path").join(__dirname, "..", "bin", "palsync.js"), "utf8");
+    assert.match(bin, /"hook", "hooks"/);
+    const originalError = console.error;
+    const errs = [];
+    console.error = (...args) => errs.push(args.join(" "));
+    try {
+        assert.equal(await run("hooks", [], { homeDir: "/nonexistent" }), 1);
+        assert.equal(await run("hooks", ["--force"], { homeDir: "/nonexistent" }), 1);
+        assert.equal(await run("hooks", ["check", "--dir"], { homeDir: "/nonexistent" }), 1);
+    } finally {
+        console.error = originalError;
+    }
+    assert.match(errs.join("\n"), /Usage: palsync hooks check\|repair/);
+    assert.match(errs.join("\n"), /--dir requires a value/);
 });

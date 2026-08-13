@@ -262,10 +262,15 @@ async function runHookCommand(argv, inputText) {
     }
 }
 
-// Returns the process exit code (0 ok, 1 refused/failed).
-async function run(cmd, argv) {
+// Returns the process exit code (0 ok, 1 refused/failed). `opts` is passed through to the hooks
+// command (test seam for the user-level settings file location); other commands ignore it.
+async function run(cmd, argv, opts) {
     if (cmd === "task" || cmd === "checkpoint") return runTaskCommand(cmd, argv);
     if (cmd === "hook") return runHookCommand(argv);
+    // `palsync hooks check|repair` — OFFLINE recovery surface for stale Claude Code hook
+    // settings (no .palsync.json, no login), dispatched before parseFlags/buildCliContext like
+    // task/checkpoint. `opts` is the test seam for the user-level settings file location.
+    if (cmd === "hooks") return require("./hooksCommand").run(argv, opts || {});
     const flags = parseFlags(argv);
     if (flags.help) { console.log(USAGE); return 0; }
     const dir = path.resolve(flags.dir || process.cwd());

@@ -102,6 +102,67 @@ function ownedBy(adapter) {
 }
 function owned(hook) { return OWNED_HOOKS.some(entry => ownedBy(entry.adapter)(hook)); }
 
+// --- Detection for `palsync hooks check|repair` (the recovery surface) ---
+
+// Every PalSync-owned hook command in a parsed settings object as { event, adapter, command },
+// deduped per (adapter, command). `palsync hooks check|repair` use this to report owned entries
+// that live in files configure() never writes (~/.claude/settings.json, .claude/settings.local.json)
+// and therefore cannot migrate. User hooks, wrappers, and `--custom`-suffixed copies are not owned
+// and never appear.
+function findOwnedIn(settings) {
+    if (!isObject(settings) || !isObject(settings.hooks)) return [];
+    const found = [];
+    const seen = new Set();
+    for (const entry of OWNED_HOOKS) {
+        const groups = settings.hooks[entry.event];
+        if (!Array.isArray(groups)) continue;
+        for (const group of groups) {
+            if (!isObject(group) || !Array.isArray(group.hooks)) continue;
+            for (const hook of group.hooks) {
+                if (!ownedBy(entry.adapter)(hook)) continue;
+                const key = entry.adapter + "\u0000" + hook.command;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                found.push({ event: entry.event, adapter: entry.adapter, command: hook.command });
+            }
+        }
+    }
+    return found;
+}
+
+// State of the owned hooks in a parsed settings object, one row per OWNED_HOOKS entry:
+//   ok      — the canonical command is installed in a group carrying the canonical matcher
+//   stale   — owned command(s) present but not canonical (legacy forms, or the canonical command
+//             parked under a foreign matcher); configure(install:true) repairs these in place
+//   missing — no owned form present; configure(install:true) installs the canonical entry
+// `ownedCommands` lists every owned command found (deduped) so the CLI can show the offending
+// forms. Classification mirrors mergeSettings(install:true): canonical means the exact pinned
+// command inside a group with the canonical matcher (Stop takes no matcher, so any group counts).
+function inspectOwnedHooks(settings) {
+    const found = findOwnedIn(settings);
+    return OWNED_HOOKS.map((entry) => {
+        const ownedCommands = found.filter(f => f.adapter === entry.adapter).map(f => f.command);
+        let canonical = false;
+        const groups = isObject(settings) && isObject(settings.hooks) ? settings.hooks[entry.event] : undefined;
+        if (Array.isArray(groups)) {
+            for (const group of groups) {
+                if (!isObject(group) || !Array.isArray(group.hooks)) continue;
+                const canonicalGroup = entry.matcher === null || group.matcher === entry.matcher;
+                if (canonicalGroup && group.hooks.some(h => isObject(h) && h.type === "command" && h.command === entry.command)) {
+                    canonical = true;
+                }
+            }
+        }
+        return {
+            event: entry.event,
+            adapter: entry.adapter,
+            matcher: entry.matcher,
+            status: canonical ? "ok" : (ownedCommands.length ? "stale" : "missing"),
+            ownedCommands,
+        };
+    });
+}
+
 function mergeSettings(settings, install) {
     if (!isObject(settings)) return { ok: false, error: "settings root must be a JSON object" };
     if (settings.hooks !== undefined && !isObject(settings.hooks)) return { ok: false, error: "settings.hooks must be an object" };
@@ -198,7 +259,7 @@ async function configure(workspaceDir, { install }) {
 }
 
 module.exports = {
-    configure, mergeSettings, owned, OWNED_HOOKS, generateCommand,
+    configure, mergeSettings, owned, OWNED_HOOKS, generateCommand, findOwnedIn, inspectOwnedHooks,
     COMPLETION_COMMAND, COMPLETION_HOOK,
     GUARD_COMMAND, GUARD_HOOK, GUARD_MATCHER,
     POST_WRITE_COMMAND, POST_WRITE_HOOK, POST_WRITE_MATCHER,

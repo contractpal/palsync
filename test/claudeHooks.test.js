@@ -390,3 +390,71 @@ test("a decoy on PATH cannot intercept the generated guard command", () => {
         fs.rmSync(decoyDir, { recursive: true, force: true });
     }
 });
+
+// --- Detection for `palsync hooks check|repair` (recovery surface) ---
+
+test("findOwnedIn reports every owned form deduped and ignores user hooks and wrappers", () => {
+    const settings = { hooks: {
+        Stop: [{ hooks: [
+            { type: "command", command: BARE.completion },
+            { type: "command", command: BARE.completion },
+            { type: "command", command: hooks.COMPLETION_COMMAND },
+            { type: "command", command: "env " + priorForm("completion", "node", "/opt/palsync.js") },
+            { type: "command", command: "team-check" },
+        ] }],
+        PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: priorForm("guard", "/x/node", "/x/palsync.js") }] }],
+        PostToolUse: "not-an-array",
+    } };
+    const found = hooks.findOwnedIn(settings);
+    assert.deepEqual(found.map(f => f.adapter), ["completion", "completion", "guard"]);
+    assert.deepEqual(found.map(f => f.command), [
+        BARE.completion,
+        hooks.COMPLETION_COMMAND,
+        priorForm("guard", "/x/node", "/x/palsync.js"),
+    ]);
+    assert.deepEqual(found[0], { event: "Stop", adapter: "completion", command: BARE.completion });
+    assert.deepEqual(hooks.findOwnedIn({}), []);
+    assert.deepEqual(hooks.findOwnedIn({ hooks: [] }), []);
+});
+
+test("inspectOwnedHooks classifies ok, stale, and missing per owned hook", () => {
+    const healthy = { hooks: {
+        Stop: [{ hooks: [{ type: "command", command: hooks.COMPLETION_COMMAND }] }],
+        PreToolUse: [{ matcher: hooks.GUARD_MATCHER, hooks: [{ type: "command", command: hooks.GUARD_COMMAND }] }],
+        PostToolUse: [{ matcher: hooks.POST_WRITE_MATCHER, hooks: [{ type: "command", command: hooks.POST_WRITE_COMMAND }] }],
+    } };
+    assert.deepEqual(hooks.inspectOwnedHooks(healthy).map(e => e.status), ["ok", "ok", "ok"]);
+    assert.deepEqual(hooks.inspectOwnedHooks({}).map(e => e.status), ["missing", "missing", "missing"]);
+    assert.deepEqual(hooks.inspectOwnedHooks({ hooks: [] }).map(e => e.status), ["missing", "missing", "missing"]);
+
+    const legacy = { hooks: {
+        Stop: [{ hooks: [{ type: "command", command: BARE.completion }] }],
+        PreToolUse: [{ matcher: hooks.GUARD_MATCHER, hooks: [{ type: "command", command: priorForm("guard", "/x/node", "/x/palsync.js") }] }],
+    } };
+    const rows = hooks.inspectOwnedHooks(legacy);
+    assert.deepEqual(rows.map(e => e.status), ["stale", "stale", "missing"]);
+    assert.deepEqual(rows[0].ownedCommands, [BARE.completion]);
+    assert.deepEqual(rows[1].ownedCommands, [priorForm("guard", "/x/node", "/x/palsync.js")]);
+    assert.equal(rows[2].ownedCommands.length, 0);
+});
+
+test("inspectOwnedHooks flags the pinned command under a foreign matcher as stale", () => {
+    const settings = { hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: hooks.GUARD_COMMAND }] }] } };
+    const rows = hooks.inspectOwnedHooks(settings);
+    assert.equal(rows.find(r => r.adapter === "guard").status, "stale");
+    assert.deepEqual(rows.find(r => r.adapter === "guard").ownedCommands, [hooks.GUARD_COMMAND]);
+    assert.equal(rows.find(r => r.adapter === "completion").status, "missing");
+});
+
+test("inspectOwnedHooks stays ok when the canonical entry coexists with an extra legacy copy", () => {
+    const settings = { hooks: { Stop: [{ hooks: [
+        { type: "command", command: hooks.COMPLETION_COMMAND },
+        { type: "command", command: BARE.completion },
+    ] }] } };
+    const rows = hooks.inspectOwnedHooks(settings);
+    assert.equal(rows.find(r => r.adapter === "completion").status, "ok");
+    assert.deepEqual(rows.find(r => r.adapter === "completion").ownedCommands, [
+        hooks.COMPLETION_COMMAND,
+        BARE.completion,
+    ]);
+});

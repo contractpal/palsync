@@ -125,6 +125,8 @@ palsync spec-lint       # lint SPEC.md
 palsync task            # spec-to-ship task operations (`--reason` required for blocked states)
 palsync checkpoint      # spec-to-ship checkpointing
 palsync completion check # offline all-done review / reasoned-handoff gate
+palsync hooks check      # Claude Code hook-settings health (offline)
+palsync hooks repair     # migrate legacy hook entries / install missing ones (offline)
 palsync cost            # palsync's own context footprint (offline; see below)
 palsync ctx inspect     # stable-prefix sizes and largest generated sections
 palsync ctx diff        # first section changed since the previous generation
@@ -145,6 +147,27 @@ and the generated context manifest. `palsync ctx inspect|diff` explains the loca
 prefix and its first changed section. Provider-reported cached tokens from a harness sidecar stay
 separate from local estimates. Set `PALSYNC_NO_CACHE=1` to bypass the content-addressed per-file
 lint cache; push-gate decisions, server state, drift, locks, and runtime results are never cached.
+
+### `palsync hooks check|repair` — Claude Code hook recovery
+
+The launcher installs three Claude Code hooks (Stop completion gate, PreToolUse guard,
+PostToolUse diagnostics) into `<workspace>/.claude/settings.json` with pinned absolute commands —
+never a bare `palsync` from PATH. If a session's hooks fail with
+`palsync: unknown subcommand 'hook'`, a legacy form (the bare `palsync hook … --mode claude`,
+which resolves whatever `palsync` is first on your PATH, or an old node+script form) is still in
+effect:
+
+```sh
+palsync hooks check    # which hooks are ok / stale / missing
+palsync hooks repair   # migrate legacy forms + install missing hooks (user hooks preserved)
+```
+
+The launcher already migrates these at every launch; `hooks repair` is the same migration without
+relaunching. PalSync writes only `<workspace>/.claude/settings.json` — it never touches
+`~/.claude/settings.json` (user) or `<workspace>/.claude/settings.local.json` (project-local).
+Claude Code merges hooks from all three files, so a legacy entry in one of the other two keeps
+failing even after repair. `hooks check`/`repair` detect and report such entries and print the
+manual remediation; they never modify those files.
 
 ## Sync safety
 
@@ -220,6 +243,19 @@ which can fail (unsettled module resolution, Windows file locking, npm 11 script
 the whole install with `git dep preparation failed`. The tarball URL writes the package straight to
 its final location. `palsync upgrade` uses the same mechanism, pinned to an immutable commit SHA.
 Force a clean reinstall by adding `--force` to the install command.
+</details>
+
+<details>
+<summary>Claude Code hooks fail with <code>palsync: unknown subcommand 'hook'</code></summary>
+
+A legacy hook form is still active: the bare <code>palsync hook … --mode claude</code> (which
+resolves whatever <code>palsync</code> is first on your PATH, possibly a stale binary) or an old
+node+script form. Run <code>palsync hooks check</code>, then <code>palsync hooks repair</code> in
+the workspace — legacy forms in <code>.claude/settings.json</code> are migrated in place and
+missing hooks are installed. If the check reports entries in <code>~/.claude/settings.json</code>
+or <code>.claude/settings.local.json</code>, PalSync cannot migrate those files (it never writes
+them): remove the entries manually or move them into <code>.claude/settings.json</code> and re-run
+<code>palsync hooks repair</code>.
 </details>
 
 <details>

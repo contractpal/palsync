@@ -174,6 +174,11 @@ async function run(argv) {
         console.error("palsync updated, but the Chromium browser install did not finish. Complete it with:\n    " + browserInstallCommand());
     }
     console.log("Upgraded to " + latest.slice(0, 7) + ". (New shell or `hash -r` if `palsync --version` looks stale.)");
+    // Workspaces keep their own .claude/settings.json hook entries; the pinned commands are only
+    // refreshed by a relaunch or by `palsync hooks repair`. This hint rides along on upgrades so
+    // the recovery surface is discoverable (the first upgrade from an old build runs old code, so
+    // it only prints on later upgrades — README.md carries the same guidance).
+    console.log("Claude Code workspaces: run `palsync hooks check`, then `palsync hooks repair`, in each workspace to refresh stale hook commands.");
     return 0;
 }
 
