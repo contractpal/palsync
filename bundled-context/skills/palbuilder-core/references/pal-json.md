@@ -58,15 +58,18 @@ the exact category-relative filename, extension included — push reads the file
 `Fragment`, `Document`, `Email`, `Style`, `Dataset`, `Dataview`, `Data`, `DataList`,
 `Attachment`, `Image`, `Wizard`).
 
-**`filename` path-prefix rule (differs by category — verified live 2026-07-18):**
-`workflows` and `fragments` are resolved by the platform's internal name registry
-(`layout.consoleWorkflow`, `switchToWorkflow`, `<c:fragment name=>`, `getAjaxFragment`), so
-their `filename` is category-relative WITHOUT the folder prefix: `"console.js"`, never
-`"workflows/console.js"`. A prefixed value pushes fine but breaks at runtime ("Invalid
-workflow" / silently-empty fragment). `styles` and `scripts` are loaded by literal URL and
-keep the disk-relative prefixed form: `"styles/styles.css"`, `"scripts/pb-ui.js"`. `pages`
-use the unprefixed filename (`"console.html"`). Every fragment entry MUST include
-`Fragment.filename` — the server rejects the whole save without it.
+**`filename` path-prefix rule:** for ALL file-backed sections, `filename` is the exact
+category-relative filename — the same contract as `string`, never prefixed with the category
+folder. Subfolder paths are allowed (`"ux/exchanges.js"`). A value repeating its own
+category folder (e.g. `"styles/styles.css"`) is WRONG: in `filename` it makes PalBuilder
+register a redundant nested folder (Styles → styles → styles.css, observed live 2026-08); in
+`string` it makes push look for `styles/styles/styles.css` on disk, which does not exist, so
+the file is silently skipped and never ships. `workflows` and `fragments` are additionally
+resolved by the platform's internal name registry (`layout.consoleWorkflow`,
+`switchToWorkflow`, `<c:fragment name=>`, `getAjaxFragment`) — a prefixed value there pushes
+fine but breaks at runtime ("Invalid workflow" / silently-empty fragment), and the validator
+errors on it. `pages` use the unprefixed filename (`"console.html"`). Every fragment entry
+MUST include `Fragment.filename` — the server rejects the whole save without it.
 
 A `Wizard` entry has just `content`/`contentType`/`filename` — no `palType`, no
 `workflowType`. Content is base64-encoded XHTML following the `<dialogs>`/`<dialog>` schema at

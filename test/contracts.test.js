@@ -1207,14 +1207,54 @@ test("bannedFilenamePrefix — layout.consoleWorkflow with workflows/ prefix err
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("bannedFilenamePrefix — legit subfolder paths and prefixed styles/scripts produce no finding", () => {
+test("prefixedManifestFilename — category-prefixed styles/scripts string/filename warn; legit subfolders pass", () => {
     const dir = tmpWorkspace({
         "pal.json": basePalJson({
             workflows: { entry: [{ string: "defaults/default_console.js", Workflow: { name: "defaults/default_console.js", filename: "defaults/default_console.js" } }] },
-            styles: { entry: [{ string: "styles.css", Style: { name: "styles.css", filename: "styles/styles.css" } }] },
+            styles: { entry: [
+                { string: "styles/a.css", Style: { name: "a", filename: "a.css" } },
+                { string: "b.css", Style: { name: "b", filename: "styles/b.css" } },
+                { string: "styles/c.css", Style: { name: "c", filename: "styles/c.css" } },
+                { string: "plain.css", Style: { name: "plain", filename: "plain.css" } },
+                { string: "styles2/x.css", Style: { name: "x", filename: "styles2/x.css" } },
+            ]},
+            scripts: { entry: [
+                { string: "tx-main.js", Script: { name: "tx-main", filename: "scripts/tx-main.js" } },
+                { string: "ux/exchanges.js", Script: { name: "exchanges", filename: "ux/exchanges.js" } },
+                { string: "defaults/x.js", Script: { name: "x", filename: "defaults/x.js" } },
+            ]},
         }),
     });
+    // workflows/fragments name-registry rule untouched — legit subfolder filename passes.
     assert.strictEqual(lintPalJson(dir).filter(f => f.rule === "bannedFilenamePrefix").length, 0);
+
+    const findings = lintPalJson(dir).filter(f => f.rule === "prefixedManifestFilename");
+    assert.strictEqual(findings.length, 5);
+    assert.ok(findings.every(f => f.severity === "warn"));
+    const stringMsgs = findings.filter(f => f.message.includes("\"string\"")).map(f => f.message);
+    const filenameMsgs = findings.filter(f => f.message.includes(".filename")).map(f => f.message);
+    // string-only prefixed (styles/a.css) + both prefixed (styles/c.css) = 2 string findings
+    assert.strictEqual(stringMsgs.length, 2);
+    // filename-only prefixed (styles/b.css) + both prefixed (styles/c.css) + scripts/tx-main.js = 3
+    assert.strictEqual(filenameMsgs.length, 3);
+    assert.ok(stringMsgs.every(m => /silently skipped/.test(m) && /<folder>\/<string>/.test(m)));
+    assert.ok(filenameMsgs.every(m => /redundant nested/.test(m)));
+    assert.ok(findings.every(f => /bare category-relative value/.test(f.message)));
+    assert.ok(findings.every(f => !/styles2\/x\.css|ux\/exchanges\.js|defaults\/x\.js/.test(f.message)));
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("missingPalJsonEntry — category-prefixed string for a styles file is reported as a near-miss", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({
+            styles: { entry: [{ string: "styles/styles.css", Style: { name: "styles.css", filename: "styles.css" } }] },
+        }),
+        "styles/styles.css": "body {}",
+    });
+    const findings = lintPalJson(dir).filter(f => f.rule === "missingPalJsonEntry");
+    assert.strictEqual(findings.length, 1);
+    assert.match(findings[0].message, /A near-miss entry exists/);
+    assert.match(findings[0].message, /"string": "styles\.css"/);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 

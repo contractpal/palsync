@@ -469,6 +469,55 @@ function checkEntryFilenames(manifest) {
     return findings;
 }
 
+// styles/scripts filename path-prefix contract (owner live observation 2026-08: PalBuilder
+// showed Styles -> styles -> styles.css and Scripts -> scripts -> tx-main.js — one redundant
+// nested folder per prefixed filename). Unlike workflows/fragments (name-registry resolution,
+// bannedFilenamePrefix above), styles/scripts are loaded by literal URL, but the manifest
+// contract is still category-relative: lib/pal.js injectFileContent() does
+// path.join(palPath, folder, entry.string), so a prefixed "string" makes push read
+// <folder>/<folder>/<file> — ENOENT, silent skip, nothing ships. WARN only (prevention +
+// warning; no manifest normalization).
+const PREFIX_CHECKED_FOLDERS = { styles: "Style", scripts: "Script" };
+
+function checkPrefixedManifestFilenames(manifest) {
+    const findings = [];
+    for (const folder of Object.keys(PREFIX_CHECKED_FOLDERS)) {
+        const typeName = PREFIX_CHECKED_FOLDERS[folder];
+        const section = manifest[folder];
+        if (!isObject(section) || !Array.isArray(section.entry)) continue;
+        for (let i = 0; i < section.entry.length; i++) {
+            const entry = section.entry[i];
+            if (!isObject(entry)) continue;
+            const at = "pal.json " + folder + ".entry[" + i + "]";
+            if (typeof entry.string === "string" && entry.string.startsWith(folder + "/")) {
+                const fixed = entry.string.slice(folder.length + 1);
+                findings.push({
+                    file: "pal.json", line: 1, column: 0, severity: "warn",
+                    rule: "prefixedManifestFilename",
+                    message: at + " \"string\": \"" + entry.string + "\" repeats its own category " +
+                        "folder — push resolves file content from <folder>/<string> (here \"" + folder +
+                        "/" + entry.string + "\"), which does not exist on disk, so the file is " +
+                        "silently skipped and never ships. Fix: use the bare category-relative value \"" +
+                        fixed + "\".",
+                });
+            }
+            const body = entry[typeName];
+            if (isObject(body) && typeof body.filename === "string" && body.filename.startsWith(folder + "/")) {
+                const fixed = body.filename.slice(folder.length + 1);
+                findings.push({
+                    file: "pal.json", line: 1, column: 0, severity: "warn",
+                    rule: "prefixedManifestFilename",
+                    message: at + "." + typeName + ".filename \"" + body.filename + "\" repeats its own " +
+                        "category folder — PalBuilder registers the file under a redundant nested \"" +
+                        folder + "\" folder (observed live 2026-08). Fix: use the bare category-relative " +
+                        "value \"" + fixed + "\".",
+                });
+            }
+        }
+    }
+    return findings;
+}
+
 // Entry shape contract, verified against lib/pal.js injectFileContent() (the only push path):
 // file content is injected exclusively through entry[<Type>] (or its lowercase twin), so an
 // entry with no <Type> wrapper object ships NOTHING — the push "succeeds" locally but the
@@ -767,6 +816,7 @@ function lintPalJson(snapshotOrDir) {
                 const typeHint = FOLDER_TYPE[folder] || folder;
                 const base = rel.replace(/\.[^./]+$/, "");
                 const near = entries.find(e => isObject(e) && (e.string === base ||
+                    e.string === folder + "/" + rel ||
                     e.filename === rel ||
                     (isObject(e[typeHint]) && e[typeHint].filename === rel)));
                 const fixShape = manifestEntryTemplate(rel, typeHint);
@@ -869,6 +919,7 @@ function lintPalJson(snapshotOrDir) {
 
     findings.push(...checkEntryShape(manifest));
     findings.push(...checkEntryFilenames(manifest));
+    findings.push(...checkPrefixedManifestFilenames(manifest));
     findings.push(...checkUnknownKeys(manifest));
     findings.push(...checkDataStructures(manifest));
     findings.push(...checkFolderRegistrations(manifest));
@@ -882,4 +933,5 @@ function lintPalJson(snapshotOrDir) {
 }
 
 module.exports = { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryShape, checkEntryFilenames,
-    checkFolderRegistrations, lineForFinding, listFilesRecursive, analyzeMarkupRegistration };
+    checkPrefixedManifestFilenames, checkFolderRegistrations, lineForFinding, listFilesRecursive,
+    analyzeMarkupRegistration };

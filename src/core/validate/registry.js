@@ -44,6 +44,7 @@ const RULE_REGISTRY = {
     invalidPalJsonShape: { severity: "error", category: "manifest", gate: "per-file", evidence: "Vendored Pal/Layout serialized field shapes cited in palJson.js." },
     unknownPalJsonKey: { severity: "both", category: "manifest", gate: "per-file", evidence: "Vendored Pal/Layout serialized fields; aliases remain advisory." },
     bannedFilenamePrefix: { severity: "error", category: "manifest", gate: "per-file", evidence: "Live server category-relative filename contract documented in palJson.js." },
+    prefixedManifestFilename: { severity: "warn", category: "manifest", gate: "per-file", evidence: "Owner live observation 2026-08 (PalBuilder redundant nested styles/scripts folder); lib/pal.js injectFileContent path.join(palPath, folder, entry.string) disk-lookup semantics." },
     missingManifestFilename: { severity: "error", category: "manifest", gate: "per-file", evidence: "Push injects content through the typed wrapper filename field." },
     unusedFolderRegistration: { severity: "warn", category: "manifest", gate: "per-file", evidence: "PalBuilder empty-folder behavior documented in palFolders.js." },
 
