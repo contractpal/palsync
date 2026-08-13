@@ -1,0 +1,38 @@
+<!-- HTML Document skeleton (Document contentType text/html) — see ../documents.md for the
+     Document/Packet workflow API, the c:document tag, and how this differs from a PDF document.
+     Unlike a fragment, a document is rendered standalone inside the c:document iframe, so it
+     needs the FULL DOM (html/head/body) — a bare cp-root div with no wrapper will not render.
+
+     Demonstrates every markup form for fields/signatures (see documents.md's "HTML document
+     markup shorthand" section) — trim to whichever forms your document actually needs:
+       - `${field:name}`      shorthand for <input type="text" name="name"/>
+       - `${signature:role}`  shorthand for a click signature with an auto-generated id — use
+                               this ONLY when nothing downstream needs to name this signature
+       - the explicit cp-sig-id/cp-sig-type/cp-sig-role attribute form — use when you need a
+         known id (to pair with cp-target, or to reference elsewhere in the workflow)
+       - cp-target="<elementId>" — scopes/locks the resulting signature to just that element's
+         content, instead of the whole cp-root document; content outside the target can still
+         change afterward without invalidating the signature
+
+     HTML document fields/signatures are entirely markup-driven — nothing to add to pal.json for
+     any of the forms above; the platform derives/tracks them (and assigns the shorthand's
+     signature id) from this XHTML at runtime. That's an HTML-only shortcut: a PDF document's
+     fields/signatures ARE hand-authored in pal.json, positioned by the PalBuilder designer. -->
+<html>
+    <head>
+        <title>Document</title>
+        <meta charset="utf-8"/>
+    </head>
+    <body>
+        <div id="cp-root">
+            <div id="sign-here">
+                Information I want to sign across.
+            </div>
+            JEXL Field: ${field:name}<br/>
+            JEXL Signature: ${signature:role}<br/>
+            Input Field: <input type="text" name="name2"/><br/>
+            Input Signature: <input type="text" cp-sig-id="sig1" cp-sig-type="click" cp-sig-role="signer"/>
+            Input Signature with Target: <input type="text" cp-sig-id="sig2" cp-sig-type="click" cp-sig-role="signer" cp-target="sign-here"/>
+        </div>
+    </body>
+</html>

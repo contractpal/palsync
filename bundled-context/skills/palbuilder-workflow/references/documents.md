@@ -22,6 +22,8 @@ here — the `Document` API surface is large):
 - `Page` (`addDocumentToPage`) — https://secure.cloudpiston.com/cpal/cp-api/transaction/Page.html
 - `c:document` tag — https://secure.cloudpiston.com/cpal/cp-api/transaction-tags/document.html
 - `c:signature` tag — https://secure.cloudpiston.com/cpal/cp-api/transaction-tags/signature.html
+  (renders what the current user's signature *would be* if they click-signed now — their
+  created or uploaded signature — not a capture-point tag and not proof they already signed)
 
 ---
 
@@ -140,14 +142,27 @@ called only for its return value.
 <c:document style="width:80%;height:11in"></c:document>
 ```
 
-`documents/htmlDoc.html` — an HTML document declares its own signature capture point inline:
+`documents/htmlDoc.html` — an HTML document declares its own signature capture point inline. Unlike
+a fragment, a document renders standalone inside the `c:document` iframe, so it needs the FULL DOM
+(`html`/`head`/`body`) — a bare `cp-root` div with no wrapper will not render. For a new pal, copy
+`templates/document-html.html` with bash `cp` (never read-then-write) and adapt the field
+name(s)/signature id(s); the inline form below is the same skeleton plus this example's own
+"HTML Doc" label text:
 
 ```xml
-<div id="cp-root">
-    HTML Doc
-    Name: <input type="text" name="name"/>
-    <input type="text" cp-sig-id="sig1" cp-sig-type="click" cp-sig-role="signer"/>
-</div>
+<html>
+    <head>
+        <title>HTML Doc</title>
+        <meta charset="utf-8"/>
+    </head>
+    <body>
+        <div id="cp-root">
+            HTML Doc
+            Name: <input type="text" name="name"/>
+            <input type="text" cp-sig-id="sig1" cp-sig-type="click" cp-sig-role="signer"/>
+        </div>
+    </body>
+</html>
 ```
 
 `documents/pdfDoc.pdf` is a real PDF binary — it has no inline `cp-sig-*` markup; its field and
@@ -185,10 +200,11 @@ differently:
 ```
 
 - **HTML documents** place fields by writing a normal input into the markup —
-  `<input type="text" name="name"/>` — same `${var}`/named-input convention as pages and
-  fragments. The field's `x`/`y`/`width`/`height`/`page` are all `0` and `palDefined` is
-  `false`: PalBuilder isn't tracking a position for it, the browser lays it out like any other
-  HTML element.
+  `<input type="text" name="name"/>` (or the `${field:name}` shorthand — see "HTML document
+  markup shorthand" below) — same `${var}`/named-input convention as pages and fragments. **You
+  do not author this `pal.json` entry yourself** — the field's `x`/`y`/`width`/`height`/`page`
+  are all `0` and `palDefined` is `false` because the platform derives this entirely from the
+  markup; it's shown here only for comparison against the PDF shape, which IS hand-authored.
 - **PDF documents** have no markup to put an input into — a PDF page is a fixed layout. Its
   fields are overlaid at explicit `x`/`y`/`width`/`height`/`page` pixel coordinates set in the
   PalBuilder designer, and `palDefined: true` marks that the position was defined there. `type`
@@ -211,18 +227,51 @@ field and don't have designer access, say so rather than inventing `x`/`y` value
 ```
 
 - **HTML documents** declare a signature capture point directly in markup with
-  `cp-sig-id`/`cp-sig-type`/`cp-sig-role` attributes on any element (see `htmlDoc.html` above) —
-  the manifest's `target` is empty because the markup itself is the anchor.
+  `cp-sig-id`/`cp-sig-type`/`cp-sig-role` attributes on any element (see `htmlDoc.html` above), or
+  the `${signature:role}` shorthand — see "HTML document markup shorthand" below. As with fields,
+  **you do not author this `pal.json` entry** — the manifest's `target` is empty because the
+  markup itself is the anchor, and the platform derives the rest from it.
 - **PDF documents** have no markup to attach to, so the signature is positioned by `x`/`y`/`page`
-  like a field. **The exact meaning of `target` for a PDF signature (`"cp-root"` here, matching
-  the host page's `<div id="cp-root">`) is not confirmed by the API docs** —
-  `Document.addClickSignature(sigId, role, target)` takes a `target` parameter but its semantics
-  aren't documented beyond the name. Treat the observed value as this example's working
-  configuration, not a rule to copy blindly into an unrelated page layout — verify with a real
-  signing test (`pal_screenshot`) if you change the host page structure.
+  like a field.
+- **What `target` actually means (HTML and PDF alike):** the resulting digital signature is
+  scoped/locked to only the target's content, not the whole document. Sign the `cp-root` div (the
+  default — see below) and the ENTIRE document is locked: any later edit anywhere invalidates the
+  signature. Sign a narrower target (e.g. one clause's `<div id="...">`) and only that content is
+  locked — the rest of the document can still change afterward without breaking the signature.
+  This is the pattern for "sign this clause now, the rest of the agreement is still being
+  negotiated." `"cp-root"` in the PDF example above locks the whole document, matching the HTML
+  default. Not exercised here: an unconfirmed-in-docs edge case is how nested/overlapping targets
+  behave if two signatures claim overlapping regions — verify with a real signing test
+  (`pal_screenshot`) before relying on that.
 - `type: "click"` is the simplest signature kind. `Document` also supports `addAudioSignature`
   (with a `recordTime` minute limit), `addImageSignature`, and initials
   (`addInitial`/`addExclusiveInitial`) — not exercised in this example.
+
+### HTML document markup shorthand — `${field:...}` / `${signature:...}` and `cp-target`
+
+Not in the official API docs — confirmed by direct testing. HTML documents accept two JEXL
+shorthand forms as an alternative to writing the raw `<input>` tags out by hand:
+
+| Shorthand | Equivalent to |
+|---|---|
+| `${field:name}` | `<input type="text" name="name"/>` |
+| `${signature:role}` | `<input type="text" cp-sig-id="<auto-generated id>" cp-sig-type="click" cp-sig-role="role"/>` |
+
+They're pure markup convenience, and **entirely self-contained in the document's XHTML — nothing
+to add to `pal.json` for either form.** This is an HTML-only shortcut: unlike a PDF document
+(whose fields/signatures are hand-authored in `pal.json`, designer-placed), the platform derives
+and tracks an HTML document's fields/signatures from this markup at runtime, including assigning
+`${signature:role}`'s id. The one real difference between the two forms: `${signature:role}`
+does not let you choose that id, so **if anything needs to name this exact signature** (a
+`cp-target` pairing, for instance), use the explicit `cp-sig-id`/`cp-sig-type`/`cp-sig-role`
+attribute form instead so you control the id.
+
+**`cp-target="<elementId>"`** — an additional attribute on the `cp-sig-*` input that names the
+element this signature scopes/locks (see "What `target` actually means" above). Omit it and the
+signature locks the whole document (`cp-root`, matching `Document.addClickSignature`'s
+null-target default); set it to sign and lock only one region — e.g. one clause — while the rest
+of the document stays editable. See `templates/document-html.html` for a worked example of a
+default (whole-document) signature next to a targeted one.
 
 ---
 
@@ -310,3 +359,10 @@ reference); reach for `c:pdf` only when you have a standalone `PdfFile`, not a `
 - **PDF field/signature coordinates come from the PalBuilder designer, not from reading the
   PDF.** Never invent `x`/`y`/`width`/`height`/`page` values for a PDF field — say so if you
   need one placed and don't have designer access.
+- **`${signature:role}` doesn't let you pick the signature's id — the platform generates one.**
+  If anything needs to name this exact signature (e.g. a `cp-target` pairing), use the explicit
+  `cp-sig-id`/`cp-sig-type`/`cp-sig-role` attributes instead.
+- **An unscoped signature (default `cp-root` target) locks the WHOLE document on sign.** Any
+  edit anywhere afterward invalidates it. If part of the document needs to keep changing after
+  signing, that content must sit outside a narrower `cp-target` — signing the whole document
+  and then editing any of it is a broken-signature bug, not a corner case.
