@@ -63,6 +63,7 @@ const USAGE = [
     "  palsync hook completion|guard|post-write --mode claude|json [--dir <ws>] [--event <json>]  Agent-harness hook adapters (event on stdin or --event; always exit 0).",
     "                                                               completion = Stop gate; guard = PreToolUse deny on writes to .palsync.json.",
     "                                                               Installed into .claude/settings.json automatically for the claude agent.",
+    "  palsync hooks check|repair [--dir <ws>]   offline hook-settings health check and repair",
     "",
     "  --force            push: override the server-drift refusal · pull: overwrite locally-modified files",
     "  --skip-validation  push: push even if the offline code check finds errors (not recommended)",
