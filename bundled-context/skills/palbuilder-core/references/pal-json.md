@@ -153,7 +153,8 @@ existing object. Create a new object in PalBuilder first. Runtime DataViews are 
 | `robotsPage` | Path to the `robots.txt` page (`palType: palTypeRobots`) |
 | `inheritanceEnabled` | Whether this pal inherits from a parent pal |
 | `inheritConsole`, `inheritWeb`, `inheritTransaction`, `inheritUser` | Per-context inheritance flags |
-| `properties`, `roles` | Pal-level metadata (often empty) |
+| `properties` | Pal-level metadata (often empty) |
+| `roles` | Array of role-name strings registered on the pal (e.g. `["signer", "approver"]`); serializes as `""` when empty, same convention as the other array sections in this file. No public API doc for this field — undocumented but confirmed real. It's a design-time utility for signatures specifically, not an API-enforced role list. **Best practice:** whenever you add a document signature (`cp-sig-role="X"` / `Signature.role: "X"`, see `palbuilder-workflow/references/documents.md`), also add `"X"` to `layout.roles` — this avoids a server warning about an unregistered role; it isn't checked at runtime by the workflow API. |
 | `auditDocumentView` | Auditing flag |
 | `workflowVersion` | Workflow schema version |
 | `consoleControlled` | Whether the pal has a console app registered. **`false` + `transactionWorkflow` set is a valid, complete shape** — a transaction-only pal with no console at all, entered directly via the transaction workflow. Console orchestration (see `palbuilder-workflow/references/console.md`/`transaction.md`) is one common pattern, not a requirement. |

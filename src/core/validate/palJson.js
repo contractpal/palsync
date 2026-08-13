@@ -385,6 +385,33 @@ function checkUnknownKeys(manifest) {
     return findings;
 }
 
+// `layout.roles` (vendored Layout.java field, no public API doc) is a String[] — an empty pal
+// serializes it as "" (same empty-XML-element convention as the other array sections above),
+// a populated one is a JSON array of role-name strings. A bare non-empty string here is a common
+// slip (writing the single role name instead of a one-element array) that the server will not
+// catch for you, so flag it explicitly.
+function checkRoles(manifest) {
+    const findings = [];
+    const layout = manifest.layout;
+    if (!isObject(layout)) return findings;
+    const roles = layout.roles;
+    if (roles == null || roles === "") return findings;
+    if (!Array.isArray(roles)) {
+        findings.push(shapeFinding("pal.json layout.roles must be an array of role-name strings " +
+            "(e.g. [\"signer\"]), or \"\" when empty — found a " + typeof roles + ". Every role a " +
+            "document signature (`cp-sig-role`/`Signature.role`) uses should be listed here too — " +
+            "a design-time convenience, not an API-enforced check — or the server may warn about " +
+            "an unregistered role."));
+        return findings;
+    }
+    roles.forEach((role, i) => {
+        if (!nonEmptyString(role)) {
+            findings.push(shapeFinding("pal.json layout.roles[" + i + "] must be a non-empty string."));
+        }
+    });
+    return findings;
+}
+
 function listFilesRecursive(root) {
     const out = [];
     function walk(abs, relBase) {
@@ -923,6 +950,7 @@ function lintPalJson(snapshotOrDir) {
     findings.push(...checkUnknownKeys(manifest));
     findings.push(...checkDataStructures(manifest));
     findings.push(...checkFolderRegistrations(manifest));
+    findings.push(...checkRoles(manifest));
 
     const raw = snapshot.palJson.raw;
     for (const finding of findings) {
@@ -933,5 +961,5 @@ function lintPalJson(snapshotOrDir) {
 }
 
 module.exports = { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryShape, checkEntryFilenames,
-    checkPrefixedManifestFilenames, checkFolderRegistrations, lineForFinding, listFilesRecursive,
+    checkPrefixedManifestFilenames, checkFolderRegistrations, checkRoles, lineForFinding, listFilesRecursive,
     analyzeMarkupRegistration };

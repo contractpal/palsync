@@ -366,3 +366,9 @@ reference); reach for `c:pdf` only when you have a standalone `PdfFile`, not a `
   edit anywhere afterward invalidates it. If part of the document needs to keep changing after
   signing, that content must sit outside a narrower `cp-target` — signing the whole document
   and then editing any of it is a broken-signature bug, not a corner case.
+- **Register every signature's role on the pal, not just on the document.** A `role` named by
+  `cp-sig-role`/`Signature.role` also belongs in `pal.json`'s top-level `layout.roles` array —
+  e.g. `role="signer"` here means `layout.roles` should include `"signer"`. This is a design-time
+  convenience only (the workflow API doesn't check it at runtime), but skipping it can produce a
+  server warning about an unregistered role. See `palbuilder-core/references/pal-json.md` for
+  `layout.roles`'s shape (array of strings, `""` when empty).

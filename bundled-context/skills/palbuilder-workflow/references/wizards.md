@@ -242,11 +242,7 @@ Each dialog's `<if>`/`goto` decides where to go next; reaching a dialog with `go
 ## Gotchas
 
 - **Reset before restart.** Call `deleteWizard(name)` before `addWizard(name)` when a user can
-  restart the same wizard in one session — otherwise stale dialog history/data can linger.
-- **Data is transient.** Wizard data lives on the transaction packet for the life of the
-  request/session — it is not a dataset and isn't persisted automatically. If you need the
-  answers kept, write them to a dataset yourself in `endWizard()` (or wherever you handle the
-  end action), same as any other workflow data.
+  restart the same wizard in one session — unless you need dialog history/data can linger which is typical for a deployed pal.
 - **`goto="endWizard"` is the ONLY way control returns to the workflow.** A dialog with no
   `goto` (and no matching `<if target="endWizard">`) just sits there waiting for the next
   `c:wizard-next`/`c:wizard-previous` click — it never reaches your `run()` switch.
@@ -255,3 +251,11 @@ Each dialog's `<if>`/`goto` decides where to go next; reaching a dialog with `go
 - **No confirmation needed on `startWizard`.** Restarting a demo/data-collection wizard isn't a
   destructive delete in the golden-rule-9 sense (it doesn't destroy persisted user data) — don't
   add `confirm=` reflexively just because `deleteWizard` is called internally.
+- **`cp-pattern="date"` on an `input type="date"` field is a mismatch.** `date` expects
+  `MM/dd/yyyy` (text-field format), but a native `input type="date"` submits `yyyy-MM-dd` —
+  validation fails against real browser input. Use `cp-pattern="dateYearMonthDay"` instead,
+  which is the pattern documented to match browser `type="date"` fields. Other date patterns
+  (`dateDayMonthYear`, `dateMonthYear`) are for text inputs with region-specific formats, not
+  the native date picker. Always check the live patterns table at
+  https://secure.cloudpiston.com/cpal/cp-api/transaction/misc.html#patterns before picking a
+  `cp-pattern` — don't assume the name matches the format you expect.
