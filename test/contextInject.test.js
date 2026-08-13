@@ -257,6 +257,23 @@ test("switching away from OpenCode removes only palsync-managed slash commands",
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
+test("every injected flavor pushes pal_context as the first-step detailed contract", async () => {
+    for (const opts of [
+        { cli: false, skillsDir: ".claude/skills" },
+        { cli: false, skillsDir: ".agents/skills" },
+        { cli: true, skillsDir: ".agents/skills" },
+    ]) {
+        const doc = await ci.buildPalsyncDoc("Demo", opts);
+        assert.match(doc, /\*\*Call `pal_context` when the task touches sync, file creation, or datasets\*\*/,
+            "callout must appear in every flavor");
+        assert.match(doc, /`section:"sync-workflow"`,\s+`section:"creating-files"`,\s+or\s+`section:"datasets"`/,
+            "callout must name the loadable sections");
+        assert.match(doc, /Use `pal_context` for the detailed `sync-workflow`, `creating-files`, or `datasets` contract/,
+            "trailing pointer must be unconditional");
+        assert.ok(!doc.includes("owning bundled skill references"), "no flavor may redirect pal_context to skill files");
+    }
+});
+
 test("Pi AGENTS.md uses the palsync CLI, not MCP", async () => {
     const ws = tmpWorkspace();
     await ci.inject(ws, { palName: "Demo", agent: "pi" });

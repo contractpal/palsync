@@ -17,9 +17,9 @@ basis that could not be reproduced.
 | Claude | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 12,229 | 3,058 | release-stable |
 | Codex/OpenCode/Pi | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 12,229 | 3,058 | release-stable |
 | All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 4,613 | 1,154 | release-stable |
-| Claude | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,772 | 443 | workspace-stable |
-| Codex/OpenCode | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,865 | 467 | workspace-stable |
-| Pi | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,881 | 471 | workspace-stable |
+| Claude | `sync-section` | `src/launcher/contextInject.js#syncSection` | 2,107 | 527 | workspace-stable |
+| Codex/OpenCode | `sync-section` | `src/launcher/contextInject.js#syncSection` | 2,200 | 550 | workspace-stable |
+| Pi | `sync-section` | `src/launcher/contextInject.js#syncSection` | 2,194 | 549 | workspace-stable |
 | Claude | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,727 | 2,182 | on-demand |
 | Codex/OpenCode | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,960 | 2,240 | on-demand |
 | Pi | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 7,023 | 1,756 | on-demand |
