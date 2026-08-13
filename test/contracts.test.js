@@ -931,27 +931,27 @@ test("unknownPalJsonKey — desktopBindings entry with the real fields produces 
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("invalidPalJsonShape — layout.roles as a bare string (not an array) is an error", () => {
+test("invalidPalJsonShape — layout.roles as a bare array is the shape mismatch that silently fails to save", () => {
     const dir = tmpWorkspace({
-        "pal.json": basePalJson({ layout: { roles: "signer" } }),
+        "pal.json": basePalJson({ layout: { roles: ["signer"] } }),
     });
     const findings = lintPalJson(dir).filter(f => f.rule === "invalidPalJsonShape");
     assert.strictEqual(findings.length, 1);
-    assert.match(findings[0].message, /layout\.roles must be an array/);
+    assert.match(findings[0].message, /layout\.roles must be \{ "string": \[/);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("invalidPalJsonShape — layout.roles with an empty-string entry is an error", () => {
+test("invalidPalJsonShape — layout.roles.string with an empty-string entry is an error", () => {
     const dir = tmpWorkspace({
-        "pal.json": basePalJson({ layout: { roles: ["signer", ""] } }),
+        "pal.json": basePalJson({ layout: { roles: { string: ["signer", ""] } } }),
     });
     const findings = lintPalJson(dir).filter(f => f.rule === "invalidPalJsonShape");
     assert.strictEqual(findings.length, 1);
-    assert.match(findings[0].message, /layout\.roles\[1\] must be a non-empty string/);
+    assert.match(findings[0].message, /layout\.roles\.string\[1\] must be a non-empty string/);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("layout.roles absent, \"\" (empty), or a clean string array all produce no finding — roles are optional", () => {
+test("layout.roles absent, \"\" (empty), or the wrapped { string: [...] } shape all produce no finding", () => {
     const noRolesDir = tmpWorkspace({ "pal.json": basePalJson({ layout: {} }) });
     assert.strictEqual(lintPalJson(noRolesDir).filter(f => f.rule === "invalidPalJsonShape").length, 0);
     fs.rmSync(noRolesDir, { recursive: true, force: true });
@@ -960,7 +960,7 @@ test("layout.roles absent, \"\" (empty), or a clean string array all produce no 
     assert.strictEqual(lintPalJson(emptyDir).filter(f => f.rule === "invalidPalJsonShape").length, 0);
     fs.rmSync(emptyDir, { recursive: true, force: true });
 
-    const filledDir = tmpWorkspace({ "pal.json": basePalJson({ layout: { roles: ["signer", "approver"] } }) });
+    const filledDir = tmpWorkspace({ "pal.json": basePalJson({ layout: { roles: { string: ["signer", "approver"] } } }) });
     assert.strictEqual(lintPalJson(filledDir).filter(f => f.rule === "invalidPalJsonShape").length, 0);
     fs.rmSync(filledDir, { recursive: true, force: true });
 });

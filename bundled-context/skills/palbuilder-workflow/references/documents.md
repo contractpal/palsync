@@ -366,9 +366,11 @@ reference); reach for `c:pdf` only when you have a standalone `PdfFile`, not a `
   edit anywhere afterward invalidates it. If part of the document needs to keep changing after
   signing, that content must sit outside a narrower `cp-target` — signing the whole document
   and then editing any of it is a broken-signature bug, not a corner case.
-- **Register every signature's role on the pal, not just on the document.** A `role` named by
-  `cp-sig-role`/`Signature.role` also belongs in `pal.json`'s top-level `layout.roles` array —
-  e.g. `role="signer"` here means `layout.roles` should include `"signer"`. This is a design-time
-  convenience only (the workflow API doesn't check it at runtime), but skipping it can produce a
-  server warning about an unregistered role. See `palbuilder-core/references/pal-json.md` for
-  `layout.roles`'s shape (array of strings, `""` when empty).
+- **Register every signature's role on the pal, not just on the document — but in the wrapped
+  shape.** A `role` named by `cp-sig-role`/`Signature.role` belongs in `pal.json`'s top-level
+  `layout.roles`, shaped `{ "string": ["signer"] }` — the same wrapper convention as
+  `DataList.cols`/`DatasetIndex.columns`. **A bare array (`roles: ["signer"]`) silently fails to
+  save**: `pal_push` reports `ok:true`, but it serializes to repeated `<roles>` elements instead
+  of one `<roles>` wrapper of `<string>` children, so the server's "no roles associated" warning
+  still fires in that response and the next pull shows the field reset to `""`. See
+  `palbuilder-core/references/pal-json.md` for the confirmed-correct shape.

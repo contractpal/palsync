@@ -385,28 +385,33 @@ function checkUnknownKeys(manifest) {
     return findings;
 }
 
-// `layout.roles` (vendored Layout.java field, no public API doc) is a String[] — an empty pal
-// serializes it as "" (same empty-XML-element convention as the other array sections above),
-// a populated one is a JSON array of role-name strings. A bare non-empty string here is a common
-// slip (writing the single role name instead of a one-element array) that the server will not
-// catch for you, so flag it explicitly.
+// `layout.roles` IS writable through pal_push, but only in the wrapped shape every other
+// String-list field in this API uses ({ "string": [...] } — same convention as
+// DataList.cols/DatasetIndex.columns/Data.values.entry, confirmed by comparing the XML
+// CloudPistonXMLBuilder produces for each). A bare JS array (`roles: ["signer"]`) serializes as
+// repeated top-level `<roles>` elements instead of one `<roles>` wrapper containing `<string>`
+// children — the shape mismatch that made an earlier live test conclude (wrongly) that the field
+// was read-only: the push reported ok:true, but the server's "no roles associated" warning fired
+// in that same response and a follow-up pull showed it reset to "", because the server's
+// deserializer found nothing in the shape it actually expects.
 function checkRoles(manifest) {
     const findings = [];
     const layout = manifest.layout;
     if (!isObject(layout)) return findings;
     const roles = layout.roles;
     if (roles == null || roles === "") return findings;
-    if (!Array.isArray(roles)) {
-        findings.push(shapeFinding("pal.json layout.roles must be an array of role-name strings " +
-            "(e.g. [\"signer\"]), or \"\" when empty — found a " + typeof roles + ". Every role a " +
-            "document signature (`cp-sig-role`/`Signature.role`) uses should be listed here too — " +
-            "a design-time convenience, not an API-enforced check — or the server may warn about " +
-            "an unregistered role."));
+    if (!isObject(roles) || Array.isArray(roles) || !Array.isArray(roles.string)) {
+        findings.push(shapeFinding("pal.json layout.roles must be { \"string\": [\"signer\", ...] } " +
+            "— the same wrapper shape as DataList.cols/DatasetIndex.columns/Data.values.entry — " +
+            "not a bare array and not a bare string. A bare array silently fails to reach the " +
+            "server (it serializes as repeated top-level <roles> elements instead of one <roles> " +
+            "wrapper of <string> children), so the push reports ok:true but the field never " +
+            "actually saves and the server's \"no roles associated\" warning still fires."));
         return findings;
     }
-    roles.forEach((role, i) => {
+    roles.string.forEach((role, i) => {
         if (!nonEmptyString(role)) {
-            findings.push(shapeFinding("pal.json layout.roles[" + i + "] must be a non-empty string."));
+            findings.push(shapeFinding("pal.json layout.roles.string[" + i + "] must be a non-empty string."));
         }
     });
     return findings;
