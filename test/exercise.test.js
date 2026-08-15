@@ -11,19 +11,26 @@ const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
 const { InMemoryTransport } = require("@modelcontextprotocol/sdk/inMemory.js");
 const { tmpWorkspace } = require("./helpers");
 const usage = require("../src/core/usage");
-const { runExercise, exerciseByBrowser, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, browserFailureMessage, MAX_STEPS } = require("../src/core/exercise");
+const { runExercise, exerciseByBrowser, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, BROWSER_EVENTS_CAP, MAX_STEPS } = require("../src/core/exercise");
 const { waitForRenderablePage } = require("../src/core/screenshot");
 
-function loadStubbedTools({ exerciseResult, pushResult, screenshotResult }) {
+function loadStubbedTools({ exerciseResult, pushResult, screenshotResult, workHistoryModule } = {}) {
     const toolsPath = require.resolve("../src/mcp/tools");
     const exercisePath = require.resolve("../src/core/exercise");
     const pushPath = require.resolve("../src/core/push");
     const screenshotPath = require.resolve("../src/core/screenshot");
     const debugPath = require.resolve("../src/core/debug");
+    const workHistoryPath = require.resolve("../src/mcp/workHistory");
     const saved = new Map([[toolsPath, require.cache[toolsPath]], [exercisePath, require.cache[exercisePath]], [pushPath, require.cache[pushPath]], [screenshotPath, require.cache[screenshotPath]], [debugPath, require.cache[debugPath]]]);
+    if (workHistoryModule) saved.set(workHistoryPath, require.cache[workHistoryPath]);
     require.cache[exercisePath] = { id: exercisePath, filename: exercisePath, loaded: true, exports: {
         runExercise: async () => Object.assign({}, exerciseResult),
-        formatExercise: result => result.pass ? "pal_exercise — PASS" : "pal_exercise — FAIL"
+        // formatExercise is pure — keep the real one so handler-level warnings are testable.
+        formatExercise,
+        // tools.js also imports these for failure-artifact persistence; keep them real.
+        applyRunId,
+        redactStepValues,
+        redactSecretForms
     } };
     require.cache[pushPath] = { id: pushPath, filename: pushPath, loaded: true, exports: {
         push: async (session, record) => {
@@ -39,6 +46,7 @@ function loadStubbedTools({ exerciseResult, pushResult, screenshotResult }) {
     require.cache[debugPath] = { id: debugPath, filename: debugPath, loaded: true, exports: {
         retrieveServerDebug: async () => ({ retrieved: false, reason: "stubbed" })
     } };
+    if (workHistoryModule) require.cache[workHistoryPath] = { id: workHistoryPath, filename: workHistoryPath, loaded: true, exports: workHistoryModule };
     delete require.cache[toolsPath];
     const loaded = require("../src/mcp/tools");
     return {
@@ -146,6 +154,546 @@ test("post-mutation block and behavior failure are never replayed", async () => 
     }
 });
 
+test("exerciseByBrowser bounds navigation/action waits and skips style/font settle", async () => {
+    const calls = [];
+    const clickTarget = {
+        async count() { return 1; },
+        first() { return this; },
+        async click(options) { calls.push(["click", options]); }
+    };
+    const pg = {
+        on() {},
+        url: () => "https://example.test/app",
+        async goto(_url, options) { calls.push(["goto", options]); },
+        async waitForLoadState(state, options) { calls.push(["waitForLoadState:" + state, options]); },
+        async waitForFunction(_fn, arg) { calls.push(["waitForFunction", arg]); },
+        async evaluate() { return {}; },
+        async waitForTimeout() {},
+        locator() { return { async count() { return 1; }, first() { return clickTarget; } }; },
+        getByText() { return clickTarget; },
+        async fill(_sel, _value, options) { calls.push(["fill", options]); },
+        async innerText() { return "saved"; },
+        async content() { return "<body>saved</body>"; }
+    };
+    const browser = { async newContext() { return { async newPage() { return pg; }, async close() {} }; } };
+    const res = await exerciseByBrowser(
+        { kind: "console", _previewUrl: "https://example.test/app" },
+        [{ fill: { name: "x" }, click: "Save", expect: ["saved"] }],
+        undefined,
+        { loadChromium: () => ({}), getBrowser: async () => browser, releaseBrowser: () => {} }
+    );
+    assert.equal(res.status, "passed");
+    const gotoOpts = calls.find(c => c[0] === "goto")[1];
+    assert.equal(gotoOpts.waitUntil, "domcontentloaded");
+    assert.equal(gotoOpts.timeout, 10000, "a single navigation must be time-bounded");
+    assert.equal(calls.find(c => c[0] === "waitForLoadState:load")[1].timeout, 5000);
+    assert.equal(calls.find(c => c[0] === "waitForLoadState:networkidle")[1].timeout, 3000);
+    assert.ok(!calls.some(c => c[0] === "waitForFunction" && c[1] === null),
+        "stylesheet/font settling is screenshot-only and must be skipped");
+    assert.deepEqual(calls.find(c => c[0] === "fill")[1], { timeout: 5000 });
+    assert.deepEqual(calls.find(c => c[0] === "click")[1], { timeout: 5000 });
+});
+
+test("blocked navigation returns completed-step evidence after mutation (no replay)", async () => {
+    let tests = 0;
+    const working = {
+        async count() { return 1; },
+        first() { return this; },
+        async click() {}
+    };
+    const stuck = {
+        async count() { return 1; },
+        first() { return this; },
+        async click() { throw new Error("element is not receiving pointer events (Timeout 3000ms exceeded)"); }
+    };
+    const pg = {
+        on() {},
+        url: () => "https://example.test/app",
+        async innerText() { return "saved ok"; },
+        async content() { return "<body>saved ok</body>"; },
+        locator() { return { async count() { return 1; }, first() { return working; } }; },
+        getByText(text) { return text === "Save" ? working : stuck; },
+        async fill() {},
+        async evaluate() { return {}; },
+        async waitForLoadState() {},
+        async waitForFunction() {},
+        async waitForTimeout() {}
+    };
+    const result = await runExercise(null, "PAL-X", {
+        steps: [{ fill: { name: "x" }, click: "Save", expect: ["saved"] }, { click: "Next" }],
+        workflow: "console"
+    }, {
+        runTest: async () => { tests++; return { ran: true, validated: true, kind: "console", _previewUrl: "https://example.test/app" }; },
+        loadChromium: () => ({}),
+        getBrowser: async () => ({ newContext: async () => ({ newPage: async () => pg, close: async () => {} }) }),
+        releaseBrowser: () => {},
+        waitForRenderablePage: async () => {}
+    });
+    assert.equal(result.status, "blocked");
+    assert.equal(result.category, "navigation");
+    assert.equal(result.potentialMutationStarted, true);
+    assert.equal(result.retryAttempted, false, "a post-mutation block is never replayed");
+    assert.equal(tests, 1);
+    assert.equal(result.steps.length, 1, "the completed step must ride on the blocked result");
+    assert.equal(result.steps[0].pass, true);
+    assert.match(result.steps[0].label, /click "Save"/);
+    const out = formatExercise(result);
+    assert.match(out, /BLOCKED/);
+    assert.match(out, /completed steps before the block \(1\):/);
+    assert.match(out, /✓ step 1 \[fill\{name\} click "Save"\]/);
+    assert.match(out, /Data may already have changed/);
+});
+
+test("formatExercise: bare blocked output stays unchanged (no steps section)", () => {
+    const out = formatExercise({ ran: false, status: "blocked", category: "environment",
+        potentialMutationStarted: false, retryAttempted: true, reason: "offline",
+        remediation: "Fix the test environment, then run a new exercise." });
+    assert.match(out, /category: environment/);
+    assert.match(out, /retry attempted: yes/);
+    assert.match(out, /potential mutation started: no/);
+    assert.match(out, /next: Fix the test environment/);
+    assert.ok(!/completed steps/.test(out));
+    assert.ok(!/evidence:/.test(out), "no browser evidence means no evidence line");
+});
+
+// ---- Slice 2: bounded browser failure evidence ------------------------------
+
+// Fake page with real event plumbing: `on` records handlers and emit() fires them mid-run, so the
+// capture happens while the exercise drives the page — the same path production uses.
+function failingPageWithEvents({ ariaSnapshot, hints }) {
+    const listeners = {};
+    const emit = (event, arg) => { for (const fn of (listeners[event] || [])) fn(arg); };
+    const clickTarget = {
+        async count() { return 1; },
+        first() { return this; },
+        async click() {
+            // Fired mid-run by the page itself, exactly like a real browser console/network stream.
+            emit("console", { type: () => "error", text: () => "Failed to load resource: the server responded with a status of 500 (https://api.example.test/data?token=SECRET)" });
+            emit("console", { type: () => "error", text: () => "Failed to load resource: the server responded with a status of 500 (https://api.example.test/data?token=SECRET)" }); // duplicate → deduped
+            emit("console", { type: () => "log", text: () => "ordinary log line" });
+            emit("response", { status: () => 500, url: () => "https://api.example.test/data?cp-auth=SECRET&x=1" });
+            emit("response", { status: () => 502, url: () => "https://api.example.test/" + "x".repeat(1000) });
+            emit("requestfailed", { url: () => "https://api.example.test/asset.css?secret=1", failure: () => ({ errorText: "net::ERR_FAILED" }) });
+            emit("pageerror", { message: "TypeError: x is undefined" });
+        }
+    };
+    const pg = {
+        on(event, handler) { (listeners[event] = listeners[event] || []).push(handler); },
+        url: () => "https://example.test/app",
+        getByText() { return clickTarget; },
+        locator() { return { async count() { return 1; }, first() { return clickTarget; }, async ariaSnapshot() { return ariaSnapshot; } }; },
+        async evaluate() { return hints || {}; },
+        async screenshot() { return Buffer.from("fake-jpeg-bytes"); },
+        async innerText() { return "saved"; },
+        async content() { return "<body>saved</body>"; },
+        async goto() {}, async waitForLoadState() {}, async waitForFunction() {}, async waitForTimeout() {}
+    };
+    return { pg, emit };
+}
+
+function runFailingExercise(pg, steps, deps = {}) {
+    return exerciseByBrowser(
+        { kind: "console", _previewUrl: "https://example.test/app" },
+        steps,
+        undefined,
+        Object.assign({ loadChromium: () => ({}), getBrowser: async () => ({ newContext: async () => ({ newPage: async () => pg, close: async () => {} }) }), releaseBrowser: () => {} }, deps)
+    );
+}
+
+test("exerciseByBrowser captures bounded, deduped, sanitized browser events on failure", async () => {
+    const { pg } = failingPageWithEvents({ ariaSnapshot: "body\n- root [body]", hints: {} });
+    const res = await runFailingExercise(pg, [{ click: "Save", expect: ["missing"] }]);
+    assert.equal(res.status, "failed");
+    assert.deepEqual(res.evidence.events, [
+        { type: "console:error", message: "Failed to load resource: the server responded with a status of 500 (<url>)" },
+        { type: "http", status: 500, url: "https://api.example.test/data" },
+        { type: "http", status: 502, url: "https://api.example.test/" + "x".repeat(261) + "… (truncated)" },
+        { type: "requestfailed", url: "https://api.example.test/asset.css", message: "net::ERR_FAILED" },
+        { type: "pageerror", message: "TypeError: x is undefined" }
+    ]);
+    const dumped = JSON.stringify(res.evidence);
+    assert.doesNotMatch(dumped, /SECRET|cp-auth|token=|secret=/, "no credential URL/query/fragment may reach evidence");
+    assert.ok(!/ordinary log line/.test(dumped), "non-error/warning console messages are ignored");
+    assert.ok(res.evidence.events.every(event => !event.url || event.url.length <= 300), "event URLs are bounded");
+});
+
+test("exerciseByBrowser caps browser events at the bound and keeps only unique events", async () => {
+    const listeners = {};
+    let clickTarget;
+    clickTarget = {
+        async count() { return 1; },
+        first() { return this; },
+        async click() { for (let n = 0; n < BROWSER_EVENTS_CAP + 5; n++) {
+            for (const fn of (listeners["console"] || [])) fn({ type: () => "error", text: () => "unique error " + n });
+        } }
+    };
+    const pg = {
+        on(event, handler) { (listeners[event] = listeners[event] || []).push(handler); },
+        url: () => "https://example.test/app",
+        getByText() { return clickTarget; },
+        locator() { return { async count() { return 1; }, first() { return clickTarget; }, async ariaSnapshot() { return "body\n- root [body]"; } }; },
+        async evaluate() { return {}; },
+        async screenshot() { return Buffer.from("x"); },
+        async innerText() { return "saved"; },
+        async content() { return "<body>saved</body>"; },
+        async goto() {}, async waitForLoadState() {}, async waitForFunction() {}, async waitForTimeout() {}
+    };
+    const res = await runFailingExercise(pg, [{ click: "Save", expect: ["missing"] }]);
+    assert.equal(res.evidence.events.length, BROWSER_EVENTS_CAP, "events are capped");
+});
+
+test("exerciseByBrowser truncates the accessibility snapshot with an explicit marker and scrubs it", async () => {
+    const snapshot = "Link https://cred.example/p?cp-auth=SECRET\n" + "y".repeat(10000);
+    const { pg } = failingPageWithEvents({ ariaSnapshot: snapshot, hints: {} });
+    const res = await runFailingExercise(pg, [{ click: "Save", expect: ["missing"] }]);
+    assert.equal(res.evidence.aria.length, 4096, "snapshot is capped at ~4k");
+    assert.match(res.evidence.aria, /… \(snapshot truncated\)$/);
+    assert.equal(res.evidence.ariaTruncated, true);
+    assert.equal(res.evidence.ariaScope, "body");
+    assert.match(res.evidence.aria, /<url>/);
+    assert.doesNotMatch(res.evidence.aria, /SECRET|cp-auth/);
+});
+
+test("exerciseByBrowser falls back to screen hints when ariaSnapshot is unavailable", async () => {
+    const pg = {
+        on() {},
+        url: () => "https://example.test/app",
+        getByText() { return { async count() { return 1; }, first() { return this; }, async click() {} }; },
+        locator() { return { async count() { return 1; }, first() { return this; } }; },
+        async evaluate() { return { clicks: ["Save"], ids: [], fields: [], headings: ["Edit equipment"] }; },
+        async screenshot() { throw new Error("page closed"); },
+        async innerText() { return "saved"; },
+        async content() { return "<body>saved</body>"; },
+        async goto() {}, async waitForLoadState() {}, async waitForFunction() {}, async waitForTimeout() {}
+    };
+    const res = await runFailingExercise(pg, [{ click: "Save", expect: ["missing"] }]);
+    assert.equal(res.status, "failed");
+    assert.equal(res.evidence.aria, null);
+    assert.deepEqual(res.evidence.hints, { clicks: ["Save"], ids: [], fields: [], headings: ["Edit equipment"] });
+    assert.equal(res.evidence.jpegBase64, null, "a failed screenshot is best-effort, never a crash");
+});
+
+test("formatExercise: failure evidence summary is compact and points at persisted artifacts", () => {
+    const out = formatExercise({
+        ran: true, kind: "console", mode: "browser", pass: false, failedStep: 1,
+        steps: [{ step: 1, label: "click \"Save\"", pass: false, error: "expect missing", url: "https://example.test/app" }],
+        evidence: {
+            events: [
+                { type: "console:error", message: "boom (<url>)" },
+                { type: "pageerror", message: "TypeError: x" },
+                { type: "http", status: 500, url: "https://example.test/api" },
+                { type: "http", status: 502, url: "https://example.test/api" }
+            ],
+            aria: "body\n- root [body]", ariaScope: "body", ariaTruncated: false, hints: null,
+            jpegBase64: "AAAA", jpegBytes: null
+        },
+        artifacts: {
+            dir: "/ws/.agent-work-history/2026-01-01T00-00-00-000Z--pal-exercise--failure-failed",
+            steps: "steps.json", events: "browser-events.json", aria: "aria-snapshot.txt",
+            jpeg: "failure.jpg", metadata: "metadata.json", notes: "notes.md"
+        }
+    });
+    assert.match(out, /BEHAVIOR FAIL/);
+    assert.match(out, /evidence: browser events: console:error ×1, http ×2, pageerror ×1; accessibility snapshot \(body\) 18 chars; failure screenshot 1KB/);
+    assert.match(out, /artifacts: \/ws\/\.agent-work-history\/2026-01-01T00-00-00-000Z--pal-exercise--failure-failed \(steps\.json, browser-events\.json, aria-snapshot\.txt, failure\.jpg, metadata\.json, notes\.md\)/);
+    assert.match(out, /inspect the artifacts instead of probing selectors by trial and error — blocked\/failed is not PASS/);
+    assert.doesNotMatch(out, /AAAA|base64/, "JPEG base64 never appears inline");
+
+    const blocked = formatExercise({
+        ran: false, status: "blocked", category: "navigation", potentialMutationStarted: true,
+        reason: "navigation timed out", steps: [{ step: 1, label: "click \"Save\"", pass: true, url: "https://example.test/app" }],
+        evidence: { events: [{ type: "http", status: 504, url: "https://example.test/api" }], aria: null, ariaScope: "body", ariaTruncated: false, hints: { clicks: [] }, jpegBase64: null, jpegBytes: null }
+    });
+    assert.match(blocked, /BLOCKED/);
+    assert.match(blocked, /completed steps before the block \(1\):/);
+    assert.match(blocked, /evidence: browser events: http ×1; accessibility snapshot unavailable — screen hints captured/);
+    assert.ok(!/artifacts:/.test(blocked), "no artifact map means no artifacts line");
+});
+
+test("pal_exercise handler persists failure-only artifacts and never returns JPEG base64", async () => {
+    const ws = tmpWorkspace();
+    const loaded = loadStubbedTools({
+        exerciseResult: {
+            ran: true, pass: false, status: "failed", category: "behavior", kind: "console",
+            mode: "browser", runId: "run-f1", failedStep: 1,
+            reason: "expect \"saved\" missing from visible text",
+            steps: [{ step: 1, label: "fill{name,password} click \"Save\"", pass: false, error: "expect missing", url: "https://example.test/app" }],
+            evidence: {
+                events: [{ type: "requestfailed", url: "https://api.example.test/asset.css?cp-auth=SECRET", message: "net::ERR_FAILED" }],
+                aria: "body\n- root [body]", ariaScope: "body", ariaTruncated: false, hints: null,
+                jpegBase64: Buffer.from("fake-jpeg").toString("base64"), jpegBytes: null
+            }
+        }
+    });
+    try {
+        const result = await findTool(loaded.tools, "pal_exercise").run({
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", palName: "Demo", lastModifiedDate: "M1" }
+        }, { steps: [{ page: "/records?token=TOPSECRET", action: "save", params: {
+            callback: "https://callback.example.test/done?token=NESTED", password: "param-secret"
+        }, fill: { name: "Camera {{runId}}", password: "hunter2" }, click: "Save", expect: ["saved"] }] });
+        assert.equal(result.status, "failed");
+        assert.equal(result.evidence.jpegBase64, undefined, "JPEG base64 must never reach the caller");
+        assert.equal(result.evidence.jpegBytes, Buffer.from("fake-jpeg").length, "byte count survives for the compact summary");
+        assert.ok(result.artifacts && result.artifacts.dir, "artifact directory is returned");
+        const runDir = result.artifacts.dir;
+        for (const name of ["steps.json", "browser-events.json", "aria-snapshot.txt", "failure.jpg", "metadata.json", "notes.md"]) {
+            assert.equal(fs.existsSync(path.join(runDir, name)), true, name + " must be persisted");
+        }
+        const persistedSteps = JSON.parse(fs.readFileSync(path.join(runDir, "steps.json"), "utf8"));
+        assert.deepEqual(persistedSteps, {
+            // Requested steps (runId applied, auth-like fill values redacted) and execution
+            // results are persisted as two DISTINCT arrays — never mislabeled as one.
+            requestedSteps: [{ page: "/records?token=<redacted>", action: "save", params: {
+                callback: "https://callback.example.test/done", password: "<redacted>"
+            }, fill: { name: "Camera run-f1", password: "<redacted>" }, click: "Save", expect: ["saved"] }],
+            executionResults: [{ step: 1, label: "fill{name,password} click \"Save\"", pass: false, error: "expect missing", url: "https://example.test/app" }]
+        }, "steps.json keeps distinct redacted requested steps and sanitized execution results");
+        const metadata = JSON.parse(fs.readFileSync(path.join(runDir, "metadata.json"), "utf8"));
+        assert.equal(metadata.viewport, "desktop", "an omitted viewport records the effective desktop default");
+        // Artifact inventory is keyed by the artifact map, so the persisted list names real files.
+        assert.deepEqual(metadata.artifacts, ["steps.json", "browser-events.json", "aria-snapshot.txt", "failure.jpg", "notes.md", "metadata.json"]);
+        assert.deepEqual(metadata.incomplete, [], "all artifact writes succeeded");
+        // Durable artifacts are credential-free even when evidence carries a raw URL.
+        for (const name of ["steps.json", "browser-events.json", "aria-snapshot.txt", "metadata.json", "notes.md"]) {
+            const text = fs.readFileSync(path.join(runDir, name), "utf8");
+            assert.doesNotMatch(text, /SECRET|NESTED|param-secret|cp-auth|hunter2/, name + " must not carry credentials");
+        }
+        const events = JSON.parse(fs.readFileSync(path.join(runDir, "browser-events.json"), "utf8"));
+        assert.deepEqual(events, [{ type: "requestfailed", url: "https://api.example.test/asset.css", message: "net::ERR_FAILED" }]);
+        assert.equal(usage.readToolEvidence(ws).length, 0, "a failed run appends no successful review evidence");
+    } finally {
+        loaded.restore();
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("pal_exercise PASS writes no failure artifacts", async () => {
+    const ws = tmpWorkspace();
+    const loaded = loadStubbedTools({
+        exerciseResult: { ran: true, pass: true, runId: "run-1", kind: "console", mode: "browser" }
+    });
+    try {
+        const result = await findTool(loaded.tools, "pal_exercise").run({
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", palName: "Demo", lastModifiedDate: "M1" }
+        }, { steps: [{ click: "Save", expect: ["saved"] }] });
+        assert.equal(result.pass, true);
+        assert.equal(fs.existsSync(path.join(ws, ".agent-work-history")), false,
+            "a PASS must not write failure artifacts");
+    } finally {
+        loaded.restore();
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("exerciseByBrowser sets context-level timeouts and time-bounds the failure screenshot", async () => {
+    const calls = [];
+    let contextOpts = null, defaultActionTimeout = null, defaultNavigationTimeout = null;
+    const clickTarget = {
+        async count() { return 1; },
+        first() { return this; },
+        async click() {}
+    };
+    const pg = {
+        on() {},
+        url: () => "https://example.test/app",
+        getByText() { return clickTarget; },
+        locator() { return { async count() { return 1; }, first() { return clickTarget; }, async ariaSnapshot() { return "body\n- root [body]"; } }; },
+        async evaluate() { return {}; },
+        async screenshot(options) { calls.push(["screenshot", options]); return Buffer.from("jpeg"); },
+        async innerText() { return "saved"; },
+        async content() { return "<body>saved</body>"; },
+        async goto() {}, async waitForLoadState() {}, async waitForFunction() {}, async waitForTimeout() {}
+    };
+    const res = await runFailingExercise(pg, [{ click: "Save", expect: ["missing"] }], {
+        getBrowser: async () => ({ newContext: async (opts) => {
+            contextOpts = opts;
+            return {
+                setDefaultTimeout(ms) { defaultActionTimeout = ms; },
+                setDefaultNavigationTimeout(ms) { defaultNavigationTimeout = ms; },
+                newPage: async () => pg, close: async () => {}
+            };
+        } })
+    });
+    assert.equal(res.status, "failed");
+    assert.deepEqual(contextOpts, { viewport: { width: 1280, height: 800 } });
+    assert.equal(defaultActionTimeout, 5000, "context-level default action timeout");
+    assert.equal(defaultNavigationTimeout, 10000, "context-level default navigation timeout");
+    const shot = calls.find(c => c[0] === "screenshot")[1];
+    assert.equal(shot.type, "jpeg");
+    assert.ok(shot.timeout > 0, "the failure screenshot itself is time-bounded");
+});
+
+test("a hung evaluate cannot hang evidence capture: bounded per-call, run still completes", async () => {
+    const hung = new Promise(() => {}); // never settles
+    const pg = {
+        on() {},
+        url: () => "https://example.test/app",
+        getByText() { return { async count() { return 1; }, first() { return this; }, async click() {} }; },
+        locator() { return { async count() { return 1; }, first() { return this; } }; },
+        async evaluate() { return hung; },
+        async screenshot() { return Buffer.from("x"); },
+        async innerText() { return "saved"; },
+        async content() { return "<body>saved</body>"; },
+        async goto() {}, async waitForLoadState() {}, async waitForFunction() {}, async waitForTimeout() {}
+    };
+    const start = Date.now();
+    const res = await runFailingExercise(pg, [{ click: "Save", expect: ["missing"] }], { evidenceTimeout: 30 });
+    const elapsed = Date.now() - start;
+    assert.equal(res.status, "failed");
+    assert.deepEqual(res.evidence.hints, { clicks: [], ids: [], fields: [], headings: [] },
+        "hung screen hints fall back to empty hints instead of hanging");
+    assert.ok(res.evidence.jpegBase64, "screenshot capture still proceeds after the bound");
+    assert.ok(elapsed < 2000, "bounded evidence must not hang (took " + elapsed + "ms)");
+});
+
+test("a failing scoped ariaSnapshot falls back to the body snapshot before screen hints", async () => {
+    let ariaCalls = 0;
+    const clickTarget = {
+        async count() { return 1; },
+        first() { return this; },
+        async click() {}
+    };
+    const pg = {
+        on() {},
+        url: () => "https://example.test/app",
+        getByText() { return clickTarget; },
+        locator(sel) {
+            const self = {
+                async count() { return 1; },
+                first() { return self; },
+                getByText() { return clickTarget; },
+                async ariaSnapshot() {
+                    ariaCalls++;
+                    if (sel !== "body") throw new Error("scoped snapshot unavailable");
+                    return "body\n- root [body]\n- button Save";
+                }
+            };
+            return self;
+        },
+        async evaluate() { return {}; },
+        async screenshot() { return Buffer.from("x"); },
+        async innerText() { return "saved"; },
+        async content() { return "<body>saved</body>"; },
+        async goto() {}, async waitForLoadState() {}, async waitForFunction() {}, async waitForTimeout() {}
+    };
+    const res = await runFailingExercise(pg, [{ click: "Save", within: ".panel", expect: ["missing"] }]);
+    assert.equal(res.status, "failed");
+    assert.equal(ariaCalls, 2, "scoped attempt, then body attempt");
+    assert.equal(res.evidence.ariaScope, "body");
+    assert.match(res.evidence.aria, /button Save/);
+    assert.equal(res.evidence.hints, null, "no hints when a snapshot was captured");
+});
+
+test("evidence redaction covers bearer/basic authorization and query/header/JSON secret forms", async () => {
+    const listeners = {};
+    const emit = (event, arg) => { for (const fn of (listeners[event] || [])) fn(arg); };
+    const clickTarget = {
+        async count() { return 1; },
+        first() { return this; },
+        async click() {
+            emit("console", { type: () => "error", text: () => "Authorization: Bearer eyJhbGciOi.abc.def" });
+            emit("console", { type: () => "error", text: () => "Basic " + Buffer.from("user:pass").toString("base64") });
+            emit("console", { type: () => "error", text: () => "{\"password\": \"hunter2\", \"otp\": \"123456\"}" });
+            emit("console", { type: () => "error", text: () => "X-Api-Key: k123" });
+            emit("console", { type: () => "error", text: () => "&api_key=k456&pin=9999" });
+            emit("console", { type: () => "error", text: () => "401 Unauthorized, retry with Bearer eyJhbGciOi.abc.def" });
+        }
+    };
+    const pg = {
+        on(event, handler) { (listeners[event] = listeners[event] || []).push(handler); },
+        url: () => "https://example.test/app",
+        getByText() { return clickTarget; },
+        locator() { return { async count() { return 1; }, first() { return clickTarget; }, async ariaSnapshot() { return "body\n- root [body]"; } }; },
+        async evaluate() { return {}; },
+        async screenshot() { return Buffer.from("x"); },
+        async innerText() { return "saved"; },
+        async content() { return "<body>saved</body>"; },
+        async goto() {}, async waitForLoadState() {}, async waitForFunction() {}, async waitForTimeout() {}
+    };
+    const res = await runFailingExercise(pg, [{ click: "Save", expect: ["missing"] }]);
+    const messages = res.evidence.events.map(e => e.message);
+    const joined = messages.join("\n");
+    assert.doesNotMatch(joined, /eyJhbGci|hunter2|123456|k123|k456|9999|user:pass/, "secret values must never reach evidence");
+    assert.ok(messages.some(m => m === "Authorization: <redacted>"), "header-form authorization is scrubbed");
+    assert.ok(messages.some(m => m === "Basic <redacted>"), "basic authorization is scrubbed");
+    assert.ok(messages.some(m => m === "401 Unauthorized, retry with Bearer <redacted>"), "standalone bearer tokens are scrubbed");
+    assert.ok(messages.some(m => m === "{\"password\": \"<redacted>\", \"otp\": \"<redacted>\"}"), "JSON-like secret assignments are scrubbed");
+    assert.ok(messages.some(m => m === "&api_key=<redacted>&pin=<redacted>"), "query-like secret values are scrubbed");
+    assert.ok(messages.some(m => m === "X-Api-Key: <redacted>"), "header-like api keys are scrubbed");
+});
+
+test("pal_exercise handler reports partial artifact writes and never returns unpersisted JPEG base64", async () => {
+    const ws = tmpWorkspace();
+    const realWorkHistory = require("../src/mcp/workHistory");
+    const loaded = loadStubbedTools({
+        exerciseResult: {
+            ran: true, pass: false, status: "failed", category: "behavior", kind: "console",
+            mode: "browser", runId: "run-j1", failedStep: 1,
+            steps: [{ step: 1, label: "click \"Save\"", pass: false, error: "expect missing", url: "https://example.test/app" }],
+            evidence: {
+                events: [],
+                aria: "body\n- root [body]", ariaScope: "body", ariaTruncated: false, hints: null,
+                jpegBase64: Buffer.from("fake-jpeg").toString("base64"), jpegBytes: null
+            }
+        },
+        workHistoryModule: Object.assign({}, realWorkHistory, {
+            writeArtifactFile: (run, name, ...rest) => name === "failure.jpg" ? null : realWorkHistory.writeArtifactFile(run, name, ...rest)
+        })
+    });
+    try {
+        const result = await findTool(loaded.tools, "pal_exercise").run({
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", palName: "Demo", lastModifiedDate: "M1" }
+        }, { steps: [{ click: "Save", expect: ["saved"] }] });
+        assert.equal(result.status, "failed", "the primary exercise result is never thrown away");
+        assert.match(result.message, /BEHAVIOR FAIL/);
+        assert.equal(result.evidence.jpegBase64, undefined, "JPEG base64 is stripped even when persistence fails");
+        assert.equal(result.evidence.jpegBytes, null, "no byte count is claimed for an unpersisted JPEG");
+        assert.equal(result.evidence.jpegUnavailable, true, "the unpersisted screenshot is explicitly marked unavailable");
+        assert.ok(result.artifacts.incomplete.includes("failure.jpg"), "incomplete list names failure.jpg");
+        assert.equal(fs.existsSync(path.join(result.artifacts.dir, "failure.jpg")), false);
+        assert.equal(fs.existsSync(path.join(result.artifacts.dir, "steps.json")), true, "sibling artifacts still persist");
+        assert.match(result.message, /failure screenshot: captured but not persisted/);
+        assert.match(result.message, /warning: 1 artifact write\(s\) failed: failure\.jpg/);
+        const metadata = JSON.parse(fs.readFileSync(path.join(result.artifacts.dir, "metadata.json"), "utf8"));
+        assert.ok(!metadata.artifacts.includes("failure.jpg"), "inventory lists only persisted files");
+        assert.deepEqual(metadata.incomplete, ["failure.jpg"]);
+    } finally {
+        loaded.restore();
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("pal_exercise preserves its failure result when work-history creation throws", async () => {
+    const ws = tmpWorkspace();
+    const loaded = loadStubbedTools({
+        exerciseResult: {
+            ran: true, pass: false, status: "failed", category: "behavior", kind: "console",
+            mode: "browser", runId: "run-j2", failedStep: 1, steps: [],
+            evidence: { events: [], aria: "body", ariaScope: "body", jpegBase64: Buffer.from("jpeg").toString("base64") }
+        },
+        workHistoryModule: Object.assign({}, require("../src/mcp/workHistory"), {
+            createWorkHistoryRun() { throw new Error("disk unavailable"); }
+        })
+    });
+    try {
+        const result = await findTool(loaded.tools, "pal_exercise").run({
+            session: {}, workspaceDir: ws,
+            record: { palGuid: "PAL-1", palName: "Demo", lastModifiedDate: "M1" }
+        }, { steps: [{ click: "Save" }] });
+        assert.equal(result.status, "failed");
+        assert.equal(result.evidence.jpegBase64, undefined);
+        assert.equal(result.evidence.jpegUnavailable, true);
+        assert.deepEqual(result.artifacts.incomplete, ["work-history run"]);
+        assert.match(result.message, /warning: 1 artifact write\(s\) failed: work-history run/);
+    } finally {
+        loaded.restore();
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
 // ---- checkStep -------------------------------------------------------------
 
 test("checkStep: expect found + absent clean passes", () => {
@@ -188,11 +736,16 @@ test("needsBrowser: only fill/click force browser mode", () => {
     assert.strictEqual(needsBrowser([{ click: "Delete" }]), true);
 });
 
-test("stepLabel: readable one-liners", () => {
+test("stepLabel: readable one-liners without credential values", () => {
     assert.strictEqual(stepLabel({ action: "save", params: { name: "Cam" } }), "action=save?name=Cam");
     assert.strictEqual(stepLabel({ fill: { name: "x" }, click: "Save" }), "fill{name} click \"Save\"");
     assert.strictEqual(stepLabel({ click: "Check out", within: 'tr:has-text("Camera")' }), 'click "Check out" within "tr:has-text(\\"Camera\\")"');
     assert.strictEqual(stepLabel({ expect: ["x"] }), "assert-only");
+    const secret = stepLabel({ page: "https://example.test/items?token=SECRET", action: "save", params: {
+        password: "hunter2", callback: "https://callback.test/done?token=NESTED"
+    } });
+    assert.doesNotMatch(secret, /SECRET|hunter2|NESTED/);
+    assert.match(secret, /page=<url> action=save\?password=%3Credacted%3E&callback=%3Curl%3E/);
 });
 
 test("resolveClickTarget: duplicate labels fail instead of silently clicking the first", async () => {
@@ -287,9 +840,12 @@ test("formatExercise: reports visible assertions, markup-only clues, screen hint
 
     const passing = formatExercise({ ran: true, kind: "web", mode: "fetch", pass: true, runId: "run123",
         steps: [{ step: 1, label: "action=list", pass: true, expect: [{ string: "Camera", found: true }], absent: [] }] });
-    assert.match(passing, /PASS/);
-    assert.match(passing, /runId: run123/);
-    assert.match(passing, /expect "Camera": found/);
+    assert.equal(passing, [
+        "pal_exercise (web, fetch mode) — PASS",
+        "  runId: run123 ({{runId}} placeholders in steps were replaced with this value)",
+        "  ✓ step 1 [action=list]",
+        "      expect \"Camera\": found in visible text"
+    ].join("\n"), "PASS output stays compact and carries no failure-evidence/artifact lines");
 });
 
 // ---- lintSteps -------------------------------------------------------------

@@ -37,3 +37,21 @@ the other. An input `value` is not visible text, and CSS `text-transform` does n
 After an edit, require both the new value and absence of the old value; otherwise a duplicate insert can
 pass. After a delete, assert the unique deleted value is absent. Never use global `absent` for a state word
 such as “available” or global empty-state copy such as “No equipment yet” on a multi-row list.
+
+## Failure evidence
+
+A failed or blocked browser run captures bounded evidence and persists failure-only artifacts in a run
+directory under `.agent-work-history/` returned by the call: `steps.json` (two distinct arrays —
+`requestedSteps`, the steps as called with auth-like fill/params values redacted, and
+`executionResults`, the per-step results with any credential-bearing text sanitized),
+`browser-events.json` (deduped console errors/warnings, page errors, failed requests, HTTP ≥ 400 —
+URLs and messages sanitized), `aria-snapshot.txt` (scoped accessibility snapshot, truncated ~4k, with a
+body-snapshot retry before the fallback) or `screen-hints.json` when the snapshot is unavailable,
+`failure.jpg` (one bounded JPEG, when captured; password/auth/OTP-like field values are masked before
+capture — this is a best-effort control, not full screenshot secrecy), `metadata.json`, and `notes.md`.
+The call returns a compact evidence summary with the artifact path; partially failed artifact writes
+are reported as an explicit warning.
+
+A blocked/failed `pal_exercise` is NOT a PASS — do not mark the pal done. Inspect the artifacts (browser
+events, accessibility snapshot, failure screenshot) and derive the fix from them instead of probing
+selectors by trial and error. Passing runs write no failure artifacts.

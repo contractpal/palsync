@@ -11,3 +11,12 @@ Read `../../pal-review/references/console-render-verification.md`. A render erro
 ## Exercise authoring
 
 Full rules: `../../shared/references/exercise-authoring.md`.
+
+### Exercise failures
+
+A blocked/failed `pal_exercise` is NOT a PASS — do not mark the pal done. The run persists failure-only
+artifacts in a returned `.agent-work-history/` run directory (`steps.json`, `browser-events.json`,
+`aria-snapshot.txt` or `screen-hints.json`, `failure.jpg` when captured, `metadata.json`, `notes.md`) and
+returns a compact evidence summary with the path. Inspect those artifacts (browser events, accessibility
+snapshot, failure screenshot) instead of probing selectors by trial and error, and only re-run after
+reading them. Passing runs write no failure artifacts.

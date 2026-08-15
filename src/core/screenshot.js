@@ -137,11 +137,20 @@ async function waitForStyles(pg, timeout = 5000) {
     try { await pg.waitForTimeout(100); } catch (e) { /* ignore */ }
 }
 
-async function waitForRenderablePage(pg, url) {
-    await pg.goto(url, { waitUntil: "domcontentloaded" });
-    try { await pg.waitForLoadState("load", { timeout: 15000 }); } catch (e) { /* keep going; style diagnostics explain gaps */ }
-    try { await pg.waitForLoadState("networkidle", { timeout: 5000 }); } catch (e) { /* common with analytics/long polling */ }
-    await waitForStyles(pg);
+// Navigate and wait until a page is renderable. pal_screenshot wants the FULL settle (stylesheets
+// and fonts included) because the image is the evidence, so the defaults below preserve its
+// behavior exactly (goto keeps Playwright's own default timeout). pal_exercise drives many
+// sequential navigations and asserts visible text, so it passes bounded timeouts and skips the
+// screenshot-only style/font settle — a single stuck navigation must never consume minutes.
+// opts: { gotoTimeout, loadTimeout, idleTimeout, skipStyleSettle }
+async function waitForRenderablePage(pg, url, opts = {}) {
+    const gotoOpts = opts.gotoTimeout != null
+        ? { waitUntil: "domcontentloaded", timeout: opts.gotoTimeout }
+        : { waitUntil: "domcontentloaded" };
+    await pg.goto(url, gotoOpts);
+    try { await pg.waitForLoadState("load", { timeout: opts.loadTimeout != null ? opts.loadTimeout : 15000 }); } catch (e) { /* keep going; style diagnostics explain gaps */ }
+    try { await pg.waitForLoadState("networkidle", { timeout: opts.idleTimeout != null ? opts.idleTimeout : 5000 }); } catch (e) { /* common with analytics/long polling */ }
+    if (!opts.skipStyleSettle) await waitForStyles(pg);
 }
 
 async function inspectStyleStatus(pg, events = { responses: [], failed: [] }) {

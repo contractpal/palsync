@@ -11,7 +11,7 @@ const { runTunnelAction, listTunnelWorkflows, matchTunnelWorkflow } = require(".
 const { retrieveServerDebug } = require("../core/debug");
 const { runPreview, fetchPagePath, checkExpect, extractSelector } = require("../core/preview");
 const { runScreenshot } = require("../core/screenshot");
-const { runExercise, formatExercise } = require("../core/exercise");
+const { runExercise, formatExercise, applyRunId, redactStepValues, redactSecretForms } = require("../core/exercise");
 const { mergeWorkspace, formatMerge } = require("../core/merge");
 const { runSeoAudit, formatSeoAudit } = require("../core/seoAudit");
 const { runRegression } = require("../core/regression");
@@ -671,6 +671,111 @@ function withOverrideGate(message, confirmOverride, palName) {
         "call again with EXACTLY:\n  confirmOverride: \"" + overridePhrase(palName) + "\"";
 }
 
+// Defensive last line before durable persistence: strip query/fragment from any URL-shaped token
+// and redact auth-ish values. Core exercise already sanitizes every captured event, but an
+// artifact must stay credential-free even if a future path attaches unsanitized evidence. The
+// secret-form redaction is the same central implementation the evidence capture uses.
+function scrubEvidenceText(text) {
+    return redactSecretForms(String(text == null ? "" : text)
+        .replace(/https?:\/\/[^\s()"'<>]+/g, (m) => {
+            try {
+                const u = new URL(m);
+                u.search = ""; u.hash = "";
+                return u.origin + u.pathname;
+            } catch (e) { return m.replace(/[?#].*$/, ""); }
+        }));
+}
+
+function sanitizeEvidenceEvents(events) {
+    return (events || []).map(e => Object.assign({}, e, {
+        url: e.url != null ? scrubEvidenceText(e.url) : e.url,
+        message: e.message != null ? scrubEvidenceText(e.message) : e.message
+    }));
+}
+
+// Failure/blocked browser runs persist durable, failure-only artifacts under a work-history run:
+// steps.json (distinct redacted `requestedSteps` and sanitized `executionResults`), captured
+// browser events, the accessibility snapshot (or screen-hints fallback), the bounded failure
+// JPEG, metadata, and notes. PASS runs never write these. Returns the artifact map ({ dir,
+// incomplete, steps, events, aria|hints, jpeg, metadata, notes }) or null when the workspace can't
+// host a run. Every write return value is validated; failed writes are listed in `incomplete` so
+// partial persistence is observable. The JPEG base64 rides the result only as far as this
+// function — the handler strips it before the caller sees the result.
+function persistExerciseFailure(ctx, res, steps, viewport) {
+    const run = createWorkHistoryRun(ctx.workspaceDir, { tool: "pal_exercise", feature: "failure-" + (res.status || "failed") });
+    if (!run) return null;
+    const ev = res.evidence || {};
+    const FILE_NAMES = { steps: "steps.json", events: "browser-events.json", aria: "aria-snapshot.txt",
+        hints: "screen-hints.json", jpeg: "failure.jpg", metadata: "metadata.json", notes: "notes.md" };
+    const artifacts = { dir: run.dir, incomplete: [] };
+    const write = (key, data, encoding) => {
+        const filePath = writeArtifactFile(run, FILE_NAMES[key], data, encoding);
+        artifacts[key] = filePath;
+        if (!filePath) artifacts.incomplete.push(FILE_NAMES[key]);
+        return filePath;
+    };
+    // Requested steps (runId applied, auth-like fill/params values redacted) and the per-step
+    // execution results are persisted as two DISTINCT arrays — the requested steps are never
+    // mislabeled as the executed ones. Execution results are scrubbed too (errors/hints can carry
+    // credential-bearing text).
+    let requestedSteps = [], executionResults = [];
+    try {
+        requestedSteps = JSON.parse(scrubEvidenceText(JSON.stringify(
+            redactStepValues(applyRunId(steps, res.runId)), null, 2)));
+    } catch (e) { /* malformed steps — keep the empty array rather than persist garbage */ }
+    try { executionResults = JSON.parse(scrubEvidenceText(JSON.stringify(res.steps || [], null, 2))); }
+    catch (e) { /* malformed results — keep the empty array rather than persist garbage */ }
+    write("steps", JSON.stringify({ requestedSteps, executionResults }, null, 2), "utf8");
+    write("events", JSON.stringify(sanitizeEvidenceEvents(ev.events), null, 2), "utf8");
+    if (ev.aria != null) write("aria", scrubEvidenceText(ev.aria) + "\n", "utf8");
+    else if (ev.hints) write("hints", scrubEvidenceText(JSON.stringify(ev.hints, null, 2)), "utf8");
+    if (ev.jpegBase64) write("jpeg", Buffer.from(ev.jpegBase64, "base64"));
+    const notes = [
+        "# pal_exercise " + String(res.status || "failed").toUpperCase(),
+        "",
+        res.pass === false
+            ? "- Behavior failed at step " + res.failedStep + " (" + scrubEvidenceText(res.steps && res.steps[res.steps.length - 1] ? res.steps[res.steps.length - 1].label : "") + ")."
+            : "- Blocked" + (res.category ? " (" + res.category + ")" : "") + ": " + (res.reason ? scrubEvidenceText(res.reason) : "unknown") + ".",
+        "- " + (res.remediation || "Blocked/failed is not PASS — do not mark the pal done."),
+        "- Completed steps: " + ((res.steps || []).filter(s => s.pass).map(s => "step " + s.step).join(", ") || "none"),
+        "- Artifacts: " + (["steps", "events", "aria", "hints", "jpeg"].filter(k => artifacts[k]).map(k => FILE_NAMES[k]).join(", ") || "none") + ".",
+        "- Inspect the artifacts (browser events, accessibility snapshot, failure screenshot) instead of probing selectors by trial and error."
+    ];
+    if (artifacts.incomplete.length) notes.push("- Not persisted: " + artifacts.incomplete.join(", ") + ".");
+    artifacts.notes = writeRunNotes(run, notes);
+    if (!artifacts.notes) artifacts.incomplete.push(FILE_NAMES.notes);
+    // Inventory keyed by artifact map keys — never by file names — computed after every write so
+    // the persisted list is real and complete. metadata.json is written right after and is always
+    // part of the run.
+    const artifactNames = ["steps", "events", "aria", "hints", "jpeg", "notes"]
+        .filter(k => artifacts[k]).map(k => FILE_NAMES[k]).concat([FILE_NAMES.metadata]);
+    const metadata = {
+        palGuid: ctx.record.palGuid,
+        palName: ctx.record.palName,
+        runId: res.runId,
+        status: res.status,
+        category: res.category || null,
+        failedStep: res.failedStep || null,
+        reason: res.reason ? scrubEvidenceText(res.reason) : null,
+        remediation: res.remediation ? scrubEvidenceText(res.remediation) : null,
+        kind: res.kind || null,
+        mode: res.mode || null,
+        // Effective viewport: prefer what the runner recorded; fall back to what the handler passed.
+        viewport: res.viewport != null ? res.viewport : (viewport || "desktop"),
+        url: scrubEvidenceText((res.steps && res.steps.length ? res.steps[res.steps.length - 1].url : null) || null),
+        evidence: {
+            eventCount: (ev.events || []).length,
+            aria: ev.aria != null ? { scope: ev.ariaScope, chars: ev.aria.length, truncated: !!ev.ariaTruncated } : null,
+            jpegKB: ev.jpegBase64 ? Math.max(1, Math.round((ev.jpegBase64.length * 3) / 4 / 1024)) : null
+        },
+        artifacts: artifactNames,
+        incomplete: artifacts.incomplete.slice()
+    };
+    artifacts.metadata = writeRunMetadata(run, metadata);
+    if (!artifacts.metadata) artifacts.incomplete.push(FILE_NAMES.metadata);
+    return artifacts;
+}
+
 const TOOLS = [
     {
         name: "pal_status",
@@ -1283,6 +1388,32 @@ const TOOLS = [
             if (disabled) return disabled;
             const res = await runExercise(ctx.session, ctx.record.palGuid, { steps, workflow, viewport });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
+            // Failure-only durable artifacts: a failed/blocked browser run with captured evidence
+            // persists steps.json, browser-events.json, the accessibility snapshot (or screen-hints
+            // fallback), the bounded failure JPEG, metadata, and notes under .agent-work-history/.
+            // The JPEG base64 rides the result only as far as this persistence point — it is
+            // stripped before the result is returned, so it never reaches the calling agent.
+            if (res.evidence) {
+                try {
+                    res.artifacts = persistExerciseFailure(ctx, res, steps, viewport) ||
+                        { dir: null, incomplete: ["work-history run"] };
+                } catch (e) {
+                    // Durable diagnostics are best-effort. A filesystem failure must not erase the
+                    // primary exercise result or make a failed run look successful.
+                    res.artifacts = { dir: null, incomplete: ["work-history run"] };
+                }
+                if (res.evidence.jpegBase64 != null) {
+                    // The JPEG base64 never reaches the caller: it is either accounted for by byte
+                    // size after a successful write, or explicitly marked unavailable when the
+                    // write failed — never silently dropped or returned.
+                    if (res.artifacts && res.artifacts.jpeg) {
+                        res.evidence.jpegBytes = Math.round((res.evidence.jpegBase64.length * 3) / 4);
+                    } else {
+                        res.evidence.jpegUnavailable = true;
+                    }
+                    delete res.evidence.jpegBase64;
+                }
+            }
             // Functional exercise proves behavior, not responsive visual quality. Only paired,
             // audited pal_screenshot captures can satisfy the page-level render gate.
             const out = Object.assign({}, res, { message: formatExercise(res) });
