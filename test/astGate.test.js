@@ -269,53 +269,27 @@ test(
     },
 );
 
-test("missing binary refuses with all three recovery messages (package hidden)", {
-    skip: !fs.existsSync(
-        path.join(__dirname, "..", "node_modules", "@ast-grep", "cli"),
-    ),
-}, () => {
-    const pkgDir = path.join(
-        __dirname,
-        "..",
-        "node_modules",
-        "@ast-grep",
-        "cli",
-    );
-    const hidden = pkgDir + ".hidden-for-gate";
-    const emptyPath = tmpDir();
+test("missing binary refuses with all three recovery messages (no binary in the resolution path)", () => {
+    // The resolution seam forces the same outcome the pinned CLI lookup produces on a binary-less
+    // machine — no node_modules mutation (which two parallel test files must never race on).
     const ws = fixtureWorkspace("regex-decoy");
-    process.env.PALSYNC_AST_BIN = path.join(
-        os.tmpdir(),
-        "palsync-ast-nonexistent",
-    );
-    fs.renameSync(pkgDir, hidden);
-    const oldPath = process.env.PATH;
-    try {
-        process.env.PATH = emptyPath;
-        palAst._resetResolution();
-        const r = palAst.run(
-            { workspaceDir: ws },
-            { lang: "html", pattern: "x" },
+    palAst._setResolutionForTests(null);
+    const r = palAst.run({ workspaceDir: ws }, { lang: "html", pattern: "x" });
+    assert.equal(r.refused, true);
+    assert.equal(r.error.code, "binary-missing");
+    for (const needle of [
+        "pnpm approve-builds",
+        "npm install --force",
+        "glibc",
+        "sg",
+        "--version",
+    ]) {
+        assert.ok(
+            r.error.message.includes(needle),
+            "missing recovery text: " + needle,
         );
-        assert.equal(r.refused, true);
-        assert.equal(r.error.code, "binary-missing");
-        for (const needle of [
-            "pnpm approve-builds",
-            "npm install --force",
-            "glibc",
-            "sg",
-            "--version",
-        ]) {
-            assert.ok(
-                r.error.message.includes(needle),
-                "missing recovery text: " + needle,
-            );
-        }
-        assert.equal(r.serverChecked, false);
-    } finally {
-        if (fs.existsSync(hidden)) fs.renameSync(hidden, pkgDir);
-        if (process.env.PATH !== oldPath) process.env.PATH = oldPath;
     }
+    assert.equal(r.serverChecked, false);
 });
 
 // ---------------------------------------------------------------------------

@@ -1550,6 +1550,17 @@ const TOOLS = [
                     unchanged: res.preview.unchanged,
                     diff: res.preview.diff.slice(0, 600) + (res.preview.diff.length > 600 ? "…" : ""),
                 };
+            } else if (res.applied) {
+                // An applied rewrite must never return ok:true with zero evidence of what was written.
+                extra.summary = {
+                    filesChanged: res.applied.filesChanged,
+                    matchesApplied: res.applied.matchesApplied,
+                    findings: (res.applied.findings || []).length,
+                    alreadyApplied: !!res.applied.alreadyApplied,
+                    writeError: res.applied.writeError
+                        ? { file: res.applied.writeError.file, message: res.applied.writeError.message, filesWritten: res.applied.writeError.filesWritten || [] }
+                        : null,
+                };
             }
             return Object.assign(
                 res,

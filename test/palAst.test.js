@@ -64,9 +64,11 @@ function emptyPathDir() {
     return fs.mkdtempSync(path.join(os.tmpdir(), "palsync-path-"));
 }
 function withAstPackageHidden(fn) {
+    // Only the PATH-fallback tests hide the real dependency, and only with a pid-unique suffix so
+    // a crashed run cannot collide with the next one — nothing else in the suite mutates it.
     const pkgDir = path.join(__dirname, "..", "node_modules", "@ast-grep", "cli");
-    const hidden = pkgDir + ".hidden-for-test";
-    if (fs.existsSync(pkgDir)) fs.renameSync(pkgDir, hidden);
+    const hidden = pkgDir + ".hidden-test-" + process.pid;
+    if (fs.existsSync(pkgDir) && !fs.existsSync(hidden)) fs.renameSync(pkgDir, hidden);
     try {
         return fn();
     } finally {
@@ -179,24 +181,17 @@ test("a failed ast-grep run (nonzero exit or spawn error) is a refusal, never a 
 // Resolution tests hide the installed package AND restrict PATH — this machine also has a
 // real ast-grep on PATH (Homebrew), so both must be controlled to prove the recovery path.
 test("missing binary refuses with all three recovery messages and names the causes", () => {
-    process.env.PALSYNC_AST_BIN = path.join(os.tmpdir(), "palsync-ast-nonexistent");
-    const emptyDir = emptyPathDir();
+    // Resolution seam: forces the same refusal a binary-less machine produces — no node_modules
+    // mutation, so two parallel --test files can never race on the package dir.
+    palAst._setResolutionForTests(null);
     const ws = wsWithEcho();
-    try {
-        process.env.PATH = emptyDir;
-        palAst._resetResolution(); // clear the forced beforeEach resolution
-        withAstPackageHidden(() => {
-            const r = palAst.run({ workspaceDir: ws }, { lang: "html", pattern: "x" });
-            assert.equal(r.refused, true);
-            assert.equal(r.error.code, "binary-missing");
-            for (const needle of ["pnpm approve-builds", "npm install --force", "glibc", "sg", "--version"]) {
-                assert.ok(r.error.message.includes(needle), "missing: " + needle);
-            }
-            assert.equal(r.serverChecked, false);
-        });
-    } finally {
-        fs.rmSync(emptyDir, { recursive: true, force: true });
+    const r = palAst.run({ workspaceDir: ws }, { lang: "html", pattern: "x" });
+    assert.equal(r.refused, true);
+    assert.equal(r.error.code, "binary-missing");
+    for (const needle of ["pnpm approve-builds", "npm install --force", "glibc", "sg", "--version"]) {
+        assert.ok(r.error.message.includes(needle), "missing: " + needle);
     }
+    assert.equal(r.serverChecked, false);
 });
 
 test("PATH fallback is accepted only when --version names ast-grep (shadow-utils sg refused)", () => {
@@ -423,4 +418,93 @@ test("routeTools surfaces pal_ast to its weak-model keywords", () => {
         assert.ok(routeTools(query, metadata).includes("pal_ast"), query);
     }
     assert.ok(routeTools("project", metadata).includes("pal_ast"));
+});
+test("apply is byte-exact around non-ASCII and invalid bytes (Buffer write, not string re-encode)", () => {
+    // Page A has a multibyte char (é) and a stray invalid-UTF-8 byte (0x80) OUTSIDE the matched
+    // region — the rewrite must preserve both byte-for-byte and write exactly what dry-run promised.
+    const ws = wsWithEcho();
+    const pageAbs = path.join(ws, "pages", "form.html");
+    const body = Buffer.concat([
+        Buffer.from('<c:page title="Démo">\n  ', "utf8"),
+        Buffer.from([0x80]), // invalid UTF-8 in an untouched region
+        Buffer.from('  <c:a href="/y">Skip</c:a>\n</c:page>\n', "utf8"),
+    ]);
+    fs.writeFileSync(pageAbs, body);
+    const text = '<c:a href="/y">Skip</c:a>';
+    const byteStart = body.indexOf(Buffer.from(text, "utf8"));
+    const before = fs.readFileSync(pageAbs);
+    // The multibyte é shifts string indices, so offsets MUST come from the Buffer (byte offsets),
+    // exactly like ast-grep's range.byteOffset does.
+    const m = match({
+        file: "pages/form.html",
+        line: 2,
+        col: 5,
+        text,
+        byteStart,
+        byteEnd: byteStart + Buffer.byteLength(text, "utf8"),
+        replacement: REPLACEMENT,
+    });
+    stubRunner([m]);
+    const dry = palAst.run(
+        { workspaceDir: ws },
+        { mode: "rewrite", lang: "html", pattern: '<c:a href="$H">$A</c:a>', rewrite: REWRITE },
+    );
+    assert.equal(dry.preview.filesChanged, 1);
+    const promisedNewBytes = dry.preview.files[0].newBytes;
+    stubRunner([m]);
+    const applied = palAst.run(
+        { workspaceDir: ws },
+        { mode: "rewrite", lang: "html", pattern: '<c:a href="$H">$A</c:a>', rewrite: REWRITE, apply: true },
+    );
+    assert.equal(applied.applied.writeError, null);
+    const after = fs.readFileSync(pageAbs);
+    assert.equal(after.length, promisedNewBytes, "dry-run bytes == bytes actually written");
+    assert.equal(after.length, before.length + Buffer.byteLength(REPLACEMENT, "utf8") - Buffer.byteLength(text, "utf8"));
+    assert.ok(after.includes(Buffer.from("Démo", "utf8")), "multibyte text intact");
+    // Byte-exact checks: the 0x80 must still be present exactly once, and its neighbors unchanged.
+    const strayCount = [...after].filter((b) => b === 0x80).length;
+    assert.equal(strayCount, 1, "invalid-UTF-8 byte survives the write byte-exactly");
+    const strayIdx = after.indexOf(0x80);
+    assert.equal(after[strayIdx - 1], 0x20, "space before the stray byte unchanged");
+    assert.equal(after[strayIdx + 1], 0x20, "space after the stray byte unchanged");
+    assert.ok(after.includes(Buffer.from('<c:a href="/y" confirm="1">Skip</c:a>', "utf8")));
+});
+
+test("a failing write reports the partial apply instead of throwing (writeError surfaced)", () => {
+    const ws = wsWithEcho();
+    const target = path.join(ws, "pages", "form.html");
+    const o = offsetsFor(ws, "pages/form.html", '<c:a href="/y">Skip</c:a>');
+    const m = match({
+        file: "pages/form.html",
+        line: 2,
+        col: 3,
+        text: '<c:a href="/y">Skip</c:a>',
+        byteStart: o.start,
+        byteEnd: o.end,
+        replacement: REPLACEMENT,
+    });
+    stubRunner([m]);
+    palAst.run(
+        { workspaceDir: ws },
+        { mode: "rewrite", lang: "html", pattern: '<c:a href="$H">$A</c:a>', rewrite: REWRITE },
+    );
+    fs.chmodSync(target, 0o444); // read-only → the write must fail, not throw
+    stubRunner([m]);
+    let thrown = null;
+    let applied;
+    try {
+        applied = palAst.run(
+            { workspaceDir: ws },
+            { mode: "rewrite", lang: "html", pattern: '<c:a href="$H">$A</c:a>', rewrite: REWRITE, apply: true },
+        );
+    } catch (e) {
+        thrown = e;
+    }
+    fs.chmodSync(target, 0o644); // restore ownership of the tmpdir cleanup
+    assert.equal(thrown, null, "a write failure must not throw out of run()");
+    assert.ok(applied.applied, "result still carries the applied section");
+    assert.ok(applied.applied.writeError, "writeError is reported");
+    assert.equal(applied.applied.writeError.file, "pages/form.html");
+    assert.equal(applied.applied.writeError.filesWritten.length, 0, "no file written before the failure");
+    assert.equal(applied.applied.filesChanged, 0);
 });

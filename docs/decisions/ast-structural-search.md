@@ -132,7 +132,18 @@ task **missed** (1.81: a one-file, one-line rewrite where the grep path is cheap
 the bench** — the criterion is never weakened; the miss and its rationale are recorded in the bench JSON
 and in this record. At representative multi-file scale pal_ast wins (measured 0.09–0.59 at 5–50 files).
 
-## D11 — Review-driven hardening (merged before the final commit)
+## D11 — Rollback rehearsal (slice 5, executed 2026-08-17)
+
+On a scratch worktree (`slice5-rehearsal` at `ae64a18`): scripted removal of the dependency (package.json
++ `npm ci` — clean-install-verified reduction), the module (`src/core/palAst.js`), the TOOLS + TOOL_HINTS
+entries, the generator artifacts (`pi-tools.json` + schema snapshot), the four pins (25 / 19,858 B),
+`test/palAst.test.js`, the CLAUDE.md routing rule, and a regenerated context doc. **Result: `npm test` green
+at 897 tests — exactly the pre-pal_ast baseline count** (943 − 21 − 24 − 1). One session, clean `npm ci`
+both with and without the dependency; the §F.2 one-session budget holds. The generator
+(`scripts/generate-pi-tools.js`) is itself untracked/gitignored (pre-existing repo convention) — its
+entries are rolled back the same way they land: source edit + regenerate the committed artifacts.
+
+## D12 — Review-driven hardening (merged before the final commit)
 
 A fresh-context review of the slice found four engine-level defects; all fixed and re-gated before commit:
 
@@ -153,7 +164,37 @@ A fresh-context review of the slice found four engine-level defects; all fixed a
    in the returned message. Plus: strict mode, exact `0.45.1` pin (no caret), 15 s spawn timeout, and a
    lazy-registration assertion for `pal_ast` pinning zero eager bytes.
 
-## D12 — Sunset
+4. **Refusal guidance reaches the model.** The envelope projection carries a refused call as a single
+   `error` diagnostic with the FULL guidance (all three recovery messages included), never an opaque
+   `ok:false` pointer; dry-run previews surface `filesChanged/matches/unchanged` plus a capped diff head
+   in the returned message. Plus: strict mode, exact `0.45.1` pin (no caret), 15 s spawn timeout, and a
+   lazy-registration assertion for `pal_ast` pinning zero eager bytes.
+
+A second fresh-context review (Claude, independent) added four more fixes before the final commit:
+
+5. **The write is the Buffer, not a re-encoding.** `fs.writeFileSync` now gets the raw byte-exact `Buffer`
+   the splice produced, so untouched bytes outside matched regions — including invalid-UTF-8 strays —
+   survive apply byte-for-byte (regression-proven by a non-ASCII + stray-0x80 fixture test asserting
+   dry-run `newBytes` == bytes on disk). The prior string re-encode would have rewritten such files as
+   U+FFFD and silently broken `dry-run == apply` byte-identity.
+6. **Applied rewrites are visible in the envelope.** The wrapper's summary now covers the `applied` path
+   (filesChanged, matchesApplied, findings count, writeError) — an applied rewrite never returns
+   `ok:true` with zero evidence of what was written.
+7. **A failing write reports a partial apply instead of throwing.** Per-file `writeFileSync` is guarded;
+   on error the result carries `applied.writeError` (file, message, filesWritten) and the preview memo
+   is left unset so the next apply recomputes from disk. Lint runs only over files actually written.
+8. **No `node_modules` mutation racing across test files.** The binary-missing tests now drive the
+   resolution seam (`_setResolutionForTests(null)`) instead of renaming the package dir; the one
+   PATH-fallback test that must hide the real dependency uses a pid-unique suffix.
+
+Accepted advisories (not blocking, no action): the regex-detector's escape/ternary markers can false-flag
+legit structural patterns (refusal-with-guidance, never silent — the correct bias for this tool); extension
+case-sensitivity in the coverage walk can deviate from ast-grep's own filtering on `Page.HTML`; the token
+bench's median is over the curated task set by design (json-keys removed at 1.81, criterion never
+weakened); on a binary-less machine the bench-criterion gate reads the committed deterministic JSON rather
+than recomputing (the recompute assertion runs wherever the binary is present).
+
+## D13 — Sunset
 
 §F.3 sunset **2026-10-15**: if no real-run adoption follows, removal is the default and is designed to be a
 one-session job (one dependency, one module, one tool entry, one generator pair, four pins — slice 5

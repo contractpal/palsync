@@ -13,10 +13,11 @@
 //     unconditionally (pal.json carries registration identity; the PreToolUse guard cannot see MCP writes),
 //   - the change set (files ast-grep would rewrite) must stay within those same folders and within
 //     maxFiles (default 25, explicit override),
-//   - stateless preview-drift refusal: apply re-runs the preview from current disk and refuses unless
-//     it matches the last dry-run for the same (pattern, rewrite, lang, paths). The memo lives only in
-//     this process — nothing is ever written to disk — so a drifted tree or a second apply on an
-//     already-rewritten tree refuses instead of double-editing,
+//   - preview-drift refusal: apply re-runs the preview from CURRENT disk and refuses when the result
+//     differs from the last dry-run/apply for the same inputs in this process — a tampered tree or a
+//     second apply on an already-rewritten tree refuses instead of double-editing. The memo lives only
+//     in this process — nothing is ever written to disk — so a FIRST apply of fresh inputs always
+//     recomputes from disk (no prior dry-run to drift from),
 //   - after writing, ONLY the written files are linted (lintContent), findings returned inline,
 //     errors-first, capped, ADVISORY — never isError, never rollback.
 //
@@ -456,6 +457,7 @@ function computeChangeSet(workspaceDir, matches) {
             abs,
             oldBytes: bytes.length,
             newBytes: newBuf.length,
+            newBuf, // byte-exact rewritten content — the WRITE uses this, never a re-encoding
             oldText: bytes.toString("utf8"),
             newText,
         });
@@ -838,11 +840,23 @@ function run({ workspaceDir }, rawArgs = {}) {
             return result;
         }
 
-        // Write file by file from the computed change set (byte-identical to the preview by
-        // construction), then lint ONLY the written files.
+        // Write file by file from the computed change set — the WRITE is the raw Buffer the splice
+        // produced (byte-identical to the preview by construction, including untouched bytes outside
+        // matched regions), then lint ONLY the written files. A failing write stops the apply and
+        // reports exactly which files landed — a partial apply is never silent.
         const written = [];
+        let writeError = null;
         for (const f of changeSet.files) {
-            fs.writeFileSync(f.abs, f.newText, "utf8");
+            try {
+                fs.writeFileSync(f.abs, f.newBuf);
+            } catch (e) {
+                writeError = {
+                    file: f.rel,
+                    message: String((e && e.message) || e),
+                    filesWritten: written.map((w) => w.rel),
+                };
+                break;
+            }
             written.push({
                 rel: f.rel,
                 oldBytes: f.oldBytes,
@@ -883,10 +897,13 @@ function run({ workspaceDir }, rawArgs = {}) {
         result.applied = {
             filesChanged: written.length,
             matchesApplied: matches.length,
+            writeError,
             findings: errorsFirst,
         };
         // Record the applied preview so a repeat of the SAME inputs now refuses (no double edit).
-        previewMemo.set(key, previewHash);
+        // On a partial apply (write failure) the memo is NOT set — the next apply re-evaluates from
+        // current disk instead of refusing on a stale preview.
+        if (!writeError) previewMemo.set(key, previewHash);
         return result;
     }
 
