@@ -13,7 +13,7 @@ basis that could not be reproduced.
 
 | Runtime | Section | Source | Bytes | Est. tokens | Loading |
 |---|---|---|---:|---:|---|
-| All | `tool-definitions` | `src/mcp/tools.js` | 19,354 | 4,839 | release-stable |
+| All | `tool-definitions` | `src/mcp/tools.js` | 19,858 | 4,965 | release-stable |
 | Claude | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 12,229 | 3,058 | release-stable |
 | Codex/OpenCode/Pi | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 12,229 | 3,058 | release-stable |
 | All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 4,613 | 1,154 | release-stable |

@@ -1,4 +1,4 @@
-"use strict";
+
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
@@ -29,8 +29,8 @@ test("advertised MCP tool schema matches the committed wire snapshot", async () 
     const advertised = await advertisedTools();
     const actual = JSON.stringify(advertised.tools, null, 2) + "\n";
     const fixture = fs.readFileSync(path.join(__dirname, "fixtures", "tool-schema.snapshot.json"), "utf8");
-    assert.equal(advertised.tools.length, 24);
-    assert.equal(Buffer.byteLength(JSON.stringify(advertised.tools)), 19354);
+    assert.equal(advertised.tools.length, 25);
+    assert.equal(Buffer.byteLength(JSON.stringify(advertised.tools)), 19858);
     assert.equal(actual, fixture);
     assert.deepStrictEqual(serializeToolDefinitions(TOOLS), advertised.tools);
     assert.equal(advertised.instructions, SERVER_INSTRUCTIONS);

@@ -1,4 +1,4 @@
-"use strict";
+
 // The palsync MCP tools. Each `run(ctx, args)` is a plain async function (so it's directly
 // testable); server.js wraps them for the MCP SDK. ctx = { session, record, workspaceDir,
 // lifecycle, persist() }. Datasets/dataviews are never created or destroyed by any tool; Data and
@@ -688,8 +688,8 @@ function scrubEvidenceText(text) {
 
 function sanitizeEvidenceEvents(events) {
     return (events || []).map(e => Object.assign({}, e, {
-        url: e.url != null ? scrubEvidenceText(e.url) : e.url,
-        message: e.message != null ? scrubEvidenceText(e.message) : e.message
+        url: e.url == null ? e.url : scrubEvidenceText(e.url),
+        message: e.message == null ? e.message : scrubEvidenceText(e.message)
     }));
 }
 
@@ -761,11 +761,11 @@ function persistExerciseFailure(ctx, res, steps, viewport) {
         kind: res.kind || null,
         mode: res.mode || null,
         // Effective viewport: prefer what the runner recorded; fall back to what the handler passed.
-        viewport: res.viewport != null ? res.viewport : (viewport || "desktop"),
+        viewport: res.viewport == null ? (viewport || "desktop") : res.viewport,
         url: scrubEvidenceText((res.steps && res.steps.length ? res.steps[res.steps.length - 1].url : null) || null),
         evidence: {
             eventCount: (ev.events || []).length,
-            aria: ev.aria != null ? { scope: ev.ariaScope, chars: ev.aria.length, truncated: !!ev.ariaTruncated } : null,
+            aria: ev.aria == null ? null : { scope: ev.ariaScope, chars: ev.aria.length, truncated: !!ev.ariaTruncated },
             jpegKB: ev.jpegBase64 ? Math.max(1, Math.round((ev.jpegBase64.length * 3) / 4 / 1024)) : null
         },
         artifacts: artifactNames,
@@ -931,7 +931,7 @@ const TOOLS = [
                         "  3. PAYLOAD — one of: (a) no payload, (b) they type/paste JSON, (c) a path to a .json file (payloadFile).\n" +
                         "Then call again with their answers plus askedUser:true. If the user's original message already answered a question (e.g. \"test tunnel xyz with action getOrders\"), you may skip asking that one." };
             }
-            let resolvedWorkflow = undefined; // undefined => server runs the registered default
+            let resolvedWorkflow ; // undefined => server runs the registered default
             if (workflow) {
                 const matched = matchTunnelWorkflow(workflow, tunnels);
                 if (!matched && tunnels.length) {
@@ -1484,25 +1484,15 @@ const TOOLS = [
     },
     {
         name: "pal_context",
-        description: "Load an on-demand PalSync contract section, or inspect exact LOCAL structural impact before editing a page/fragment. For impact pass target alone. Impact does not check the live server or runtime-selected relationships.",
+        description: "Load an on-demand PalSync contract section by exact id or keyword query (sync-workflow, creating-files, datasets). For LOCAL structural impact before an edit, use pal_impact({target}) instead.",
         needsCtx: false,
         inputShape: {
             section: z.enum(["sync-workflow", "creating-files", "datasets"]).optional(),
-            query: z.string().optional().describe("Keywords used when the exact section id is unknown."),
-            target: z.string().optional().describe("Exact POSIX workspace-relative page/fragment path for local structural impact, e.g. fragments/navbar.html. Use alone, not with section/query.")
+            query: z.string().optional().describe("Keywords used when the exact section id is unknown.")
         },
-        async run(ctx, { section, query, target } = {}) {
-            if (target !== undefined && (section !== undefined || query !== undefined)) {
-                return formatImpactResult(createImpactError("mixed-modes", target));
-            }
-
+        async run(ctx, { section, query } = {}) {
             let record = null;
             try { record = await palsyncfile.read(ctx.workspaceDir); } catch (e) { /* optional context */ }
-            if (target !== undefined) {
-                const snapshot = buildImpactSnapshot(ctx.workspaceDir);
-                const analysis = buildStructuralImpact(snapshot, record);
-                return formatImpactResult(resolveImpactTarget(analysis, target));
-            }
 
             const palName = record && record.palName;
             const sections = onDemandSyncSections(palName, { cli: false, skillsDir: ".claude/skills" });
@@ -1514,6 +1504,24 @@ const TOOLS = [
             ids = [...new Set(ids)];
             const selected = sections.filter(item => ids.includes(item.id)).map(item => ({ id: item.id, content: item.content }));
             return { ran: true, sections: selected, message: JSON.stringify({ sections: selected }) };
+        }
+    },
+    {
+        name: "pal_impact",
+        description: "Inspect exact LOCAL structural impact before editing a page/fragment: direct dependencies, dependents, and registration state from pal.json + markup references. Deterministic and offline; never checks the live server or runtime-selected relationships. For contract sections use pal_context.",
+        needsCtx: false,
+        inputShape: {
+            target: z.string().optional().describe("Exact POSIX workspace-relative pages/ or fragments/ markup path for local structural impact, e.g. fragments/navbar.html.")
+        },
+        async run(ctx, { target } = {}) {
+            if (target === undefined) {
+                return formatImpactResult(createImpactError("invalid-target", undefined));
+            }
+            let record = null;
+            try { record = await palsyncfile.read(ctx.workspaceDir); } catch (e) { /* optional context */ }
+            const snapshot = buildImpactSnapshot(ctx.workspaceDir);
+            const analysis = buildStructuralImpact(snapshot, record);
+            return formatImpactResult(resolveImpactTarget(analysis, target));
         }
     },
     {
@@ -1887,6 +1895,7 @@ const TOOLS = [
 // metadata only; the tool implementations remain the authority for safety and idempotency.
 const TOOL_HINTS = {
     pal_context: ["Load PalSync context", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_impact: ["Inspect local structural impact", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_status: ["Report pal status", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_validate: ["Validate pal code", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_testing: ["Toggle automated testing", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],

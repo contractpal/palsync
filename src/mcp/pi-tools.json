@@ -574,7 +574,7 @@
   {
     "name": "pal_context",
     "title": "Load PalSync context",
-    "description": "Load an on-demand PalSync contract section, or inspect exact LOCAL structural impact before editing a page/fragment. For impact pass target alone. Impact does not check the live server or runtime-selected relationships.",
+    "description": "Load an on-demand PalSync contract section by exact id or keyword query (sync-workflow, creating-files, datasets). For LOCAL structural impact before an edit, use pal_impact({target}) instead.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -588,10 +588,6 @@
         },
         "query": {
           "description": "Keywords used when the exact section id is unknown.",
-          "type": "string"
-        },
-        "target": {
-          "description": "Exact POSIX workspace-relative page/fragment path for local structural impact, e.g. fragments/navbar.html. Use alone, not with section/query.",
           "type": "string"
         }
       },
@@ -608,6 +604,36 @@
     ],
     "keywords": [
       "context"
+    ]
+  },
+  {
+    "name": "pal_impact",
+    "title": "Inspect local structural impact",
+    "description": "Inspect exact LOCAL structural impact before editing a page/fragment: direct dependencies, dependents, and registration state from pal.json + markup references. Deterministic and offline; never checks the live server or runtime-selected relationships. For contract sections use pal_context.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "description": "Exact POSIX workspace-relative pages/ or fragments/ markup path for local structural impact, e.g. fragments/navbar.html.",
+          "type": "string"
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    },
+    "groups": [
+      "project"
+    ],
+    "keywords": [
+      "impact",
+      "dependents",
+      "dependencies",
+      "blast-radius",
+      "affected"
     ]
   },
   {

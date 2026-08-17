@@ -1,4 +1,4 @@
-"use strict";
+
 
 const { test } = require("node:test");
 const assert = require("node:assert");
@@ -31,6 +31,15 @@ test("tool profiles expose exact initial sets", async () => {
         await client.close();
         fs.rmSync(workspaceDir, { recursive: true, force: true });
     }
+});
+
+test("pal_impact is lazily reachable by weak-model words and not in the eager core", () => {
+    const eager = require("../src/core/piHelpers").eagerToolNames(metadata);
+    assert.ok(!eager.includes("pal_impact"), "pal_impact must stay lazy (zero eager bytes)");
+    for (const query of ["impact", "dependents", "blast radius", "affected"]) {
+        assert.ok(routeTools(query, metadata).includes("pal_impact"), query);
+    }
+    assert.ok(routeTools("project", metadata).includes("pal_impact"), "project group");
 });
 
 test("unknown/default profile fails open to the full static set", async () => {

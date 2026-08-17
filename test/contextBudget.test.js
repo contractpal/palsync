@@ -1,4 +1,4 @@
-"use strict";
+
 
 const { test } = require("node:test");
 const assert = require("node:assert");
@@ -66,7 +66,7 @@ test("pal_context preserves exact no-arg, section, query, and section-over-query
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("pal_context target mode is local-only and returns compact impact JSON without a record", async () => {
+test("pal_impact target mode is local-only and returns compact impact JSON without a record", async () => {
     const ws = tmpWorkspace({
         "pages/home.html": '<c:fragment name="shared/nav"/>',
         "fragments/shared/nav.html": "<nav/>",
@@ -75,11 +75,11 @@ test("pal_context target mode is local-only and returns compact impact JSON with
             fragments: { entry: [{ string: "shared/nav.html", Fragment: { filename: "shared/nav.html" } }] },
         }),
     });
-    const tool = TOOLS.find(item => item.name === "pal_context");
+    const tool = TOOLS.find(item => item.name === "pal_impact");
     const ctx = { workspaceDir: ws };
     Object.defineProperties(ctx, {
-        session: { get() { throw new Error("target mode must not resolve login context"); } },
-        record: { get() { throw new Error("target mode must read only its optional local record"); } },
+        session: { get() { throw new Error("impact mode must not resolve login context"); } },
+        record: { get() { throw new Error("impact mode must read only its optional local record"); } },
     });
 
     const originalRead = palsyncfile.read;
@@ -100,19 +100,19 @@ test("pal_context target mode is local-only and returns compact impact JSON with
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("pal_context target mode bypasses getCtx at the MCP routing layer", async () => {
+test("pal_impact target mode bypasses getCtx at the MCP routing layer", async () => {
     const ws = tmpWorkspace({ "pages/home.html": "<main/>" });
     let contextCalls = 0;
     const server = createServer(async () => {
         contextCalls++;
-        throw new Error("target mode must not resolve login context");
+        throw new Error("impact mode must not resolve login context");
     }, ws);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     const client = new Client({ name: "impact-context-test", version: "1" });
     try {
         await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
         const result = await client.callTool({
-            name: "pal_context",
+            name: "pal_impact",
             arguments: { target: "pages/home.html" },
         });
         assert.strictEqual(contextCalls, 0);
@@ -125,55 +125,29 @@ test("pal_context target mode bypasses getCtx at the MCP routing layer", async (
     }
 });
 
-test("pal_context rejects mixed modes before local context and formats target errors as bounded JSON", async () => {
-    const tool = TOOLS.find(item => item.name === "pal_context");
-    const missingWorkspace = "/workspace/that/must/not/be-read";
-    const originalRead = palsyncfile.read;
-    let reads = 0;
-    palsyncfile.read = async () => {
-        reads++;
-        throw new Error("mixed mode must be rejected before local context read");
-    };
-    let mixed;
-    try {
-        mixed = await tool.run({ workspaceDir: missingWorkspace }, {
-            section: "datasets",
-            query: "create manifest",
-            target: "pages/home.html",
-        });
-    } finally {
-        palsyncfile.read = originalRead;
-    }
-    assert.strictEqual(reads, 0);
-    assert.deepStrictEqual(mixed, {
-        ran: false,
-        error: {
-            schema: "palsync/impact-error/1",
-            target: "pages/home.html",
-            error: {
-                code: "mixed-modes",
-                message: "Pass target alone for local structural impact; do not combine it with section or query.",
-            },
-            serverChecked: false,
-        },
-        message: JSON.stringify({
-            schema: "palsync/impact-error/1",
-            target: "pages/home.html",
-            error: {
-                code: "mixed-modes",
-                message: "Pass target alone for local structural impact; do not combine it with section or query.",
-            },
-            serverChecked: false,
-        }),
-    });
-    assert.deepStrictEqual(Object.keys(mixed).sort(), ["error", "message", "ran"]);
-    assertJsonMessage(mixed);
-
+test("pal_impact requires target and formats target errors as bounded JSON; pal_context sections ignore stray args", async () => {
+    // pal_impact is the sole local-impact entry point — target alone, no mixing possible. A missing
+    // target is a deterministic refusal; invalid paths produce bounded impact-error JSON.
+    const tool = TOOLS.find(item => item.name === "pal_impact");
     const ws = tmpWorkspace();
-    for (const target of ["bad", "pages/missing.html", "pages/" + "x".repeat(600) + ".html"]) {
-        const error = await tool.run({ workspaceDir: ws }, { target });
+    for (const target of [undefined, "bad", "pages/missing.html", "pages/" + "x".repeat(600) + ".html"]) {
+        const error = await tool.run({ workspaceDir: ws }, target === undefined ? {} : { target });
         assert.strictEqual(error.ran, false);
+        assert.match(error.message, /palsync\/impact-error\/1/);
         assertJsonMessage(error);
     }
     fs.rmSync(ws, { recursive: true, force: true });
+
+    // pal_context stays the section tool: sections behavior is byte-identical and a stray key (the
+    // retired `target` input) is ignored, never surfaced as an impact result or an error.
+    const sectionTool = TOOLS.find(item => item.name === "pal_context");
+    const sectionWs = tmpWorkspace({ ".palsync.json": JSON.stringify({ palName: "Demo" }) });
+    const sections = contextInject.onDemandSyncSections("Demo", { cli: false, skillsDir: ".claude/skills" });
+    const plain = await sectionTool.run({ workspaceDir: sectionWs }, { section: "datasets" });
+    const withStray = await sectionTool.run({ workspaceDir: sectionWs }, { section: "datasets", target: "pages/home.html" });
+    assert.deepStrictEqual(withStray, plain);
+    assert.deepStrictEqual(plain, expectedLegacyContext(sections, { section: "datasets" }));
+    const noArgs = await sectionTool.run({ workspaceDir: sectionWs }, {});
+    assert.deepStrictEqual(noArgs, expectedLegacyContext(sections, {}));
+    fs.rmSync(sectionWs, { recursive: true, force: true });
 });

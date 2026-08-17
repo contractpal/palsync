@@ -1,4 +1,4 @@
-"use strict";
+
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
@@ -35,7 +35,7 @@ test("context manifest exposes eager stability and diagnoses a pal-name change",
         reason: "pal name changed"
     });
     const summary = manifestApi.eagerSummary(current);
-    assert.equal(current.sections.find(section => section.name === "tool-definitions").bytes, 19354);
+    assert.equal(current.sections.find(section => section.name === "tool-definitions").bytes, 19858);
     assert.ok(current.sections.every(section => !section.source.includes("\\")));
     assert.ok(summary.stablePrefixBytes > 0);
     assert.ok(summary.dynamicTailBytes > 0);
