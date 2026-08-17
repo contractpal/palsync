@@ -1527,7 +1527,7 @@ const TOOLS = [
     },
     {
         name: "pal_ast",
-        description: "Syntax-aware STRUCTURAL search + conservative rewrite over pal markup and code, via the pinned ast-grep binary. Matches code SHAPES, not text: exact strings plus $VAR/$$$ metavariables only — regex and plain-text search are grep/read territory and refused up front. lang: html|javascript|css|json. search returns file:line + matched text for whole matched nodes (a bare pattern reaches element TEXT, never attribute interiors — attribute edits are whole-element rewrites). rewrite returns a dry-run diff; apply:true writes it byte-identically, but only inside the 14 manifest folders — pal.json/.palsync.json are never written, maxFiles overruns and on-disk preview drift are refused — and lints ONLY the written files, advisory (the write stands).",
+        description: "Syntax-aware STRUCTURAL search + conservative rewrite over the 14 manifest folders via the pinned ast-grep binary. Matches code SHAPES, not text: exact strings + $VAR/$$$ metavariables only; regex and plain-text search are grep/read territory (refused). lang: html|javascript|css|json. search returns file:line + matched text for whole matched nodes (bare patterns reach element TEXT, never attribute interiors). rewrite returns a dry-run diff; apply:true writes byte-identically, only inside the manifest folders (pal.json/.palsync.json never written; maxFiles overruns and preview drift refused) and lints ONLY the written files, advisory.",
         needsCtx: false,
         inputShape: {
             mode: z.enum(["search", "rewrite"]).optional().describe("search (default) returns matches; rewrite returns a dry-run diff, written only with apply:true."),
@@ -1541,7 +1541,20 @@ const TOOLS = [
         },
         async run(ctx, args = {}) {
             const res = runAst(ctx, args);
-            return Object.assign(res, envelopeFields(ctx.workspaceDir, "pal_ast", res, args, astEnvelopeProjection(res, args)));
+            const extra = {};
+            if (res.preview) {
+                // Dry-run diff preview belongs in the returned message, not only the artifact.
+                extra.summary = {
+                    filesChanged: res.preview.filesChanged,
+                    matches: res.preview.matches,
+                    unchanged: res.preview.unchanged,
+                    diff: res.preview.diff.slice(0, 600) + (res.preview.diff.length > 600 ? "…" : ""),
+                };
+            }
+            return Object.assign(
+                res,
+                envelopeFields(ctx.workspaceDir, "pal_ast", res, args, astEnvelopeProjection(res, args), Object.keys(extra).length ? extra : null),
+            );
         }
     },
     {

@@ -1,0 +1,20 @@
+{
+  "palName": "ConfirmDemo",
+  "pages": {
+    "entry": [
+      {
+        "string": "confirm.html",
+        "Page": {
+          "name": "confirm",
+          "filename": "confirm.html"
+        }
+      }
+    ]
+  },
+  "styles": {
+    "entry": []
+  },
+  "workflows": {
+    "entry": []
+  }
+}

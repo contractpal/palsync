@@ -547,7 +547,7 @@
   {
     "name": "pal_ast",
     "title": "Search and rewrite code structure",
-    "description": "Syntax-aware STRUCTURAL search + conservative rewrite over pal markup and code, via the pinned ast-grep binary. Matches code SHAPES, not text: exact strings plus $VAR/$$$ metavariables only — regex and plain-text search are grep/read territory and refused up front. lang: html|javascript|css|json. search returns file:line + matched text for whole matched nodes (a bare pattern reaches element TEXT, never attribute interiors — attribute edits are whole-element rewrites). rewrite returns a dry-run diff; apply:true writes it byte-identically, but only inside the 14 manifest folders — pal.json/.palsync.json are never written, maxFiles overruns and on-disk preview drift are refused — and lints ONLY the written files, advisory (the write stands).",
+    "description": "Syntax-aware STRUCTURAL search + conservative rewrite over the 14 manifest folders via the pinned ast-grep binary. Matches code SHAPES, not text: exact strings + $VAR/$$$ metavariables only; regex and plain-text search are grep/read territory (refused). lang: html|javascript|css|json. search returns file:line + matched text for whole matched nodes (bare patterns reach element TEXT, never attribute interiors). rewrite returns a dry-run diff; apply:true writes byte-identically, only inside the manifest folders (pal.json/.palsync.json never written; maxFiles overruns and preview drift refused) and lints ONLY the written files, advisory.",
     "inputSchema": {
       "type": "object",
       "properties": {

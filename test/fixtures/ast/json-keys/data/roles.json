@@ -1,0 +1,9 @@
+{
+  "users": [
+    { "role": "admin", "name": "ada" },
+    { "role": "user", "name": "bob" }
+  ],
+  "siteRole": {"role": "site"},
+  "role": "site",
+  "roles": ["role", "admin"]
+}

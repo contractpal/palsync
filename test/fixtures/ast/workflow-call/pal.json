@@ -1,0 +1,21 @@
+{
+  "palName": "WF",
+  "workflows": {
+    "entry": [
+      {
+        "string": "app.js",
+        "Workflow": {
+          "name": "app",
+          "filename": "app.js",
+          "workflowType": 7
+        }
+      }
+    ]
+  },
+  "pages": {
+    "entry": []
+  },
+  "styles": {
+    "entry": []
+  }
+}

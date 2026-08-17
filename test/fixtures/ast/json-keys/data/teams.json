@@ -1,0 +1,5 @@
+{
+  "eng": { "role": "lead", "team": "platform" },
+  "ops": { "role": "member", "team": "core" },
+  "extra": ["role"]
+}

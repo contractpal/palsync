@@ -76,7 +76,9 @@ function withAstPackageHidden(fn) {
 
 beforeEach(() => {
     lastArgs = [];
-    palAst._resetResolution();
+    // Force a valid resolution so stub-runner tests run even where no ast-grep binary exists
+    // (the resolution tests below reset it explicitly to exercise the real resolution paths).
+    palAst._setResolutionForTests({ path: "stub-binary", viaPath: false });
     palAst._setRunnerForTests();
 });
 afterEach(() => {
@@ -149,6 +151,31 @@ test("refuses oversized maxFiles", () => {
     assert.equal(r.error.code, "max-files-too-large");
 });
 
+test("refuses rewrite/apply without the rewrite argument (invalid-rewrite)", () => {
+    const ws = wsWithEcho();
+    stubRunner([]);
+    const r1 = palAst.run({ workspaceDir: ws }, { mode: "rewrite", lang: "html", pattern: "x" });
+    assert.equal(r1.refused, true);
+    assert.equal(r1.error.code, "invalid-rewrite");
+    const r2 = palAst.run({ workspaceDir: ws }, { lang: "html", pattern: "x", apply: true });
+    assert.equal(r2.refused, true);
+    assert.equal(r2.error.code, "invalid-rewrite");
+});
+
+test("a failed ast-grep run (nonzero exit or spawn error) is a refusal, never a silent no-match", () => {
+    const ws = wsWithEcho();
+    palAst._setRunnerForTests(() => ({ status: 1, stdout: "", stderr: "Illegal option" }));
+    const r1 = palAst.run({ workspaceDir: ws }, { lang: "html", pattern: "x" });
+    assert.equal(r1.refused, true);
+    assert.equal(r1.error.code, "binary-error");
+    assert.match(r1.error.message, /Illegal option/);
+    palAst._setRunnerForTests(() => ({ error: "spawn EACCES", status: null, stdout: "", stderr: "" }));
+    const r2 = palAst.run({ workspaceDir: ws }, { lang: "html", pattern: "x" });
+    assert.equal(r2.refused, true);
+    assert.equal(r2.error.code, "binary-error");
+    assert.match(r2.error.message, /EACCES/);
+});
+
 // Resolution tests hide the installed package AND restrict PATH — this machine also has a
 // real ast-grep on PATH (Homebrew), so both must be controlled to prove the recovery path.
 test("missing binary refuses with all three recovery messages and names the causes", () => {
@@ -157,6 +184,7 @@ test("missing binary refuses with all three recovery messages and names the caus
     const ws = wsWithEcho();
     try {
         process.env.PATH = emptyDir;
+        palAst._resetResolution(); // clear the forced beforeEach resolution
         withAstPackageHidden(() => {
             const r = palAst.run({ workspaceDir: ws }, { lang: "html", pattern: "x" });
             assert.equal(r.refused, true);
@@ -308,7 +336,7 @@ test("apply writes byte-identically to the preview and returns applied summary",
     const dry = palAst.run({ workspaceDir: ws }, { mode: "rewrite", lang: "html", pattern: '<c:a href="$H">$A</c:a>', rewrite: REWRITE });
     assert.equal(dry.refused, undefined);
     stubRunner([m]);
-    const applied = palAst.run({ workspaceDir: ws }, { lang: "html", pattern: '<c:a href="$H">$A</c:a>', rewrite: REWRITE, apply: true });
+    const applied = palAst.run({ workspaceDir: ws }, { mode: "rewrite", lang: "html", pattern: '<c:a href="$H">$A</c:a>', rewrite: REWRITE, apply: true });
     assert.equal(applied.applied.filesChanged, 1);
     assert.equal(applied.applied.matchesApplied, 1);
     assert.equal(applied.applied.findings.length, 0);
@@ -324,7 +352,7 @@ test("nothing in the change set outside the manifest folders is ever written (co
     const palText = JSON.stringify({ palName: "Hacked" });
     const o = offsetsFor(ws, "pal.json", '"palName": "Demo"');
     stubRunner([match({ file: "pal.json", line: 1, col: 1, text: '"palName": "Demo"', byteStart: o.start, byteEnd: o.end, replacement: '"palName": "Hacked"' })]);
-    const r = palAst.run({ workspaceDir: ws }, { lang: "json", pattern: '{"palName": $V}', rewrite: '{"palName": "Hacked"}', apply: true });
+    const r = palAst.run({ workspaceDir: ws }, { mode: "rewrite", lang: "json", pattern: '{"palName": $V}', rewrite: '{"palName": "Hacked"}', apply: true });
     assert.equal(r.refused, true);
     assert.equal(r.error.code, "unsafe-rewrite");
     assert.match(r.error.message, /Nothing was written/);
@@ -356,14 +384,14 @@ test("apply refuses on preview drift: a changed tree or a double apply never dou
     stubRunner([m]);
     palAst.run({ workspaceDir: ws }, { mode: "rewrite", lang: "html", pattern: '<c:a href="$H">$A</c:a>', rewrite: REWRITE }); // dry-run seeds the memo
     stubRunner([m]);
-    const ok = palAst.run({ workspaceDir: ws }, { lang: "html", pattern: '<c:a href="$H">$A</c:a>', rewrite: REWRITE, apply: true });
+    const ok = palAst.run({ workspaceDir: ws }, { mode: "rewrite", lang: "html", pattern: '<c:a href="$H">$A</c:a>', rewrite: REWRITE, apply: true });
     assert.equal(ok.applied.filesChanged, 1);
     const afterOnce = fs.readFileSync(path.join(ws, "pages/form.html"), "utf8");
     assert.equal((afterOnce.match(/confirm="1"/g) || []).length, 1);
     // Second apply of the SAME inputs on the already-rewritten tree: the on-disk preview no
     // longer matches the memoized dry-run → drift refusal, no double edit.
     stubRunner([m]);
-    const second = palAst.run({ workspaceDir: ws }, { lang: "html", pattern: '<c:a href="$H">$A</c:a>', rewrite: REWRITE, apply: true });
+    const second = palAst.run({ workspaceDir: ws }, { mode: "rewrite", lang: "html", pattern: '<c:a href="$H">$A</c:a>', rewrite: REWRITE, apply: true });
     assert.equal(second.refused, true);
     assert.equal(second.error.code, "preview-drift");
     const afterTwice = fs.readFileSync(path.join(ws, "pages/form.html"), "utf8");
@@ -378,7 +406,7 @@ test("apply lints ONLY the written files and returns findings inline, advisory, 
     const dry = palAst.run({ workspaceDir: ws }, { mode: "rewrite", lang: "javascript", pattern: "var x = $V", rewrite: "let x = $V" });
     assert.equal(dry.preview.filesChanged, 1);
     stubRunner([m]);
-    const applied = palAst.run({ workspaceDir: ws }, { lang: "javascript", pattern: "var x = $V", rewrite: "let x = $V", apply: true });
+    const applied = palAst.run({ workspaceDir: ws }, { mode: "rewrite", lang: "javascript", pattern: "var x = $V", rewrite: "let x = $V", apply: true });
     assert.equal(applied.applied.filesChanged, 1, "write stands despite findings");
     assert.ok(applied.applied.findings.length >= 1, "letConst must be reported");
     assert.equal(applied.applied.findings[0].rule, "letConst");

@@ -1,3 +1,4 @@
+
 // pal_ast — deterministic, offline, syntax-aware STRUCTURAL search and conservative rewrite over a
 // pal workspace, backed by the pinned @ast-grep/cli binary (ast-grep, an AST tree-sitter engine).
 //
@@ -131,6 +132,12 @@ const _resetResolution = () => {
     resolution = undefined;
 };
 
+// Test seam: force a resolution (unit tests stub the spawn seam; the binary itself may be
+// absent on CI). Mirrors how _setRunnerForTests bypasses the process boundary.
+const _setResolutionForTests = (r) => {
+    resolution = r;
+};
+
 // ---------------------------------------------------------------------------
 // Command runner (stubbed in unit tests — this is the process boundary)
 // ---------------------------------------------------------------------------
@@ -142,12 +149,14 @@ function defaultRunner(args, { cwd }) {
         cwd,
         encoding: "utf8",
         maxBuffer: 64 * 1024 * 1024,
+        timeout: 15000,
         windowsHide: true,
     });
     return {
         status: res.status,
-        stdout: String(res.stdout || ""),
         stderr: String(res.stderr || ""),
+        error: res.error ? String(res.error.message || res.error) : null,
+        stdout: String(res.stdout || ""),
     };
 }
 let runner = defaultRunner;
@@ -364,6 +373,7 @@ function coverageBlock(coverage) {
 const previewMemo = new Map();
 const memoKey = (args) =>
     JSON.stringify([
+        args.workspaceDir,
         args.pattern,
         args.rewrite || null,
         args.lang,
@@ -383,8 +393,11 @@ function hashPreview(diffText) {
 // Core operations
 // ---------------------------------------------------------------------------
 function parseAstMatches(stdout) {
+    // A legit zero-match run ALWAYS prints "[]"; an EMPTY stdout means the run produced nothing
+    // (failure), which must read as unreadable output / binary-error — never as "no match".
+    if (typeof stdout !== "string" || stdout.trim() === "") return null;
     try {
-        return JSON.parse(stdout || "[]");
+        return JSON.parse(stdout);
     } catch (e) {
         return null;
     }
@@ -395,12 +408,9 @@ function parseAstMatches(stdout) {
 function computeChangeSet(workspaceDir, matches) {
     const byFile = new Map();
     for (const m of matches || []) {
-        const rel = String(m.file || "")
-            .split("/")
-            .join("/");
+        const rel = String(m.file || "").split("/").join("/");
         if (!byFile.has(rel)) byFile.set(rel, []);
-        const entry = { match: m };
-        byFile.get(rel).push(entry);
+        byFile.get(rel).push(m);
     }
     const files = [];
     let diffText = "";
@@ -408,19 +418,17 @@ function computeChangeSet(workspaceDir, matches) {
         const abs = path.join(workspaceDir, rel);
         let bytes;
         try {
-            bytes = fs.readFileSync(abs);
+            bytes = fs.readFileSync(abs); // Buffer — edits splice on BYTE offsets
         } catch (e) {
             continue;
         }
-        const oldText = bytes.toString("utf8");
         const edits = byFile
             .get(rel)
-            .map((entry) => {
-                const m = entry.match;
+            .map((m) => {
                 const off =
                     m.replacementOffsets && m.replacementOffsets.start != null
                         ? m.replacementOffsets
-                        : m.range.byteOffset;
+                        : m.range && m.range.byteOffset;
                 if (off == null) return null;
                 return {
                     start: off.start,
@@ -430,31 +438,28 @@ function computeChangeSet(workspaceDir, matches) {
             })
             .filter(Boolean)
             .sort((a, b) => b.start - a.start); // descending so in-place splicing never shifts earlier offsets
-        let newText = oldText;
+        let newBuf = bytes;
         let applied = 0;
         for (const edit of edits) {
-            if (
-                edit.start < 0 ||
-                edit.end > newText.length ||
-                edit.start > edit.end
-            )
-                continue;
-            newText =
-                newText.slice(0, edit.start) +
-                edit.text +
-                newText.slice(edit.end);
+            if (edit.start < 0 || edit.end > newBuf.length || edit.start > edit.end) continue;
+            newBuf = Buffer.concat([
+                newBuf.slice(0, edit.start),
+                Buffer.from(edit.text, "utf8"),
+                newBuf.slice(edit.end),
+            ]);
             applied++;
         }
-        if (applied === 0 || newText === oldText) continue;
+        if (applied === 0 || newBuf.equals(bytes)) continue;
+        const newText = newBuf.toString("utf8");
         files.push({
             rel,
             abs,
-            oldBytes: Buffer.byteLength(oldText, "utf8"),
-            newBytes: Buffer.byteLength(newText, "utf8"),
-            oldText,
+            oldBytes: bytes.length,
+            newBytes: newBuf.length,
+            oldText: bytes.toString("utf8"),
             newText,
         });
-        diffText += diffFor(rel, oldText, newText);
+        diffText += diffFor(rel, bytes.toString("utf8"), newText);
     }
     return { files, diffText };
 }
@@ -636,10 +641,45 @@ function run({ workspaceDir }, rawArgs = {}) {
         "--no-ignore=vcs",
     ];
     if (mode === "rewrite" || wantsApply) astArgs.push("-r", args.rewrite);
+    // Scope the scan to the validated roots (narrowed within the 14 manifest folders). Matching the
+    // coverage block to what the engine actually searches keeps "searched" honest. Only roots that
+    // EXIST are passed positionally: ast-grep exits 1 on a nonexistent path, and a missing folder is
+    // already reported honestly in the coverage block as "skipped (missing)".
+    for (const root of roots) {
+        try {
+            fs.lstatSync(path.resolve(workspaceDir, root));
+            astArgs.push(root.split("/").join("/"));
+        } catch (e) {
+            /* missing — covered by the coverage report */
+        }
+    }
     const res = runner(astArgs, { cwd: workspaceDir });
     if (res.missing) return missingBinaryResult();
+    if (res.error) {
+        // The process could not be spawned at all (EACCES/ENOENT/timeout) — nothing to parse.
+        return Object.assign(
+            {
+                schema: AST_SCHEMA,
+                mode: effectiveMode,
+                refused: true,
+                error: {
+                    code: "binary-error",
+                    message:
+                        "ast-grep could not be run (" +
+                        res.error +
+                        "). " +
+                        (String(res.stderr || "").slice(0, 300) || "No error detail.") +
+                        " This is unexpected — report it with the pattern and lang.",
+                },
+            },
+            { serverChecked: false },
+        );
+    }
 
-    // ast-grep's own refusal: a pattern it cannot parse at all.
+    const matches = parseAstMatches(res.stdout);
+
+    // ast-grep's own refusal: a pattern it cannot parse at all. Checked before the exit-status gate
+    // so an unparseable pattern is never misread as a binary failure.
     if (/Cannot parse query as a valid pattern/i.test(res.stderr || "")) {
         return Object.assign(
             {
@@ -658,7 +698,29 @@ function run({ workspaceDir }, rawArgs = {}) {
         );
     }
 
-    const matches = parseAstMatches(res.stdout);
+    // ast-grep itself exits 1 on a rewrite with zero matches when --json=compact is on, while
+    // still emitting a valid JSON [] on stdout — a pinned-binary convention, not a failure. So a
+    // nonzero exit is an error ONLY when the stdout did not parse as JSON.
+    if (res.status != null && res.status !== 0 && matches === null) {
+        return Object.assign(
+            {
+                schema: AST_SCHEMA,
+                mode: effectiveMode,
+                refused: true,
+                error: {
+                    code: "binary-error",
+                    message:
+                        "ast-grep failed (exit " +
+                        res.status +
+                        "). " +
+                        (String(res.stderr || "").slice(0, 300) || "No error detail.") +
+                        " This is unexpected — report it with the pattern and lang.",
+                },
+            },
+            { serverChecked: false },
+        );
+    }
+
     if (matches === null) {
         return Object.assign(
             {
@@ -874,7 +936,24 @@ function run({ workspaceDir }, rawArgs = {}) {
 
 // Envelope projection: matches/changes/findings as location-addressed diagnostics (severity info),
 // so the envelope bytes are metered like every other tool and the artifact keeps the full result.
+// A refusal is NEVER silent in the envelope: its full guidance rides as a single error diagnostic, so
+// the model sees (e.g.) all three recovery messages without opening the artifact.
 function envelopeProjection(result, args) {
+    if (result.refused && result.error) {
+        return {
+            ok: false,
+            filesChecked: null,
+            findings: [
+                {
+                    severity: "error",
+                    rule: "astRefused",
+                    file: null,
+                    line: null,
+                    message: result.error.message,
+                },
+            ],
+        };
+    }
     const diagnostics = [];
     if (Array.isArray(result.matches)) {
         for (const m of result.matches)
@@ -911,13 +990,7 @@ function envelopeProjection(result, args) {
             });
     }
     return {
-        ok: result.refused
-            ? false
-            : result.matches
-              ? true
-              : result.applied
-                ? true
-                : true,
+        ok: true,
         filesChecked: result.coverage ? result.coverage.searchedCount : null,
         findings: diagnostics,
     };
@@ -933,6 +1006,7 @@ module.exports = {
     validateInput,
     missingBinaryResult,
     _resetResolution,
+    _setResolutionForTests,
     _setRunnerForTests,
     LANG_EXT,
     LANGS,

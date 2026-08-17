@@ -42,6 +42,15 @@ test("pal_impact is lazily reachable by weak-model words and not in the eager co
     assert.ok(routeTools("project", metadata).includes("pal_impact"), "project group");
 });
 
+test("pal_ast is lazily reachable by weak-model words and not in the eager core", () => {
+    const eager = require("../src/core/piHelpers").eagerToolNames(metadata);
+    assert.ok(!eager.includes("pal_ast"), "pal_ast must stay lazy (zero eager bytes)");
+    for (const query of ["ast", "refactor", "rename", "pattern", "structural", "codemod", "search", "rewrite"]) {
+        assert.ok(routeTools(query, metadata).includes("pal_ast"), query);
+    }
+    assert.ok(routeTools("project", metadata).includes("pal_ast"), "project group");
+});
+
 test("unknown/default profile fails open to the full static set", async () => {
     const { client, workspaceDir } = await connect("unknown");
     assert.deepStrictEqual((await client.listTools()).tools.map(tool => tool.name).sort(), TOOLS.map(tool => tool.name).sort());
