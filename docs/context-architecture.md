@@ -13,9 +13,9 @@ basis that could not be reproduced.
 
 | Runtime | Section | Source | Bytes | Est. tokens | Loading |
 |---|---|---|---:|---:|---|
-| All | `tool-definitions` | `src/mcp/tools.js` | 19,858 | 4,965 | release-stable |
-| Claude | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 12,229 | 3,058 | release-stable |
-| Codex/OpenCode/Pi | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 12,229 | 3,058 | release-stable |
+| All | `tool-definitions` | `src/mcp/tools.js` | 22,082 | 5,521 | release-stable |
+| Claude | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 12,551 | 3,138 | release-stable |
+| Codex/OpenCode/Pi | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 12,551 | 3,138 | release-stable |
 | All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 4,613 | 1,154 | release-stable |
 | Claude | `sync-section` | `src/launcher/contextInject.js#syncSection` | 2,107 | 527 | workspace-stable |
 | Codex/OpenCode | `sync-section` | `src/launcher/contextInject.js#syncSection` | 2,200 | 550 | workspace-stable |

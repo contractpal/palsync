@@ -8,7 +8,7 @@ agent). *A pal* = one application; this workspace is one pal.
 
 **You do NOT know this dialect from training.** Never guess a tag, attribute, or API method —
 look it up in the skill files or the docs. A guessed attribute is a hard build error.
-Official API docs: https://secure.cloudpiston.com/cpal/cp-api/index.html
+Official API docs: <https://secure.cloudpiston.com/cpal/cp-api/index.html>
 
 ---
 
@@ -21,7 +21,7 @@ Bug fix:      pal-fix (escalates to pal-init/pal-spec if scope grows)
 ```
 
 | You are asked to… | Load |
-|---|---|
+| --- | --- |
 | Build a brand-new pal | **pal-spec** (interview → SPEC.md + EXECUTION.md) |
 | Change/extend an EXISTING pal | **pal-init** (map + baseline first, then pal-spec) |
 | Fix a bug / small correction | **pal-fix** |
@@ -80,6 +80,7 @@ and no Fontshare import; marketing/web pals keep the Satoshi/Fontshare default.
 ```
 
 **Pull is SYNC, not WIPE:**
+
 - Pull-managed = `pal.json` + the **14 manifest folders** above (`pages/` … `datalists/`).
   Pull overwrites these from the server; it removes a local file only when the server deleted it.
 - NEW un-pushed files in manifest folders SURVIVE a pull (their `pal.json` entries carry forward).
@@ -88,6 +89,12 @@ and no Fontshare import; marketing/web pals keep the Satoshi/Fontshare default.
 - Everything else at the workspace root is NEVER touched by pull. Put notes, specs,
   reference images, `baseline/` there — e.g. `~/PalBuilder/<pal>/spec.md`, `notes/`,
   `references/*.png`. Never park scratch files inside the 14 manifest folders.
+
+## Finding things — route, don't browse
+
+- Exact text (a name, a string, a tag): `grep` / read — fast, unambiguous.
+- Code SHAPE (every `saveRecord` call; rename a variable's uses): `pal_ast` — structural, dry-run first.
+- A pal's contract / relationships (who uses this fragment): `pal_impact({target})`.
 
 ---
 
@@ -147,6 +154,7 @@ and no Fontshare import; marketing/web pals keep the Satoshi/Fontshare default.
    <!-- ✗ WRONG: server refuses the save — fragments cannot contain <form> -->
    <form><c:a action="saveEquipment">Save</c:a></form>
    ```
+
 9. **Any `c:a` that deletes/destroys data carries `confirm="..."`.** The platform renders the
    browser's native confirm before the request fires — there is no undo. A delete link with no
    `confirm=` is a hard build error, not a style choice.
@@ -156,6 +164,7 @@ and no Fontshare import; marketing/web pals keep the Satoshi/Fontshare default.
 ## Restraint — the least code that works
 
 Default discipline on every change:
+
 - Surface assumptions and alternate interpretations; genuine ambiguity is a blocker, not permission to guess.
 - Read the touched flow, then stop at the first rung that holds: YAGNI → reuse existing pal code/data/styles → supported platform tag/API → already sanctioned capability → minimum readable dialect-correct code.
 - Touch only task-named files; every changed line traces to the requirement or cleanup made necessary by it. Do not reformat or improve adjacent code.

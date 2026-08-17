@@ -32,6 +32,7 @@ const palsyncfile = require("../core/palsyncfile");
 const { onDemandSyncSections } = require("../launcher/contextInject");
 const { routeItems } = require("../core/piHelpers");
 const { openUrl } = require("../platform/openUrl");
+const { run: runAst, envelopeProjection: astEnvelopeProjection } = require("../core/palAst");
 const {
     createWorkHistoryRun,
     writeArtifactFile,
@@ -1525,6 +1526,25 @@ const TOOLS = [
         }
     },
     {
+        name: "pal_ast",
+        description: "Syntax-aware STRUCTURAL search + conservative rewrite over pal markup and code, via the pinned ast-grep binary. Matches code SHAPES, not text: exact strings plus $VAR/$$$ metavariables only — regex and plain-text search are grep/read territory and refused up front. lang: html|javascript|css|json. search returns file:line + matched text for whole matched nodes (a bare pattern reaches element TEXT, never attribute interiors — attribute edits are whole-element rewrites). rewrite returns a dry-run diff; apply:true writes it byte-identically, but only inside the 14 manifest folders — pal.json/.palsync.json are never written, maxFiles overruns and on-disk preview drift are refused — and lints ONLY the written files, advisory (the write stands).",
+        needsCtx: false,
+        inputShape: {
+            mode: z.enum(["search", "rewrite"]).optional().describe("search (default) returns matches; rewrite returns a dry-run diff, written only with apply:true."),
+            pattern: z.string().describe("Complete AST node shape to match in the selected lang: exact strings + $VAR / $$$ metavariables only (no regex, no plain text)."),
+            rewrite: z.string().optional().describe("Full replacement node for mode:rewrite / apply:true (required there)."),
+            lang: z.enum(["html", "javascript", "css", "json"]).describe("Language the pattern is parsed in."),
+            paths: z.array(z.string()).optional().describe("Workspace-relative paths narrowing the search within the 14 manifest folders (default: all of them)."),
+            apply: z.boolean().optional().describe("Write the rewrite matching the last dry-run for these same inputs; refuses on drift."),
+            maxResults: z.number().int().positive().optional().describe("Match cap for search (default 20)."),
+            maxFiles: z.number().int().positive().optional().describe("Changed-file cap for rewrite/apply (default 25; explicit override allowed up to 500).")
+        },
+        async run(ctx, args = {}) {
+            const res = runAst(ctx, args);
+            return Object.assign(res, envelopeFields(ctx.workspaceDir, "pal_ast", res, args, astEnvelopeProjection(res, args)));
+        }
+    },
+    {
         name: "pal_spec_lint",
         description: "Lint a SPEC.md OFFLINE for the MECHANICAL half of pal-spec's reality check: placeholders (TBD/decide-later), dead §3 links, §8a primary-key/type/size/indexability against palbuilder-types.md, §5 dataset references, and the §12 floor (plus the REGRESSION criterion when a MAP.md sits beside it). Returns HARD_FLAG/FLAG/NOTE findings; capability->primitive mapping and component checks stay manual.",
         needsCtx: false,
@@ -1896,6 +1916,7 @@ const TOOLS = [
 const TOOL_HINTS = {
     pal_context: ["Load PalSync context", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_impact: ["Inspect local structural impact", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_ast: ["Search and rewrite code structure", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
     pal_status: ["Report pal status", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_validate: ["Validate pal code", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_testing: ["Toggle automated testing", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
