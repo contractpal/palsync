@@ -1,4 +1,4 @@
-"use strict";
+
 // Standalone sync subcommands: `palsync push|pull|status` — the fallback path that works with
 // NO MCP server and NO agent. If the MCP server died mid-session (or you just prefer the
 // terminal), these read .palsync.json from the workspace, authenticate from the OS keychain,
@@ -232,7 +232,7 @@ async function runHookCommand(argv, inputText) {
             guard: "../core/guardHook",
             "post-write": "../core/postWriteHook",
         };
-        if (!Object.prototype.hasOwnProperty.call(ADAPTERS, adapter)) throw new Error("unknown hook adapter");
+        if (!Object.hasOwn(ADAPTERS, adapter)) throw new Error("unknown hook adapter");
         let mode = "json", dir, eventArg;
         for (let i = 1; i < argv.length; i++) {
             if (argv[i] === "--mode") mode = argv[++i];
@@ -271,7 +271,16 @@ async function run(cmd, argv, opts) {
     // settings (no .palsync.json, no login), dispatched before parseFlags/buildCliContext like
     // task/checkpoint. `opts` is the test seam for the user-level settings file location.
     if (cmd === "hooks") return require("./hooksCommand").run(argv, opts || {});
-    const flags = parseFlags(argv);
+    // #15: `palsync ctx inspect <path>` used to dump the generic USAGE block — whose first line is
+    // `palsync validate`'s usage — because parseFlags throws USAGE on an extra positional. `ctx` takes
+    // no path argument, so whatever the caller typed, ctx's own one-line usage is the honest answer.
+    let flags;
+    if (cmd === "ctx") {
+        try { flags = parseFlags(argv); }
+        catch (e) { console.error("Usage: palsync ctx inspect|diff [--dir <workspace>]"); return 1; }
+    } else {
+        flags = parseFlags(argv);
+    }
     if (flags.help) { console.log(USAGE); return 0; }
     const dir = path.resolve(flags.dir || process.cwd());
 

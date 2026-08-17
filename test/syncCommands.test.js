@@ -1,4 +1,4 @@
-"use strict";
+
 // CLI flag parsing for human-vs-agent preview behavior. The MCP pal_preview tool remains
 // no-open by default; the standalone CLI opens unless the caller explicitly opts out.
 const { test } = require("node:test");
@@ -161,6 +161,28 @@ test("ctx inspect and diff run fully offline", async () => {
     }
     assert.match(output.join("\n"), /Locally stable prefix/);
     assert.match(output.join("\n"), /First divergent section: sync-section/);
+});
+
+test("#15: ctx inspect with a stray path prints ctx's own usage, not the validate-led USAGE", async () => {
+    const originalLog = console.log, originalError = console.error;
+    const output = [];
+    console.log = (...args) => output.push(args.join(" "));
+    console.error = (...args) => output.push(args.join(" "));
+    try {
+        const syncCommands = require("../src/cli/syncCommands");
+        assert.equal(await syncCommands.run("ctx", ["inspect", "fragments/nav.html"]), 1);
+        assert.equal(await syncCommands.run("ctx", ["diff", "pages/a.html", "--dir", "/tmp"]), 1);
+    } finally {
+        console.log = originalLog;
+        console.error = originalError;
+    }
+    // The generic USAGE block starts with `palsync validate` — the deterministic bug: a path typed
+    // after `ctx inspect` must NEVER surface that. Each run prints ctx's own one-line usage instead.
+    assert.equal(output.length, 2, output.join("\n"));
+    for (const line of output) {
+        assert.match(line, /Usage: palsync ctx inspect\|diff \[--dir <workspace>\]/);
+        assert.doesNotMatch(line, /palsync validate \[--dir <workspace>\]/);
+    }
 });
 
 test("open runs the core preview and opens the web raw token without printing it", async () => {
