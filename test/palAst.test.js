@@ -59,10 +59,9 @@ function wsWithEcho({ appJs = APP_JS } = {}) {
     });
 }
 
+// Two files must never race on node_modules (see withAstPackageHidden note) — the missing-binary
+// path uses the resolution seam, not PATH hacks, so no empty-path tempdir helper is needed.
 const REAL_PATH = process.env.PATH;
-function emptyPathDir() {
-    return fs.mkdtempSync(path.join(os.tmpdir(), "palsync-path-"));
-}
 function withAstPackageHidden(fn) {
     // Only the PATH-fallback tests hide the real dependency, and only with a pid-unique suffix so
     // a crashed run cannot collide with the next one — nothing else in the suite mutates it.
