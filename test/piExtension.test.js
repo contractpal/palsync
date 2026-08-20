@@ -9,7 +9,7 @@ const { spawnSync } = require("node:child_process");
 const metadata = require("../src/mcp/pi-tools.json");
 const { routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision, piUsageEntry, appendPiUsage,
     isPalsyncWorkspace, completionFingerprint, completionFollowUp,
-    piWriteEvent, piAppendContent } = require("../src/core/piHelpers");
+    piWriteEvent, piAppendContent, promptGuidelinesFor, activationGuidance } = require("../src/core/piHelpers");
 const { TOOLS } = require("../src/mcp/tools");
 const { serializeToolDefinitions } = require("../src/mcp/toolSchema");
 const registerPi = require("../src/mcp/registerPi");
@@ -189,6 +189,42 @@ test("both Pi hooks reach the same cores through the CLI adapter's --event flag"
     assert.equal(broken.status, 0);
     assert.equal(broken.stdout.trim(), "");
     fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("promptGuidelinesFor specifies pal_impact/pal_ast routing as Pi guideline arrays", () => {
+    const impact = promptGuidelinesFor("pal_impact");
+    assert.equal(impact.length, 1);
+    assert.match(impact[0], /Use pal_impact before editing/);
+    assert.match(impact[0], /pages\/ or fragments\//);
+    assert.match(impact[0], /dependents and registration/);
+    const ast = promptGuidelinesFor("pal_ast");
+    assert.equal(ast.length, 1);
+    assert.match(ast[0], /Use pal_ast for syntax-aware code-shape searches and rewrites/);
+    assert.match(ast[0], /grep\/read only for exact text/);
+    assert.deepStrictEqual(promptGuidelinesFor("pal_validate"), []);
+    assert.deepStrictEqual(promptGuidelinesFor("unknown"), []);
+});
+
+test("activationGuidance returns relevant lines in stable order without duplicates", () => {
+    const both = activationGuidance(["pal_ast", "pal_impact"]);
+    assert.equal(both.length, 2);
+    assert.ok(both[0].includes("pal_impact"));
+    assert.ok(both[1].includes("pal_ast"));
+    const dup = activationGuidance(["pal_impact", "pal_impact", "pal_ast", "pal_impact"]);
+    assert.deepStrictEqual(dup, both, "deduped and stable");
+    const reversed = activationGuidance(["pal_ast", "pal_impact", "pal_ast"]);
+    assert.deepStrictEqual(reversed, both, "stable order regardless of input order");
+    assert.deepStrictEqual(activationGuidance(["pal_validate", "pal_status"]), []);
+    assert.deepStrictEqual(activationGuidance([]), []);
+    assert.deepStrictEqual(activationGuidance(["pal_impact"]), promptGuidelinesFor("pal_impact"));
+});
+
+test("Pi extension wires promptGuidelines and immediate activation guidance", () => {
+    const source = fs.readFileSync(path.join(__dirname, "..", "pi-extension", "index.ts"), "utf8");
+    assert.match(source, /promptGuidelines:\s*promptGuidelines\.length \? promptGuidelines : undefined/);
+    assert.match(source, /const guidance = activationGuidance\(names\)/);
+    assert.match(source, /Routing:\\n- /);
+    assert.match(source, /details:\s*\{\s*activated:\s*names\s*\}/);
 });
 
 test("Pi installer copies owned extension files idempotently and reports pi-mcp", async () => {

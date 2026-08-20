@@ -2,7 +2,7 @@
 
 `palsync setup --agent pi` installs the native extension at `~/.pi/agent/extensions/palsync/`. Pi loads its TypeScript entry directly; no build step is required.
 
-The extension exposes `pal_tools`, `pal_context`, `pal_validate`, and `pal_spec_lint` initially. `pal_tools({query})` activates matching tools additively using the deterministic groups `sync`, `browser`, `runtime`, `project`, and `spec`. The MCP server starts only when a PalSync tool is first called.
+The extension exposes `pal_tools`, `pal_context`, `pal_validate`, and `pal_spec_lint` initially. `pal_tools({query})` activates matching tools additively using the deterministic groups `sync`, `browser`, `runtime`, `project`, and `spec`. Its result immediately states any `pal_impact`/`pal_ast` routing guidance, and Pi keeps the same guidance in the system Guidelines while those tools are active. The MCP server starts only when a PalSync tool is first called.
 
 ## Existing pi-mcp installation
 
@@ -14,6 +14,7 @@ Do not serve PalSync through both integrations. If the general `pi-mcp` extensio
 2. Confirm only `pal_tools`, `pal_context`, `pal_validate`, and `pal_spec_lint` are initially active.
 3. Call `pal_tools` with `browser testing`.
 4. Confirm preview, fetch, screenshot, exercise, SEO, and runtime-test tools were added and the original tools remain active.
+5. Call `pal_tools` with `project` and confirm its result includes routing guidance for `pal_impact` and `pal_ast`.
 
 The legacy static `pi-mcp` path remains a fail-open fallback when the native extension is absent.
 

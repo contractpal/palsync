@@ -4,7 +4,8 @@ import metadata from "./tools.json";
 import helpers from "./helpers.js";
 
 const { routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision, appendPiUsage,
-  isPalsyncWorkspace, completionFingerprint, completionFollowUp, piWriteEvent, piAppendContent } = helpers;
+  isPalsyncWorkspace, completionFingerprint, completionFollowUp, piWriteEvent, piAppendContent,
+  promptGuidelinesFor, activationGuidance } = helpers;
 
 class PalsyncClient {
   private child: ChildProcessWithoutNullStreams | null = null;
@@ -74,11 +75,13 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
   const registerMcpTool = (tool: any) => {
     if (registered.has(tool.name)) return;
     registered.add(tool.name);
+    const promptGuidelines = promptGuidelinesFor(tool.name);
     pi.registerTool({
       name: tool.name,
       label: tool.title || tool.name,
       description: tool.description,
       promptSnippet: tool.description.slice(0, 120),
+      promptGuidelines: promptGuidelines.length ? promptGuidelines : undefined,
       parameters: tool.inputSchema as any,
       async execute(_id, params) {
         const result = await client!.call(tool.name, params as Record<string, unknown>);
@@ -115,7 +118,10 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
         await client!.call("pal_tools", { query: params.query });
         const names = routeTools(params.query, metadata as any[]);
         activate(names);
-        return { content: [{ type: "text", text: names.length ? "Activated: " + names.join(", ") : "No PalSync tools matched that query." }], details: { activated: names } };
+        const guidance = activationGuidance(names);
+        let text = names.length ? "Activated: " + names.join(", ") : "No PalSync tools matched that query.";
+        if (guidance.length) text += "\n\nRouting:\n- " + guidance.join("\n- ");
+        return { content: [{ type: "text", text }], details: { activated: names } };
       }
     });
     pi.setActiveTools(activateAdditively(pi.getActiveTools(), ["pal_tools"]));

@@ -4,6 +4,27 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 
+const TOOL_GUIDELINES = {
+    pal_impact: "Use pal_impact before editing an existing file under pages/ or fragments/ to inspect dependents and registration.",
+    pal_ast: "Use pal_ast for syntax-aware code-shape searches and rewrites; use grep/read only for exact text."
+};
+const GUIDELINE_ORDER = ["pal_impact", "pal_ast"];
+
+function promptGuidelinesFor(toolName) {
+    const line = TOOL_GUIDELINES[toolName];
+    return line ? [line] : [];
+}
+
+function activationGuidance(names) {
+    if (!Array.isArray(names) || names.length === 0) return [];
+    const present = new Set(names);
+    const out = [];
+    for (const name of GUIDELINE_ORDER) {
+        if (present.has(name)) out.push(TOOL_GUIDELINES[name]);
+    }
+    return out;
+}
+
 const CORE_TOOLS = ["pal_validate", "pal_spec_lint", "pal_context"];
 
 function tokens(value) {
@@ -147,4 +168,5 @@ function completionFollowUp(gate, fingerprint, previousFingerprint) {
 
 module.exports = { CORE_TOOLS, routeItems, routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision,
     imageTokens, contentStats, piUsageEntry, appendPiUsage, isPalsyncWorkspace,
-    completionFingerprint, completionFollowUp, piWriteEvent, piAppendContent, PI_WRITE_TOOLS };
+    completionFingerprint, completionFollowUp, piWriteEvent, piAppendContent, PI_WRITE_TOOLS,
+    promptGuidelinesFor, activationGuidance };
