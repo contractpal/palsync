@@ -4,8 +4,25 @@ import metadata from "./tools.json";
 import helpers from "./helpers.js";
 
 const { routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision, appendPiUsage,
-  isPalsyncWorkspace, completionFingerprint, completionFollowUp, piWriteEvent, piAppendContent,
-  promptGuidelinesFor, activationGuidance } = helpers;
+  isPalsyncWorkspace, completionFingerprint, completionFollowUp, piWriteEvent, piAppendContent } = helpers;
+
+// Keep routing guidance in the entrypoint that consumes it. During setup or /reload, Pi can briefly
+// observe an older cached helpers.js; the entrypoint must never require a newly-added helper export.
+const TOOL_GUIDELINES: Record<string, string> = {
+  pal_impact: "Use pal_impact before editing an existing file under pages/ or fragments/ to inspect dependents and registration.",
+  pal_ast: "Use pal_ast for syntax-aware code-shape searches and rewrites; use grep/read only for exact text."
+};
+const GUIDELINE_ORDER = ["pal_impact", "pal_ast"];
+
+function promptGuidelinesFor(toolName: string): string[] {
+  const line = TOOL_GUIDELINES[toolName];
+  return line ? [line] : [];
+}
+
+function activationGuidance(names: string[]): string[] {
+  const present = new Set(names);
+  return GUIDELINE_ORDER.filter(name => present.has(name)).map(name => TOOL_GUIDELINES[name]);
+}
 
 class PalsyncClient {
   private child: ChildProcessWithoutNullStreams | null = null;

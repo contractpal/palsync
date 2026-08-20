@@ -227,6 +227,13 @@ test("Pi extension wires promptGuidelines and immediate activation guidance", ()
     assert.match(source, /details:\s*\{\s*activated:\s*names\s*\}/);
 });
 
+test("Pi routing guidance is entrypoint-local and the installer replaces index.ts last", () => {
+    const source = fs.readFileSync(path.join(__dirname, "..", "pi-extension", "index.ts"), "utf8");
+    assert.match(source, /const TOOL_GUIDELINES/);
+    assert.doesNotMatch(source, /promptGuidelinesFor, activationGuidance \} = helpers/);
+    assert.deepStrictEqual(registerPi.FILES, ["helpers.js", "tools.json", "index.ts"]);
+});
+
 test("Pi installer copies owned extension files idempotently and reports pi-mcp", async () => {
     const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-pi-home-"));
     const thirdParty = path.join(homeDir, ".pi", "agent", "extensions", "mcp", "index.ts");

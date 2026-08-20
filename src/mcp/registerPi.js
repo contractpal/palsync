@@ -5,7 +5,9 @@ const os = require("os");
 const path = require("path");
 
 const SOURCE_DIR = path.join(__dirname, "..", "..", "pi-extension");
-const FILES = ["index.ts", "helpers.js", "tools.json"];
+// Replace dependencies before the entrypoint so an interrupted setup leaves the old index with
+// compatible helpers instead of loading a new index against stale helper exports.
+const FILES = ["helpers.js", "tools.json", "index.ts"];
 const SHARED_SOURCES = {
     "helpers.js": path.join(__dirname, "..", "core", "piHelpers.js"),
     "tools.json": path.join(__dirname, "pi-tools.json")
