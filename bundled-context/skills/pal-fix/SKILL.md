@@ -30,6 +30,8 @@ When in doubt it's not a fix — escalate.
    with the tool output that shows it. **Can't reproduce → set `needs-info`, ask the user for repro steps, and do not guess.** Before fixing, check `git log`, MAP.md, and available prior decision notes for evidence that the change is already implemented or was previously rejected; report that state instead of overwriting it.
 2. **Isolate.** Read only the failure path — the failing fragment/workflow, the files it
    calls, the dataset it reads. Don't survey the whole pal.
+   `pal_impact` is mandatory before editing an existing page or fragment that other
+   files reference; silent for new files.
 3. **Minimal diff, using the pal-loop restraint ladder.** Reuse before building, platform before library,
    touch only the lines this fix needs. Don't "improve" adjacent code.
 4. **Verify** — the step-1 reproduction must now pass:

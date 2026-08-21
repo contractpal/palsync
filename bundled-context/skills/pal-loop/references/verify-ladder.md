@@ -8,6 +8,11 @@ UI-only: one desktop `pal_screenshot`. Behavior-only: one `pal_exercise`. Both: 
 
 Read `../../pal-review/references/console-render-verification.md`. A render error fails even after a clean compile. If capture is unavailable, record a `HUMAN GATE` naming what must be checked.
 
+Branch recovery (from `pal_screenshot`):
+- `captured:true` + `renderError` non-null → the workflow compiled but threw while rendering — fix, push, screenshot again; `pal_test` passing does NOT clear it.
+- `captured:true` + `renderError` null → judge the image against §12 VISUAL → `done`.
+- `captured:false` → do NOT guess from HTML: run `palsync task <id> needs-human --reason "HUMAN GATE: <what the human must confirm>" --tried "<command + error>"`, naming exactly what to eyeball. Continue with independent tasks. (Full rule: `../../pal-review/references/console-render-verification.md`.)
+
 ## Exercise authoring
 
 Full rules: `../../shared/references/exercise-authoring.md`.

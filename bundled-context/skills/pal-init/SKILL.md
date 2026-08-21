@@ -27,6 +27,8 @@ normal pal-spec → pal-loop → pal-review pipeline.
 ## Step 2 — Mine into MAP.md
 Walk the pulled files and write `MAP.md` (template below) at the workspace root. One line of
 purpose per item, inferences marked. Do not deep-analyze workflows you won't change.
+`pal_impact` is mandatory before editing an existing page or fragment that other files
+reference; silent for new files — run it while mapping brownfield dependents.
 
 ## Step 3 — Capture the regression baseline
 Record what passes RIGHT NOW, before any change. Run the checks, then write a STRUCTURED

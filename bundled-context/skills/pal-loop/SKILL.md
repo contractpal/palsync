@@ -25,12 +25,12 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
 
 ## Session start (once)
 
-1. **Targeted reads, not the whole spec** (each task re-reads its own SPEC.md § via `spec
-   ref`; loading it all now burns tokens). Read:
-   - SPEC.md frontmatter — note `mode:` full|lite, `pal:` web|console, `review cadence:`
-     each-task|every-N|end (absent = end)
-   - SPEC.md **§2 Decisions & open questions** and **§11 Constraints (NEVER)**
-   - EXECUTION.md task table, last session summary, Blockers
+1. **Slim session start — frontmatter only.** Each task's requirement — ticket plus
+   spliced SPEC § plus §11 NEVER — comes from `palsync task list --ready`; do not read
+   SPEC.md per task, and do not read §2 or §11 at session start — §11 arrives with every ticket and §2 arrives only when a task's `spec ref` names it (SPEC.md §9 skill manifest is the one exception: read it once per session at start, not per task). Read now:
+   SPEC.md frontmatter only (`mode`, `pal`, `review cadence`, `status`, `reality_check`,
+   `push policy`) plus SPEC.md §9 skill manifest (once per session, not per task) plus the EXECUTION.md last session summary line and Blockers (the
+   task table remains available for the readiness gate)
 2. **Gate — spec must be ready:**
    - `status: draft` → STOP: "The spec isn't approved — set status: approved, or run pal-spec."
    - `reality_check: blocked` → STOP. `pass` → proceed. Absent/`not_run` → check §13 for any
@@ -59,9 +59,12 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
 
 ## The task cycle (repeat until done or blocked)
 
-1. **Pick**: `palsync task list --ready` prints the first `todo` task whose `depends` are all
-   `done`. None → "Ending a session" below. Read the task's `spec ref` and **re-read those
-   SPEC.md section(s) now** — the success condition derives from the requirement. Surface assumptions: name any ambiguity and reasonable interpretations; genuine uncertainty is a blocker, never permission to guess. **Done when:** one ready task and its exact requirement are identified with no hidden assumption.
+1. **Pick**: `palsync task list --ready` prints the ready ticket — `id`, `status`,
+   `tier`, `depends`, `spec ref`, `task`, `success condition` — plus the verbatim body of each SPEC.md section that `spec ref` names and the verbatim body of §11 Constraints (NEVER);
+   that print is the requirement, so do not open EXECUTION.md or re-read SPEC.md for it. Surface assumptions: name any ambiguity and reasonable
+   interpretations; genuine uncertainty is a blocker, never permission to guess.
+   **Done when:** one ready ticket and its exact requirement are identified with no
+   hidden assumption. None → "Ending a session" below.
 2. **Tier check.** Task tier `frontier` and you're not frontier-class (test: does it need NEW
    structure, not just following the spec?) → if an advisor capability exists (e.g.
    `/advisor`), call it with full context for the plan; you still execute, verify, commit. No
@@ -98,6 +101,16 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
    - Before writing, trace the touched flow and stop at the first rung that holds: (1) YAGNI — do not build it; (2) reuse an existing fragment/function/dataset/class; (3) use a supported `c:` tag or platform API; (4) use an already sanctioned capability; (5) write the minimum readable ES3-compatible solution. Touch only named files.
    - Ladder adapted from Dietrich Gebert's ponytail; assumption discipline from Andrej Karpathy's LLM-coding-pitfalls guidance.
    - After a multi-block edit call, re-read the changed region before pushing when the harness does not report expected-vs-actual replacement counts. On non-Claude harnesses, keep one logical change per edit call.
+   - **Structural tools — `pal_impact` and `pal_ast`:**
+      - `pal_impact` is mandatory before editing an existing page or fragment that
+        other files reference; silent for new files.
+      - `pal_ast` `mode:"search"` is free — run it whenever the task touches a class,
+        attribute, or function that may have other consumers.
+      - `pal_ast` `apply:true` is earned and narrow — only when the identical
+        mechanical change spans three or more files named by the task's `spec ref`,
+        only after a dry-run whose diff is recorded on the checkpoint line, followed
+        by one `pal_push`; never use `apply:true` for a copy or design change —
+        those are §4/§6 edits, not codemods.
    - **Done when:** the smallest spec-traceable change is present and the changed region was re-read.
 5. **Verify** against the success condition with tool outputs, not opinion. Before UI or exercise verification, read `references/verify-ladder.md` (especially §Exercise authoring before writing steps). Offline first, so
    a bad result never reaches the server. **Batch every edit for the task first, then verify
@@ -131,48 +144,15 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       behavior check after the last visual edit. A screenshot file path without pixel critique is
       not review evidence. After a single-class/attribute fix, `pal_push`; if its server notes are clean, skip duplicate `pal_test` and re-check with `pal_screenshot imageless:true`.
    5. CONSOLE screen: `pal_test` proves it compiles; the RENDER needs `pal_screenshot`:
-      - `captured:true` + `renderError` non-null → hard FAIL. The workflow compiled but threw
-        while rendering. Fix, push, screenshot again — `pal_test` passing does NOT clear it.
-      - `captured:true` + `renderError` null → judge the image against §12 VISUAL → `done`.
-      - `captured:false` → do NOT guess from HTML: run
-        `palsync task <id> needs-human --reason "HUMAN GATE: <what the human must confirm>" --tried "<command + error>"`,
-        naming exactly what to eyeball. Continue with independent
-        tasks. (Full rule: `../pal-review/references/console-render-verification.md`.)
+      - `captured:true` + `renderError` non-null → hard FAIL.
+      This step is mandatory and non-skippable: read `references/verify-ladder.md` (Console render) before handling `captured`/`renderError` branch recovery.
    6. ANY write action (create/edit/delete), when the task includes behavior changes: `pal_exercise` — trigger the action and assert the
       result in the rendered output. For every §5 effect, read the record back and assert
       **every field named by the effect**, including fields the default fragment does not
       render; use a detail/read action that exposes a non-rendered field rather than assuming
       its value from visible state. For example, if check-in sets `status = available` and
       clears `checkedOutAt`, assert both fields after check-in, not only the rendered status.
-      Full authoring rules: `../shared/references/exercise-authoring.md` — read it before writing your FIRST `pal_exercise` call of the session.
-      Read the local page/fragment markup first; derive exact input names, click text, and `within`
-      selectors instead of discovering them through repeated exercise calls.
-      **Batch the whole flow into ONE call's `steps` array**
-      (e.g. add → edit → delete is one exercise with expects per step), not one call per
-      action — each extra call is a full context-window round trip. Web:
-      `steps:[{action, params, expect}]`. Console:
-      `steps:[{fill:{name:value}, click:"<exact link text>", expect:[...]}]`. **Use unique
-      `{{runId}}` data for every created record and subsequent expected value.** A console normally
-      opens on its default list fragment, so a create flow must click its Add/Create link before it
-      tries to fill form fields. If row/card action
-      labels repeat, `click` is intentionally ambiguous and the exercise fails; add
-      `within:'tr:has([data-label="Name"]:has-text("Record {{runId}}"))'` (or the equivalent
-      unique card-container selector) so the exact record is exercised. Bare `:has-text()` can
-      match every ancestor containing the text, not just the row. Never rely on list order or an
-      unscoped first matching action.
-
-      | After action | `expect` | `absent` |
-      |---|---|---|
-      | Create | new value | — |
-      | Edit | new value | old value |
-      | Delete | — | deleted value |
-
-      After an EDIT, put
-      the new value in `expect` AND the old value in `absent` — a surviving old value means the
-      edit inserted a duplicate. After a DELETE, put the deleted record's name/value in `absent`
-      — never assert empty-state copy or list ordering (other rows may exist; lists sort
-      alphabetically, so a shorter list is not proof of the right row leaving). This is the
-      read-back check; a failing step is a task failure. Never use global `absent` for a state word (for example "available") on a multi-row list — scope with `within:`.
+      This step is mandatory and non-skippable: read `../shared/references/exercise-authoring.md` before writing your FIRST `pal_exercise` call of the session — covering flow shape and step batching, `within:` scoping for ambiguous row/card actions, the `{{runId}}` uniqueness rule, and the create/edit/delete `expect`/`absent` table.
    7. `pal_sync_datasets` after pushing a **§8a** definition (never §8b).
    8. Before marking any UI-touching task `done`, run standalone `pal_validate` against the
       whole workspace. Require 0 diagnostics, or individually waive every remaining warning
@@ -182,7 +162,7 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
    - **Done when:** every success-condition clause has current pushed-version evidence and every warning is fixed or explicitly waived.
 6. **On pass:** first confirm there are no unhandled validation warnings from the push output
    (fixed, or each one checkpointed with a concrete reason it is safe). Then `palsync task <id> done`; `palsync checkpoint "<date>, <task id>,
-   <tool-output summary>"`; `git add -A && git commit -m "<task id>: <task name>"`; continue.
+   <tool-output summary>, session tasks: <n>/3, since last review: <m>/N"` (a `cheap`-tier task carries the previous `session tasks` value forward unchanged; `since last review` is the existing review-cadence counter); `git add -A && git commit -m "<task id>: <task name>"`; continue.
 7. **On fail:** fix and re-verify, up to TWO attempts. Still failing →
    `palsync task <id> blocked --reason "<result and required decision>" --tried "<the two attempts: literal command + error>"`. A BLOCKED exercise means the Pal result is
    unknown, never PASS or done. Do not replay after an action/click may have changed data; inspect
@@ -297,17 +277,23 @@ evidence-producing action unless the verdict is CHANGES-NEEDED. Then update stat
 start a fresh review cycle. The reviewer runs all evidence-producing tools before its final
 `REVIEW.md` write. "the exercises pass now" never permits skipping independent re-review.
 
-## Ending a session
+## Ending a session — countable handoff
 
-Stop when: all tasks `done` and pal-review returned PASS; or only `blocked`/`needs-frontier`/
-`needs-human` remain; or the user asked; or you're degrading (context pressure, repeated
-mistakes — be honest). **Prefer a proactive handoff over grinding to auto-compact:** after
-several completed tasks, or when the session feels large, finish the current task, reach a
-clean boundary (no task `in_progress`), and stop — a fresh session resuming from disk costs
-nothing; a compacted one is lossy.
+Handoff triggers, whichever comes first — three tasks `done` in this session, any
+`frontier`-tier task completing, or a task that consumed both of its verification
+retries. `cheap`-tier tasks do not increment the counter. The counter rides the
+checkpoint line (`session tasks: 2/3`), like the existing `every-N` review cadence
+so the state is on disk and a resumed session inherits it; no new CLI surface.
+Handoff = finish the current task, leave nothing `in_progress`, commit, write the
+session summary line, then stop and tell the human to start a fresh session. Where
+a subagent capability exists, dispatching the next task to a fresh subagent per
+`references/delegation.md` satisfies the handoff. Do not auto-continue via the Claude Stop hook or the Pi queue.
 
-For a proactive handoff, write this session summary before stopping. On the completion path it was
-already written before reviewer dispatch; do not rewrite it after review:
+Stop also when: all tasks `done` and pal-review returned PASS; or only
+`blocked`/`needs-frontier`/`needs-human` remain; or the user asked.
+
+For a handoff, write this session summary before stopping. On the completion path
+it was already written before reviewer dispatch; do not rewrite it after review:
 ```
 == session <n> (<date>), mode <full|lite>: <a> done, <b> blocked, <c> needs-frontier, <d> needs-human.
    Next: <task id or "review blockers / clear human gates">.

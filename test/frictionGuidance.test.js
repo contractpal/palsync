@@ -90,15 +90,19 @@ test("dataset write examples preserve the asymmetric update/delete signatures", 
 
 test("pal_exercise guidance uses precise row scope and teaches the full CRUD flow", () => {
     const loop = read("bundled-context/skills/pal-loop/SKILL.md");
+    const exercise = read("bundled-context/skills/shared/references/exercise-authoring.md");
 
-    mustMatch(loop, /tr:has\(\[data-label=["']Name["']\]:has-text\(/,
+    // Exercise authoring moved to shared reference in pal-loop trim — body now carries mandatory read; verify detail in the reference.
+    mustMatch(exercise, /tr:has\(\[data-label=["']Name["']\]:has-text\(/,
         "row-action example must scope through the identifying data-label cell");
-    mustMatch(loop, /(?:first load|initial (?:screen|view)|opens? on[^\n]*list|loads? the list)[\s\S]{0,180}(?:Add|Create)|(?:Add|Create)[\s\S]{0,180}(?:before[^\n]*fill|navigate[^\n]*form)/i,
+    mustMatch(exercise, /(?:first load|initial (?:screen|view)|opens? on[^\n]*list|loads? the list)[\s\S]{0,180}(?:Add|Create)|(?:Add|Create)[\s\S]{0,180}(?:before[^\n]*fill|navigate[^\n]*form)/i,
         "console create exercise must navigate from the initial list to the form");
-    mustMatch(loop, /After an EDIT[\s\S]{0,260}expect[\s\S]{0,160}absent/i,
+    mustMatch(exercise, /After an EDIT[\s\S]{0,260}new value[\s\S]{0,160}absence/i,
         "edit verification must require the new value and reject the old value");
-    mustMatch(loop, /After a DELETE[\s\S]{0,180}absent/i,
+    mustMatch(exercise, /After a DELETE[\s\S]{0,180}absent/i,
         "delete verification must assert the deleted value is absent");
+    mustMatch(loop, /mandatory and non-skippable[\s\S]{0,80}exercise-authoring\.md/i,
+        "pal-loop body must still route agents to the exercise-authoring reference");
 });
 
 test("pal authoring guidance prevents empty fragments and documents platform JEXL access", () => {
