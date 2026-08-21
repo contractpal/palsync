@@ -1,8 +1,29 @@
 # Verify ladder branches
 
+## Push diagnosis
+
+Use standalone `pal_validate` between edits for diagnosis, and never twice without an edit in between — same input, same output. Do not run standalone `pal_validate` immediately before `pal_push` merely to duplicate the changed-file checkpoint; the mandatory whole-workspace pre-`done` validation (step 7) is a separate completion checkpoint, not a redundant pre-push call. `pal_push` gates changed files plus narrow cross-file contracts; it blocks errors and surfaces advisory warnings.
+
+## WEB page verification
+
+`pal_fetch`/`pal_preview` with `expect:[...]` returns per-string
+found/missing, not the HTML — use `selector`/`maxChars` only when you
+truly need markup. WEB checks: `pal_fetch` or `pal_preview` with
+`expect:[the exact strings the success condition names]` → all found,
+then `pal_seo_audit` → `ok:true`, `diagnosticCount:0` (public pages).
+
 ## UI by task type
 
-UI-only: one desktop `pal_screenshot`. Behavior-only: one `pal_exercise`. Both: one of each. Merge same-page assertions into one flow. Mobile is final-review-only — but final review is refused without it (`palsync review check` requires clean desktop+mobile captures per reviewed route), so budget the mobile pass into the review phase, ahead of writing REVIEW.md. A clean capture has `renderError:null`, loaded CSS, zero pal-content audit errors, and pixel critique. Apply `../../shared/references/console-chrome-exception.md` only with quoted sample evidence.
+UI-only: one desktop `pal_screenshot`. Behavior-only: one `pal_exercise`. Both: one of each. Merge same-page assertions into one exercise flow. Mobile screenshots are final-review-only — but final review is refused without it (`palsync review check` requires clean desktop+mobile captures per reviewed route), so budget the mobile pass into the review phase, ahead of writing REVIEW.md. A clean capture has `renderError:null`, loaded CSS, zero pal-content audit errors, and pixel critique. Apply `../../shared/references/console-chrome-exception.md` only with quoted sample evidence.
+
+## UI screenshot rubric and fast re-check
+
+Inspect the desktop image against design-build's archetype rubric; if
+the audit/image exposes a failure, fix the three highest-impact issues,
+push, and re-capture. Re-run the task's behavior check after the last
+visual edit. After a single-class/attribute fix, `pal_push`; if its
+server notes are clean, skip duplicate `pal_test` and re-check with
+`pal_screenshot imageless:true`.
 
 ## Console render
 
@@ -25,3 +46,19 @@ artifacts in a returned `.agent-work-history/` run directory (`steps.json`, `bro
 returns a compact evidence summary with the path. Inspect those artifacts (browser events, accessibility
 snapshot, failure screenshot) instead of probing selectors by trial and error, and only re-run after
 reading them. Passing runs write no failure artifacts.
+
+## Datasets
+
+`pal_sync_datasets` after pushing a **§8a** definition (never §8b).
+Never provision §8b consumed datasets.
+
+## Warning waiver mechanics
+
+Fix warnings too, or checkpoint why each warning is safe for this task
+before marking it `done`; warnings are allowed to push but never
+silently ignored. Before marking any UI-touching task `done`, whole-
+workspace `pal_validate` must show 0 diagnostics, or every remaining
+warning must be individually waived in EXECUTION.md with its
+`file:line` and a concrete reason. Errors cannot be waived. **Done
+when:** every success-condition clause has current pushed-version
+evidence and every warning is fixed or explicitly waived.

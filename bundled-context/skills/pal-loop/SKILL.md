@@ -14,9 +14,7 @@ write every state change to the file the moment it happens.
 **EXECUTION.md edits go through the CLI**: `palsync task list [--ready]`,
 `palsync task <id> <status>`, `palsync checkpoint "<line>"`. Transitions to `blocked`,
 `needs-human`, or `needs-frontier` require `--reason "<why>"`; `blocked` and `needs-human` also
-require `--tried "<workaround>"` — before either status, retry the failing step once, attempt one
-alternate path, and record the literal failing command and error text in `--tried`; only then set
-the status. (`needs-frontier` is a capability call and needs no `--tried`.) These are OFFLINE local helpers —
+require `--tried "<workaround>"`. These are OFFLINE local helpers —
 the only `palsync` CLI you run from your shell (they have no MCP equivalent and touch no
 server). Everything else (push, pull, validate, test…) uses the `pal_*` MCP tools, never the
 CLI. Hand-edit the markdown only if the CLI is unavailable.
@@ -27,35 +25,19 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
 
 1. **Slim session start — frontmatter only.** Each task's requirement — ticket plus
    spliced SPEC § plus §11 NEVER — comes from `palsync task list --ready`; do not read
-   SPEC.md per task, and do not read §2 or §11 at session start — §11 arrives with every ticket and §2 arrives only when a task's `spec ref` names it (SPEC.md §9 skill manifest is the one exception: read it once per session at start, not per task). Read now:
-   SPEC.md frontmatter only (`mode`, `pal`, `review cadence`, `status`, `reality_check`,
-   `push policy`) plus SPEC.md §9 skill manifest (once per session, not per task) plus the EXECUTION.md last session summary line and Blockers (the
-   task table remains available for the readiness gate)
+   SPEC.md per task, and do not read §2 or §11 at session start — §11 arrives with every ticket and §2 arrives only when a task's `spec ref` names it.
+   Read now: SPEC.md frontmatter only (`mode`, `pal`, `review cadence`, `status`,
+   `reality_check`, `push policy`) plus SPEC.md §9 skill manifest (once per session, not per task)
+   and the EXECUTION.md last session summary line and Blockers (the task table remains
+   available for the readiness gate)
 2. **Gate — spec must be ready:**
    - `status: draft` → STOP: "The spec isn't approved — set status: approved, or run pal-spec."
    - `reality_check: blocked` → STOP. `pass` → proceed. Absent/`not_run` → check §13 for any
      unresolved `HARD FLAG`; found → STOP and list them; no §13 at all → proceed, record a
      caveat in the session summary.
-3. **Reviewer-dispatch preflight at Build Plan time:** before starting any task, perform a
-   lightweight fresh-context reviewer dispatch preflight. Confirm the subagent/session
-   mechanism is available and the review provider credentials are present. If either check
-   fails, add a Blockers entry prefixed `HUMAN GATE:` with the exact failure and surface it
-   now; do not burn the full build before discovering that independent review cannot run.
-4. **Environment doctor:** run `palsync doctor` from your shell — it is offline,
-   non-interactive, and always exits 0, so it is safe to call unconditionally. Print only the
-   non-ok rows (warn/fail) in your session-start note; skip the ok rows entirely. A fail row
-   that blocks the build (e.g. Node below the minimum) becomes a Blockers entry.
-5. Not a git repo → `git init && git add -A && git commit -m "loop start"`. Commit after every
-   task. **git is a LOCAL checkpoint only** — the server is the source of truth; `git
-   checkout` does NOT undo a pushed change (recovery: "On fail" below). Never push this repo.
-6. **Load exactly the skills SPEC.md §9 lists, just in time.** §9 is the manifest — don't
-   guess it (it may include palbuilder-workflow, palbuilder-data, or palbuilder-realtime).
-   Load a listed skill when the first task requiring it starts, not all before coding.
-   palbuilder-frontend and design-build still load before the first UI task. The restraint ladder below is the default discipline on every task.
-7. `pal_status`. Server newer than your last pull → `pal_pull` first.
-8. **Smoke-test before picking work:** `pal_validate`, plus `pal_test` on the workflow the
-   Checkpoints show as last touched — a prior session can leave the workspace broken despite
-   what EXECUTION.md says. Either fails → fix that first.
+
+This step is mandatory and non-skippable: read `references/session-start.md` at session start,
+before the first task.
 
 ## The task cycle (repeat until done or blocked)
 
@@ -87,20 +69,12 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
      ```
      Leave file-entry `content` empty; `pal_push` fills it from disk. After adding a CREATE
      dataset schema, run `pal_sync_datasets`; never provision §8b consumed datasets.
-   - Foundation task (T1): use bash `cp` to copy the matching pal-type template files and the
-     runtime shell/styles plus ONLY the behavior scripts with real consumers in current markup;
-     add a script later when a task introduces its consumer. Replace `{{PAL_NAME}}`/`YOUR-DOMAIN`
-     placeholders, then adapt; author `styles/styles.css` from selected design-system rules.
-     For console pals establish the `run()` skeleton from the copied template.
-   - Copy: **§4**, verbatim — these exact words ship.
-   - Layout: **§6** composition, styled via **design-build** (the spec carries no colors/fonts).
-   - SEO head values: **§7** (web only).
-   - Schemas: **§8a** (CREATE). **§8b** datasets are CONSUMED, read-only — never create or
-     alter one; before reading it, confirm its §8b fields exist live (`pal_status`/a read
-     action) — a missing field is a blocker.
-   - Before writing, trace the touched flow and stop at the first rung that holds: (1) YAGNI — do not build it; (2) reuse an existing fragment/function/dataset/class; (3) use a supported `c:` tag or platform API; (4) use an already sanctioned capability; (5) write the minimum readable ES3-compatible solution. Touch only named files.
-   - Ladder adapted from Dietrich Gebert's ponytail; assumption discipline from Andrej Karpathy's LLM-coding-pitfalls guidance.
-   - After a multi-block edit call, re-read the changed region before pushing when the harness does not report expected-vs-actual replacement counts. On non-Claude harnesses, keep one logical change per edit call.
+   - This step is mandatory and non-skippable: read `references/execute.md` before
+     executing the task's build procedure (template copy, §4/§6/§7/§8 mapping, restraint
+     ladder, and multi-block re-read).
+   - **§8b** datasets are CONSUMED, read-only — never create or alter one; before reading a §8b dataset, confirm its §8b fields exist live (`pal_status` or a read action) — a missing field is a blocker.
+   - Follow the restraint ladder — reuse before building, platform before hand-rolled,
+     minimum that works.
    - **Structural tools — `pal_impact` and `pal_ast`:**
       - `pal_impact` is mandatory before editing an existing page or fragment that
         other files reference; silent for new files.
@@ -112,7 +86,7 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
         by one `pal_push`; never use `apply:true` for a copy or design change —
         those are §4/§6 edits, not codemods.
    - **Done when:** the smallest spec-traceable change is present and the changed region was re-read.
-5. **Verify** against the success condition with tool outputs, not opinion. Before UI or exercise verification, read `references/verify-ladder.md` (especially §Exercise authoring before writing steps). Offline first, so
+5. **Verify** against the success condition with tool outputs, not opinion. Before UI or exercise verification, read `references/verify-ladder.md` for verification mechanics — push diagnosis, WEB `expect`/`selector` guidance, UI rubric and `imageless` re-check, and waiver detail — especially §Exercise authoring before writing steps. Offline first, so
    a bad result never reaches the server. **Batch every edit for the task first, then verify
    once — target ONE `pal_push` per task, never push per-file:**
    1. `pal_push` directly (push policy `checkpoint` → ask the user first). Push gates the files
@@ -121,28 +95,18 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       immediately before this push merely to duplicate that changed-file checkpoint. Push must
       return `ok:true` and `diagnosticCount:0`. Fix warnings too, or checkpoint why each warning
       is safe for this task before marking it `done`; warnings are allowed to push but never
-      silently ignored. Use standalone `pal_validate` between edits for diagnosis, and never
-      twice without an edit in between — same input, same output. The mandatory whole-workspace
-      pre-`done` validation below is a separate completion checkpoint, not a redundant pre-push
-      call.
+      silently ignored.
    2. `pal_test` once per task, after that task's final push → `ok:true`, `diagnosticCount:0` —
       the real server compile (console AND web). Read `messages` too (whole-test failures like
       "Pal is not a Web Pal" live there).
    3. WEB page: `pal_fetch` or `pal_preview` with `expect:[the exact strings the success
-      condition names]` → all found. (This returns per-string found/missing, not the HTML —
-      use `selector`/`maxChars` only when you truly need markup.) Then `pal_seo_audit` →
+      condition names]` → all found. Then `pal_seo_audit` →
       `ok:true`, `diagnosticCount:0` (public pages).
    4. **UI verification by task type:** UI-only task → one desktop `pal_screenshot`; behavior-only
       task → one `pal_exercise`; a task changing both → one desktop screenshot and one exercise.
-      Merge same-page assertions into one exercise flow. Mobile screenshots are final-review-only
-      (pal-review owns the desktop + mobile pair), not per-task. Screenshots must
+      Screenshots must
       have `renderError:null`, fully loaded CSS, and zero pal-content design-audit errors. Console
-      screenshots can include platform-chrome outside `#cp-root`; apply only the evidence-gated exceptions in `../shared/references/console-chrome-exception.md`.
-      Inspect the desktop image
-      against design-build's archetype rubric; if the audit/image exposes a failure, fix the
-      three highest-impact issues, push, and re-capture. Re-run the task's
-      behavior check after the last visual edit. A screenshot file path without pixel critique is
-      not review evidence. After a single-class/attribute fix, `pal_push`; if its server notes are clean, skip duplicate `pal_test` and re-check with `pal_screenshot imageless:true`.
+      screenshots can include platform-chrome outside `#cp-root`; apply only the evidence-gated exceptions in `../shared/references/console-chrome-exception.md`. A screenshot file path without pixel critique is not review evidence.
    5. CONSOLE screen: `pal_test` proves it compiles; the RENDER needs `pal_screenshot`:
       - `captured:true` + `renderError` non-null → hard FAIL.
       This step is mandatory and non-skippable: read `references/verify-ladder.md` (Console render) before handling `captured`/`renderError` branch recovery.
@@ -153,8 +117,7 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
       its value from visible state. For example, if check-in sets `status = available` and
       clears `checkedOutAt`, assert both fields after check-in, not only the rendered status.
       This step is mandatory and non-skippable: read `../shared/references/exercise-authoring.md` before writing your FIRST `pal_exercise` call of the session — covering flow shape and step batching, `within:` scoping for ambiguous row/card actions, the `{{runId}}` uniqueness rule, and the create/edit/delete `expect`/`absent` table.
-   7. `pal_sync_datasets` after pushing a **§8a** definition (never §8b).
-   8. Before marking any UI-touching task `done`, run standalone `pal_validate` against the
+   7. Before marking any UI-touching task `done`, run standalone `pal_validate` against the
       whole workspace. Require 0 diagnostics, or individually waive every remaining warning
       in EXECUTION.md with its `file:line` and a concrete reason. Errors cannot be waived.
    - `pal_preview`/`pal_fetch`/`pal_exercise`/`pal_seo_audit`/`pal_test` all act on the LAST
@@ -175,26 +138,15 @@ CLI. Hand-edit the markdown only if the CLI is unavailable.
 - `end`: no pauses — run to completion.
 - `each-task`: after each done task, report it (what shipped + step-5 evidence) and **wait for
   the human's go-ahead** — don't self-approve.
-- `every-N`: track a counter on the checkpoint line (`since last review: 2/3`); at N, pause
-  like `each-task` (report every task since the last pause), reset. Below N, continue.
+- `every-N`: pauses at N — `since last review: <n>/N` counter on the checkpoint line.
 This is independent of the push `checkpoint` gate (per-push) and the pal-review handoff
 (always runs at completion).
 
 ### Brownfield regression re-check (only if `baseline/` exists)
 Runs at each review-cadence pause and always at the build-completion handoff — NOT per-task
 (step 5 already catches immediate breakage).
-- **Run `pal_regression`** and act on its structured result. It does the whole mechanical
-  check: freshness gate (stale → returns `{stale}`; set `needs-human`, re-run pal-init Step 3),
-  validate/`pal_test`/page-`h1s` vs `baseline.json`, `eyeball_only` viewports → `needs_human`,
-  inherited (`known_issues`) vs caused split. `caused` empty → pass. `inherited`/`needs_human`
-  never block.
-- **A `caused` failure → bisect for the culprit** (the break may have ridden through several
-  committed tasks):
-  1. Start at the last commit where this check passed.
-  2. Walk per-task commits forward, re-running the SAME failing check against each commit's
-     file state (`git show <sha>:<path>` — read-only inspection, never a rewrite).
-  3. First failing commit → that commit's task is the culprit.
-  4. Reopen and `block` THAT task, citing the baseline comparison and the culprit commit.
+- **Run `pal_regression`** and act on its structured result — `caused` empty → pass;
+  `inherited`/`needs_human` never block.
 
 ### Mode (full | lite)
 - **full:** a §5 behavior shipped without its specced edge-case handling, or any unmet §12
@@ -248,25 +200,8 @@ fresh eyes are the point.
 Trigger: every task `done`, or every remaining task is a `blocked`/`needs-frontier`/
 `needs-human` the human accepted as parked.
 
-1. `baseline/` exists → run the regression re-check above, unconditionally.
-2. Cost recording — IF harness is claude-code THEN skip `palsync cost record` (agent cannot read its own spend); IF pi THEN run `palsync cost record --model <model> --phase <build|review>` using the user-supplied footer figures.
-3. Write the final session summary/checkpoint now, before review. A proactive mid-build handoff also
-   writes its summary normally but does not invoke review.
-4. Run `palsync review brief`, then **dispatch pal-review in a fresh session/subagent** with its
-   EVIDENCE LEDGER output, SPEC.md, EXECUTION.md, DESIGN_SYSTEM.md/COMPONENTS.md, `baseline/`
-   (if any), and the pal's identity so it can `pal_fetch`/`pal_screenshot`/`pal_test` the real
-   artifacts.
-5. **Reviewer says PASS** → run `palsync completion check` yourself in the workspace. Missing or
-   stale `REVIEW.md`, missing source-bound behavior evidence when §5/action/happy-path rows declare
-   behavior, or any `result: FAIL` means the build is not complete. Claude blocks Stop, Pi queues a
-   corrective follow-up, and other harnesses call this same CLI gate manually.
-6. **CHANGES-NEEDED** → append each `## Fix tasks` item as a new EXECUTION.md task (next id,
-   `spec ref` from the finding, `depends` per stated order, `todo`, tier `standard` unless it
-   needs new structure); resume the task cycle on exactly those tasks.
-7. **Re-review** when the fix tasks are `done`; repeat until PASS. Every review pass, including a
-   re-review after fixes, overwrites `REVIEW.md` with that pass's new verdict, its own complete
-   `palsync review check` output, and fresh evidence. Chat-only verdicts are invalid. A `needs-human` verdict
-   (console eyeball gate) routes like any other `needs-human` task, not a failure.
+This step is mandatory and non-skippable: read `references/handoff.md` at build completion,
+before dispatching pal-review.
 
 The build session may fix review findings, but it may **never convert its own fixes into PASS**.
 Every CHANGES-NEEDED cycle ends with another fresh pal-review dispatch and a new REVIEW.md verdict;
