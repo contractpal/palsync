@@ -42,7 +42,78 @@ function parseSpec(text) {
             sections[cur.num] = cur;
         } else if (cur) cur.bodyLines.push({ line: i + 1, text: ln });
     });
+    // Addressable subsections: a ### <n><letter> heading inside a numbered
+    // section creates an extra entry keyed "n<letter>" (e.g. 8a, 8b) while
+    // the parent section keeps its full body unchanged.
+    const parents = Object.values(sections);
+    for (const parent of parents) {
+        const heads = [];
+        parent.bodyLines.forEach((b, idx) => {
+            const t = b.text.trim();
+            const m = t.match(/^###\s*(\d+)([a-zA-Z])\b/);
+            if (m) {
+                const n = Number(m[1]);
+                if (n !== parent.num) return;
+                const key = String(n) + m[2].toLowerCase();
+                const title = t.replace(/^###\s*\d+[a-zA-Z]\b[\s.]*/, "").trim();
+                heads.push({ idx, key, title, line: b.line });
+            }
+        });
+        for (let hi = 0; hi < heads.length; hi++) {
+            const head = heads[hi];
+            const nextIdx = hi + 1 < heads.length ? heads[hi + 1].idx : parent.bodyLines.length;
+            const slice = parent.bodyLines.slice(head.idx + 1, nextIdx);
+            sections[head.key] = {
+                num: head.key,
+                title: head.title,
+                start: head.line + 1,
+                end: nextIdx < parent.bodyLines.length ? parent.bodyLines[nextIdx].line - 1 : parent.end,
+                bodyLines: slice.slice(),
+                parent: parent.num
+            };
+        }
+    }
     return { lines, sections };
+}
+
+// --- spec ref token handling (resolver exported for taskState) ---
+function normalizeSpecRefToken(raw) {
+    const s = String(raw).trim();
+    if (!s) return null;
+    let t = s;
+    if (t.charAt(0) === "\u00A7") t = t.slice(1).trim();
+    if (!/^\d+[a-zA-Z]?$/.test(t)) return null;
+    return t.toLowerCase();
+}
+
+function resolveSpecSection(parsed, token) {
+    const norm = normalizeSpecRefToken(token);
+    if (!norm) return null;
+    const secs = parsed && parsed.sections ? parsed.sections : parsed;
+    if (!secs) return null;
+    if (Object.prototype.hasOwnProperty.call(secs, norm)) return secs[norm];
+    const asNum = Number(norm);
+    if (!isNaN(asNum) && Object.prototype.hasOwnProperty.call(secs, asNum)) return secs[asNum];
+    return null;
+}
+
+function resolveSpecRefs(parsed, refString) {
+    const input = String(refString == null ? "" : refString);
+    const parts = input.split(",");
+    const resolved = [];
+    for (let raw of parts) {
+        const trimmed = raw.trim();
+        if (!trimmed) {
+            return { ok: false, token: String(refString).trim(), error: `Malformed spec ref "${String(refString).trim()}" \u2014 empty component between commas` };
+        }
+        const sec = resolveSpecSection(parsed, trimmed);
+        if (!sec) return { ok: false, token: trimmed, error: `Unresolvable spec ref "${trimmed}"` };
+        resolved.push(sec);
+    }
+    if (resolved.length === 0) {
+        return { ok: false, token: String(refString).trim(), error: `Spec ref "${String(refString).trim()}" does not resolve to any SPEC.md section` };
+    }
+    return { ok: true, sections: resolved };
 }
 
 // Parse markdown table rows in a set of body lines -> [{ line, cells: [...] }] (separator rows dropped).
@@ -186,12 +257,78 @@ function lintSpec(text, { workspaceDir, hasMap } = {}) {
         }
     }
 
+    // F. EXECUTION.md spec ref tokens must resolve to a real SPEC.md section.
+    // EXECUTION.md does not exist when the linter runs in pal-spec Step 5
+    // (written in Step 6), so its absence is not a finding.
+    if (workspaceDir) {
+        const execPath = path.join(workspaceDir, "EXECUTION.md");
+        let execText = null;
+        try {
+            if (fs.existsSync(execPath)) execText = fs.readFileSync(execPath, "utf8");
+        } catch (e) { /* ignore */ }
+        if (execText !== null) {
+            const exec = parseExecutionTasks(execText);
+            if (exec.ok) {
+                for (const row of exec.rows) {
+                    const raw = row.specRefRaw;
+                    if (!raw || /^[\u2014\-\s]*$/.test(raw)) continue;
+                    const parts = raw.split(",");
+                    for (let tokRaw of parts) {
+                        const tok = tokRaw.trim();
+                        if (!tok) {
+                            // bundled-context/skills/pal-spec/references/execution-template.md:15-17 — every task names at least one spec ref
+                            add("HARD_FLAG", "EXECUTION.md", row.line,
+                                `Task ${row.id} spec ref "${raw.trim()}" has an empty component between commas.`,
+                                `Fix the spec ref list \u2014 remove the empty component (e.g. "\u00A74,,\u00A76" -> "\u00A74,\u00A76").`);
+                            break;
+                        }
+                        const sec = resolveSpecSection({ sections }, tok);
+                        if (!sec) {
+                            // bundled-context/skills/pal-spec/references/execution-template.md:15-17 — every task names at least one spec ref
+                            add("HARD_FLAG", "EXECUTION.md", row.line,
+                                `Task ${row.id} spec ref "${tok}" does not resolve to a SPEC.md section.`,
+                                `Fix the spec ref to a valid section (e.g. \u00A74, \u00A78b) or add the missing SPEC.md section.`);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     const counts = {
         HARD_FLAG: findings.filter(f => f.severity === "HARD_FLAG").length,
         FLAG: findings.filter(f => f.severity === "FLAG").length,
         NOTE: findings.filter(f => f.severity === "NOTE").length
     };
     return { findings, counts, mapPresent };
+}
+
+function parseExecutionTasks(text) {
+    const lines = text.split(/\r?\n/);
+    let inTasks = false;
+    let cols = null;
+    const rows = [];
+    for (let i = 0; i < lines.length; i++) {
+        const t = lines[i].trim();
+        if (/^##\s+Tasks\b/i.test(t)) { inTasks = true; continue; }
+        if (inTasks && /^##\s+/.test(t)) break;
+        if (!inTasks) continue;
+        if (t.charAt(0) !== "|") continue;
+        if (/^\|[\s:|-]+\|?\s*$/.test(t)) continue;
+        const cells = t.replace(/^\|/, "").replace(/\|\s*$/, "").split("|").map(c => c.trim());
+        if (!cols) {
+            const idx = re => cells.findIndex(c => re.test(c));
+            cols = { id: idx(/^id$/i), specRef: idx(/spec\s*ref/i) };
+            if (cols.id === -1) return { ok: false };
+            continue;
+        }
+        const id = cells[cols.id] || "";
+        if (!id) continue;
+        const specRefRaw = cols.specRef >= 0 ? (cells[cols.specRef] || "") : "";
+        rows.push({ id, specRefRaw, line: i + 1 });
+    }
+    if (!cols) return { ok: false };
+    return { ok: true, rows };
 }
 
 function formatSpecLint(result) {
@@ -205,4 +342,4 @@ function formatSpecLint(result) {
     return lines.join("\n");
 }
 
-module.exports = { lintSpec, formatSpecLint, parseSpec, STORED_TYPES, PICKER_LABEL_TO_STORED, NON_INDEXABLE };
+module.exports = { lintSpec, formatSpecLint, parseSpec, bodyText, normalizeSpecRefToken, resolveSpecSection, resolveSpecRefs, STORED_TYPES, PICKER_LABEL_TO_STORED, NON_INDEXABLE };

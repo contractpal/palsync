@@ -8,6 +8,7 @@
 // push acquires the pal lock (the server requires it to save) and releases it afterwards by
 // default, since there is no session to keep holding it; --keep-lock leaves it held (e.g. when
 // you're about to relaunch palsync and want to stay the holder).
+const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 const { buildContext } = require("../mcp/context");
@@ -53,7 +54,7 @@ const USAGE = [
     "  palsync completion check [--dir <workspace>]                Enforce all-done independent review or allow a reasoned handoff (offline)",
     "  palsync regression [--keep-lock] [--dir <ws>]                Brownfield regression vs baseline/baseline.json (freshness -> validate/test/H1; caused vs inherited)",
     "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Mechanical reality-check of a SPEC.md (offline): placeholders, dead links, §8a types, §12 floor",
-    "  palsync task list [--ready] [--dir <ws>]                     List EXECUTION.md tasks; --ready prints the first todo whose depends are all done",
+    "  palsync task list [--ready] [--dir <ws>]                     List EXECUTION.md tasks; --ready prints the ready ticket plus its spec ref sections and \u00A711",
     "  palsync task <id> <status> [--reason \"<why>\"] [--tried \"<workaround>\"] [--dir <ws>]",
     "                                                               Set one task status; --reason is required for blocked|needs-frontier|needs-human,",
     "                                                               --tried (the automated workaround you attempted) also for blocked|needs-human",
@@ -192,13 +193,22 @@ async function runTaskCommand(cmd, argv) {
     }
     // cmd === "task"
     if (pos.length === 0 || pos[0] === "list") {
-        const r = ts.listTasks(text, { ready });
-        if (!r.ok) { console.error("task list failed: " + r.error); return 1; }
         if (ready) {
-            if (!r.next) { console.log("No ready task — every todo is blocked by an unfinished dependency, or none remain."); return 1; }
-            console.log(r.next.id + "\t" + r.next.status + "\t" + r.next.task);
+            const specFile = path.join(path.resolve(dir), "SPEC.md");
+            let specText;
+            try { specText = fs.readFileSync(specFile, "utf8"); }
+            catch (e) { specText = null; }
+            const rendered = ts.renderReadyTicket(text, specText);
+            if (!rendered.ok) {
+                if (rendered.noReady) { console.log(rendered.error); return 1; }
+                console.error(rendered.error);
+                return 1;
+            }
+            process.stdout.write(rendered.ticket);
             return 0;
         }
+        const r = ts.listTasks(text, { ready });
+        if (!r.ok) { console.error("task list failed: " + r.error); return 1; }
         for (const t of r.tasks) console.log(t.id + "\t" + t.status + "\t" + (t.depends.length ? "depends:" + t.depends.join(",") : "—") + "\t" + t.task);
         return 0;
     }

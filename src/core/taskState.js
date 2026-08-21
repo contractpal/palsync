@@ -7,6 +7,7 @@
 // The parser tolerates the template's real shape: an optional |---| separator row, columns in any
 // order (identified by header text, not position), and "—"/"-"/blank in depends.
 const fs = require("fs");
+const { parseSpec, bodyText, resolveSpecRefs } = require("./specLint");
 
 const STATUSES = ["todo", "in_progress", "done", "blocked", "needs-frontier", "needs-human"];
 const BLOCKED_STATUSES = ["blocked", "needs-frontier", "needs-human"];
@@ -37,7 +38,7 @@ function parseTasks(text) {
         if (!cols) {
             // First |-row inside ## Tasks is the header — map column names to indices.
             const idx = (re) => cells.findIndex(c => re.test(c));
-            cols = { id: idx(/^id$/i), task: idx(/task/i), status: idx(/status/i), depends: idx(/depend/i) };
+            cols = { id: idx(/^id$/i), task: idx(/task/i), status: idx(/status/i), depends: idx(/depend/i), tier: idx(/^tier$/i), specRef: idx(/spec\s*ref/i), success: idx(/success/i) };
             if (cols.id === -1 || cols.status === -1) return { ok: false, error: "Tasks table header has no 'id' and/or 'status' column (found: " + cells.join(" | ") + ")." };
             headerIdx = i;
             continue;
@@ -46,7 +47,11 @@ function parseTasks(text) {
         if (!id) continue; // skip a stray/blank row rather than treat it as a task
         const depRaw = cols.depends >= 0 ? (cells[cols.depends] || "") : "";
         const depends = /^[—\-\s]*$/.test(depRaw) ? [] : depRaw.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
-        rows.push({ lineIndex: i, cells, id, status: cells[cols.status] || "", depends });
+        const tier = cols.tier >= 0 ? (cells[cols.tier] || "") : "";
+        const specRef = cols.specRef >= 0 ? (cells[cols.specRef] || "") : "";
+        const successCondition = cols.success >= 0 ? (cells[cols.success] || "") : "";
+        const task = cols.task >= 0 ? (cells[cols.task] || "") : "";
+        rows.push({ lineIndex: i, cells, id, status: cells[cols.status] || "", depends, tier, specRef, successCondition, task });
     }
     // missingSection distinguishes "this workspace does not use task tracking at all" from "it does
     // but the table is broken". Only the latter is actionable by the agent, so only the latter may
@@ -73,7 +78,55 @@ function listTasks(text, { ready = false } = {}) {
     if (!ready) return { ok: true, tasks: p.rows.map(r => ({ id: r.id, status: r.status, depends: r.depends, task: p.cols.task >= 0 ? r.cells[p.cols.task] : "" })) };
     const doneIds = new Set(p.rows.filter(r => r.status === "done").map(r => r.id));
     const next = p.rows.find(r => r.status === "todo" && r.depends.every(d => doneIds.has(d)));
-    return { ok: true, ready: true, next: next ? { id: next.id, status: next.status, depends: next.depends, task: p.cols.task >= 0 ? next.cells[p.cols.task] : "" } : null };
+    if (!next) return { ok: true, ready: true, next: null };
+    return { ok: true, ready: true, next: { id: next.id, status: next.status, depends: next.depends, tier: next.tier || "", specRef: next.specRef || "", task: next.task || "", successCondition: next.successCondition || "" } };
+}
+
+// Pure render: (EXECUTION.md text, SPEC.md text) -> printable ready-ticket string.
+// Handles all ready-ticket failures explicitly so the CLI never prints a partial ticket.
+function renderReadyTicket(execText, specText) {
+    if (specText == null || typeof specText !== "string" || String(specText).trim() === "") {
+        return { ok: false, error: "SPEC.md is missing or empty \u2014 cannot render ready ticket. Ensure SPEC.md exists in the workspace.", kind: "missingSpec" };
+    }
+    const r = listTasks(execText, { ready: true });
+    if (!r.ok) return { ok: false, error: r.error };
+    if (!r.next) return { ok: false, error: "No ready task \u2014 every todo is blocked by an unfinished dependency, or none remain.", noReady: true };
+    const next = r.next;
+    const parsedSpec = parseSpec(specText);
+    const sec11 = parsedSpec.sections[11];
+    if (!sec11) {
+        return { ok: false, error: "SPEC.md is missing \u00A711 Constraints (NEVER) \u2014 cannot render ready ticket. Every ticket must include \u00A711.", kind: "missingNever" };
+    }
+    const rawRef = next.specRef || "";
+    let refSections = [];
+    if (rawRef && !/^[\u2014\-\s]*$/.test(rawRef)) {
+        const res = resolveSpecRefs(parsedSpec, rawRef);
+        if (!res.ok) {
+            return { ok: false, error: "Task " + next.id + " spec ref \"" + res.token + "\" does not resolve to a SPEC.md section.", taskId: next.id, token: res.token, kind: "badRef" };
+        }
+        refSections = res.sections;
+    }
+    let out = "";
+    out += "id: " + next.id + "\n";
+    out += "status: " + next.status + "\n";
+    out += "tier: " + (next.tier || "\u2014") + "\n";
+    out += "depends: " + (next.depends.length ? next.depends.join(", ") : "\u2014") + "\n";
+    out += "spec ref: " + (next.specRef || "\u2014") + "\n";
+    out += "task: " + (next.task || "") + "\n";
+    out += "success condition: " + (next.successCondition || "\u2014") + "\n";
+    for (const sec of refSections) {
+        const body = bodyText(sec);
+        out += "\n--- SPEC \u00A7" + sec.num + " ---\n";
+        out += body;
+        if (body.charAt(body.length - 1) !== "\n") out += "\n";
+    }
+    if (sec11) {
+        const body11 = bodyText(sec11);
+        out += "\n--- SPEC \u00A711 ---\n";
+        out += body11;
+        if (body11.charAt(body11.length - 1) !== "\n") out += "\n";
+    }
+    return { ok: true, ticket: out, next };
 }
 
 // set exactly one task's status. Returns { ok, text } or { ok:false, error }.
@@ -200,6 +253,6 @@ function setStatusWithReason(text, id, status, reason, tried) {
 function readExecution(file) { return fs.readFileSync(file, "utf8"); }
 function writeExecution(file, text) { fs.writeFileSync(file, text, "utf8"); }
 
-module.exports = { STATUSES, BLOCKED_STATUSES, TRIED_STATUSES, MAX_BLOCKER_REASON, parseTasks, listTasks, setStatus,
+module.exports = { STATUSES, BLOCKED_STATUSES, TRIED_STATUSES, MAX_BLOCKER_REASON, parseTasks, listTasks, renderReadyTicket, setStatus,
     setStatusWithReason, appendCheckpoint, blockerReasons, terminalReasonState, normalizeBlockerReason,
     replaceCell, readExecution, writeExecution };
