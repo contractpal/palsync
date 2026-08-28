@@ -146,6 +146,10 @@ freshness: regenerate or update if pal_status shows the server moved since `mapp
 | name | kind | over which datasets | used by |
 ### Loaded libraries (c:resource)
 <bootstrap x.y, jquery, chartjs, ... — only what's actually loaded>
+### CloudPiston Resource usage (inferred — see palbuilder-core/references/pal-chain.md)
+<which cloudpiston/... includes/scripts/fragments are actually referenced (lib-ui, lib-paging,
+validation.js, etc.), or "not used" if nothing under cloudpiston/ is referenced anywhere. Match
+this when adding new UI — don't introduce it in passing, and don't ask the developer; infer.>
 
 ## Conventions (discovered — what new work must match)
 - Naming: <file/workflow/dataset naming patterns observed>

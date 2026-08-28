@@ -637,6 +637,32 @@
     ]
   },
   {
+    "name": "pal_resources",
+    "title": "Refresh chain resources",
+    "description": "Refresh .resources/ from the server's GET_CHAIN: every pal in this pal's chain (module dependencies, resource pals, and cloud-wide system pals such as CloudPiston Resource) extracted read-only, one folder per chain pal (pages/fragments/workflows/etc., same shape as a pulled pal). Runs automatically at session start; call this again only if a chain pal (e.g. CloudPiston Resource) may have changed server-side, or the chain itself changed (a module was attached/detached). Never edit files under .resources/ — they are not part of this pal and are wiped and rewritten on every refresh.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    },
+    "groups": [
+      "sync",
+      "project"
+    ],
+    "keywords": [
+      "resources",
+      "chain",
+      "module",
+      "cloudpiston",
+      "cpresource"
+    ]
+  },
+  {
     "name": "pal_ast",
     "title": "Search and rewrite code structure",
     "description": "Syntax-aware STRUCTURAL search + conservative rewrite over the 14 manifest folders via the pinned ast-grep binary. Matches code SHAPES, not text: exact strings + $VAR/$$$ metavariables only; regex and plain-text search are grep/read territory (refused). lang: html|javascript|css|json. search returns file:line + matched text for whole matched nodes (bare patterns reach element TEXT, never attribute interiors). rewrite returns a dry-run diff; apply:true writes byte-identically, only inside the manifest folders (pal.json/.palsync.json never written; maxFiles overruns and preview drift refused) and lints ONLY the written files, advisory.",

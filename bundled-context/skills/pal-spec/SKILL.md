@@ -89,7 +89,10 @@ came from.
   order + which named component fills each slot + hierarchy/primary action/progressive disclosure
   notes. Confirm every new-pal page shell follows `../shared/references/css-conventions.md`; `pb-charts.js` is optional when charts are used. Use the approved inline SVG icon guidance in
   `design-system-init/references/component-library.md`. No colors/fonts. Do not
-  retrofit `styles.css` into an existing pal that lacks it.
+  retrofit `styles.css` into an existing pal that lacks it. Also ask now whether to use
+  CloudPiston Resource (`palbuilder-core/references/pal-chain.md`) for the UI elements it
+  already covers — modals, toasts, inline alerts, form validation, paging, image upload — before
+  designing bespoke versions of any of them. Always ask on a new pal; don't assume.
 - **SEO** *(usually web; a publicly indexed console landing/login page can qualify; never a
   webservice/tunnel action)* — Q16 Domain? Per §3 page: publicly indexable? Target phrase for
   each page that is (propose from approved copy).

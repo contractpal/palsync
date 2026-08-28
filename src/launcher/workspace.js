@@ -15,6 +15,7 @@ const os = require("os");
 const { pull } = require("../core/pull");
 const { push } = require("../core/push");
 const lock = require("../core/lock");
+const { fetchAndExtract } = require("../core/resources");
 const contextInject = require("./contextInject");
 const palsyncfile = require("../core/palsyncfile");
 const { register } = require("../mcp/register");
@@ -165,6 +166,21 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
         throw new Error("Could not lock \"" + sel.pal.name + "\" (" + (lk.blocked || "unknown") + "). Unlock and close it in PalBuilder, then re-run palsync.");
     }
 
+    // Fetch the pal's chain (module dependencies, resource pals, CloudPiston Resource, etc.) into
+    // .resources/ so the agent has the full in-scope code available from the start of the session,
+    // not just on request. Best-effort: most pals have a chain, but a pal with none, or a transient
+    // failure, must never block session setup.
+    log("fetching pal chain (.resources/)");
+    let resources;
+    try {
+        resources = await fetchAndExtract(session, lk.resolved, workspaceDir);
+        if (resources.ok) log("  extracted " + resources.entries.length + " chain resource(s): " + resources.entries.map(e => e.slug).join(", "));
+        else log("  chain fetch skipped: " + resources.reason);
+    } catch (e) {
+        resources = { ok: false, reason: e && e.message ? e.message : String(e) };
+        log("  chain fetch failed (non-fatal): " + resources.reason);
+    }
+
     // CLAUDE.md is not wiped by pull (sync only touches files inside the 14 manifest folders
     // + pal.json) — inject() reads the user's existing CLAUDE.md and merges its managed block
     // in place.
@@ -215,6 +231,7 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
         preserved,
         locked: lk.acquired,
         lockHolder: lk.holder,
+        resources,
         injected,
         agent,
         mcpConfig: reg.filePath || null,   // .mcp.json path (Claude) or null (Codex uses its own config)

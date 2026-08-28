@@ -33,6 +33,7 @@ const { onDemandSyncSections } = require("../launcher/contextInject");
 const { routeItems } = require("../core/piHelpers");
 const { openUrl } = require("../platform/openUrl");
 const { run: runAst, envelopeProjection: astEnvelopeProjection } = require("../core/palAst");
+const { fetchAndExtract } = require("../core/resources");
 const {
     createWorkHistoryRun,
     writeArtifactFile,
@@ -1526,6 +1527,23 @@ const TOOLS = [
         }
     },
     {
+        name: "pal_resources",
+        description: "Refresh .resources/ from the server's GET_CHAIN: every pal in this pal's chain (module dependencies, resource pals, and cloud-wide system pals such as CloudPiston Resource) extracted read-only, one folder per chain pal (pages/fragments/workflows/etc., same shape as a pulled pal). Runs automatically at session start; call this again only if a chain pal (e.g. CloudPiston Resource) may have changed server-side, or the chain itself changed (a module was attached/detached). Never edit files under .resources/ — they are not part of this pal and are wiped and rewritten on every refresh.",
+        inputShape: {},
+        async run(ctx) {
+            const resolved = await resolveServerPalByGuid(ctx.session, ctx.record.palGuid);
+            if (!resolved) return { ok: false, message: "Could not resolve this pal on the server." };
+            const res = await fetchAndExtract(ctx.session, resolved, ctx.workspaceDir);
+            if (!res.ok) return Object.assign(res, { message: "Chain fetch did not complete: " + res.reason });
+            return Object.assign(res, {
+                message: res.entries.length
+                    ? "Extracted " + res.entries.length + " chain resource(s) to .resources/:\n" +
+                      res.entries.map(e => "   - " + e.slug + (e.name ? " (" + e.name + ")" : "") + (e.module ? " [module]" : "") + " — " + e.files + " file(s)").join("\n")
+                    : "No chain resources found for this pal."
+            });
+        }
+    },
+    {
         name: "pal_ast",
         description: "Syntax-aware STRUCTURAL search + conservative rewrite over the 14 manifest folders via the pinned ast-grep binary. Matches code SHAPES, not text: exact strings + $VAR/$$$ metavariables only; regex and plain-text search are grep/read territory (refused). lang: html|javascript|css|json. search returns file:line + matched text for whole matched nodes (bare patterns reach element TEXT, never attribute interiors). rewrite returns a dry-run diff; apply:true writes byte-identically, only inside the manifest folders (pal.json/.palsync.json never written; maxFiles overruns and preview drift refused) and lints ONLY the written files, advisory.",
         needsCtx: false,
@@ -1940,6 +1958,7 @@ const TOOLS = [
 const TOOL_HINTS = {
     pal_context: ["Load PalSync context", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_impact: ["Inspect local structural impact", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_resources: ["Refresh chain resources", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
     pal_ast: ["Search and rewrite code structure", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
     pal_status: ["Report pal status", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_validate: ["Validate pal code", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],

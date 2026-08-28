@@ -52,6 +52,17 @@ Read when:
 - Working out subfolder conventions within `workflows/` (`defaults/`, `others/`, `libs/`)
 - Interpreting whether a file's `workflowType` matches its filename and folder (they can lie)
 
+### `references/pal-chain.md` — pal resources, chains, and modules
+
+Read when:
+
+- You need to know what's reachable from the current pal beyond its own files — chained
+  resource pals, the cloud-wide CloudPiston Resource system pal, or (for a module pal) its
+  runtime/parent pal
+- Deciding whether to use CloudPiston Resource on a new pal (always ask) vs an existing one
+  (infer from what's already referenced)
+- Working out what `.resources/` is, why it's read-only, and when to refresh it (`pal_resources`)
+
 ---
 
 ## If none of these fit

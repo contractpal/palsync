@@ -13,7 +13,18 @@ mechanism: workflow libraries via `@include`, client behavior via plain `<script
 presentation via a plain `<link>` stylesheet, markup via `<c:fragment>`. There's no single
 tag that loads "all of CPResource" — a pal takes only the pieces it uses.
 
+**This is a snapshot, not a fixed API.** CloudPiston Resource is an ordinary pal on the server
+(reached via the pal chain — see `pal-chain.md`) and can change independent of this doc: a
+function signature, default, or fragment path documented below may have moved on since this was
+last verified. Before depending on a specific function/fragment/file named here, confirm it in
+the live extraction at `.resources/<cloudpiston-resource-slug>/` (refresh with `pal_resources` if
+it looks stale) rather than trusting this doc alone.
+
 Companion:
+- `palbuilder-core/references/pal-chain.md` — what CloudPiston Resource IS (a cloud-wide system
+  pal reachable via the pal chain), what else it carries beyond lib-ui/lib-paging (demo pages,
+  other fragments/libraries under `cloudpiston/`), where it lands on disk (`.resources/`), and
+  when to ask vs infer whether a pal should use it. Read that first if you're new to the concept.
 - `palbuilder-workflow/references/libraries.md` — the general `@include` mechanism these
   workflow libraries use
 - `SKILL.md` — the main-file + modules pattern and `runJS()`, which is how workflow code
