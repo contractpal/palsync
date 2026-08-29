@@ -19,6 +19,7 @@ const { resolveServerPalByGuid } = require("./resolve");
 // Named baselineStore (not `baseline`) on purpose: pull()'s options already destructure a
 // `baseline` (the fileHashes map for the sync decision), which would shadow this inside the fn.
 const baselineStore = require("./baseline");
+const { persistManifest } = require("./manifestPersist");
 
 // The 14 manifest folders pull manages. Files INSIDE these are pull-owned and may be deleted
 // as stale; anything outside is left alone.
@@ -208,10 +209,12 @@ function clearContent(pal) {
     }
 }
 
-// Port of saveLocal(): write pal.json (structure only; base64 content blanked).
-async function saveLocal(pal) {
+// Port of saveLocal(): write pal.json via the stable manifest contract (omit
+// runtime-only id/path/environment, preserve empty shape/key order, trailing newline,
+// write-if-changed). Kept exported for tests that import it directly.
+async function saveLocal(pal, priorRaw) {
     await fs.mkdir(pal.path, { recursive: true });
-    await fs.writeFile(path.join(pal.path, "pal.json"), JSON.stringify(pal, null, 2), "utf8");
+    await persistManifest(pal.path, pal, priorRaw != null ? priorRaw : null);
 }
 
 // Full pull (SYNC). Returns { resolved, serverPal, pal, written, removed, preserved, serverPaths }.
@@ -272,11 +275,10 @@ async function pull(session, guid, targetDir, { baseline = null } = {}) {
     await pruneEmptySubdirs(targetDir);
 
     // 5) Carry preserved new files' manifest entries forward, then write pal.json (base64
-    //    content blanked). pal.json = server manifest + the preserved local-only entries, so
-    //    the next push still ships the user's new files.
+    //    content blanked) through the stable manifest contract shared with merge.
     const preserved = mergePreservedEntries(pal, oldPalJson, toPreserve);
     clearContent(pal);
-    await saveLocal(pal);
+    await saveLocal(pal, oldPalJson);
 
     // serverPaths = exactly the files the SERVER tracks right now (what expandPalFiles wrote).
     // Callers build the next fileHashes baseline from this — preserved local files must NOT

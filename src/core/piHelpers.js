@@ -109,6 +109,9 @@ function piUsageEntry(event, model) {
 function appendPiUsage(workspaceDir, event, model) {
     if (!workspaceDir || !event || !/^pal_/.test(event.toolName || "") || !isPalsyncWorkspace(workspaceDir)) return null;
     try {
+        try {
+            require("./workspaceIgnore").ensureGitignoreSync(workspaceDir);
+        } catch (e) { /* best-effort */ }
         const file = path.join(workspaceDir, ".palsync", "pi-usage.jsonl");
         fs.mkdirSync(path.dirname(file), { recursive: true });
         fs.appendFileSync(file, JSON.stringify(piUsageEntry(event, model)) + "\n", "utf8");

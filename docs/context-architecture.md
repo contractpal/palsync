@@ -13,7 +13,7 @@ basis that could not be reproduced.
 
 | Runtime | Section | Source | Bytes | Est. tokens | Loading |
 |---|---|---|---:|---:|---|
-| All | `tool-definitions` | `src/mcp/tools.js` | 21,967 | 5,492 | release-stable |
+| All | `tool-definitions` | `src/mcp/tools.js` | 27,213 | 6,804 | release-stable |
 | Claude | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 12,551 | 3,138 | release-stable |
 | Codex/OpenCode/Pi | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 12,551 | 3,138 | release-stable |
 | All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 4,613 | 1,154 | release-stable |
@@ -29,11 +29,11 @@ basis that could not be reproduced.
 | All | `skill-body:design-build` | `bundled-context/skills/design-build/SKILL.md` | 16,550 | 4,138 | on-demand |
 | All | `skill-body:design-system-init` | `bundled-context/skills/design-system-init/SKILL.md` | 18,350 | 4,588 | on-demand |
 | All | `skill-body:pal-fix` | `bundled-context/skills/pal-fix/SKILL.md` | 4,433 | 1,109 | on-demand |
-| All | `skill-body:pal-init` | `bundled-context/skills/pal-init/SKILL.md` | 9,810 | 2,453 | on-demand |
-| All | `skill-body:pal-loop` | `bundled-context/skills/pal-loop/SKILL.md` | 18,790 | 4,698 | on-demand |
+| All | `skill-body:pal-init` | `bundled-context/skills/pal-init/SKILL.md` | 10,187 | 2,547 | on-demand |
+| All | `skill-body:pal-loop` | `bundled-context/skills/pal-loop/SKILL.md` | 19,397 | 4,850 | on-demand |
 | All | `skill-body:pal-review` | `bundled-context/skills/pal-review/SKILL.md` | 16,467 | 4,117 | on-demand |
-| All | `skill-body:pal-spec` | `bundled-context/skills/pal-spec/SKILL.md` | 9,682 | 2,421 | on-demand |
-| All | `skill-body:palbuilder-core` | `bundled-context/skills/palbuilder-core/SKILL.md` | 2,881 | 721 | on-demand |
+| All | `skill-body:pal-spec` | `bundled-context/skills/pal-spec/SKILL.md` | 9,985 | 2,497 | on-demand |
+| All | `skill-body:palbuilder-core` | `bundled-context/skills/palbuilder-core/SKILL.md` | 3,397 | 850 | on-demand |
 | All | `skill-body:palbuilder-data` | `bundled-context/skills/palbuilder-data/SKILL.md` | 16,054 | 4,014 | on-demand |
 | All | `skill-body:palbuilder-email` | `bundled-context/skills/palbuilder-email/SKILL.md` | 5,912 | 1,478 | on-demand |
 | All | `skill-body:palbuilder-frontend` | `bundled-context/skills/palbuilder-frontend/SKILL.md` | 16,985 | 4,247 | on-demand |

@@ -16,6 +16,13 @@ const fs = require("fs/promises");
 const path = require("path");
 const { writeIfChanged } = require("../core/atomicWrite");
 const claudeHooks = require("./claudeHooks");
+let workspaceIgnoreSync = null;
+function getWorkspaceIgnoreSync() {
+    if (!workspaceIgnoreSync) {
+        try { workspaceIgnoreSync = require("../core/workspaceIgnore"); } catch (e) { workspaceIgnoreSync = null; }
+    }
+    return workspaceIgnoreSync;
+}
 
 const BUNDLE_DIR = path.join(__dirname, "..", "..", "bundled-context");
 const VERSION = require("../../package.json").version;
@@ -631,6 +638,13 @@ async function contextStatus(workspaceDir) {
 //            Pi uses the CLI flavor (palsync subcommands, no session lock); Codex and OpenCode use
 //            the MCP flavor (both get a registered MCP server — see workspace.js).
 async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
+    // Ensure transient artifacts are ignored and already-tracked copies are migrated
+    // out of the index. This keeps task commits focused on source while leaving disk
+    // content and unrelated staging untouched. Best-effort: warnings do not block setup.
+    try {
+        const wi = getWorkspaceIgnoreSync();
+        if (wi) wi.ensureWorkspaceIgnoreSync(workspaceDir);
+    } catch (e) { /* best-effort */ }
     const skills = await bundledSkills();
     const skillNames = skills.map(s => s.name);
     const keep = skillNames.concat(SHARED_REFERENCES);

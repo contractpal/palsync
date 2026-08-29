@@ -61,20 +61,43 @@ function availableWorkflows(serverPal) {
     return Object.values(byKind);
 }
 
+// Vendored query-key evidence:
+//   cp-auth: PalbuilderTaskConnector.addAuth (com/nxlight/palbuilder/webstart/services/PalbuilderTaskConnector.java:152) and AppConstants.CPAUTH (com/nxlight/framework/AppConstants.java:137)
+//   nxProfileId: TestConsoleAction.java:86 / TestTransactionAction.java:103
+//   cp-workflow: AppConstants.cpWorkflow (AppConstants.java:28), TestConsoleAction.java:102, TestTransactionAction.java:109, TestWebAction.java:84
+//   cp-ws-doaction: TestConsoleAction.java:108, TestTransactionAction.java:94
+const RESERVED_QUERY_KEYS = new Set(["cp-auth", "nxProfileId", "cp-workflow", "cp-ws-doaction"]);
+
+// Normalize workflow names consistently, stripping a file extension if present.
+// Matches runTest's prior behaviour String(file).replace(/\.[^.]+$/, "").
+function normalizeWorkflowName(name) {
+    const s = String(name == null ? "" : name).trim();
+    // strip last ".ext" only when an extension exists; bare names pass through unchanged
+    return s.replace(/\.[^.]+$/, "");
+}
+
+// Append a single query parameter using URL + URLSearchParams (no manual concatenation).
+function appendQueryParam(urlString, key, value) {
+    // Token URLs from Test*.do are absolute (verified live against ISR / webpals hosts).
+    // New URL() is the required URL-parsing path — no manual "?" / "&" concatenation.
+    const u = new URL(urlString);
+    u.searchParams.append(key, String(value));
+    return u.toString();
+}
+
 // Build the runnable preview URL. CREDENTIAL-BEARING — never return/log this; hand straight to
 // the browser opener. profileId/workflowName only matter for console/transaction.
+// Uses URL and URLSearchParams for all selection fields (no manual string concatenation).
 function buildPreviewUrl(session, token, kind, profileId, workflowName) {
-    //let url = token + "&cp-auth=" + Buffer.from(session.username + ":" + session.password).toString("base64");
+    if (kind === "web") return token;
     let url = token;
-    if (kind !== "web") {
-        if (session.sessionAuthToken)
-        {
-            const auth=session.sessionAuthToken;
-            url+="&cp-auth="+auth.substring(auth.indexOf(":")+1);
-        }
-        if (profileId) url += "&nxProfileId=" + profileId;
-        if (workflowName) url += "&cp-workflow=" + workflowName;
+    if (session.sessionAuthToken) {
+        const auth = session.sessionAuthToken;
+        const tokenPart = auth.indexOf(":") >= 0 ? auth.substring(auth.indexOf(":") + 1) : auth;
+        url = appendQueryParam(url, "cp-auth", tokenPart);
     }
+    if (profileId) url = appendQueryParam(url, "nxProfileId", profileId);
+    if (workflowName) url = appendQueryParam(url, "cp-workflow", normalizeWorkflowName(workflowName));
     return url;
 }
 
@@ -98,15 +121,37 @@ async function runTest(session, guid, { kind, workflowName } = {}) {
     if (!avail.length) {
         return { ran: false, blocked: "no-testable-workflow", available: [] };
     }
-    // Pick the engine: explicit kind, else the first available (web preferred — it renders
-    // directly; otherwise console).
-    let chosen;
+    // Explicit selection takes precedence over auto-detection. Validate BEFORE starting a Test
+    // endpoint that the type exists and the workflow name belongs to it — list valid choices and
+    // make no Test call on failure.
+    let chosen = null;
+    const hasWorkflowName = workflowName != null && String(workflowName).trim() !== "";
+    const normalizedRequested = hasWorkflowName ? normalizeWorkflowName(workflowName) : null;
     if (kind) {
-        chosen = avail.find(a => a.kind === kind) || { kind, endpoint: KIND_ENDPOINT[kind], files: [] };
+        if (!KIND_ENDPOINT[kind]) {
+            return { ran: false, blocked: "unknown-workflow-type", kind, availableKinds: avail.map(a => a.kind) };
+        }
+        chosen = avail.find(a => a.kind === kind);
+        if (!chosen) {
+            return { ran: false, blocked: "unknown-workflow-type", kind, availableKinds: avail.map(a => a.kind) };
+        }
+        if (hasWorkflowName) {
+            const availableNames = chosen.files.map(f => normalizeWorkflowName(f));
+            if (!availableNames.includes(normalizedRequested)) {
+                return { ran: false, blocked: "unknown-workflow-name", kind: chosen.kind, workflowName: normalizedRequested, availableWorkflowNames: availableNames, availableKinds: avail.map(a => a.kind) };
+            }
+        }
+    } else if (hasWorkflowName) {
+        const owner = avail.find(a => a.files.map(f => normalizeWorkflowName(f)).includes(normalizedRequested));
+        if (!owner) {
+            const allNames = avail.flatMap(a => a.files.map(f => normalizeWorkflowName(f)));
+            return { ran: false, blocked: "unknown-workflow-name", workflowName: normalizedRequested, availableWorkflowNames: allNames, availableKinds: avail.map(a => a.kind) };
+        }
+        chosen = owner;
     } else {
         chosen = avail.find(a => a.kind === "web") || avail[0];
     }
-    if (!chosen.endpoint) return { ran: false, blocked: "unknown-kind", kind };
+    if (!chosen || !chosen.endpoint) return { ran: false, blocked: "unknown-workflow-type", kind, availableKinds: avail.map(a => a.kind) };
 
     const resp = await CloudPistonAPIManager.testWorkflow(session, palId, chosen.endpoint);
     const validation = normalizeValidation(resp);
@@ -118,7 +163,7 @@ async function runTest(session, guid, { kind, workflowName } = {}) {
     let previewUrl = null;
     if (validated && resp.token) {
         const wfName = chosen.kind === "web" ? null
-            : (workflowName || (chosen.files[0] ? String(chosen.files[0]).replace(/\.[^.]+$/, "") : "main"));
+            : (hasWorkflowName ? normalizedRequested : (chosen.files[0] ? normalizeWorkflowName(chosen.files[0]) : "main"));
         const profileId = chosen.kind === "web" ? null : (profiles[0] && profiles[0].profileId);
         previewUrl = buildPreviewUrl(session, resp.token, chosen.kind, profileId, wfName);
     }
@@ -135,4 +180,4 @@ async function runTest(session, guid, { kind, workflowName } = {}) {
     };
 }
 
-module.exports = { runTest, availableWorkflows, buildPreviewUrl, normalizeValidation, normalizeMessages, TYPE_NUM, KIND_ENDPOINT };
+module.exports = { runTest, availableWorkflows, buildPreviewUrl, normalizeWorkflowName, appendQueryParam, RESERVED_QUERY_KEYS, normalizeValidation, normalizeMessages, TYPE_NUM, KIND_ENDPOINT };

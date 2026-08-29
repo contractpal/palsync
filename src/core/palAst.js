@@ -1015,6 +1015,7 @@ function envelopeProjection(result, args) {
 
 module.exports = {
     run,
+    envelopeProjection,
     resolveAstGrep,
     validatePaths,
     collectCandidates,

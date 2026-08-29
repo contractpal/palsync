@@ -46,9 +46,7 @@ handoff — NOT per-task (step 5 already catches immediate breakage).
    record` (agent cannot read its own spend); IF pi THEN run
    `palsync cost record --model <model> --phase <build|review>` using the
    user-supplied footer figures.
-3. Write the final session summary/checkpoint now, before review. A
-   proactive mid-build handoff also writes its summary normally but does
-   not invoke review.
+3. Run `palsync session-summary [--mode <full|lite>] [--next "<text>"]` to append the final canonical session summary now, before review — counts and session number are derived from the parsed task table and the checkpoint is appended through the validation gate in one atomic write. If no single ready task is unambiguous, provide `--next` (e.g. `review blockers / clear human gates`). A proactive mid-build handoff also runs `palsync session-summary` normally but does not invoke review.
 4. Run `palsync review brief`, then **dispatch pal-review in a fresh
    session/subagent** with its EVIDENCE LEDGER output, SPEC.md,
    EXECUTION.md, DESIGN_SYSTEM.md/COMPONENTS.md, `baseline/` (if any), and

@@ -140,6 +140,7 @@ function prune(workspaceDir) {
 }
 
 function cachedLint(workspaceDir, options, compute) {
+    try { require("./workspaceIgnore").ensureGitignoreSync(workspaceDir); } catch (e) { /* best-effort */ }
     if (process.env.PALSYNC_NO_CACHE === "1") {
         record(workspaceDir, "bypasses");
         return compute();

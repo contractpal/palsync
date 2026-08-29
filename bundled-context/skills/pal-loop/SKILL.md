@@ -12,7 +12,7 @@ something you fix yourself. State lives ON DISK in EXECUTION.md, never only in y
 write every state change to the file the moment it happens.
 
 **EXECUTION.md edits go through the CLI**: `palsync task list [--ready]`,
-`palsync task <id> <status>`, `palsync checkpoint "<line>"`. Transitions to `blocked`,
+`palsync task <id> <status>`, `palsync checkpoint "<line>"`, `palsync session-summary [--mode full|lite] [--next "<text>"]`. Transitions to `blocked`,
 `needs-human`, or `needs-frontier` require `--reason "<why>"`; `blocked` and `needs-human` also
 require `--tried "<workaround>"`. These are OFFLINE local helpers —
 the only `palsync` CLI you run from your shell (they have no MCP equivalent and touch no
@@ -125,7 +125,7 @@ before the first task.
    - **Done when:** every success-condition clause has current pushed-version evidence and every warning is fixed or explicitly waived.
 6. **On pass:** first confirm there are no unhandled validation warnings from the push output
    (fixed, or each one checkpointed with a concrete reason it is safe). Then `palsync task <id> done`; `palsync checkpoint "<date>, <task id>,
-   <tool-output summary>, session tasks: <n>/3, since last review: <m>/N"` (a `cheap`-tier task carries the previous `session tasks` value forward unchanged; `since last review` is the existing review-cadence counter); `git add -A && git commit -m "<task id>: <task name>"`; continue.
+   <tool-output summary>, session tasks: <n>/3, since last review: <m>/N"` (a `cheap`-tier task carries the previous `session tasks` value forward unchanged; `since last review` is the existing review-cadence counter); `git add -A && git commit -m "<task id>: <task name>"` (transient PalSync artifacts are excluded from the commit by harness-enforced ignore management); continue.
 7. **On fail:** fix and re-verify, up to TWO attempts. Still failing →
    `palsync task <id> blocked --reason "<result and required decision>" --tried "<the two attempts: literal command + error>"`. A BLOCKED exercise means the Pal result is
    unknown, never PASS or done. Do not replay after an action/click may have changed data; inspect
@@ -227,8 +227,7 @@ a subagent capability exists, dispatching the next task to a fresh subagent per
 Stop also when: all tasks `done` and pal-review returned PASS; or only
 `blocked`/`needs-frontier`/`needs-human` remain; or the user asked.
 
-For a handoff, write this session summary before stopping. On the completion path
-it was already written before reviewer dispatch; do not rewrite it after review:
+For a handoff, run `palsync session-summary [--mode <full|lite>] [--next "<task-or-prose>"]` before stopping — it derives the session number and `done`/`blocked`/`needs-frontier`/`needs-human` counts from the parsed task table, infers `Next` from the single ready task when unambiguous (otherwise `--next` is required), and appends the canonical summary through the checkpoint validation gate in a single atomic write. Do not hand-calculate counts or format the prose yourself. On the completion path it was already written before reviewer dispatch; do not rewrite it after review. The canonical format is:
 ```
 == session <n> (<date>), mode <full|lite>: <a> done, <b> blocked, <c> needs-frontier, <d> needs-human.
    Next: <task id or "review blockers / clear human gates">.

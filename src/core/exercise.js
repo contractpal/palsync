@@ -22,6 +22,14 @@ const { detectRenderError, sanitizeUrl, sanitizeResourceUrl, loadChromium, getBr
 
 const MAX_STEPS = 10;
 
+// Per-step bounded wait: a step may wait for its existing expect/absent assertions to become
+// true without replaying the mutation. Waiting forces browser observation so current visible
+// state (not stale fetch HTML) is checked. Timeout and interval are optional and bounded.
+const WAIT_DEFAULT_TIMEOUT_MS = 15000;
+const WAIT_MAX_TIMEOUT_MS = 60000;
+const WAIT_DEFAULT_INTERVAL_MS = 500;
+const WAIT_MIN_INTERVAL_MS = 100;
+
 // Failure-evidence bounds. A failed/blocked browser run captures bounded evidence (browser events,
 // a scoped accessibility snapshot, one failure JPEG) that the pal_exercise handler persists as
 // failure-only artifacts under .agent-work-history/ so a coding agent can act on evidence instead
@@ -32,6 +40,8 @@ const BROWSER_EVENTS_CAP = 50;    // max captured browser events per run
 const EVENT_MESSAGE_CAP = 300;    // max chars per event message (first line)
 const ARIA_CAP = 4096;            // accessibility snapshot cap (~4k) with explicit truncation
 const ARIA_TRUNCATE_MARK = "\n… (snapshot truncated)";
+const FINAL_TEXT_CAP = 4000;      // final-state snapshot cap (~4k) with explicit truncation marker
+const FINAL_TEXT_TRUNCATE_MARK = "\n… (final text truncated)";
 const FAILURE_JPEG_QUALITY = 50;  // bounded failure screenshot (JPEG, quality 0-100)
 const EVIDENCE_TIMEOUT_MS = 5000; // per-call bound for evaluate/aria/screenshot evidence calls
 
@@ -53,9 +63,11 @@ const SECRET_KEY_RE = /password|passwd|passcode|pwd|secret|token|auth|api[_-]?ke
 
 // The same key family for textual scrubbing — the single source of truth used both by evidence
 // capture and by artifact persistence. Covers query-like (?k=v), header-like (k: v), and JSON-like
-// ("k": "v") secret assignments plus bearer/basic authorization tokens. Over-redaction is safe
-// here — this is failure evidence, not a UI string.
-const SECRET_FORM_KEYS = "authorization|auth|token|access[_-]?token|refresh[_-]?token|api[_-]?key|apikey|password|passwd|passcode|pwd|secret|client[_-]?secret|credential|jwt|session|cookie|otp|pin|bearer|private[_-]?key";
+// ("k": "v") secret assignments plus bearer/basic authorization tokens. Failure evidence uses
+// the strict scrub (blanket URL substitution + header-like on any secret-bearing label); the
+// success snapshot path uses assignment/bearer/basic redaction only, with a tightened
+// header-like rule that does not fire on a bare human-readable label like "Session:".
+const SECRET_FORM_KEYS = "cp-auth|cp_auth|authorization|auth|token|access[_-]?token|refresh[_-]?token|api[_-]?key|apikey|password|passwd|passcode|pwd|secret|client[_-]?secret|credential|jwt|session|cookie|otp|pin|bearer|private[_-]?key";
 
 // Central textual secret scrubbing: strips auth-ish values from query-like, header-like, and
 // JSON-like forms plus bearer/basic authorization tokens, so no credential value in these forms
@@ -63,11 +75,44 @@ const SECRET_FORM_KEYS = "authorization|auth|token|access[_-]?token|refresh[_-]?
 function redactSecretForms(text) {
     let s = String(text == null ? "" : text);
     s = s.replace(new RegExp("([?&](?:" + SECRET_FORM_KEYS + ")=)[^&\\s\"'<>]+", "gi"), "$1<redacted>");
+    // Unquoted key=value forms in body text (e.g. token=SECRET or cp-auth=SECRET) — not after ?/& and not quoted.
+    s = s.replace(new RegExp("\\b((?:" + SECRET_FORM_KEYS + ")\\b)[\\t ]*=[\\t ]*[^\\s\"'<>`&;,]+", "gi"), "$1=<redacted>");
     s = s.replace(new RegExp("(^|\\r?\\n)([ \\t]*(?:[\\w-]*[ ._-])?(?:" + SECRET_FORM_KEYS + ")[\\w-]*[ \\t]*:[ \\t]*)([^\\r\\n]*)", "gim"), "$1$2<redacted>");
     s = s.replace(new RegExp("([\"']?(?:" + SECRET_FORM_KEYS + ")[\"']?[ \\t]*[:=][ \\t]*[\"'])([^\"']*)([\"'])", "gi"), "$1<redacted>$3");
     s = s.replace(/\bBearer[ \t]+[A-Za-z0-9._~+/=_-]+/gi, "Bearer <redacted>");
     s = s.replace(/\bBasic[ \t]+[A-Za-z0-9+/=_-]{4,}/gi, "Basic <redacted>");
     return s;
+}
+
+// Success-path redaction: same assignment/bearer/basic forms as redactSecretForms but WITHOUT
+// blanket URL substitution and with a tightened header-like rule that does not fire on a bare
+// human-readable label such as "Session: Welding 101". Failure evidence keeps the strict
+// scrubCredentials path (which blanks every URL and redacts any header-like secret label).
+function redactSecretFormsForSuccess(text) {
+    let s = String(text == null ? "" : text);
+    s = s.replace(new RegExp("([?&](?:" + SECRET_FORM_KEYS + ")=)[^&\\s\"'<>]+", "gi"), "$1<redacted>");
+    s = s.replace(new RegExp("\\b((?:" + SECRET_FORM_KEYS + ")\\b)[\\t ]*=[\\t ]*[^\\s\"'<>`&;,]+", "gi"), "$1=<redacted>");
+    s = s.replace(new RegExp("(^|\\r?\\n)([ \\t]*(?:[\\w-]*[ ._-])?(?:" + SECRET_FORM_KEYS + ")[\\w-]*[ \\t]*:[ \\t]*)([^\\r\\n]*)", "gim"), (match, p1, p2) => {
+        const normalized = p2.trim().replace(/:.*/, "").trim();
+        if (/^session$/i.test(normalized)) return match;
+        return p1 + p2 + "<redacted>";
+    });
+    s = s.replace(new RegExp("([\"']?(?:" + SECRET_FORM_KEYS + ")[\"']?[ \\t]*[:=][ \\t]*[\"'])([^\"']*)([\"'])", "gi"), "$1<redacted>$3");
+    s = s.replace(/\bBearer[ \t]+[A-Za-z0-9._~+/=_-]+/gi, "Bearer <redacted>");
+    s = s.replace(/\bBasic[ \t]+[A-Za-z0-9+/=_-]{4,}/gi, "Basic <redacted>");
+    return s;
+}
+
+// Build a bounded, scrubbed final-state snapshot. Only returned on overall success; failures
+// carry no final text. Browser results use visible body text, fetch results carry honest
+// server-markup provenance so callers never overclaim browser evidence. Text is scrubbed with
+// the success-path filter (assignment/bearer/basic only, no blanket URL, tightened header)
+// and capped with an explicit marker; failure-evidence scrubbing stays strictly via scrubCredentials.
+function makeFinalSnapshot(raw, source) {
+    const scrubbed = redactSecretFormsForSuccess(String(raw == null ? "" : raw));
+    const truncated = scrubbed.length > FINAL_TEXT_CAP;
+    const text = truncated ? scrubbed.slice(0, FINAL_TEXT_CAP - FINAL_TEXT_TRUNCATE_MARK.length) + FINAL_TEXT_TRUNCATE_MARK : scrubbed;
+    return { source, text, truncated };
 }
 
 // Strip URL-shaped tokens and auth-ish values from evidence text. Inline summaries and persisted
@@ -298,6 +343,30 @@ function validateSteps(steps) {
             errs.push(at + " within must be a non-empty CSS/Playwright selector");
         }
         if (s.within !== undefined && !s.click) errs.push(at + " has within but no click to scope");
+        if (s.waitFor !== undefined) {
+            if (!s.waitFor || typeof s.waitFor !== "object" || Array.isArray(s.waitFor)) {
+                errs.push(at + " waitFor must be an object with timeoutMs and/or intervalMs");
+            } else {
+                if (s.waitFor.timeoutMs !== undefined) {
+                    const v = s.waitFor.timeoutMs;
+                    if (typeof v !== "number" || !Number.isFinite(v) || !Number.isInteger(v) || v <= 0 || v > WAIT_MAX_TIMEOUT_MS) {
+                        errs.push(at + " waitFor.timeoutMs must be an integer 1.." + WAIT_MAX_TIMEOUT_MS + " (ms)");
+                    }
+                }
+                if (s.waitFor.intervalMs !== undefined) {
+                    const v = s.waitFor.intervalMs;
+                    if (typeof v !== "number" || !Number.isFinite(v) || !Number.isInteger(v) || v < WAIT_MIN_INTERVAL_MS || v > WAIT_MAX_TIMEOUT_MS) {
+                        errs.push(at + " waitFor.intervalMs must be an integer " + WAIT_MIN_INTERVAL_MS + ".." + WAIT_MAX_TIMEOUT_MS + " (ms)");
+                    }
+                }
+                const known = new Set(["timeoutMs", "intervalMs"]);
+                for (const k of Object.keys(s.waitFor)) {
+                    if (!known.has(k)) errs.push(at + " waitFor has unknown key " + JSON.stringify(k));
+                }
+                const hasAssertion = (Array.isArray(s.expect) && s.expect.length) || (Array.isArray(s.absent) && s.absent.length);
+                if (!hasAssertion) errs.push(at + " waitFor requires at least one expect or absent assertion");
+            }
+        }
     });
     return errs;
 }
@@ -564,6 +633,10 @@ function needsBrowser(steps) {
     return steps.some(s => s.fill || s.click);
 }
 
+function hasWaitFor(steps) {
+    return steps.some(s => s.waitFor);
+}
+
 function isLoginRedirect(url) {
     try { return /(?:^|\/)login(?:\/|\b)|\bgetlogin\b/i.test(new URL(url).pathname); }
     catch (e) { return false; }
@@ -724,7 +797,8 @@ async function runExercise(session, guid, { steps, workflow, viewport } = {}, de
                      problems: ["a " + t.kind + " pal's actions run through the console screen — write steps as fill (inputs by name) + click (the action link/button text), not action/page"] };
         }
 
-        const res = isWeb && !needsBrowser(steps)
+        const useFetch = isWeb && !needsBrowser(steps) && !hasWaitFor(steps);
+        const res = useFetch
             ? await exerciseByFetch(t, steps)
             : await browserFn(t, steps, viewport, deps);
         if (res.status === "blocked" && !res.potentialMutationStarted && attempt === 0 &&
@@ -747,6 +821,7 @@ async function exerciseByFetch(t, steps) {
     const inst = await openInstanceSessionFromTest(t);
     if (!inst.opened) return { ran: false, kind: "web", status: "blocked", category: "environment", potentialMutationStarted: false, reason: inst.reason };
     const results = [];
+    let lastHtml = "";
     for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
         let path = step.page || "";
@@ -760,6 +835,7 @@ async function exerciseByFetch(t, steps) {
             results.push({ step: i + 1, label: stepLabel(step), pass: false, error: "fetch failed: " + (e && e.message ? e.message : String(e)) });
             return { ran: true, kind: "web", mode: "fetch", pass: false, status: "failed", category: "behavior", failedStep: i + 1, steps: results };
         }
+        lastHtml = r.html || "";
         const renderError = detectRenderError(r.html);
         const chk = checkStep(r.html, step);
         const pass = chk.pass && !renderError && r.status < 400;
@@ -767,7 +843,7 @@ async function exerciseByFetch(t, steps) {
                        expect: chk.expect, absent: chk.absent, renderError });
         if (!pass) return { ran: true, kind: "web", mode: "fetch", pass: false, status: "failed", category: "behavior", failedStep: i + 1, steps: results };
     }
-    return { ran: true, kind: "web", mode: "fetch", pass: true, status: "passed", category: "behavior", steps: results };
+    return { ran: true, kind: "web", mode: "fetch", pass: true, status: "passed", category: "behavior", steps: results, finalSnapshot: makeFinalSnapshot(lastHtml, "server-markup") };
 }
 
 // Browser path: drive the real screen (console/transaction always; web when steps fill/click).
@@ -793,6 +869,7 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}) {
     const results = [];
     const evidenceTimeout = deps.evidenceTimeout || EVIDENCE_TIMEOUT_MS;
     let bctx, pg, events = [], potentialMutationStarted = false;
+    let finalVisibleText = "";
     try {
         // Context-level defaults bound actions/navigations the per-call timeouts below don't cover.
         // These are context methods in Playwright, not browser.newContext options.
@@ -876,6 +953,54 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}) {
                 }
                 return fail(browserFailureMessage(e, pg, isWeb, t.kind));
             }
+            // Optional bounded wait: observe current visible state repeatedly without replaying
+            // the mutation. Each poll only re-reads body text and markup; never navigates, clicks,
+            // or invokes a workflow again.
+            const waitCfg = step.waitFor;
+            if (waitCfg) {
+                const timeoutMs = waitCfg.timeoutMs != null ? waitCfg.timeoutMs : WAIT_DEFAULT_TIMEOUT_MS;
+                const intervalMs = waitCfg.intervalMs != null ? waitCfg.intervalMs : WAIT_DEFAULT_INTERVAL_MS;
+                const wait = deps.wait || (ms => new Promise(resolve => setTimeout(resolve, ms)));
+                const now = deps.now || Date.now;
+                const deadline = now() + timeoutMs;
+                let lastText = "", lastHtml = "", lastChk = null, lastRenderError = null;
+                while (true) {
+                    try { lastText = await pg.innerText("body"); } catch (e) { lastText = ""; }
+                    try { lastHtml = await pg.content(); } catch (e) { lastHtml = ""; }
+                    lastRenderError = detectRenderError(lastText) || detectRenderError(lastHtml);
+                    if (lastRenderError) {
+                        lastChk = checkBrowserStep(lastText, lastHtml, step);
+                        const dialogs = acceptedDialogs.splice(0);
+                        const hints = await screenHints(pg, evidenceTimeout);
+                        results.push({ step: i + 1, label: stepLabel(step), pass: false,
+                            expect: lastChk.expect, absent: lastChk.absent, renderError: lastRenderError, dialogs, hints, url: sanitizeUrl(pg.url()) });
+                        return attachEvidence({
+                            ran: true, kind: t.kind, mode: "browser", pass: false, status: "failed",
+                            category: "behavior", potentialMutationStarted, failedStep: i + 1, steps: results
+                        }, pg, step, events, evidenceTimeout);
+                    }
+                    lastChk = checkBrowserStep(lastText, lastHtml, step);
+                    if (lastChk.pass) {
+                        finalVisibleText = lastText;
+                        const dialogs = acceptedDialogs.splice(0);
+                        results.push({ step: i + 1, label: stepLabel(step), pass: true,
+                            expect: lastChk.expect, absent: lastChk.absent, renderError: null, dialogs, hints: null, url: sanitizeUrl(pg.url()) });
+                        break;
+                    }
+                    if (now() >= deadline) {
+                        const dialogs = acceptedDialogs.splice(0);
+                        const hints = await screenHints(pg, evidenceTimeout);
+                        results.push({ step: i + 1, label: stepLabel(step), pass: false,
+                            expect: lastChk.expect, absent: lastChk.absent, renderError: null, dialogs, hints, url: sanitizeUrl(pg.url()) });
+                        return attachEvidence({
+                            ran: true, kind: t.kind, mode: "browser", pass: false, status: "failed",
+                            category: "behavior", potentialMutationStarted, failedStep: i + 1, steps: results
+                        }, pg, step, events, evidenceTimeout);
+                    }
+                    await wait(Math.min(intervalMs, Math.max(0, deadline - now())));
+                }
+                continue;
+            }
             let text = "";
             try { text = await pg.innerText("body"); } catch (e) { /* keep "" */ }
             const html = await pg.content();
@@ -887,6 +1012,7 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}) {
             const pass = chk.pass && !renderError;
             const dialogs = acceptedDialogs.splice(0);
             const hints = pass ? null : await screenHints(pg, evidenceTimeout);
+            if (pass) finalVisibleText = text;
             results.push({ step: i + 1, label: stepLabel(step), pass,
                            expect: chk.expect, absent: chk.absent, renderError, dialogs, hints, url: sanitizeUrl(pg.url()) });
             if (!pass) return attachEvidence({
@@ -894,7 +1020,7 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}) {
                 category: "behavior", potentialMutationStarted, failedStep: i + 1, steps: results
             }, pg, step, events, evidenceTimeout);
         }
-        return { ran: true, kind: t.kind, mode: "browser", pass: true, status: "passed", category: "behavior", potentialMutationStarted, steps: results };
+        return { ran: true, kind: t.kind, mode: "browser", pass: true, status: "passed", category: "behavior", potentialMutationStarted, steps: results, finalSnapshot: makeFinalSnapshot(finalVisibleText, "visible") };
     } catch (e) {
         const category = !isWeb && pageIsLoginRedirect(pg) ? "auth" : "navigation";
         return attachEvidence({
@@ -949,8 +1075,15 @@ function formatExercise(res) {
         if (!s.pass && s.hints) lines.push("      " + formatScreenHints(s.hints));
     }
     if (!res.pass && res.ran) lines.push("  Later steps were not run. Do not probe labels/selectors by trial and error: read the local page/fragment markup and derive the exact name=, click text, and unique within selector. If only the exercise targeting was wrong, revise the steps and call again without pushing; edit and push first only when the pal behavior was wrong.");
+    if (res.finalSnapshot) {
+        const snap = res.finalSnapshot;
+        const label = snap.source === "server-markup" ? "server markup" : "visible text";
+        const firstLine = String(snap.text).split("\n")[0].slice(0, 120);
+        lines.push("  final snapshot (" + snap.source + " — " + label + ", " + snap.text.length + " chars" + (snap.truncated ? ", truncated" : "") + "): " + JSON.stringify(firstLine) + (snap.text.indexOf("\n") !== -1 ? " …" : ""));
+        lines.push("  final text (bounded, " + snap.text.length + " chars):\n" + snap.text);
+    }
     lines.push(...failureEvidenceLines(res));
     return lines.join("\n");
 }
 
-module.exports = { runExercise, exerciseByFetch, exerciseByBrowser, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, BROWSER_EVENTS_CAP, EVIDENCE_TIMEOUT_MS, MAX_STEPS };
+module.exports = { runExercise, exerciseByFetch, exerciseByBrowser, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, redactSecretFormsForSuccess, makeFinalSnapshot, BROWSER_EVENTS_CAP, EVIDENCE_TIMEOUT_MS, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };

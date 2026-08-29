@@ -42,8 +42,8 @@ const USAGE = [
     "                                                               Render the pal (opens console/transaction previews in a browser by default)",
     "  palsync open    [--workflow console|web|transaction] [--keep-lock] [--dir <ws>]",
     "                                                               Open the rendered pal in a real browser window (human review)",
-    "  palsync screenshot [<page>] [--viewport desktop|mobile] [--full-page] [--keep-lock] [--dir <ws>]",
-    "                                                               Render a WEB pal to a PNG (saves the file, prints the path)",
+    "  palsync screenshot [<page>] [--viewport desktop|mobile] [--full-page] [--workflow console|web|transaction] [--workflow-name <name>] [--action <name>] [--param k=v ...] [--keep-lock] [--dir <ws>]",
+    "                                                               Render a pal to a PNG (WEB page via [<page>]; console/transaction action state via --action+--param)",
     "  palsync seo-audit [--keep-lock] [--dir <ws>]             On-page SEO audit of a WEB pal's rendered page",
     "  palsync exercise --steps '<json>' | --steps-file <path> [--workflow console|web|transaction] [--viewport desktop|mobile] [--keep-lock] [--dir <ws>]",
     "                                                               Exercise workflow actions end-to-end; assert expect/absent strings in the rendered result",
@@ -54,6 +54,7 @@ const USAGE = [
     "  palsync completion check [--dir <workspace>]                Enforce all-done independent review or allow a reasoned handoff (offline)",
     "  palsync regression [--keep-lock] [--dir <ws>]                Brownfield regression vs baseline/baseline.json (freshness -> validate/test/H1; caused vs inherited)",
     "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Mechanical reality-check of a SPEC.md (offline): placeholders, dead links, §8a types, §12 floor",
+    "  palsync session-summary [--mode full|lite] [--next <text>] [--dir <ws>] Append the canonical two-line session handoff summary (offline, derived)",
     "  palsync task list [--ready] [--dir <ws>]                     List EXECUTION.md tasks; --ready prints the ready ticket plus its spec ref sections and \u00A711",
     "  palsync task <id> <status> [--reason \"<why>\"] [--tried \"<workaround>\"] [--dir <ws>]",
     "                                                               Set one task status; --reason is required for blocked|needs-frontier|needs-human,",
@@ -75,6 +76,9 @@ const USAGE = [
     "  --no-open          preview: do not open a browser",
     "  --viewport         screenshot: desktop (default 1280x800) | mobile (~390x844)",
     "  --full-page        screenshot: capture the whole scroll height, not just the viewport",
+    "  --workflow-name    screenshot: workflow name to render (extension stripped consistently)",
+    "  --action           screenshot: console/transaction action (cp-ws-doaction) before capture",
+    "  --param k=v        screenshot: scalar query param for the action (repeatable; reserved keys refused)",
     "  --expect <str>     fetch/preview: assert the served page contains <str> (repeatable); prints found/missing per string, NOT the HTML",
     "  --selector <css>   fetch/preview: return only that region's markup (simple tag/.class/#id selector)",
     "  --max-chars <n>    fetch/preview: cap the returned markup to n characters",
@@ -87,7 +91,7 @@ const USAGE = [
 ].join("\n");
 
 function parseFlags(argv) {
-    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, preview: false, open: undefined, skipValidation: false, datasets: undefined, recreate: false, viewport: undefined, fullPage: false, expect: undefined, selector: undefined, maxChars: undefined };
+    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, workflowName: undefined, action: undefined, params: undefined, preview: false, open: undefined, skipValidation: false, datasets: undefined, recreate: false, viewport: undefined, fullPage: false, expect: undefined, selector: undefined, maxChars: undefined };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--force" || a === "-f") flags.force = true;
@@ -101,6 +105,12 @@ function parseFlags(argv) {
         else if (a === "--help" || a === "-h") flags.help = true;
         else if (a === "--workflow") { flags.workflow = argv[++i]; if (!flags.workflow) throw new Error("--workflow requires a value"); }
         else if (a.startsWith("--workflow=")) flags.workflow = a.slice("--workflow=".length);
+        else if (a === "--workflow-name") { flags.workflowName = argv[++i]; if (!flags.workflowName) throw new Error("--workflow-name requires a value"); }
+        else if (a.startsWith("--workflow-name=")) flags.workflowName = a.slice("--workflow-name=".length);
+        else if (a === "--action") { flags.action = argv[++i]; if (!flags.action) throw new Error("--action requires a value"); }
+        else if (a.startsWith("--action=")) flags.action = a.slice("--action=".length);
+        else if (a === "--param") { const kv = argv[++i]; if (!kv) throw new Error("--param requires key=value"); const eq = kv.indexOf("="); if (eq === -1) throw new Error("--param requires key=value, got " + kv); const k = kv.slice(0, eq); const v = kv.slice(eq + 1); if (!k) throw new Error("--param key must be non-empty"); (flags.params = flags.params || {}); flags.params[k] = v; }
+        else if (a.startsWith("--param=")) { const kv = a.slice("--param=".length); const eq = kv.indexOf("="); if (eq === -1) throw new Error("--param requires key=value, got " + kv); const k = kv.slice(0, eq); const v = kv.slice(eq + 1); if (!k) throw new Error("--param key must be non-empty"); (flags.params = flags.params || {}); flags.params[k] = v; }
         else if (a === "--datasets") { flags.datasets = argv[++i]; if (!flags.datasets) throw new Error("--datasets requires a value"); }
         else if (a.startsWith("--datasets=")) flags.datasets = a.slice("--datasets=".length);
         else if (a === "--viewport") { flags.viewport = argv[++i]; if (!flags.viewport) throw new Error("--viewport requires a value"); }
@@ -160,6 +170,51 @@ async function buildCliContext(dir) {
         }
         throw e;
     }
+}
+
+async function runSessionSummary(argv) {
+    const ts = require("../core/taskState");
+    let dir = process.cwd(); let mode; let next; let showHelp = false;
+    for (let i = 0; i < argv.length; i++) {
+        const a = argv[i];
+        if (a === "--dir") { dir = argv[++i]; if (!dir) { console.error("--dir requires a value"); return 1; } }
+        else if (a.startsWith("--dir=")) dir = a.slice("--dir=".length);
+        else if (a === "--mode") { mode = argv[++i]; if (!mode) { console.error("--mode requires a value"); return 1; } }
+        else if (a.startsWith("--mode=")) mode = a.slice("--mode=".length);
+        else if (a === "--next") { next = argv[++i]; if (next === undefined) { console.error("--next requires a value"); return 1; } }
+        else if (a.startsWith("--next=")) next = a.slice("--next=".length);
+        else if (a === "--help" || a === "-h") showHelp = true;
+        else { console.error("Unknown flag for session-summary: " + a + "\n\n" + USAGE); return 1; }
+    }
+    if (showHelp) {
+        console.log("Usage: palsync session-summary [--mode full|lite] [--next <text>] [--dir <workspace>]\n" +
+            "  Derive session number and status counts from EXECUTION.md and append the canonical\n" +
+            "  two-line handoff summary through the checkpoint validation gate.\n\n" +
+            "  --mode full|lite   Session mode (default: parsed from EXECUTION.md \"mode:\" header)\n" +
+            "  --next <text>      Explicit Next state (required when no single ready task is unambiguous)\n" +
+            "  --dir <workspace>  Workspace directory (default: current directory)\n");
+        return 0;
+    }
+    const file = path.join(path.resolve(dir), "EXECUTION.md");
+    let text;
+    try { text = ts.readExecution(file); }
+    catch (e) { console.error("Could not read " + file + " \u2014 " + (e && e.message ? e.message : e)); return 1; }
+    // Validate mode flag early so a typo fails fast without touching the file
+    if (mode !== undefined && mode !== null && String(mode).toLowerCase() !== "full" && String(mode).toLowerCase() !== "lite") {
+        console.error("session-summary failed: Invalid mode \"" + mode + "\". Use full or lite. (nothing changed)");
+        return 1;
+    }
+    const result = ts.buildSessionSummary(text, { mode, next });
+    if (!result.ok) {
+        console.error("session-summary failed: " + result.error + " (nothing changed)");
+        return 1;
+    }
+    // Single atomic write via the repo's EXECUTION helper
+    try { ts.writeExecution(file, result.text); }
+    catch (e) { console.error("Could not write " + file + " \u2014 " + (e && e.message ? e.message : e)); return 1; }
+    // Verify we wrote exactly once and did not create a sidecar
+    console.log("Session summary appended:\n  " + result.summary.replace(/\n/g, "\n  "));
+    return 0;
 }
 
 // `palsync task` / `palsync checkpoint` — OFFLINE EXECUTION.md edits (no login/lock). Their args
@@ -276,6 +331,7 @@ async function runHookCommand(argv, inputText) {
 // command (test seam for the user-level settings file location); other commands ignore it.
 async function run(cmd, argv, opts) {
     if (cmd === "task" || cmd === "checkpoint") return runTaskCommand(cmd, argv);
+    if (cmd === "session-summary" || cmd === "session_summary") return runSessionSummary(argv);
     if (cmd === "hook") return runHookCommand(argv);
     // `palsync hooks check|repair` — OFFLINE recovery surface for stale Claude Code hook
     // settings (no .palsync.json, no login), dispatched before parseFlags/buildCliContext like
@@ -474,7 +530,11 @@ async function run(cmd, argv, opts) {
 
     if (cmd === "screenshot") {
         // page is an optional positional (default: home page), like fetch's <page>.
-        const res = await toolByName("pal_screenshot").run(ctx, { page: flags._positional, viewport: flags.viewport, fullPage: flags.fullPage });
+        // Workflow-targeting flags mirror the MCP tool: workflow/workflow-name/action/param.
+        const res = await toolByName("pal_screenshot").run(ctx, {
+            page: flags._positional, viewport: flags.viewport, fullPage: flags.fullPage,
+            workflow: flags.workflow, workflowName: flags.workflowName, action: flags.action, params: flags.params
+        });
         console.log(res.message); // includes the saved PNG path — CLI can't return the image inline
         if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
         return res.captured ? 0 : 1;

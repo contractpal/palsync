@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const usage = require("../core/usage");
 
 const HISTORY_DIR = ".agent-work-history";
-const IGNORE_ENTRY = HISTORY_DIR + "/";
+const workspaceIgnore = require("../core/workspaceIgnore");
 
 function safeSlug(value, fallback = "run") {
     const raw = String(value || "").trim();
@@ -24,18 +24,11 @@ function stamp(d = new Date()) {
 }
 
 function ensureGitignored(workspaceDir) {
-    const gitignore = path.join(workspaceDir, ".gitignore");
-    let text = "";
-    try { text = fs.readFileSync(gitignore, "utf8"); }
-    catch (e) {
-        if (!e || e.code !== "ENOENT") return;
+    try {
+        workspaceIgnore.ensureGitignoreSync(workspaceDir);
+    } catch (e) {
+        // best-effort — never block Pal work
     }
-    const already = new RegExp("(^|\\n)" + HISTORY_DIR.replace(".", "\\.") + "\\/?(\\n|$)").test(text);
-    if (already) return;
-    const prefix = text && !text.endsWith("\n") ? "\n" : "";
-    const header = text ? "" : "# local agent work history\n";
-    try { fs.writeFileSync(gitignore, text + prefix + header + IGNORE_ENTRY + "\n", "utf8"); }
-    catch (e) { /* best-effort */ }
 }
 
 function createWorkHistoryRun(workspaceDir, { tool = "palsync", feature = "run", now = new Date() } = {}) {
@@ -125,6 +118,7 @@ function writeRunNotes(run, lines) {
 // Optional: cost (numeric), currency (default "USD"), phase ("build" | "review").
 function recordSessionCost(workspaceDir, entry) {
     if (!workspaceDir || !entry || typeof entry.model !== "string" || typeof entry.provider !== "string") return null;
+    ensureGitignored(workspaceDir);
     try {
         const filePath = path.join(workspaceDir, usage.SESSION_COST_FILE);
         const dir = path.dirname(filePath);

@@ -153,10 +153,13 @@ function completionClaimError(text, clean) {
     const p = parseTasks(text);
     if (!p.ok) return null; // no parseable table — nothing to contradict
     if (COMPLETION_CLAIM.test(clean)) {
+        // A "Next: <taskId>" pointer names a task precisely because it is NOT done, so it is the one
+        // place an id may appear without being a completion claim. Everything before it still counts.
+        const checkClean = clean.split(/\bNext:/i)[0];
         for (const r of p.rows) {
             if (r.status === "done") continue;
             const idRe = new RegExp("(^|[^A-Za-z0-9])" + r.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^A-Za-z0-9]|$)", "i");
-            if (idRe.test(clean)) {
+            if (idRe.test(checkClean)) {
                 return "Checkpoint claims completion for " + r.id + " but its Tasks-table status is \"" +
                     r.status + "\". If its success condition verifiably passed, run `palsync task " + r.id +
                     " done` first, then re-record the checkpoint; otherwise reword the checkpoint to match reality.";
@@ -176,7 +179,7 @@ function completionClaimError(text, clean) {
 }
 
 // append a checkpoint line to the end of the "## Checkpoints" section. Returns { ok, text } or error.
-function appendCleanCheckpoint(text, clean) {
+function appendCleanCheckpoint(text, clean, continuation) {
     const lines = text.split(/\r?\n/);
     const start = lines.findIndex(l => /^##\s+Checkpoints\b/i.test(l.trim()));
     if (start === -1) return { ok: false, error: "No \"## Checkpoints\" section found in EXECUTION.md." };
@@ -184,7 +187,11 @@ function appendCleanCheckpoint(text, clean) {
     for (let i = start + 1; i < lines.length; i++) { if (/^##\s+/.test(lines[i].trim())) { end = i; break; } }
     let insertAt = end;
     while (insertAt - 1 > start && lines[insertAt - 1].trim() === "") insertAt--;
-    lines.splice(insertAt, 0, "- " + clean);
+    if (continuation !== undefined && continuation !== null && String(continuation).trim() !== "") {
+        lines.splice(insertAt, 0, "- " + clean, String(continuation));
+    } else {
+        lines.splice(insertAt, 0, "- " + clean);
+    }
     return { ok: true, text: lines.join("\n") };
 }
 
@@ -249,10 +256,98 @@ function setStatusWithReason(text, id, status, reason, tried) {
     return Object.assign({}, updated, { text: appended.text, unchanged: false, reason: cleanReason, tried: cleanTried, to: status });
 }
 
+function parseModeFromExecution(text) {
+    const m = String(text).match(/mode:\s*(full|lite)/i);
+    return m ? m[1].toLowerCase() : null;
+}
+
+function deriveSessionNumber(text) {
+    const re = /^\s*-\s*==\s*session\s+(\d+)\b/gim;
+    let max = 0; let match;
+    while ((match = re.exec(String(text))) !== null) {
+        const n = Number(match[1]);
+        if (n > max) max = n;
+    }
+    return max + 1;
+}
+
+function deriveStatusCounts(rows) {
+    let done = 0; let blocked = 0; let needsFrontier = 0; let needsHuman = 0;
+    for (const r of rows) {
+        if (r.status === "done") done++;
+        else if (r.status === "blocked") blocked++;
+        else if (r.status === "needs-frontier") needsFrontier++;
+        else if (r.status === "needs-human") needsHuman++;
+    }
+    return { done, blocked, needsFrontier, needsHuman };
+}
+
+function findReadyTasks(rows) {
+    const doneIds = new Set(rows.filter(r => r.status === "done").map(r => r.id));
+    return rows.filter(r => r.status === "todo" && r.depends.every(d => doneIds.has(d)));
+}
+
+function inferNextState(text, explicitNext) {
+    const cleanNext = explicitNext !== undefined && explicitNext !== null ? String(explicitNext).replace(/[\r\n]+/g, " ").trim() : "";
+    if (cleanNext) {
+        if (/==\s*session\s+\d+/i.test(cleanNext)) {
+            return { ok: false, error: "Next must not contain a canonical session marker (\"== session N\"); provide a task id or prose instead." };
+        }
+        return { ok: true, next: cleanNext };
+    }
+    const parsed = parseTasks(text);
+    if (!parsed.ok) return parsed;
+    const ready = findReadyTasks(parsed.rows);
+    if (ready.length === 1) return { ok: true, next: ready[0].id };
+    if (ready.length === 0) {
+        return { ok: false, error: "Cannot infer Next: no single ready task. Provide --next \"<task id or prose>\" (e.g. --next \"review blockers / clear human gates\")." };
+    }
+    return { ok: false, error: "Cannot infer Next: multiple ready tasks (" + ready.map(r => r.id).join(", ") + "). Provide --next to disambiguate." };
+}
+
+function formatSessionSummary({ sessionNumber, date, mode, counts, next }) {
+    return "== session " + sessionNumber + " (" + date + "), mode " + mode + ": " +
+        counts.done + " done, " + counts.blocked + " blocked, " +
+        counts.needsFrontier + " needs-frontier, " + counts.needsHuman + " needs-human.\n   Next: " + next;
+}
+
+function buildSessionSummary(text, { mode, next } = {}) {
+    const parsed = parseTasks(text);
+    if (!parsed.ok) return { ok: false, error: parsed.error };
+    const invalid = parsed.rows.filter(r => STATUSES.indexOf(r.status) === -1);
+    if (invalid.length) {
+        return { ok: false, error: "EXECUTION.md has invalid task status: " + invalid.map(r => r.id + "=" + r.status).join(", ") + "." };
+    }
+    let useMode = mode ? String(mode).toLowerCase() : parseModeFromExecution(text);
+    if (!useMode) {
+        return { ok: false, error: "Mode not specified and not found in EXECUTION.md. Provide --mode full|lite." };
+    }
+    if (useMode !== "full" && useMode !== "lite") {
+        return { ok: false, error: "Invalid mode \"" + mode + "\". Use full or lite." };
+    }
+    const counts = deriveStatusCounts(parsed.rows);
+    const sessionNumber = deriveSessionNumber(text);
+    const nextRes = inferNextState(text, next);
+    if (!nextRes.ok) return nextRes;
+    const date = new Date().toISOString().slice(0, 10);
+    const summary = formatSessionSummary({ sessionNumber, date, mode: useMode, counts, next: nextRes.next });
+    // Session summary is canonical two lines; validate the full text through the anti-fabrication gate
+    // before splitting, then append as two lines via the checkpoint path.
+    const claimError = completionClaimError(text, summary);
+    if (claimError) return { ok: false, error: claimError };
+    const parts = summary.split("\n");
+    const first = parts[0];
+    const continuation = parts.length > 1 ? parts.slice(1).join("\n") : null;
+    const appended = appendCleanCheckpoint(text, first, continuation);
+    if (!appended.ok) return appended;
+    return { ok: true, text: appended.text, summary, counts, sessionNumber, mode: useMode, next: nextRes.next, date };
+}
+
 // --- thin file wrappers used by the CLI ---
 function readExecution(file) { return fs.readFileSync(file, "utf8"); }
 function writeExecution(file, text) { fs.writeFileSync(file, text, "utf8"); }
 
 module.exports = { STATUSES, BLOCKED_STATUSES, TRIED_STATUSES, MAX_BLOCKER_REASON, parseTasks, listTasks, renderReadyTicket, setStatus,
     setStatusWithReason, appendCheckpoint, blockerReasons, terminalReasonState, normalizeBlockerReason,
-    replaceCell, readExecution, writeExecution };
+    replaceCell, readExecution, writeExecution,
+    parseModeFromExecution, deriveSessionNumber, deriveStatusCounts, findReadyTasks, inferNextState, formatSessionSummary, buildSessionSummary };

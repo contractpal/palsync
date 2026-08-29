@@ -308,7 +308,7 @@
   {
     "name": "pal_screenshot",
     "title": "Capture rendered pal screen",
-    "description": "Render the last-pushed pal, detect runtime errors, and return a browser-computed designAudit. Capture desktop and mobile; require zero audit errors and inspect pixels. imageless:true returns only the audit. Missing browser/auth is unavailable, never a pass.",
+    "description": "Render the last-pushed pal, detect runtime errors, and return a browser-computed designAudit. Capture desktop and mobile; require zero audit errors and inspect pixels. imageless:true returns only the audit. Missing browser/auth is unavailable, never a pass. Optional workflow/workflowName select the engine/workflow explicitly (takes precedence over auto-detection, extension stripped); console/transaction action+params render the action state before capture (encoded via URLSearchParams).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -335,20 +335,57 @@
         "imageless": {
           "description": "Return designAudit without image data.",
           "type": "boolean"
+        },
+        "workflow": {
+          "description": "Explicit workflow type — overrides auto-detection.",
+          "type": "string",
+          "enum": [
+            "console",
+            "web",
+            "transaction"
+          ]
+        },
+        "workflowName": {
+          "description": "Registered workflow name (with or without file extension — extension is stripped consistently).",
+          "type": "string"
+        },
+        "action": {
+          "description": "Console/transaction action name (appended as cp-ws-doaction before capture).",
+          "type": "string"
+        },
+        "params": {
+          "description": "Scalar query parameters appended with the action (reserved keys cp-auth/nxProfileId/cp-workflow/cp-ws-doaction are refused).",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          }
         }
       },
       "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false
     }
   },
   {
     "name": "pal_exercise",
     "title": "Exercise pal behavior",
-    "description": "Exercise last-pushed actions end-to-end and assert results. Read local markup first; do not discover fields or selectors by retries. Steps stop at the first failure. WEB uses action+params; console/transaction fills inputs and clicks exact text. Scope duplicate controls with within and unique {{runId}}. Use after create/edit/delete.",
+    "description": "Exercise last-pushed actions end-to-end and assert results. Read local markup first; do not discover fields or selectors by retries. Steps stop at the first failure. WEB uses action+params; console/transaction fills inputs and clicks exact text. Scope duplicate controls with within and unique {{runId}}. waitFor waits a bounded time for the step's existing expect/absent to become true by polling visible text only (never replaying the mutation); waiting WEB steps use browser mode. Use after create/edit/delete.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -421,6 +458,24 @@
                 "type": "array",
                 "items": {
                   "type": "string"
+                }
+              },
+              "waitFor": {
+                "description": "Bounded wait for existing expect/absent to become true; polls visible text only, never replays the mutation.",
+                "type": "object",
+                "properties": {
+                  "timeoutMs": {
+                    "description": "Bounded wait timeout in ms (default 15000, max 60000).",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 60000
+                  },
+                  "intervalMs": {
+                    "description": "Poll interval in ms (default 500, min 100).",
+                    "type": "integer",
+                    "minimum": 100,
+                    "maximum": 60000
+                  }
                 }
               }
             }
@@ -949,6 +1004,202 @@
     },
     "annotations": {
       "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_dataset_query",
+    "title": "Query dataset rows",
+    "description": "Query a bounded page of dataset rows from the current Pal (read-only). Validates dataset and columns against the local pal.json before the server call. Uses the dedicated QUERY_DATASET operation only.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "dataset": {
+          "type": "string",
+          "description": "Dataset name as defined in pal.json."
+        },
+        "startRecord": {
+          "description": "Zero-based start row (default 0).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "limit": {
+          "description": "Max rows to return (1-100, default 20).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "mode": {
+          "description": "Top-level filter mode for conditions (default AND).",
+          "type": "string",
+          "enum": [
+            "AND",
+            "OR"
+          ]
+        },
+        "conditions": {
+          "description": "Flat filter conditions using the vendored operator vocabulary.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "column": {
+                "type": "string"
+              },
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "NULL",
+                  "NOT_NULL",
+                  "EQUAL",
+                  "NOT_EQUAL",
+                  "GREATER_THAN",
+                  "LESS_THAN",
+                  "GREATER_THAN_EQUAL",
+                  "LESS_THAN_EQUAL",
+                  "BETWEEN",
+                  "LIKE",
+                  "NOT_LIKE"
+                ]
+              },
+              "value1": {
+                "type": "string"
+              },
+              "value2": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "column",
+              "operator"
+            ]
+          }
+        },
+        "orderBy": {
+          "description": "Column ordering.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "column": {
+                "type": "string"
+              },
+              "order": {
+                "type": "string",
+                "enum": [
+                  "ASC",
+                  "DESC",
+                  "NATURAL"
+                ]
+              }
+            },
+            "required": [
+              "column"
+            ]
+          }
+        }
+      },
+      "required": [
+        "dataset"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_dataset_count",
+    "title": "Count dataset records",
+    "description": "Count matching dataset records in the current Pal (read-only). Same filter vocabulary as pal_dataset_query but requests at most one row and returns only the total count.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "dataset": {
+          "type": "string",
+          "description": "Dataset name as defined in pal.json."
+        },
+        "mode": {
+          "description": "Top-level filter mode for conditions (default AND).",
+          "type": "string",
+          "enum": [
+            "AND",
+            "OR"
+          ]
+        },
+        "conditions": {
+          "description": "Flat filter conditions using the vendored operator vocabulary.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "column": {
+                "type": "string"
+              },
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "NULL",
+                  "NOT_NULL",
+                  "EQUAL",
+                  "NOT_EQUAL",
+                  "GREATER_THAN",
+                  "LESS_THAN",
+                  "GREATER_THAN_EQUAL",
+                  "LESS_THAN_EQUAL",
+                  "BETWEEN",
+                  "LIKE",
+                  "NOT_LIKE"
+                ]
+              },
+              "value1": {
+                "type": "string"
+              },
+              "value2": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "column",
+              "operator"
+            ]
+          }
+        },
+        "orderBy": {
+          "description": "Column ordering (validated but not needed for count).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "column": {
+                "type": "string"
+              },
+              "order": {
+                "type": "string",
+                "enum": [
+                  "ASC",
+                  "DESC",
+                  "NATURAL"
+                ]
+              }
+            },
+            "required": [
+              "column"
+            ]
+          }
+        }
+      },
+      "required": [
+        "dataset"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
     }

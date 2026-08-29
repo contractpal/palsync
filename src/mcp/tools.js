@@ -28,6 +28,7 @@ const {
 } = require("../core/impactContext");
 const { cachedLint } = require("../core/lintCache");
 const { appendToolEvidence } = require("../core/usage");
+const { executeDatasetQuery } = require("../core/datasetQuery");
 const palsyncfile = require("../core/palsyncfile");
 const { onDemandSyncSections } = require("../launcher/contextInject");
 const { routeItems } = require("../core/piHelpers");
@@ -1202,15 +1203,19 @@ const TOOLS = [
     },
     {
         name: "pal_screenshot",
-        description: "Render the last-pushed pal, detect runtime errors, and return a browser-computed designAudit. Capture desktop and mobile; require zero audit errors and inspect pixels. imageless:true returns only the audit. Missing browser/auth is unavailable, never a pass.",
+        description: "Render the last-pushed pal, detect runtime errors, and return a browser-computed designAudit. Capture desktop and mobile; require zero audit errors and inspect pixels. imageless:true returns only the audit. Missing browser/auth is unavailable, never a pass. Optional workflow/workflowName select the engine/workflow explicitly (takes precedence over auto-detection, extension stripped); console/transaction action+params render the action state before capture (encoded via URLSearchParams).",
         inputShape: {
             page: z.string().optional().describe("WEB page path; default is home."),
             feature: z.string().optional().describe("Work-history feature label."),
             viewport: z.enum(["desktop", "mobile"]).optional().describe("desktop (default) or mobile."),
             fullPage: z.boolean().optional().describe("Capture the full scroll height."),
-            imageless: z.boolean().optional().describe("Return designAudit without image data.")
+            imageless: z.boolean().optional().describe("Return designAudit without image data."),
+            workflow: z.enum(["console", "web", "transaction"]).optional().describe("Explicit workflow type — overrides auto-detection."),
+            workflowName: z.string().optional().describe("Registered workflow name (with or without file extension — extension is stripped consistently)."),
+            action: z.string().optional().describe("Console/transaction action name (appended as cp-ws-doaction before capture)."),
+            params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional().describe("Scalar query parameters appended with the action (reserved keys cp-auth/nxProfileId/cp-workflow/cp-ws-doaction are refused).")
         },
-        async run(ctx, { page, feature, viewport, fullPage, imageless } = {}) {
+        async run(ctx, { page, feature, viewport, fullPage, imageless, workflow, workflowName, action, params } = {}) {
             // Durable render evidence (.palsync/tool-evidence.jsonl), mirroring pal_exercise at
             // its appendToolEvidence call: `palsync review check` is a separate offline process
             // that cannot see ctx, so every path — clean capture, unavailable browser, testing
@@ -1235,7 +1240,7 @@ const TOOLS = [
                 if (!disabled.evidenceRecorded) disabled.message += persistWarning;
                 return disabled;
             }
-            const res = await runScreenshot(ctx.session, ctx.record.palGuid, { page, viewport, fullPage, imageless });
+            const res = await runScreenshot(ctx.session, ctx.record.palGuid, { page, viewport, fullPage, imageless, workflow, workflowName, action, params });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             if (!res.captured) {
                 let persistNote = "";
@@ -1246,8 +1251,17 @@ const TOOLS = [
                     }));
                     if (!res.evidenceRecorded) persistNote = persistWarning;
                 }
+                // Build a reason that lists valid choices when the workflow selection was invalid
+                let reason = res.reason;
+                if (res.blocked === "unknown-workflow-type" && res.availableKinds) {
+                    reason += " Available types: " + (res.availableKinds.length ? res.availableKinds.join(", ") : "(none)");
+                } else if (res.blocked === "unknown-workflow-name" && res.availableWorkflowNames) {
+                    reason += " Available names: " + (res.availableWorkflowNames.length ? res.availableWorkflowNames.join(", ") : "(none)");
+                } else if (res.blocked === "reserved-param") {
+                    reason += " Reserved keys: cp-auth, nxProfileId, cp-workflow, cp-ws-doaction";
+                }
                 return Object.assign(res, {
-                    message: (res.available === false ? "Screenshot unavailable: " : "Could not screenshot: ") + res.reason +
+                    message: (res.available === false ? "Screenshot unavailable: " : "Could not screenshot: ") + reason +
                         (res.validation ? "\n" + formatValidation(res.validation) : "") + persistNote
                 });
             }
@@ -1267,6 +1281,18 @@ const TOOLS = [
             // as REPORTED fields. Severity vocabulary is "error" | "warning" (screenshot.js
             // inspectDesignQuality), not "warn". Plain const — `out` does not exist yet here;
             // the flag is folded into the response fields below, next to visualGate.
+            // Persist only safe selection metadata — workflow kind/name and action name are safe;
+            // param VALUES must never enter tool-evidence or work-history metadata.
+            const safeSelection = {};
+            if (workflow) safeSelection.workflow = workflow;
+            if (workflowName) {
+                try { const { normalizeWorkflowName: norm } = require("../core/test"); safeSelection.workflowName = norm(workflowName); } catch (e) { safeSelection.workflowName = String(workflowName); }
+            }
+            if (action) safeSelection.action = String(action).trim();
+            // param keys are safe to list (without values) for observability; values are discarded
+            if (params && typeof params === "object" && Object.keys(params).length) {
+                safeSelection.paramKeys = Object.keys(params).slice(0, 20);
+            }
             const evidenceRecorded = appendToolEvidence(ctx.workspaceDir, Object.assign(evidenceBase(), {
                 viewportName: res.viewportName,
                 renderClean: res.captured === true && !res.renderError &&
@@ -1274,7 +1300,8 @@ const TOOLS = [
                 auditErrors: (res.designAudit && res.designAudit.errors) || 0,
                 auditRules: [...new Set(((res.designAudit && res.designAudit.findings) || [])
                     .filter(f => f.severity === "error" || f.severity === "warning")
-                    .map(f => String(f.rule).slice(0, 60)))].slice(0, 10)
+                    .map(f => String(f.rule).slice(0, 60)))].slice(0, 10),
+                selection: Object.keys(safeSelection).length ? safeSelection : undefined
             }));
             // Save the PNG to a file the harness can Read, and return MCP image content so a
             // vision-capable model sees the render inline.
@@ -1286,6 +1313,16 @@ const TOOLS = [
                 run = createWorkHistoryRun(ctx.workspaceDir, { tool: "pal_screenshot", feature: featureLabel });
                 if (!imageless) filePath = writeArtifactFile(run, "screenshot-" + res.viewportName + ".png", Buffer.from(res.pngBase64, "base64"));
                 auditPath = writeArtifactFile(run, "design-audit.json", JSON.stringify(res.designAudit || { inspected: false }, null, 2), "utf8");
+                // Work-history metadata persists only safe selection names — no param values
+                const metadataSelection = {};
+                if (workflow) metadataSelection.workflow = workflow;
+                if (workflowName) {
+                    try { const { normalizeWorkflowName: norm2 } = require("../core/test"); metadataSelection.workflowName = norm2(workflowName); } catch (e) { metadataSelection.workflowName = String(workflowName); }
+                }
+                if (action) metadataSelection.action = String(action).trim();
+                if (params && typeof params === "object" && Object.keys(params).length) {
+                    metadataSelection.paramKeys = Object.keys(params).slice(0, 20);
+                }
                 writeRunMetadata(run, {
                     palGuid: ctx.record.palGuid,
                     palName: ctx.record.palName,
@@ -1298,6 +1335,7 @@ const TOOLS = [
                     renderError: res.renderError || null,
                     styleStatus: res.styleStatus || null,
                     designAudit: res.designAudit || null,
+                    selection: Object.keys(metadataSelection).length ? metadataSelection : null,
                     artifact: filePath ? pathMod.basename(filePath) : null,
                     designAuditArtifact: auditPath ? pathMod.basename(auditPath) : null,
                     smallDims: res.smallDims || null
@@ -1370,7 +1408,7 @@ const TOOLS = [
     },
     {
         name: "pal_exercise",
-        description: "Exercise last-pushed actions end-to-end and assert results. Read local markup first; do not discover fields or selectors by retries. Steps stop at the first failure. WEB uses action+params; console/transaction fills inputs and clicks exact text. Scope duplicate controls with within and unique {{runId}}. Use after create/edit/delete.",
+        description: "Exercise last-pushed actions end-to-end and assert results. Read local markup first; do not discover fields or selectors by retries. Steps stop at the first failure. WEB uses action+params; console/transaction fills inputs and clicks exact text. Scope duplicate controls with within and unique {{runId}}. waitFor waits a bounded time for the step's existing expect/absent to become true by polling visible text only (never replaying the mutation); waiting WEB steps use browser mode. Use after create/edit/delete.",
         inputShape: {
             steps: z.array(z.object({
                 page: z.string().optional().describe("WEB page path to load first."),
@@ -1380,7 +1418,11 @@ const TOOLS = [
                 click: z.string().optional().describe("Exact visible text or simple selector to click."),
                 within: z.string().optional().describe("CSS scope when click text matches multiple elements."),
                 expect: z.array(z.string()).optional().describe("Visible strings required after this step."),
-                absent: z.array(z.string()).optional().describe("Unique visible strings forbidden after this step.")
+                absent: z.array(z.string()).optional().describe("Unique visible strings forbidden after this step."),
+                waitFor: z.object({
+                    timeoutMs: z.number().int().min(1).max(60000).optional().describe("Bounded wait timeout in ms (default 15000, max 60000)."),
+                    intervalMs: z.number().int().min(100).max(60000).optional().describe("Poll interval in ms (default 500, min 100).")
+                }).optional().describe("Bounded wait for existing expect/absent to become true; polls visible text only, never replays the mutation.")
             })).min(1).max(10).describe("Ordered; stops at first failure."),
             workflow: z.enum(["console", "web", "transaction"]).optional().describe("Engine; default auto-detected."),
             viewport: z.enum(["desktop", "mobile"]).optional().describe("Viewport; default desktop.")
@@ -1566,7 +1608,7 @@ const TOOLS = [
                     filesChanged: res.preview.filesChanged,
                     matches: res.preview.matches,
                     unchanged: res.preview.unchanged,
-                    diff: res.preview.diff.slice(0, 600) + (res.preview.diff.length > 600 ? "…" : ""),
+                    diff: res.preview.diff.slice(0, 600) + (res.preview.diff.length > 600 ? "…" : "")
                 };
             } else if (res.applied) {
                 // An applied rewrite must never return ok:true with zero evidence of what was written.
@@ -1577,12 +1619,12 @@ const TOOLS = [
                     alreadyApplied: !!res.applied.alreadyApplied,
                     writeError: res.applied.writeError
                         ? { file: res.applied.writeError.file, message: res.applied.writeError.message, filesWritten: res.applied.writeError.filesWritten || [] }
-                        : null,
+                        : null
                 };
             }
             return Object.assign(
                 res,
-                envelopeFields(ctx.workspaceDir, "pal_ast", res, args, astEnvelopeProjection(res, args), Object.keys(extra).length ? extra : null),
+                envelopeFields(ctx.workspaceDir, "pal_ast", res, args, astEnvelopeProjection(res, args), Object.keys(extra).length ? extra : null)
             );
         }
     },
@@ -1950,6 +1992,80 @@ const TOOLS = [
             }
             return { unlocked: false, message: "No palsync lock to release." };
         }
+    },
+    {
+        name: "pal_dataset_query",
+        description: "Query a bounded page of dataset rows from the current Pal (read-only). Validates dataset and columns against the local pal.json before the server call. Uses the dedicated QUERY_DATASET operation only.",
+        needsLock: false,
+        inputShape: {
+            dataset: z.string().describe("Dataset name as defined in pal.json."),
+            startRecord: z.number().int().min(0).optional().describe("Zero-based start row (default 0)."),
+            limit: z.number().int().min(1).max(100).optional().describe("Max rows to return (1-100, default 20)."),
+            mode: z.enum(["AND", "OR"]).optional().describe("Top-level filter mode for conditions (default AND)."),
+            conditions: z.array(z.object({
+                column: z.string(),
+                operator: z.enum(["NULL", "NOT_NULL", "EQUAL", "NOT_EQUAL", "GREATER_THAN", "LESS_THAN", "GREATER_THAN_EQUAL", "LESS_THAN_EQUAL", "BETWEEN", "LIKE", "NOT_LIKE"]),
+                value1: z.string().optional(),
+                value2: z.string().optional()
+            })).optional().describe("Flat filter conditions using the vendored operator vocabulary."),
+            orderBy: z.array(z.object({
+                column: z.string(),
+                order: z.enum(["ASC", "DESC", "NATURAL"]).optional()
+            })).optional().describe("Column ordering.")
+        },
+        async run(ctx, args = {}) {
+            // This tool is structurally read-only: it never acquires a lock, never writes
+            // usage/evidence/work-history, and never persists returned dataset values.
+            const result = await executeDatasetQuery(ctx.workspaceDir, ctx.session, ctx.record.palGuid, args, false);
+            if (!result.ok) {
+                return { ok: false, error: result.error, message: result.error };
+            }
+            const note = result.truncated ? " (truncated to fit response cap)" : "";
+            const rowsJson = JSON.stringify(result.rows, null, 2);
+            const message = "Dataset " + JSON.stringify(args.dataset) + ": " + result.rows.length + " row(s) returned, totalRecords=" + result.totalRecords + note + "\n\n" + rowsJson;
+            return {
+                ok: true,
+                dataset: args.dataset,
+                rows: result.rows,
+                totalRecords: result.totalRecords,
+                truncated: !!result.truncated,
+                message,
+                content: [{ type: "text", text: message }]
+            };
+        }
+    },
+    {
+        name: "pal_dataset_count",
+        description: "Count matching dataset records in the current Pal (read-only). Same filter vocabulary as pal_dataset_query but requests at most one row and returns only the total count.",
+        needsLock: false,
+        inputShape: {
+            dataset: z.string().describe("Dataset name as defined in pal.json."),
+            mode: z.enum(["AND", "OR"]).optional().describe("Top-level filter mode for conditions (default AND)."),
+            conditions: z.array(z.object({
+                column: z.string(),
+                operator: z.enum(["NULL", "NOT_NULL", "EQUAL", "NOT_EQUAL", "GREATER_THAN", "LESS_THAN", "GREATER_THAN_EQUAL", "LESS_THAN_EQUAL", "BETWEEN", "LIKE", "NOT_LIKE"]),
+                value1: z.string().optional(),
+                value2: z.string().optional()
+            })).optional().describe("Flat filter conditions using the vendored operator vocabulary."),
+            orderBy: z.array(z.object({
+                column: z.string(),
+                order: z.enum(["ASC", "DESC", "NATURAL"]).optional()
+            })).optional().describe("Column ordering (validated but not needed for count).")
+        },
+        async run(ctx, args = {}) {
+            // Count is the same shared adapter with limit hard-coded to 1 and only totalRecords returned.
+            // Values are never persisted to usage/evidence/work-history.
+            const result = await executeDatasetQuery(ctx.workspaceDir, ctx.session, ctx.record.palGuid, args, true);
+            if (!result.ok) {
+                return { ok: false, error: result.error, message: result.error };
+            }
+            return {
+                ok: true,
+                dataset: args.dataset,
+                totalRecords: result.totalRecords,
+                message: "Dataset " + JSON.stringify(args.dataset) + ": totalRecords=" + result.totalRecords
+            };
+        }
     }
 ];
 
@@ -1968,7 +2084,7 @@ const TOOL_HINTS = {
     pal_debug: ["Read server debug output", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_preview: ["Preview rendered pal", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_fetch: ["Fetch rendered web page", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
-    pal_screenshot: ["Capture rendered pal screen", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_screenshot: ["Capture rendered pal screen", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
     pal_exercise: ["Exercise pal behavior", { readOnlyHint: false, destructiveHint: false, idempotentHint: false }],
     pal_seo_audit: ["Audit web page SEO", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_spec_lint: ["Lint pal specification", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
@@ -1981,6 +2097,8 @@ const TOOL_HINTS = {
     // Safe sync is additive, but recreate:true can drop every row, so the tool as a whole is
     // destructive and clients should present a confirmation affordance.
     pal_sync_datasets: ["Synchronize pal datasets", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
+    pal_dataset_query: ["Query dataset rows", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_dataset_count: ["Count dataset records", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_data_set: ["Set pal Data map", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
     pal_data_delete: ["Delete pal Data map", { readOnlyHint: false, destructiveHint: true, idempotentHint: true }],
     pal_datalist_set: ["Set pal DataList", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],

@@ -35,3 +35,7 @@ Text tokens use the same bytes/4 estimator as `palsync cost`; image estimates us
 Pi 0.80.10 exposes compaction events but its `session_before_compact` result cannot contribute context or instructions. PalSync therefore installs no custom summarizer or compaction mutation; details refs remain available in tool trailers. Revisit when Pi provides an additive compaction-content API.
 
 Middleware order: PalSync semantic condensation → Agent Trim generic trimming → observers/telemetry. Agent Trim must preserve the final `Full result:` trailer.
+
+## Session handoff
+
+Before dispatching `pal-review` or stopping a session, run `palsync session-summary [--mode full|lite] [--next "<text>"] [--dir <workspace>]` to append the canonical two-line handoff summary. Counts and session number are derived from the parsed `EXECUTION.md` task table and the checkpoint is appended through the validated checkpoint gate in a single atomic write.

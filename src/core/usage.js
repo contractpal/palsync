@@ -17,6 +17,18 @@
 const fs = require("fs");
 const path = require("path");
 const { contentStats: sharedContentStats } = require("./piHelpers");
+let workspaceIgnore = null;
+function getWorkspaceIgnore() {
+    if (!workspaceIgnore) {
+        try { workspaceIgnore = require("./workspaceIgnore"); } catch (e) { workspaceIgnore = null; }
+    }
+    return workspaceIgnore;
+}
+function ensureTransientIgnore(workspaceDir) {
+    const wi = getWorkspaceIgnore();
+    if (!wi || !workspaceDir) return;
+    try { wi.ensureGitignoreSync(workspaceDir); } catch (e) { /* best-effort */ }
+}
 
 const USAGE_FILE = ".palsync.usage.json";
 const SESSION_COST_FILE = ".palsync/session-cost.json";
@@ -98,7 +110,10 @@ function flush(workspaceDir) {
         if (timer) clearTimeout(timer);
         flushTimers.delete(workspaceDir);
         const u = tallies.get(workspaceDir);
-        if (u) fs.writeFileSync(usagePath(workspaceDir), JSON.stringify(u, null, 2));
+        if (u) {
+            ensureTransientIgnore(workspaceDir);
+            fs.writeFileSync(usagePath(workspaceDir), JSON.stringify(u, null, 2));
+        }
     } catch (e) { /* never let metering break a tool call */ }
 }
 
@@ -173,6 +188,7 @@ function recordToolCall(workspaceDir, toolName, bytes, tokens, {
 
 function recordContextGeneration(workspaceDir, event) {
     try {
+        ensureTransientIgnore(workspaceDir);
         const existing = normalizeV2(readJson(usagePath(workspaceDir))) || emptyTally();
         existing.contextGenerations = (existing.contextGenerations || []).concat([event]).slice(-20);
         fs.writeFileSync(usagePath(workspaceDir), JSON.stringify(existing, null, 2) + "\n", "utf8");
@@ -292,6 +308,7 @@ function recordSessionCost(workspaceDir, entry) {
     let locked = false;
     let tmp = null;
     try {
+        ensureTransientIgnore(workspaceDir);
         if (typeof workspaceDir !== "string" || !workspaceDir) return { ok: false, error: "workspace directory is required" };
         const valid = normalizeSessionCostEntry(entry);
         if (!valid.ok) return valid;
@@ -404,6 +421,7 @@ function readJsonLines(file, schema) {
 // call this writer; failures remain non-fatal to the underlying tool operation.
 function appendToolEvidence(workspaceDir, entry) {
     try {
+        ensureTransientIgnore(workspaceDir);
         const file = path.join(workspaceDir, TOOL_EVIDENCE_FILE);
         fs.mkdirSync(path.dirname(file), { recursive: true });
         fs.appendFileSync(file, JSON.stringify(Object.assign({}, entry, {

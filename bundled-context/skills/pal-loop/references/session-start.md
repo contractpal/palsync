@@ -38,6 +38,12 @@ Commit after every task. **git is a LOCAL checkpoint only** — the server
 is the source of truth; `git checkout` does NOT undo a pushed change
 (recovery: "On fail" below). Never push this repo.
 
+Transient PalSync artifacts (`.agent-work-history/`, `.palsync/cache/`, usage tallies,
+session-cost files/lock, Pi usage, tool evidence) are excluded from task commits by
+harness-enforced `.gitignore` management and index migration — not by model discipline.
+Do not manually `git add` those paths and do not ignore the whole `.palsync/` directory
+(baseline snapshots, context manifests, `EXECUTION.md`, and `REVIEW.md` remain tracked).
+
 ## Just-in-time skill loading (§9 manifest)
 
 Load exactly the skills SPEC.md §9 lists, just in time. §9 is the

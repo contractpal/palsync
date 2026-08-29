@@ -14,8 +14,7 @@ to a human. Every skill that touches console verification points here instead of
 ## Verifying a console render
 1. Try to capture it. The screenshot capability is either the `pal_screenshot` MCP tool (Claude
    Code) OR the `palsync screenshot` CLI subcommand (Pi / headless harnesses, no MCP) — same core,
-   same args (page, viewport, fullPage). Playwright replays the cp-auth redirect chain when Chromium
-   is installed. Don't assume MCP.
+   same args (page, viewport, fullPage, workflow, workflowName, action, params). Explicit workflow/type/name selection wins over auto-detection; console/transaction action+params render the action state before capture (encoded via URLSearchParams; reserved keys cp-auth/nxProfileId/cp-workflow/cp-ws-doaction are refused). Workflow names are normalized by stripping file extensions consistently. Playwright replays the cp-auth redirect chain when Chromium is installed. Don't assume MCP.
 2. **`captured:true`** → the render is agent-visible after all.
    - **Check the final captured URL.** It must be the intended console screen. A redirect to a
      `/login/` or Login route is expired authentication, not a successful render, even when the

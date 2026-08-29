@@ -267,3 +267,17 @@ the surrounding pal already does.
 - **Test end-of-loop termination.** The most common bug is "progress bar keeps polling
   forever" — verify that the final state (`complete`) stops rendering the `pollLink` and
   the browser loop self-terminates.
+
+## Testing a progress UI with `pal_exercise`
+
+Use a bounded `waitFor` on the step that should see the final state. The step's `expect`/`absent`
+strings are the completion predicate; the wait only re-reads `innerText("body")` and markup and
+never replays the triggering click or action:
+
+```js
+{ click: "Start job", expect: ["Done"], waitFor: { timeoutMs: 15000, intervalMs: 500 } }
+```
+
+For a WEB job UI, `waitFor` forces browser mode so the current visible state is observed. A render
+error aborts the wait immediately; a timeout is a behavior failure that retains the last observed
+assertion state. Keep `expect`/`absent` focused on the strings that prove the job completed.

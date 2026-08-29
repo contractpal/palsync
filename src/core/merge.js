@@ -27,6 +27,8 @@ const path = require("path");
 const { pull, listTrackedFiles, mergePreservedEntries, CREATABLE_FOLDERS } = require("./pull");
 const baseline = require("./baseline");
 const { resolveServerPalByGuid } = require("./resolve");
+const { buildPersistedObject, serializeManifest } = require("./manifestPersist");
+const { writeIfChanged } = require("./atomicWrite");
 
 // Pure 3-way classification for ONE file, given its content (string) or null (absent) in each of
 // the three versions. Returns { action, reason } where action is one of:
@@ -131,16 +133,17 @@ async function mergeWorkspace(session, guid, record, workspaceDir) {
             }
         }
 
-        // pal.json: take THEIRS (the server manifest), then carry forward entries for any local
-        // files we kept that the server doesn't track yet (local adds / kept-after-server-delete).
+        // pal.json: take THEIRS (the server manifest) through the same persistence contract as
+        // pull — omit runtime keys, preserve empty shape/key order, trailing newline, write-if-changed.
         const serverPalJson = JSON.parse(readFileOrNull(path.join(tmp, "pal.json")) || "null");
         if (serverPalJson) {
             const serverSet = new Set(serverPaths);
             const keepRels = [].concat(plan.keepLocal.map(f => f.rel), plan.conflicts.map(f => f.rel))
                 .filter(rel => !serverSet.has(rel));
-            // Reuse pull's entry-carrying (creatable types only) against the SERVER pal.json.
             mergePreservedEntries(serverPalJson, oldLocalPalJson, keepRels);
-            await fsp.writeFile(path.join(workspaceDir, "pal.json"), JSON.stringify(serverPalJson, null, 2), "utf8");
+            const plain = buildPersistedObject(serverPalJson, oldLocalPalJson);
+            const content = serializeManifest(plain, oldLocalPalJson);
+            await writeIfChanged(path.join(workspaceDir, "pal.json"), content);
         }
 
         // The workspace has now incorporated THEIRS. The new ancestor is the server state, and the

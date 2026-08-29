@@ -38,6 +38,25 @@ After an edit, require both the new value and absence of the old value; otherwis
 pass. After a delete, assert the unique deleted value is absent. Never use global `absent` for a state word
 such as “available” or global empty-state copy such as “No equipment yet” on a multi-row list.
 
+## Waiting for asynchronous state
+
+A background job, self-polling fragment, or WebSocket push may update the current page after the
+triggering action completes. Add a bounded `waitFor` to the step that should observe that update:
+
+```js
+{ click: "Start job", expect: ["Done {{runId}}"], waitFor: { timeoutMs: 15000, intervalMs: 500 } }
+```
+
+The step's existing `expect`/`absent` arrays are the completion predicate. Defaults are 15 s timeout
+(max 60 s) and 500 ms interval (min 100 ms); invalid or oversized values are refused before any
+browser is launched. A waiting WEB step uses browser mode so current visible state is observed.
+
+Safety: each `action`/`click` executes exactly once. The wait loop only re-reads `innerText("body")`
+and current markup — it never navigates, reloads, fetches, clicks, or invokes a workflow again while
+polling. A render error aborts the wait immediately. A timeout is a behavior failure that retains the
+last observed assertion state as evidence. Waiting does not change the pre-mutation retry boundary or
+the step-count cap (still 10 steps).
+
 ## Failure evidence
 
 A failed or blocked browser run captures bounded evidence and persists failure-only artifacts in a run
@@ -51,6 +70,8 @@ body-snapshot retry before the fallback) or `screen-hints.json` when the snapsho
 capture — this is a best-effort control, not full screenshot secrecy), `metadata.json`, and `notes.md`.
 The call returns a compact evidence summary with the artifact path; partially failed artifact writes
 are reported as an explicit warning.
+
+A successful `pal_exercise` returns a bounded `finalSnapshot` — browser runs expose final visible body text (`source: "visible"`), fetch runs expose server markup with honest `server-markup` provenance. Text is scrubbed and capped (~4k) with an explicit truncation marker; failed/blocked/invalid runs return no snapshot. The snapshot never enters the durable evidence ledger (only the data-minimized summary does) and the human-readable result includes a compact final-snapshot line.
 
 A blocked/failed `pal_exercise` is NOT a PASS — do not mark the pal done. Inspect the artifacts (browser
 events, accessibility snapshot, failure screenshot) and derive the fix from them instead of probing

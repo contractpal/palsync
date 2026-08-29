@@ -18,7 +18,9 @@
 //
 // SECURITY: the console URL is credential-bearing. Never return or log _previewUrl — the result
 // carries the image + a SANITIZED landing URL (origin + path only, query/credentials stripped).
-const { runTest } = require("./test");
+const { runTest, normalizeWorkflowName, RESERVED_QUERY_KEYS } = require("./test");
+// Reserved keys mirror test.js vendored evidence (cp-auth, nxProfileId, cp-workflow, cp-ws-doaction).
+// RESERVED_QUERY_KEYS is imported from test.js so screenshot and preview share one allow-list.
 
 const VIEWPORTS = {
     desktop: { width: 1280, height: 800 },
@@ -533,19 +535,109 @@ async function downscaleToJpeg(pg, pngBase64, scale = null, quality = 0.42) {
     }
 }
 
+// Validate scalar param values — only string/number/boolean/ null are allowed as query fragments.
+function isScalarParamValue(v) {
+    return typeof v === "string" || typeof v === "number" || typeof v === "boolean";
+}
+
+// Redact exact supplied param values from browser-derived textual metadata before persistence.
+// The page may echo a param value into visible text, which then flows into designAudit samples
+// and renderError messages. Replace literal occurrences of each supplied value.
+function redactParamValuesFromText(text, params) {
+    if (!text || typeof text !== "string") return text;
+    if (!params || typeof params !== "object") return text;
+    let out = text;
+    for (const v of Object.values(params)) {
+        const val = String(v);
+        if (!val) continue;
+        const esc = val.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        out = out.replace(new RegExp(esc, "g"), "<redacted>");
+    }
+    return out;
+}
+
+function redactParamValuesFromAudit(audit, params) {
+    if (!audit || !params || typeof params !== "object" || !Object.keys(params).length) return audit;
+    if (!audit.findings || !Array.isArray(audit.findings)) return audit;
+    const scrub = (s) => redactParamValuesFromText(s, params);
+    for (const f of audit.findings) {
+        if (typeof f.message === "string") f.message = scrub(f.message);
+        if (Array.isArray(f.samples)) f.samples = f.samples.map(scrub);
+    }
+    return audit;
+}
+
+function redactParamValuesFromRenderError(err, params) {
+    if (!err || !params || typeof params !== "object" || !Object.keys(params).length) return err;
+    const scrub = (s) => redactParamValuesFromText(s, params);
+    const out = Object.assign({}, err);
+    for (const k of ["message", "raw", "exception", "workflow", "function", "methodCalled", "line"]) {
+        if (typeof out[k] === "string") out[k] = scrub(out[k]);
+    }
+    return out;
+}
+
+// Build action-bearing console/transaction URL using URL + URLSearchParams (no manual concatenation).
+// Preserves existing token/auth/workflow query fields and encodes action + params once.
+function buildActionUrl(previewUrl, action, params) {
+    const u = new URL(previewUrl);
+    u.searchParams.append("cp-ws-doaction", String(action));
+    if (params && typeof params === "object") {
+        for (const [k, v] of Object.entries(params)) {
+            u.searchParams.append(k, String(v));
+        }
+    }
+    return u.toString();
+}
+
 // Render a WEB pal screen and return its PNG (base64) + the resolved landing URL + viewport used.
 // Returns { captured, available, ... }. Never throws on a normal failure; `available:false` means
 // the capability itself is missing (Playwright/Chromium), distinct from a per-pal failure.
-async function runScreenshot(session, guid, { page, viewport, fullPage, imageless } = {}) {
+async function runScreenshot(session, guid, { page, viewport, fullPage, imageless, workflow, workflowName, action, params } = {}) {
     const chromium = loadChromium();
     if (!chromium) {
         return { captured: false, available: false,
                  reason: "Playwright/Chromium is not installed in this runtime — visual review falls back to the human eyeball gate. Enable with: npm i playwright && npx playwright install chromium" };
     }
 
-    // Auto-detect the engine (web preferred — directly fetchable; else console/transaction).
-    const t = await runTest(session, guid, {});
+    // Pre-validate generic param map BEFORE any Test call: reserved keys are never allowed to
+    // overwrite auth/selection fields, and params require an action. Scalar validation keeps
+    // the URL encoding honest.
+    const hasParams = params != null && typeof params === "object" && Object.keys(params).length > 0;
+    const hasAction = action != null && String(action).trim() !== "";
+    if (params != null && (typeof params !== "object" || Array.isArray(params))) {
+        return { captured: false, available: true, blocked: "invalid-params", reason: "params must be a map of scalar query parameters." };
+    }
+    if (hasParams || hasAction) {
+        if (hasParams) {
+            for (const [k, v] of Object.entries(params)) {
+                if (RESERVED_QUERY_KEYS.has(k)) {
+                    return { captured: false, available: true, blocked: "reserved-param", reservedKey: k, reason: "Param key \"" + k + "\" is reserved and cannot be overwritten." };
+                }
+                if (!isScalarParamValue(v)) {
+                    return { captured: false, available: true, blocked: "invalid-params", reason: "Param \"" + k + "\" must be a scalar string/number/boolean." };
+                }
+            }
+        }
+        if (hasParams && !hasAction) {
+            return { captured: false, available: true, blocked: "params-require-action", reason: "params require an action — pass action with cp-ws-doaction." };
+        }
+    }
+    // Explicit workflow and workflowName are forwarded to runTest where pre-Test validation
+    // (explicit wins over auto-detection, unknown types/names list valid choices, no Test call)
+    // is enforced via URL-parsed normalization (normalizeWorkflowName strips file extensions).
+    const t = await runTest(session, guid, { kind: workflow, workflowName });
     if (!t.ran) {
+        if (t.blocked === "unknown-workflow-type") {
+            const avail = t.availableKinds || [];
+            return { captured: false, available: true, blocked: t.blocked, kind: workflow || t.kind, availableKinds: avail,
+                     reason: "Unknown workflow type \"" + (workflow || t.kind) + "\" — available: " + (avail.length ? avail.join(", ") : "(none)") + "." };
+        }
+        if (t.blocked === "unknown-workflow-name") {
+            const avail = t.availableWorkflowNames || [];
+            return { captured: false, available: true, blocked: t.blocked, kind: t.kind, workflowName, availableWorkflowNames: avail,
+                     reason: "Unknown workflow name \"" + (workflowName || t.workflowName || "") + "\" — available: " + (avail.length ? avail.join(", ") : "(none)") + "." };
+        }
         return { captured: false, available: true, blocked: t.blocked,
                  reason: t.blocked === "no-testable-workflow"
                      ? "This pal has no testable workflow to screenshot."
@@ -556,10 +648,24 @@ async function runScreenshot(session, guid, { page, viewport, fullPage, imageles
                  reason: "The pal did not validate on the server, so it can't be rendered. Fix the validation notes, push, and screenshot again." };
     }
 
-    // WEB → directly-fetchable rawToken (no auth). CONSOLE/transaction → the cp-auth'd preview URL
-    // (credential-bearing; never returned/logged). Playwright absorbs the auth redirect chain.
+    // Action / params are ONLY for console/transaction. Refuse WEB action before navigation and
+    // already handled params-without-action above — this catches auto-detected WEB + action.
+    if (t.kind === "web" && (hasAction || hasParams)) {
+        return { captured: false, available: true, blocked: "web-action-not-allowed", kind: t.kind,
+                 reason: "Action and params are only allowed for console/transaction workflows — this pal rendered as web. Use page for WEB route selection." };
+    }
+
+    // Build the navigable target. For console/transaction with an action, append cp-ws-doaction plus
+    // scalar params via URLSearchParams (encode once). Existing token fields survive.
     const isWeb = t.kind === "web";
-    const target = isWeb ? t.rawToken : t._previewUrl;
+    let target;
+    if (isWeb) {
+        target = t.rawToken;
+    } else if (hasAction) {
+        target = buildActionUrl(t._previewUrl, String(action).trim(), hasParams ? params : null);
+    } else {
+        target = t._previewUrl;
+    }
     if (!target) {
         return { captured: false, available: true, kind: t.kind,
                  reason: isWeb
@@ -607,18 +713,36 @@ async function runScreenshot(session, guid, { page, viewport, fullPage, imageles
             };
         }
         const styleStatus = await inspectStyleStatus(pg, styleEvents);
-        const designAudit = await inspectDesignQuality(pg, { kind: t.kind, viewportName });
+        let designAudit = await inspectDesignQuality(pg, { kind: t.kind, viewportName });
         const buf = imageless ? null : await pg.screenshot({ fullPage: !!fullPage });
         const pngBase64 = buf ? buf.toString("base64") : null;
         // Read the rendered text and check for a CloudPiston runtime-error block — a pal that
         // validated can still throw at render time. Best-effort: a failure to read text must not
         // sink the (successful) capture.
         let renderError = null;
-        try { renderError = detectRenderError(await pg.innerText("body")); } catch (e) { /* ignore */ }
+        try { renderError = detectRenderError(await pg.innerText("body")); } catch (_e) { /* ignore */ }
+        // Redact exact supplied param values from browser-derived textual metadata before
+        // persistence/projection (designAudit samples and renderError text). The page may echo
+        // param values into visible text, which then flows into these structures.
+        if (hasParams) {
+            designAudit = redactParamValuesFromAudit(designAudit, params);
+            renderError = redactParamValuesFromRenderError(renderError, params);
+        }
         const small = pngBase64 ? await downscaleToJpeg(pg, pngBase64) : null;
+        // Persist only safe selection metadata — workflow kind/name and action name are safe;
+        // param VALUES must never appear in any persisted artifact or returned evidence string.
+        const safeSelection = {};
+        if (workflow) safeSelection.workflow = workflow;
+        if (workflowName) safeSelection.workflowName = normalizeWorkflowName(workflowName);
+        if (hasAction) safeSelection.action = String(action).trim();
         return {
             captured: true, available: true, kind: t.kind,
             viewport: vp, viewportName,
+            // safe selection metadata (no param values)
+            selection: Object.keys(safeSelection).length ? safeSelection : null,
+            workflow: workflow || null,
+            workflowName: workflowName ? normalizeWorkflowName(workflowName) : null,
+            action: hasAction ? String(action).trim() : null,
             // WEB landing is the webpals host (no creds). CONSOLE landing may retain cp-auth in the
             // URL — sanitize to origin+path so no credential is ever returned.
             url: isWeb ? pg.url() : sanitizeUrl(pg.url()),
@@ -646,5 +770,6 @@ async function runScreenshot(session, guid, { page, viewport, fullPage, imageles
 module.exports = {
     runScreenshot, detectRenderError, sanitizeUrl, sanitizeResourceUrl, isLoginRedirect, loadChromium,
     getBrowser, releaseBrowser, downscaleToJpeg, waitForStyles, waitForRenderablePage, inspectStyleStatus,
-    inspectDesignQuality, VIEWPORTS
+    inspectDesignQuality, VIEWPORTS, buildActionUrl, isScalarParamValue,
+    redactParamValuesFromText, redactParamValuesFromAudit, redactParamValuesFromRenderError
 };

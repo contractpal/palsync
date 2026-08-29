@@ -71,9 +71,18 @@ function createServer(getCtx, workspaceDir, options = {}) {
                     // bare { workspaceDir }. DEFAULT IS CTX-REQUIRED — absent or any non-false value
                     // resolves full ctx, so a mis-flagged tool errs toward (safe) login/lock, never
                     // toward silently skipping it.
-                    const ctx = t.needsCtx === false ? { workspaceDir } : await getCtx();
+                    // needsLock:false — authenticated but lockless (dataset reads). Honored by the
+                    // memoized getCtx: reuse an already-locked ctx if one exists, otherwise build
+                    // with acquireLock:false so the tool never acquires the Pal lock.
+                    let ctx;
+                    if (t.needsCtx === false) ctx = { workspaceDir };
+                    else if (t.needsLock === false) {
+                        ctx = await getCtx({ acquireLock: false });
+                    } else {
+                        ctx = await getCtx();
+                    }
                     const res = await t.run(ctx, args || {});
-                    if (ctx && ctx.lifecycle) ctx.lifecycle.onActivity(); // reset idle timer; re-lock after an idle release
+                    if (ctx && ctx.lifecycle && t.needsLock !== false) ctx.lifecycle.onActivity(); // reset idle timer; re-lock after an idle release (skip for lockless tools)
                     // A tool may return its own MCP content blocks (e.g. pal_screenshot's image);
                     // honor them. Otherwise fall back to the text message.
                     const content = (res && Array.isArray(res.content))
@@ -147,13 +156,25 @@ async function main() {
     // Memoize the build as a PROMISE so two concurrent first tool calls share one login +
     // one lock lifecycle (the old `if (!ctx) ctx = await build()` let both pass the null
     // check and build twice). A failed build resets so the next call can retry cleanly.
-    let ctxPromise = null;
-    const getCtx = () => {
-        if (!ctxPromise) {
-            ctxPromise = buildContext(workspaceDir, { log: logErr })
-                .catch(err => { ctxPromise = null; throw err; });
+    // Dataset reads must NOT acquire a Pal lock (spec): they use acquireLock:false and
+    // reuse an already-locked ctx if one exists, so a prior locked session is shared.
+    let lockedPromise = null;
+    let unlockedPromise = null;
+    const getCtx = (opts = {}) => {
+        const wantLock = opts.acquireLock !== false;
+        if (wantLock) {
+            if (!lockedPromise) {
+                lockedPromise = buildContext(workspaceDir, { log: logErr, acquireLock: true })
+                    .catch(err => { lockedPromise = null; throw err; });
+            }
+            return lockedPromise;
         }
-        return ctxPromise;
+        if (lockedPromise) return lockedPromise;
+        if (!unlockedPromise) {
+            unlockedPromise = buildContext(workspaceDir, { log: logErr, acquireLock: false })
+                .catch(err => { unlockedPromise = null; throw err; });
+        }
+        return unlockedPromise;
     };
     const server = createServer(getCtx, workspaceDir, { profile: process.env.PALSYNC_TOOL_PROFILE });
 
@@ -179,10 +200,10 @@ async function main() {
         shuttingDown = true;
         logErr(why + " — releasing lock and shutting down");
         // T3: session-end context-contribution summary (palsync's own footprint, not model spend).
-        try { logErr("session cost summary —\n" + usage.formatCost(workspaceDir, TOOLS)); } catch (e) { /* never block shutdown */ }
+        try { logErr("session cost summary —\n" + usage.formatCost(workspaceDir, TOOLS)); } catch (_e) { /* never block shutdown */ }
         try {
-            if (ctxPromise) {
-                const ctx = await ctxPromise.catch(() => null);
+            if (lockedPromise) {
+                const ctx = await lockedPromise.catch(() => null);
                 if (ctx && ctx.lifecycle) await ctx.lifecycle.release("client-disconnected");
             }
         } catch (err) {
