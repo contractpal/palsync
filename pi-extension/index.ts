@@ -123,12 +123,18 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
       return;
     }
     client = new PalsyncClient(ctx.cwd);
+    // Pi's deferred-loading contract requires every searchable tool to exist in getAllTools before
+    // pal_tools activates a subset. Registration is schema-only; inactive tools stay out of prompts.
+    for (const tool of metadata as any[]) registerMcpTool(tool);
     activate(eagerToolNames(metadata as any[]));
     pi.registerTool({
       name: "pal_tools",
       label: "Activate PalSync tools",
       description: "Activate additional PalSync tools by deterministic keyword or group: sync, browser, runtime, project, spec.",
       promptSnippet: "Load PalSync tools for the current task by keyword or group",
+      promptGuidelines: [
+        "After pal_tools returns Activated, attempt the required pal_* tool directly on the next model response. Do not claim activation failed or fall back to the PalSync CLI unless that direct tool call returns an error."
+      ],
       parameters: { type: "object", properties: { query: { type: "string", description: "Keywords or groups for tools to activate." } }, required: ["query"], additionalProperties: false } as any,
       async execute(_id, params: any) {
         if (hasPiMcpCollision(pi.getActiveTools())) throw new Error("pi-mcp is already serving palsync; configure one integration only.");
@@ -137,6 +143,7 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
         activate(names);
         const guidance = activationGuidance(names);
         let text = names.length ? "Activated: " + names.join(", ") : "No PalSync tools matched that query.";
+        if (names.length) text += "\n\nThe activated tools are callable on the next model response. Call the required pal_* tool directly before considering any fallback.";
         if (guidance.length) text += "\n\nRouting:\n- " + guidance.join("\n- ");
         return { content: [{ type: "text", text }], details: { activated: names } };
       }

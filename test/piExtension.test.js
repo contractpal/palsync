@@ -52,6 +52,16 @@ test("every MCP tool is reachable by a deterministic keyword or group", () => {
     assert.deepStrictEqual(routeTools("browser testing", metadata).includes("pal_test"), true);
 });
 
+test("Pi registers every routed tool before activating the eager subset", () => {
+    const source = fs.readFileSync(path.join(__dirname, "..", "pi-extension", "index.ts"), "utf8");
+    const registerAll = source.indexOf("for (const tool of metadata as any[]) registerMcpTool(tool);");
+    const activateEager = source.indexOf("activate(eagerToolNames(metadata as any[]));");
+    assert.ok(registerAll >= 0, "all deferred tools must be registered during session_start");
+    assert.ok(registerAll < activateEager, "deferred tools must be registered before activation");
+    assert.match(source, /After pal_tools returns Activated[\s\S]*attempt the required pal_\* tool directly/);
+    assert.match(source, /Do not claim activation failed or fall back to the PalSync CLI/);
+});
+
 test("Pi activation is eager-small and additive with a mocked ExtensionAPI", () => {
     const state = { active: ["read", "bash"] };
     const pi = {
