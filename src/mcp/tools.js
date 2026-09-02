@@ -244,6 +244,11 @@ const { diffWorkspace, describeDiff } = require("../core/localDrift");
 
 // The pal record QUERY_DATASET needs (internal id + real profileId). The lock lifecycle already
 // resolved it at session start, so reuse that instead of walking the whole account per query.
+//
+// resolve.js warns that the 64-hex ids rotate per enumeration, but reusing them here is safe:
+// verified live (2026-09-02) that a record resolved at session start still answers QUERY_DATASET
+// after two further full enumerations minted different ids. A later enumeration ADDS valid ids,
+// it does not invalidate earlier ones for the life of the session.
 async function resolvePalForRead(ctx) {
     const cached = ctx.lifecycle && ctx.lifecycle.lockState && ctx.lifecycle.lockState.resolved;
     if (cached && cached.guid === ctx.record.palGuid) return cached;
