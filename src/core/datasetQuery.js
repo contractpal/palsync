@@ -9,6 +9,13 @@ const fs = require("fs");
 const path = require("path");
 const { CloudPistonAPIManager } = require("../../lib/apiManager");
 
+// XStream needs each list element tagged with its concrete class. Server-verified: the entries of
+// DatasetFilter.criterias must be ConditionCriteria (sending DatasetFilterCriteria — the declared
+// element name in GroupFilterCriteria's @XmlElements — answers "DatasetFilterCriteria cannot be
+// cast to ConditionCriteria"), and selectOrder entries must be ColumnOrderCriteria.
+const CONDITION_CRITERIA = "com.contractpal.palbuilder.ConditionCriteria";
+const COLUMN_ORDER_CRITERIA = "com.contractpal.palbuilder.ColumnOrderCriteria";
+
 // ---------------------------------------------------------------------------
 // Caps — bounded before the server call, response bytes bounded after.
 // Chosen to match spec "recommended 100" for row limit and to keep request/response
@@ -256,15 +263,26 @@ function buildWireFilter(args, isCount) {
     //   mode and criterias. view:false = dataset mode, not DataView.
     // Evidence: com/nxlight/palbuilder/webstart/services/PalServiceManager.java
     //   getDatasetData uses Operation.QUERY_DATASET hard-coded.
-    return {
+    const wire = {
         name: dataset,
         view: false,
         startRecord: startRecord,
         limit: limit,
-        mode: mode,
-        criterias: criterias,
-        selectOrder: selectOrder
+        mode: mode
     };
+    // One wrapper element holding every entry. A plain array makes the XML builder repeat the
+    // <criterias> WRAPPER per entry, which the server rejects ("criterias") for 2+ conditions.
+    if (criterias.length) wire.criterias = { [CONDITION_CRITERIA]: criterias };
+    if (selectOrder.length) wire.selectOrder = { [COLUMN_ORDER_CRITERIA]: selectOrder };
+    return wire;
+}
+
+// A ComposerResult's first server message, verbatim. messages holds either one object or an array.
+function serverMessage(resp) {
+    const node = resp && resp.messages && resp.messages["com.contractpal.Message"];
+    const first = Array.isArray(node) ? node[0] : node;
+    const msg = first && first.message;
+    return typeof msg === "string" && msg.trim() ? msg.trim() : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -272,29 +290,41 @@ function buildWireFilter(args, isCount) {
 // Evidence: com/contractpal/palbuilder/DatasetQueryResult.java fields
 //   columns:String[], data:String[][], totalRecords:int, startRecord, limit
 // ---------------------------------------------------------------------------
+// CloudPiston wraps each list in a per-type child tag: columns is { string: [...] } and data is
+// { "string-array": [{ string: [cells] }] } (cells already restored to true column order by
+// xmlParser's fixOrderSensitiveShapes, with <null/> cells kept as JS null). A zero-row result
+// omits columns and data entirely — server-verified.
+function unwrapList(node, childTag) {
+    if (node === undefined || node === null) return [];
+    if (!node || typeof node !== "object" || Array.isArray(node)) return null;
+    const inner = node[childTag];
+    if (inner === undefined) return [];
+    return Array.isArray(inner) ? inner : [inner];
+}
+
 function mapResult(queryResult) {
     if (!queryResult || typeof queryResult !== "object") {
         throw new Error("malformed server response: expected DatasetQueryResult object");
     }
-    const columns = queryResult.columns;
-    const data = queryResult.data;
     const totalRecords = queryResult.totalRecords;
 
-    if (!Array.isArray(columns)) {
-        throw new Error("malformed server response: columns must be an array");
+    const columns = unwrapList(queryResult.columns, "string");
+    if (columns === null) {
+        throw new Error("malformed server response: columns must be a <string> list");
     }
-    if (data !== null && data !== undefined && !Array.isArray(data)) {
-        throw new Error("malformed server response: data must be an array or null");
+    const rawData = unwrapList(queryResult.data, "string-array");
+    if (rawData === null) {
+        throw new Error("malformed server response: data must be a <string-array> list");
     }
     if (typeof totalRecords !== "number" || !Number.isInteger(totalRecords) || totalRecords < 0) {
         throw new Error("malformed server response: totalRecords must be a non-negative integer");
     }
 
     const rows = [];
-    const rawData = Array.isArray(data) ? data : [];
-    for (const rowArr of rawData) {
-        if (!Array.isArray(rowArr)) {
-            throw new Error("malformed server response: each data row must be an array");
+    for (const rowNode of rawData) {
+        const rowArr = unwrapList(rowNode, "string");
+        if (rowArr === null) {
+            throw new Error("malformed server response: each data row must be a <string> list");
         }
         const obj = {};
         for (let i = 0; i < columns.length; i++) {
@@ -319,7 +349,7 @@ function checkResponseBytes(obj) {
 // maps result, enforces response byte cap. Never acquires a lock, never
 // writes to usage/evidence/work-history, never persists returned values.
 // ---------------------------------------------------------------------------
-async function executeDatasetQuery(workspaceDir, session, palGuid, args, isCount) {
+async function executeDatasetQuery(workspaceDir, session, palGuid, args, isCount, resolvePal) {
     const palJson = readPalJson(workspaceDir);
     if (!palJson) {
         return { ok: false, error: "cannot read pal.json in workspace " + workspaceDir };
@@ -357,26 +387,43 @@ async function executeDatasetQuery(workspaceDir, session, palGuid, args, isCount
         return { ok: false, error: "REFUSED: filter too large (" + filterBytes + " bytes)" };
     }
 
+    // Resolve the pal ONLY once local validation has passed, so a bad dataset/column/operator is
+    // still refused without any server traffic. QUERY_DATASET needs the internal id (palId
+    // header) plus the real profileId (request body) — see apiManager.queryDataset.
+    let resolved;
+    try {
+        resolved = await resolvePal();
+    } catch (e) {
+        return { ok: false, error: "could not resolve this pal on the server: " + (e && e.message ? e.message : String(e)) };
+    }
+    if (!resolved || !resolved.id || !resolved.profileId) {
+        return { ok: false, error: "could not resolve pal " + palGuid + " on the server — QUERY_DATASET needs its internal id and profile id" };
+    }
+
     // Evidence: PalBuilderRequest.Operation.QUERY_DATASET (PalBuilderRequest.java)
     // and view:false (DatasetFilter.java isView). This adapter never calls save/sync/recreate.
     let raw;
     try {
-        raw = await CloudPistonAPIManager.queryDataset(session, palGuid, wireFilter);
+        raw = await CloudPistonAPIManager.queryDataset(session, resolved, wireFilter);
     } catch (e) {
         return { ok: false, error: "dataset query failed: " + (e && e.message ? e.message : String(e)) };
     }
 
+    // fetchAPI collapses an HTTP failure AND an empty-but-successful 200 to undefined. Tell them
+    // apart from the recorded transport instead of blaming authentication for both.
     if (raw === undefined || raw === null) {
-        return { ok: false, error: "dataset query request failed — no response; check authentication/server status" };
+        const t = session.lastTransport;
+        if (t && t.ok === false) {
+            return { ok: false, error: "QUERY_DATASET failed — server returned HTTP " + t.status };
+        }
+        return { ok: false, error: "server declined the request — QUERY_DATASET returned HTTP 200 with an empty body" };
+    }
+    if (raw.success === false) {
+        const msg = serverMessage(raw);
+        return { ok: false, error: "server declined QUERY_DATASET: " + (msg || "no message returned") };
     }
 
-    // The apiManager may return the ComposerResult's queryResult directly or the full result.
-    // Normalize: if raw has queryResult field, use it; else use raw itself if it looks like
-    // DatasetQueryResult (has columns/totalRecords). This tolerates both shapes.
-    let queryResult = raw;
-    if (raw && typeof raw === "object" && raw.queryResult !== undefined) {
-        queryResult = raw.queryResult;
-    }
+    const queryResult = raw.customObject && raw.customObject.queryResult;
     let mapped;
     try {
         mapped = mapResult(queryResult);

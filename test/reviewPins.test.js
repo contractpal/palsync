@@ -14,11 +14,14 @@ test("1 — pal_dataset_query returns bounded row payload via MCP server content
     const origApi = require(apiManagerPath);
     const origQuery = origApi.CloudPistonAPIManager.queryDataset;
     origApi.CloudPistonAPIManager.queryDataset = async () => ({
-        columns: ["name", "status"],
-        data: [["Camera_9PIN_ROW_VALUE", "available"]],
-        totalRecords: 1,
-        startRecord: 0,
-        limit: 20
+        success: true,
+        customObject: { queryResult: {
+            startRecord: 0,
+            limit: 20,
+            totalRecords: 1,
+            columns: { string: ["name", "status"] },
+            data: { "string-array": [{ string: ["Camera_9PIN_ROW_VALUE", "available"] }] }
+        } }
     });
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-pin1-"));
     const palJson = {
@@ -26,7 +29,8 @@ test("1 — pal_dataset_query returns bounded row payload via MCP server content
     };
     fs.writeFileSync(path.join(dir, "pal.json"), JSON.stringify(palJson));
     const { createServer } = require("../src/mcp/server");
-    const getCtx = async () => ({ workspaceDir: dir, session: { username: "u", password: "p" }, record: { palGuid: "g1", palName: "p", lastModifiedDate: "0" }, lifecycle: { onActivity() {} } });
+    const getCtx = async () => ({ workspaceDir: dir, session: { username: "u", password: "p" }, record: { palGuid: "g1", palName: "p", lastModifiedDate: "0" },
+        lifecycle: { onActivity() {}, lockState: { resolved: { id: "internal-1", guid: "g1", profileId: "prof-1" } } } });
     const server = createServer(getCtx, dir);
     const [ct, st] = InMemoryTransport.createLinkedPair();
     const client = new Client({ name: "pin1", version: "0" });
@@ -105,20 +109,46 @@ test("4 — dataset query distinguishes no-response vs malformed shape", async (
     const apiManagerPath = require.resolve("../lib/apiManager");
     const orig = require(apiManagerPath).CloudPistonAPIManager.queryDataset;
 
-    // No response (undefined) -> request failure wording
-    require(apiManagerPath).CloudPistonAPIManager.queryDataset = async () => undefined;
+    const resolvePal = async () => ({ id: "internal-1", guid: "g", profileId: "prof-1" });
+
+    // HTTP failure -> the status, never an authentication guess.
+    require(apiManagerPath).CloudPistonAPIManager.queryDataset = async (s) => {
+        s.lastTransport = { endpoint: "ProcessPalBuilder.do", status: 502, ok: false, bytes: null };
+        return undefined;
+    };
     delete require.cache[require.resolve("../src/core/datasetQuery")];
     const { executeDatasetQuery } = require("../src/core/datasetQuery");
-    let r = await executeDatasetQuery(dir, session, "g", { dataset: "equipment" }, false);
+    let r = await executeDatasetQuery(dir, session, "g", { dataset: "equipment" }, false, resolvePal);
     assert.equal(r.ok, false);
-    assert.match(r.error, /request failed.*no response/i, "undefined response must be request failure, not malformed");
+    assert.match(r.error, /HTTP 502/, "an HTTP failure must report its status");
+    assert.doesNotMatch(r.error, /malformed/i);
+    assert.doesNotMatch(r.error, /authentication/i);
+
+    // HTTP 200 with an empty body -> the server declined, not "no response".
+    require(apiManagerPath).CloudPistonAPIManager.queryDataset = async (s) => {
+        s.lastTransport = { endpoint: "ProcessPalBuilder.do", status: 200, ok: true, bytes: 0 };
+        return undefined;
+    };
+    r = await executeDatasetQuery(dir, session, "g", { dataset: "equipment" }, false, resolvePal);
+    assert.equal(r.ok, false);
+    assert.match(r.error, /declined/i, "an empty 200 must be reported as a declined request");
+    assert.doesNotMatch(r.error, /malformed/i);
+    assert.doesNotMatch(r.error, /authentication/i);
+
+    // success=false -> the server's own message, verbatim.
+    require(apiManagerPath).CloudPistonAPIManager.queryDataset = async () => ({
+        success: false, messages: { "com.contractpal.Message": { message: "Pal not found" } }
+    });
+    r = await executeDatasetQuery(dir, session, "g", { dataset: "equipment" }, false, resolvePal);
+    assert.equal(r.ok, false);
+    assert.match(r.error, /Pal not found/, "the server message must be surfaced verbatim");
     assert.doesNotMatch(r.error, /malformed/i);
 
-    // Malformed shape (has columns as string) -> malformed wording
-    require(apiManagerPath).CloudPistonAPIManager.queryDataset = async () => ({ columns: "not-array", data: [], totalRecords: 0 });
-    delete require.cache[require.resolve("../src/core/datasetQuery")];
-    const { executeDatasetQuery: exec2 } = require("../src/core/datasetQuery");
-    r = await exec2(dir, session, "g", { dataset: "equipment" }, false);
+    // Malformed shape (columns not a <string> list) -> malformed wording
+    require(apiManagerPath).CloudPistonAPIManager.queryDataset = async () => ({
+        success: true, customObject: { queryResult: { columns: "not-a-list", totalRecords: 0 } }
+    });
+    r = await executeDatasetQuery(dir, session, "g", { dataset: "equipment" }, false, resolvePal);
     assert.equal(r.ok, false);
     assert.match(r.error, /malformed/i, "shape error must be malformed");
 

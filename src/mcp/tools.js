@@ -242,6 +242,14 @@ const { resolveServerPalByGuid } = require("../core/resolve");
 const { hashWorkspace, hashPaths } = require("../core/workspaceHash");
 const { diffWorkspace, describeDiff } = require("../core/localDrift");
 
+// The pal record QUERY_DATASET needs (internal id + real profileId). The lock lifecycle already
+// resolved it at session start, so reuse that instead of walking the whole account per query.
+async function resolvePalForRead(ctx) {
+    const cached = ctx.lifecycle && ctx.lifecycle.lockState && ctx.lifecycle.lockState.resolved;
+    if (cached && cached.guid === ctx.record.palGuid) return cached;
+    return await resolveServerPalByGuid(ctx.session, ctx.record.palGuid);
+}
+
 // Refresh the record's local baseline after a pull/push: localHash (legacy combined hash) +
 // fileHashes (per-file map over exactly the server-tracked paths — preserved local-only files
 // must NOT enter it, or the next pull would mistake them for server-side deletes).
@@ -2016,7 +2024,8 @@ const TOOLS = [
         async run(ctx, args = {}) {
             // This tool is structurally read-only: it never acquires a lock, never writes
             // usage/evidence/work-history, and never persists returned dataset values.
-            const result = await executeDatasetQuery(ctx.workspaceDir, ctx.session, ctx.record.palGuid, args, false);
+            const result = await executeDatasetQuery(ctx.workspaceDir, ctx.session, ctx.record.palGuid, args, false,
+                () => resolvePalForRead(ctx));
             if (!result.ok) {
                 return { ok: false, error: result.error, message: result.error };
             }
@@ -2055,7 +2064,8 @@ const TOOLS = [
         async run(ctx, args = {}) {
             // Count is the same shared adapter with limit hard-coded to 1 and only totalRecords returned.
             // Values are never persisted to usage/evidence/work-history.
-            const result = await executeDatasetQuery(ctx.workspaceDir, ctx.session, ctx.record.palGuid, args, true);
+            const result = await executeDatasetQuery(ctx.workspaceDir, ctx.session, ctx.record.palGuid, args, true,
+                () => resolvePalForRead(ctx));
             if (!result.ok) {
                 return { ok: false, error: result.error, message: result.error };
             }

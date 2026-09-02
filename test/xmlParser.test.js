@@ -171,6 +171,43 @@ test("responses with no data section are left untouched", () => {
 // with every row's cells shifted right by one. buildOrderSensitiveShapes() fixes the build
 // direction; round-tripping build -> parse -> fixOrderSensitiveShapes below is what proves it.
 
+// Wraps a <queryResult>...</queryResult> fragment the way a real ProcessPalBuilder.do /
+// QUERY_DATASET ComposerResult does (ComposerResult > customObject > queryResult > ...).
+function composerResultQueryXml(queryResultInnerXml) {
+    return "<com.contractpal.composer.ComposerResult><customObject>" +
+        "<queryResult>" + queryResultInnerXml + "</queryResult>" +
+        "</customObject></com.contractpal.composer.ComposerResult>";
+}
+
+test("DatasetQueryResult row cells stay pinned to their column when interior cells are null", () => {
+    // Real Audithelm V1 / activityLog row (server-verified 2026-09-02): workspaceId and
+    // actorProfileId are null. The order-losing parse groups this as
+    // { string: ["1", "spike.jobwindow", ...], null: ["",""] }, which read naively puts `action`
+    // in the workspaceId column and shifts every remaining value one place left.
+    const xml = composerResultQueryXml(
+        "<startRecord>0</startRecord><limit>2</limit><totalRecords>107</totalRecords>" +
+        "<columns><string>activityId</string><string>workspaceId</string><string>actorProfileId</string>" +
+        "<string>action</string><string>at</string></columns>" +
+        "<data>" +
+        "<string-array><string>1</string><null/><null/><string>spike.jobwindow</string><string>08-27-2026</string></string-array>" +
+        "<string-array><string>2</string><string>1</string><null/><string>workspace.updated</string><null/></string-array>" +
+        "</data>"
+    );
+    const result = parse(xml);
+    assert.deepStrictEqual(result.customObject.queryResult.data, {
+        "string-array": [
+            { string: ["1", null, null, "spike.jobwindow", "08-27-2026"] },
+            { string: ["2", "1", null, "workspace.updated", null] }
+        ]
+    });
+});
+
+test("a DatasetQueryResult with no data rows is left untouched", () => {
+    const xml = composerResultQueryXml("<startRecord>0</startRecord><limit>5</limit><totalRecords>0</totalRecords>");
+    const result = parse(xml);
+    assert.deepStrictEqual(result.customObject.queryResult, { startRecord: 0, limit: 5, totalRecords: 0 });
+});
+
 function roundTripDataList(dataList) {
     const task = { pal: { datalists: { entry: [{ string: dataList.name, DataList: dataList }] } } };
     const xml = "<com.contractpal.composer.ComposerResult>" + buildOrderSensitiveShapes(task, false) +

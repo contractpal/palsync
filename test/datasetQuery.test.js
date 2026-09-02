@@ -1,9 +1,10 @@
 "use strict";
 // MCP tool-wrapper seam tests for pal_dataset_query and pal_dataset_count.
 // Invoke the advertised descriptor from TOOLS, stub the server, never call CloudPiston.
-// Covers: wire shape, operator mapping, paging, row mapping, count-only, malformed
-// response, every cap, invalid dataset/column/operator/bounds rejected before server,
-// no mutating endpoint reachable, and no local artifact written.
+// Covers: wire shape (verified identity contract + XStream list wrappers), operator mapping,
+// paging, row mapping, count-only, every distinct server-error branch, malformed response,
+// every cap, invalid dataset/column/operator/bounds rejected before server, no mutating
+// endpoint reachable, and no local artifact written.
 
 const { test } = require("node:test");
 const assert = require("node:assert");
@@ -58,28 +59,47 @@ function tmpWorkspaceWithDataset() {
     return dir;
 }
 
-function loadToolsWithStub({ queryResult, queryImpl, capture }) {
+// The XStream class tags QUERY_DATASET requires for DatasetFilter's two lists.
+const CONDITION_CRITERIA = "com.contractpal.palbuilder.ConditionCriteria";
+const COLUMN_ORDER_CRITERIA = "com.contractpal.palbuilder.ColumnOrderCriteria";
+
+// Wrap a flat DatasetQueryResult fixture in the real wire shape: a ComposerResult whose
+// customObject is the PalBuilderResponse, with CloudPiston's per-type list child tags
+// (columns -> { string: [...] }, data -> { "string-array": [{ string: [cells] }] }).
+function composerOk({ columns, data, totalRecords, startRecord, limit }) {
+    const queryResult = { startRecord, limit, totalRecords };
+    if (columns !== undefined) queryResult.columns = { string: columns };
+    if (data !== undefined) queryResult.data = { "string-array": data.map(cells => ({ string: cells })) };
+    return { success: true, customObject: { success: true, queryResult } };
+}
+
+function composerFailure(message) {
+    return { success: false, messages: { "com.contractpal.Message": { message, type: "service" } } };
+}
+
+function loadToolsWithStub({ queryResult, rawResponse, queryImpl, capture }) {
     // Stub apiManager.queryDataset
     const origApi = require(apiManagerPath);
     const origQuery = origApi.CloudPistonAPIManager.queryDataset;
     let callCount = 0;
     let lastFilter = null;
-    let lastPalId = null;
-    const stub = async (session, palId, filter) => {
+    let lastResolved = null;
+    const stub = async (session, resolved, filter) => {
         callCount++;
-        lastPalId = palId;
+        lastResolved = resolved;
         lastFilter = JSON.parse(JSON.stringify(filter));
         if (capture) capture.filter = lastFilter;
-        if (capture) capture.palId = lastPalId;
-        if (queryImpl) return queryImpl(session, palId, filter);
-        if (queryResult !== undefined) return queryResult;
-        return {
+        if (capture) capture.resolved = lastResolved;
+        if (queryImpl) return queryImpl(session, resolved, filter);
+        if (rawResponse !== undefined) return rawResponse;
+        if (queryResult !== undefined) return composerOk(queryResult);
+        return composerOk({
             columns: ["equipmentId", "name", "status"],
             data: [["1", "Hammer", "available"], ["2", "Drill", "checked"]],
             totalRecords: 42,
             startRecord: filter.startRecord,
             limit: filter.limit
-        };
+        });
     };
     origApi.CloudPistonAPIManager.queryDataset = stub;
 
@@ -125,7 +145,7 @@ function loadToolsWithStub({ queryResult, queryImpl, capture }) {
         countTool,
         getCallCount: () => callCount,
         getLastFilter: () => lastFilter,
-        getLastPalId: () => lastPalId,
+        getLastResolved: () => lastResolved,
         wasEvidenceWritten: () => evidenceWritten,
         wasRowsLeaked: () => evidenceRowsLeaked,
         wasWorkHistoryWritten: () => workHistoryWritten,
@@ -138,10 +158,16 @@ function makeCtx(workspaceDir) {
         workspaceDir,
         session: { username: "u", password: "p", userId: "uid", environment: { url: "https://example.com" } },
         record: { palGuid: "test-guid-123", palName: "test-pal", lastModifiedDate: "2026-01-01 00:00:00.0", localHash: "abc" },
-        lifecycle: { onActivity() {} },
+        // The lock lifecycle's already-resolved pal — what QUERY_DATASET's identity contract needs.
+        lifecycle: { onActivity() {}, lockState: { resolved: RESOLVED } },
         persist: async () => {}
     };
 }
+
+const RESOLVED = { id: "INTERNAL-SESSION-ID", guid: "test-guid-123", profileId: "REAL-PROFILE-ID" };
+
+// Adapter-level resolver matching what the MCP handlers pass in.
+const resolvePal = async () => RESOLVED;
 
 test("query wire shape: hard-coded QUERY_DATASET, dataset mode, paging, mode, conditions, order", async () => {
     const dir = tmpWorkspaceWithDataset();
@@ -164,10 +190,12 @@ test("query wire shape: hard-coded QUERY_DATASET, dataset mode, paging, mode, co
     assert.equal(f.startRecord, 5);
     assert.equal(f.limit, 10);
     assert.equal(f.mode, "OR");
-    assert.deepStrictEqual(f.criterias, [{ column: "status", operator: "EQUAL", value1: "available" }]);
-    assert.deepStrictEqual(f.selectOrder, [{ column: "name", order: "DESC" }]);
-    // PalGuid is current Pal only
-    assert.equal(loaded.getLastPalId(), "test-guid-123");
+    // Each list is ONE wrapper element holding class-tagged entries. A plain array would make the
+    // XML builder repeat the <criterias> wrapper per entry, which the server rejects.
+    assert.deepStrictEqual(f.criterias, { [CONDITION_CRITERIA]: [{ column: "status", operator: "EQUAL", value1: "available" }] });
+    assert.deepStrictEqual(f.selectOrder, { [COLUMN_ORDER_CRITERIA]: [{ column: "name", order: "DESC" }] });
+    // Current Pal only, and the resolved record the identity contract requires.
+    assert.deepStrictEqual(loaded.getLastResolved(), RESOLVED);
     loaded.restore();
     fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -196,10 +224,10 @@ test("operator vocabulary mapping for every vendored operator", async () => {
         const cond = Object.assign({ column: col, operator: op }, vals);
         const res = await loaded.queryTool.run(ctx, { dataset: "equipment", conditions: [cond] });
         assert.equal(res.ok, true, op + " should be accepted");
-        const f = loaded.getLastFilter();
-        assert.equal(f.criterias[0].operator, op, op + " operator must pass through verbatim");
-        if (vals.value1 !== undefined) assert.equal(f.criterias[0].value1, vals.value1);
-        if (vals.value2 !== undefined) assert.equal(f.criterias[0].value2, vals.value2);
+        const entries = loaded.getLastFilter().criterias[CONDITION_CRITERIA];
+        assert.equal(entries[0].operator, op, op + " operator must pass through verbatim");
+        if (vals.value1 !== undefined) assert.equal(entries[0].value1, vals.value1);
+        if (vals.value2 !== undefined) assert.equal(entries[0].value2, vals.value2);
         loaded.restore();
     }
     fs.rmSync(dir, { recursive: true, force: true });
@@ -285,29 +313,125 @@ test("count ignores caller limit and always requests one row", async () => {
 test("malformed server response is refused clearly", async () => {
     const dir = tmpWorkspaceWithDataset();
     const ctx = makeCtx(dir);
-    // Null/undefined are request failures (no response), not malformed shape
-    for (const bad of [null, "UNDEFINED_SENTINEL"]) {
-        const stubVal = bad === "UNDEFINED_SENTINEL" ? undefined : bad;
-        const loaded = loadToolsWithStub({ queryResult: stubVal, queryImpl: async () => stubVal });
-        const res = await loaded.queryTool.run(ctx, { dataset: "equipment" });
-        assert.equal(res.ok, false, "should refuse no-response " + JSON.stringify(bad));
-        assert.match(res.error, /request failed.*no response/i);
-        loaded.restore();
-    }
     const malformedCases = [
-        {},
-        { columns: "not-array", data: [], totalRecords: 0 },
-        { columns: [], data: "not-array", totalRecords: 0 },
-        { columns: [], data: [], totalRecords: "not-a-number" },
-        { columns: [], data: [[1, 2], "not-array-row"], totalRecords: 1 }
+        { queryResult: {} },
+        { queryResult: { columns: "not-a-list", data: { "string-array": [] }, totalRecords: 0 } },
+        { queryResult: { columns: { string: [] }, data: "not-a-list", totalRecords: 0 } },
+        { queryResult: { columns: { string: [] }, data: { "string-array": [] }, totalRecords: "not-a-number" } },
+        { queryResult: { columns: { string: ["a"] }, data: { "string-array": ["not-a-row"] }, totalRecords: 1 } }
     ];
     for (const bad of malformedCases) {
-        const loaded = loadToolsWithStub({ queryResult: bad, queryImpl: async () => bad });
+        const loaded = loadToolsWithStub({ rawResponse: { success: true, customObject: bad } });
         const res = await loaded.queryTool.run(ctx, { dataset: "equipment" });
         assert.equal(res.ok, false, "should refuse malformed " + JSON.stringify(bad));
         assert.match(res.error, /malformed/i);
         loaded.restore();
     }
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// Every distinct transport/server failure gets its OWN message. An empty 200 used to be reported
+// as "no response; check authentication/server status", which pointed at authentication when the
+// server had simply declined a malformed request — the false hint that made this bug expensive.
+test("each server failure mode is reported honestly and distinctly", async () => {
+    const dir = tmpWorkspaceWithDataset();
+    const ctx = makeCtx(dir);
+
+    // HTTP non-2xx: fetchAPI returns undefined but records the status.
+    {
+        const loaded = loadToolsWithStub({
+            queryImpl: async (session) => {
+                session.lastTransport = { endpoint: "ProcessPalBuilder.do", status: 503, ok: false, bytes: null };
+                return undefined;
+            }
+        });
+        const res = await loaded.queryTool.run(ctx, { dataset: "equipment" });
+        assert.equal(res.ok, false);
+        assert.match(res.error, /HTTP 503/);
+        assert.doesNotMatch(res.error, /authentication/i, "an HTTP failure must not be blamed on authentication");
+        loaded.restore();
+    }
+
+    // HTTP 200 with a zero-byte body: the server declined the request.
+    {
+        const loaded = loadToolsWithStub({
+            queryImpl: async (session) => {
+                session.lastTransport = { endpoint: "ProcessPalBuilder.do", status: 200, ok: true, bytes: 0 };
+                return undefined;
+            }
+        });
+        const res = await loaded.queryTool.run(ctx, { dataset: "equipment" });
+        assert.equal(res.ok, false);
+        assert.match(res.error, /declined/i);
+        assert.match(res.error, /QUERY_DATASET/);
+        assert.match(res.error, /empty body/i);
+        assert.doesNotMatch(res.error, /authentication/i, "an empty 200 must not be blamed on authentication");
+        loaded.restore();
+    }
+
+    // success=false: the server's own message, verbatim.
+    for (const msg of ["Pal not found", "Invalid request", "Dataset not found: ghost", "Secure ID is null"]) {
+        const loaded = loadToolsWithStub({ rawResponse: composerFailure(msg) });
+        const res = await loaded.queryTool.run(ctx, { dataset: "equipment" });
+        assert.equal(res.ok, false);
+        assert.ok(res.error.includes(msg), "must surface the server message verbatim: " + res.error);
+        loaded.restore();
+    }
+
+    // success=false with no message at all still says so rather than inventing a cause.
+    {
+        const loaded = loadToolsWithStub({ rawResponse: { success: false } });
+        const res = await loaded.queryTool.run(ctx, { dataset: "equipment" });
+        assert.equal(res.ok, false);
+        assert.match(res.error, /no message returned/i);
+        loaded.restore();
+    }
+
+    // An unresolvable pal is reported as such, and never reaches the server.
+    {
+        const loaded = loadToolsWithStub({});
+        const { executeDatasetQuery } = require("../src/core/datasetQuery");
+        const res = await executeDatasetQuery(dir, ctx.session, "test-guid-123", { dataset: "equipment" }, false, async () => null);
+        assert.equal(res.ok, false);
+        assert.match(res.error, /could not resolve pal/i);
+        assert.equal(loaded.getCallCount(), 0);
+        loaded.restore();
+    }
+
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// A zero-row result omits columns and data entirely — server-verified. That is success, not
+// a malformed response.
+test("empty result set maps to zero rows, not an error", async () => {
+    const dir = tmpWorkspaceWithDataset();
+    const ctx = makeCtx(dir);
+    const loaded = loadToolsWithStub({
+        rawResponse: { success: true, customObject: { queryResult: { startRecord: 0, limit: 5, totalRecords: 0 } } }
+    });
+    const res = await loaded.queryTool.run(ctx, { dataset: "equipment", limit: 5 });
+    assert.equal(res.ok, true);
+    assert.deepStrictEqual(res.rows, []);
+    assert.equal(res.totalRecords, 0);
+    loaded.restore();
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// A single row / single column comes back unwrapped (not an array) from the XML parse.
+test("single-row and single-column responses map correctly", async () => {
+    const dir = tmpWorkspaceWithDataset();
+    const ctx = makeCtx(dir);
+    const loaded = loadToolsWithStub({
+        rawResponse: { success: true, customObject: { queryResult: {
+            startRecord: 0, limit: 1, totalRecords: 1,
+            columns: { string: "equipmentId" },
+            data: { "string-array": { string: "7" } }
+        } } }
+    });
+    const res = await loaded.queryTool.run(ctx, { dataset: "equipment", limit: 1 });
+    assert.equal(res.ok, true);
+    assert.deepStrictEqual(res.rows, [{ equipmentId: "7" }]);
+    loaded.restore();
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -320,7 +444,7 @@ test("caps: every cap is enforced — row count, condition count, string lengths
         const loaded = loadToolsWithStub({});
         // Bypass zod by calling adapter directly with limit 200 (simulates caller tampering)
         const { executeDatasetQuery } = require("../src/core/datasetQuery");
-        const r = await executeDatasetQuery(dir, ctx.session, ctx.record.palGuid, { dataset: "equipment", limit: 200 }, false);
+        const r = await executeDatasetQuery(dir, ctx.session, ctx.record.palGuid, { dataset: "equipment", limit: 200 }, false, resolvePal);
         assert.equal(r.ok, false);
         assert.match(r.error, /limit/i);
         assert.equal(loaded.getCallCount(), 0, "must be refused before server call");
@@ -436,14 +560,29 @@ test("operation is hard-coded to QUERY_DATASET — caller input cannot select sa
             capturedEndpoint = endpoint;
             return { columns: [], data: [], totalRecords: 0, startRecord: 0, limit: 1 };
         };
+        let capturedHeaders = null;
+        apiMod.CloudPistonAPIManager.fetchAPI = async (_session, endpoint, headers, task) => {
+            capturedTask = task;
+            capturedEndpoint = endpoint;
+            capturedHeaders = headers;
+            return { success: true, customObject: { queryResult: { startRecord: 0, limit: 1, totalRecords: 0 } } };
+        };
         try {
-            await apiMod.CloudPistonAPIManager.queryDataset(ctx.session, "test-guid-123", {
-                name: "equipment", view: false, startRecord: 0, limit: 1, mode: "AND", criterias: [], selectOrder: []
+            await apiMod.CloudPistonAPIManager.queryDataset(ctx.session, RESOLVED, {
+                name: "equipment", view: false, startRecord: 0, limit: 1, mode: "AND"
             });
             const req = capturedTask["com.contractpal.palbuilder.PalBuilderRequest"];
             assert.equal(req.operation, "QUERY_DATASET", "operation must be hard-coded QUERY_DATASET (PalBuilderRequest.java Operation.QUERY_DATASET)");
             assert.equal(req.datasetFilter.view, false, "must be dataset mode (DatasetFilter.java isView false)");
             assert.equal(capturedEndpoint, "ProcessPalBuilder.do");
+            // Verified identity contract: guid + real profileId in the BODY, internal id in the
+            // palId HEADER with profileId "-1". The guid in the palId header is what made the
+            // server answer HTTP 200 with a zero-byte body.
+            assert.equal(req.palId, RESOLVED.guid, "body palId must be the stable PAL-SE guid");
+            assert.equal(req.profileId, RESOLVED.profileId, "body profileId must be the real profile id");
+            assert.equal(capturedHeaders.get("palId"), RESOLVED.id, "header palId must be the internal session id");
+            assert.equal(capturedHeaders.get("profileId"), "-1");
+            assert.equal(capturedHeaders.get("lock-information"), null, "read path must not send a lock header");
         } finally {
             apiMod.CloudPistonAPIManager.fetchAPI = origFetch;
         }
