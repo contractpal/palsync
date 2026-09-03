@@ -8,7 +8,6 @@ const path = require("path");
 const { checkExpect, extractSelector } = require("../src/core/preview");
 const { capRepeats } = require("../src/core/findingCap");
 const { formatExpect, htmlRegionResult } = require("../src/mcp/tools");
-const { HISTORY_DIR } = require("../src/mcp/workHistory");
 const { tmpWorkspace } = require("./helpers");
 
 const HTML = [
@@ -100,10 +99,14 @@ test("htmlRegionResult: with workspaceDir writes artifacts under .agent-work-his
         feature: "fetch-about.html"
     });
 
-    assert.ok(out.htmlFile.startsWith(path.join(ws, HISTORY_DIR)));
-    assert.equal(fs.readFileSync(out.htmlFile, "utf8"), '<main id="m">HI</main>');
-    assert.match(out.message, /Work-history run:/);
+    // Stable agent-visible ref: a relative content-addressed path, byte-identical for
+    // identical bodies — no absolute run-dir path, no volatile "Work-history run:" line.
+    assert.match(out.htmlFile, /^\.agent-work-history\/pal_fetch\/[a-f0-9]{16}\.json$/);
+    assert.equal(fs.readFileSync(path.join(ws, out.htmlFile), "utf8"), '<main id="m">HI</main>');
+    assert.match(out.message, /Full region saved to: /);
+    assert.doesNotMatch(out.message, /Work-history run:/);
     assert.match(fs.readFileSync(path.join(ws, ".gitignore"), "utf8"), /\.agent-work-history\//);
+    fs.rmSync(ws, { recursive: true, force: true });
 });
 
 test("formatExpect: verdict line + per-string marks, no page body", () => {

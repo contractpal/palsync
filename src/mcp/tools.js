@@ -38,9 +38,11 @@ const { fetchAndExtract } = require("../core/resources");
 const {
     createWorkHistoryRun,
     writeArtifactFile,
+    writeContentAddressedArtifact,
     writeRunMetadata,
     writeRunNotes
 } = require("./workHistory");
+const { stableStringify } = require("../core/stableStringify");
 const { serializeEnvelope } = require("./envelope");
 const fs = require("fs");
 const pathMod = require("path");
@@ -441,6 +443,7 @@ function htmlRegionResult(res, { headline, filePrefix, guid, selector, maxChars,
     let body = res.html, missSel = false;
     if (selector) { const region = extractSelector(res.html, selector); if (region == null) { missSel = true; body = ""; } else body = region; }
     let filePath = null;
+    let stableRef = null;
     let run = null;
     try {
         if (!missSel && workspaceDir) {
@@ -464,6 +467,9 @@ function htmlRegionResult(res, { headline, filePrefix, guid, selector, maxChars,
                 "- Content-Type: " + res.contentType,
                 selector ? "- Selector: `" + selector + "`" : null
             ]);
+            // Stable agent-visible ref: content-addressed digest path, byte-identical for
+            // identical bodies. The run-dir copy above stays as the human evidence trail.
+            stableRef = writeContentAddressedArtifact(workspaceDir, tool, body);
         }
     } catch (e) { /* best-effort */ }
     const cap = maxChars && maxChars > 0 ? maxChars : PREVIEW_INLINE_CAP;
@@ -474,12 +480,12 @@ function htmlRegionResult(res, { headline, filePrefix, guid, selector, maxChars,
                    : "\n  selector " + JSON.stringify(selector) + " -> " + body.length + " bytes extracted")
         : "";
     const safe = Object.assign({}, res); delete safe.html;
+    const echoed = missSel ? null : (stableRef || filePath);
     return Object.assign(safe, {
-        htmlFile: missSel ? null : filePath,
+        htmlFile: echoed,
         message: headline + " — status=" + res.status + " content-type=" + res.contentType +
             " title=" + JSON.stringify(res.title) + " size=" + res.bytes + " bytes" + extraLine + selNote + dirtyNote +
-            (run ? "\n  Work-history run: " + run.dir : "") +
-            (missSel ? "" : (filePath ? "\n  Full " + (selector ? "region" : "body") + " saved to: " + filePath : "") +
+            (missSel ? "" : (echoed ? "\n  Full " + (selector ? "region" : "body") + " saved to: " + echoed : "") +
                 "\n\n--- " + (selector ? "selected markup" : "served body") +
                 (truncated ? " (first " + cap + " of " + body.length + " bytes — read the file for the rest)" : "") + " ---\n" + shown)
     });
@@ -545,6 +551,7 @@ function debugHasDiagnosticLines(text) {
 function saveSummaryBody(workspaceDir, tool, feature, res) {
     let run = null;
     let filePath = null;
+    let stableRef = null;
     try {
         run = createWorkHistoryRun(workspaceDir, { tool, feature });
         filePath = writeArtifactFile(run, "body.html", res.html, "utf8");
@@ -561,8 +568,10 @@ function saveSummaryBody(workspaceDir, tool, feature, res) {
             "- Title: " + JSON.stringify(res.title),
             "- Artifact: `" + (filePath ? pathMod.basename(filePath) : "not written") + "`"
         ]);
+        // Stable agent-visible ref alongside the run-dir copy (human evidence trail).
+        stableRef = writeContentAddressedArtifact(workspaceDir, tool, res.html);
     } catch (e) { /* best-effort */ }
-    return { run, filePath };
+    return { run, filePath: stableRef || filePath };
 }
 
 // How much c.debug text to inline before truncating to the TAIL (the most recent lines matter
@@ -1071,6 +1080,7 @@ const TOOLS = [
                 }
                 // Save the full HTML to a file the agent can Read, and inline a capped slice.
                 let filePath = null;
+                let stableRef = null;
                 let run = null;
                 try {
                     run = createWorkHistoryRun(ctx.workspaceDir, { tool: "pal_preview", feature: "preview-" + (workflow || res.kind || "web") });
@@ -1095,6 +1105,8 @@ const TOOLS = [
                         "- Size: " + res.bytes + " bytes",
                         "- Artifact: `" + (filePath ? pathMod.basename(filePath) : "not written") + "`"
                     ]);
+                    // Stable agent-visible ref alongside the run-dir copy (human evidence trail).
+                    stableRef = writeContentAddressedArtifact(ctx.workspaceDir, "pal_preview", res.html);
                 } catch (e) { /* best-effort */ }
                 const full = detail === "full";
                 const truncated = full && res.html.length > PREVIEW_INLINE_CAP;
@@ -1102,12 +1114,12 @@ const TOOLS = [
                     ? (truncated ? res.html.slice(0, PREVIEW_INLINE_CAP) : res.html)
                     : failureLineSummary(res.html);
                 const safe = Object.assign({}, res); delete safe.html; // don't double-include in structured result
+                const echoedPreview = stableRef || filePath;
                 return withServerDebug(ctx, Object.assign(safe, {
-                    htmlFile: filePath,
+                    htmlFile: echoedPreview,
                     message: "WEB preview rendered — this is your pal's actual server-rendered HTML output.\n" +
                         "  url=" + res.url + "  content-type=" + res.contentType + "  title=" + JSON.stringify(res.title) + "  size=" + res.bytes + " bytes" + dirtyNote +
-                        (run ? "\n  Work-history run: " + run.dir : "") +
-                        (filePath ? "\n  Full HTML saved to: " + filePath + " (Read it to inspect the whole page)." : "") +
+                        (echoedPreview ? "\n  Full HTML saved to: " + echoedPreview + " (Read it to inspect the whole page)." : "") +
                         "\n\n--- " + (full ? "rendered HTML" : "summary (failure lines with 2 lines of context)") +
                         (truncated ? " (first " + PREVIEW_INLINE_CAP + " of " + res.bytes + " bytes — read the file for the rest)" : "") + " ---\n" + shown
                 }));
@@ -1172,6 +1184,7 @@ const TOOLS = [
                 }));
             }
             let filePath = null;
+            let stableRef = null;
             let run = null;
             try {
                 run = createWorkHistoryRun(ctx.workspaceDir, { tool: "pal_fetch", feature: "fetch-" + path });
@@ -1196,6 +1209,8 @@ const TOOLS = [
                     "- Size: " + res.bytes + " bytes",
                     "- Artifact: `" + (filePath ? pathMod.basename(filePath) : "not written") + "`"
                 ]);
+                // Stable agent-visible ref alongside the run-dir copy (human evidence trail).
+                stableRef = writeContentAddressedArtifact(ctx.workspaceDir, "pal_fetch", res.html);
             } catch (e) { /* best-effort */ }
             const full = detail === "full";
             const truncated = full && res.html.length > PREVIEW_INLINE_CAP;
@@ -1203,12 +1218,12 @@ const TOOLS = [
                 ? (truncated ? res.html.slice(0, PREVIEW_INLINE_CAP) : res.html)
                 : failureLineSummary(res.html);
             const safe = Object.assign({}, res); delete safe.html;
+            const echoedFetch = stableRef || filePath;
             return withServerDebug(ctx, Object.assign(safe, {
-                htmlFile: filePath,
+                htmlFile: echoedFetch,
                 message: "Fetched " + path + " — status=" + res.status + " content-type=" + res.contentType +
                     " title=" + JSON.stringify(res.title) + " size=" + res.bytes + " bytes" +
-                    (run ? "\n  Work-history run: " + run.dir : "") +
-                    (filePath ? "\n  Full body saved to: " + filePath : "") +
+                    (echoedFetch ? "\n  Full body saved to: " + echoedFetch : "") +
                     "\n\n--- " + (full ? "served body" : "summary (failure lines with 2 lines of context)") +
                     (truncated ? " (first " + PREVIEW_INLINE_CAP + " bytes — read the file for the rest)" : "") + " ---\n" + shown
             }));
@@ -1302,9 +1317,10 @@ const TOOLS = [
                 try { const { normalizeWorkflowName: norm } = require("../core/test"); safeSelection.workflowName = norm(workflowName); } catch (e) { safeSelection.workflowName = String(workflowName); }
             }
             if (action) safeSelection.action = String(action).trim();
-            // param keys are safe to list (without values) for observability; values are discarded
+            // param keys are safe to list (without values) for observability; values are discarded.
+            // Sorted code-point (not localeCompare) for evidence-line determinism.
             if (params && typeof params === "object" && Object.keys(params).length) {
-                safeSelection.paramKeys = Object.keys(params).slice(0, 20);
+                safeSelection.paramKeys = Object.keys(params).sort((a, b) => a < b ? -1 : a > b ? 1 : 0).slice(0, 20);
             }
             const evidenceRecorded = appendToolEvidence(ctx.workspaceDir, Object.assign(evidenceBase(), {
                 viewportName: res.viewportName,
@@ -1313,13 +1329,16 @@ const TOOLS = [
                 auditErrors: (res.designAudit && res.designAudit.errors) || 0,
                 auditRules: [...new Set(((res.designAudit && res.designAudit.findings) || [])
                     .filter(f => f.severity === "error" || f.severity === "warning")
-                    .map(f => String(f.rule).slice(0, 60)))].slice(0, 10),
+                    .map(f => String(f.rule).slice(0, 60)))].sort((a, b) => a < b ? -1 : a > b ? 1 : 0).slice(0, 10),
                 selection: Object.keys(safeSelection).length ? safeSelection : undefined
             }));
             // Save the PNG to a file the harness can Read, and return MCP image content so a
-            // vision-capable model sees the render inline.
+            // vision-capable model sees the render inline. The run-dir copies stay as the human
+            // evidence trail; the agent-visible refs below are stable content-addressed paths.
             let filePath = null;
             let auditPath = null;
+            let stablePngRef = null;
+            let stableAuditRef = null;
             let run = null;
             const featureLabel = feature || (page ? "page-" + page : (res.kind || "pal") + "-" + res.viewportName);
             try {
@@ -1334,7 +1353,7 @@ const TOOLS = [
                 }
                 if (action) metadataSelection.action = String(action).trim();
                 if (params && typeof params === "object" && Object.keys(params).length) {
-                    metadataSelection.paramKeys = Object.keys(params).slice(0, 20);
+                    metadataSelection.paramKeys = Object.keys(params).sort((a, b) => a < b ? -1 : a > b ? 1 : 0).slice(0, 20);
                 }
                 writeRunMetadata(run, {
                     palGuid: ctx.record.palGuid,
@@ -1367,6 +1386,11 @@ const TOOLS = [
                     "- " + formatDesignAudit(res.designAudit),
                     res.renderError ? "- Runtime render error: " + res.renderError.message : "- Runtime render error: none"
                 ]);
+                // Stable agent-visible refs: PNG bytes hash byte-accurately, audit JSON canonically.
+                try {
+                    if (!imageless && res.pngBase64) stablePngRef = writeContentAddressedArtifact(ctx.workspaceDir, "pal_screenshot", Buffer.from(res.pngBase64, "base64"));
+                    if (res.designAudit) stableAuditRef = writeContentAddressedArtifact(ctx.workspaceDir, "pal_screenshot", res.designAudit);
+                } catch (e) { /* best-effort */ }
             } catch (e) { /* best-effort */ }
             const errBlock = res.renderError
                 ? "\n\n⚠ RUNTIME RENDER ERROR — the page did NOT render its UI; it threw at runtime:\n"
@@ -1384,20 +1408,21 @@ const TOOLS = [
                     auditFailures.map(f => "  - " + f.rule + ": " + f.message +
                         (f.samples && f.samples.length ? " [" + f.samples.join(", ") + "]" : "")).join("\n")
                 : "";
+            const echoedPng = stablePngRef || filePath;
+            const echoedAudit = stableAuditRef || auditPath;
             const text = (res.kind ? res.kind.toUpperCase() : "WEB") + " screenshot captured — " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height +
                 (fullPage ? " (full page)" : "") + "\n  url=" + res.url +
                 "\n  " + formatStyleStatus(res.styleStatus) +
                 "\n  " + formatDesignAudit(res.designAudit) +
                 "\n  Visual gate: " + (visualGate.complete ? "complete" : "incomplete; clean desktop + mobile still required for " + visualGate.incomplete.join(", ")) +
-                (run ? "\n  Work-history run: " + run.dir : "") +
-                (filePath ? "\n  PNG saved to: " + filePath : "") +
-                (auditPath ? "\n  Design audit saved to: " + auditPath : "") + errBlock + auditBlock +
+                (echoedPng ? "\n  PNG saved to: " + echoedPng : "") +
+                (echoedAudit ? "\n  Design audit saved to: " + echoedAudit : "") + errBlock + auditBlock +
                 (evidenceRecorded ? "" : persistWarning);
             // Attach the c.debug trail (prime evidence beside a renderError) BEFORE assembling the
             // content blocks, so the debug text rides the visible text block too.
             const out = await withServerDebug(ctx, screenshotEnvelopeProjection(res, {
-                pngFile: filePath,
-                designAuditFile: auditPath,
+                pngFile: echoedPng,
+                designAuditFile: echoedAudit,
                 visualGate,
                 evidenceRecorded,
                 message: text
@@ -1443,7 +1468,7 @@ const TOOLS = [
         async run(ctx, { steps, workflow, viewport } = {}) {
             const disabled = testingDisabledResult(ctx, "pal_exercise");
             if (disabled) return disabled;
-            const res = await runExercise(ctx.session, ctx.record.palGuid, { steps, workflow, viewport });
+            const res = await runExercise(ctx.session, ctx.record.palGuid, { steps, workflow, viewport, workspaceDir: ctx.workspaceDir });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             // Failure-only durable artifacts: a failed/blocked browser run with captured evidence
             // persists steps.json, browser-events.json, the accessibility snapshot (or screen-hints
@@ -2035,7 +2060,7 @@ const TOOLS = [
                 return { ok: false, error: result.error, message: result.error };
             }
             const note = result.truncated ? " (truncated to fit response cap)" : "";
-            const rowsJson = JSON.stringify(result.rows, null, 2);
+            const rowsJson = stableStringify(result.rows, 2);
             const message = "Dataset " + JSON.stringify(args.dataset) + ": " + result.rows.length + " row(s) returned, totalRecords=" + result.totalRecords + note + "\n\n" + rowsJson;
             return {
                 ok: true,

@@ -13,9 +13,10 @@ never pal-loop's self-report.
 
 ## Inputs (read all, first)
 - **Activate the verification tools before anything else.** On lazy-tool harnesses only a core
-  set is active; call `pal_tools` with query `"browser runtime screenshot exercise debug"` and
-  confirm `pal_screenshot`, `pal_exercise`, and `pal_debug` are active. A review that never
-  ATTEMPTED activation may not claim the tools were unavailable — record the activation result
+  set is active. If `pal_tools` is available (lazy profile), call it with query
+  `"browser runtime screenshot exercise debug"` and confirm `pal_screenshot`, `pal_exercise`, and
+  `pal_debug` are active; otherwise (eager profile — full set at boot) the required tools are
+  already active. A review that never ATTEMPTED activation may not claim the tools were unavailable — record the activation result
   (or its exact error) in REVIEW.md; a missing attempt caps the verdict at CHANGES-NEEDED.
 - Run `palsync review brief` first. Treat its EVIDENCE LEDGER as primary evidence; open source
   files only for criteria listed under `NO EVIDENCE` or for a specific failed/ambiguous proof.

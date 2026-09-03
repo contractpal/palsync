@@ -32,6 +32,10 @@ test("advertised MCP tool schema matches the committed wire snapshot", async () 
     assert.equal(advertised.tools.length, 29);
     assert.equal(Buffer.byteLength(JSON.stringify(advertised.tools)), 27213);
     assert.equal(actual, fixture);
-    assert.deepStrictEqual(serializeToolDefinitions(TOOLS), advertised.tools);
+    assert.deepStrictEqual(
+        serializeToolDefinitions(TOOLS).slice().sort((a, b) => (a.name < b.name ? -1 : 1)),
+        advertised.tools,
+        "the wire listing is code-point sorted; TOOLS definition order is not"
+    );
     assert.equal(advertised.instructions, SERVER_INSTRUCTIONS);
 });

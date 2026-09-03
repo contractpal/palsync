@@ -1,148 +1,91 @@
 [
   {
-    "name": "pal_status",
-    "title": "Report pal status",
-    "description": "Report whether the server is newer than your last pull, and who holds the lock (read-only).",
+    "name": "pal_ast",
+    "title": "Search and rewrite code structure",
+    "description": "Syntax-aware STRUCTURAL search + conservative rewrite over the 14 manifest folders via the pinned ast-grep binary. Matches code SHAPES, not text: exact strings + $VAR/$$$ metavariables only; regex and plain-text search are grep/read territory (refused). lang: html|javascript|css|json. search returns file:line + matched text for whole matched nodes (bare patterns reach element TEXT, never attribute interiors). rewrite returns a dry-run diff; apply:true writes byte-identically, only inside the manifest folders (pal.json/.palsync.json never written; maxFiles overruns and preview drift refused) and lints ONLY the written files, advisory.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "detail": {
+        "mode": {
+          "description": "search (default) returns matches; rewrite returns a dry-run diff, written only with apply:true.",
           "type": "string",
           "enum": [
-            "summary",
-            "normal",
-            "full"
+            "search",
+            "rewrite"
           ]
         },
-        "maxDiagnostics": {
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
-        },
-        "maxBytes": {
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
-        },
-        "includePassing": {
-          "type": "boolean"
-        },
-        "includeDebug": {
-          "type": "boolean"
-        }
-      },
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true
-    }
-  },
-  {
-    "name": "pal_validate",
-    "title": "Validate pal code",
-    "description": "Offline-check the whole workspace for restricted workflow JS, c:/XHTML markup, and cross-file contract violations. Returns each finding's location, severity, and fix. Run before finishing. pal_push gates changed files and narrow workspace contracts only.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "detail": {
+        "pattern": {
           "type": "string",
-          "enum": [
-            "summary",
-            "normal",
-            "full"
-          ]
+          "description": "Complete AST node shape to match in the selected lang: exact strings + $VAR / $$$ metavariables only (no regex, no plain text)."
         },
-        "maxDiagnostics": {
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
-        },
-        "maxBytes": {
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
-        },
-        "includePassing": {
-          "type": "boolean"
-        },
-        "includeDebug": {
-          "type": "boolean"
-        }
-      },
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true
-    }
-  },
-  {
-    "name": "pal_testing",
-    "title": "Toggle automated testing",
-    "description": "Toggle CHIP runtime/self-tests for this session. false skips pal_test/preview/fetch/screenshot/exercise/regression/SEO/tunnel; true resumes. pal_validate and push validation stay on. Resets at session end.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "description": "false stops automated runtime/self-tests now; true resumes them. Omit to report the current setting.",
-          "type": "boolean"
-        }
-      },
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true
-    }
-  },
-  {
-    "name": "pal_test",
-    "title": "Compile workflow on server",
-    "description": "Compile a workflow on the server and return validation notes. This does not render the pal; use pal_screenshot or pal_exercise for agent-visible verification. preview:true opens a credential-bearing URL only for human review; the URL is never returned.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "workflow": {
-          "type": "string",
-          "enum": [
-            "console",
-            "web",
-            "transaction"
-          ]
-        },
-        "workflowName": {
+        "rewrite": {
+          "description": "Full replacement node for mode:rewrite / apply:true (required there).",
           "type": "string"
         },
-        "preview": {
-          "type": "boolean"
-        },
-        "detail": {
+        "lang": {
           "type": "string",
           "enum": [
-            "summary",
-            "normal",
-            "full"
+            "html",
+            "javascript",
+            "css",
+            "json"
+          ],
+          "description": "Language the pattern is parsed in."
+        },
+        "paths": {
+          "description": "Workspace-relative paths narrowing the search within the 14 manifest folders (default: all of them).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "apply": {
+          "description": "Write the rewrite matching the last dry-run for these same inputs; refuses on drift.",
+          "type": "boolean"
+        },
+        "maxResults": {
+          "description": "Match cap for search (default 20).",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxFiles": {
+          "description": "Changed-file cap for rewrite/apply (default 25; explicit override allowed up to 500).",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "pattern",
+        "lang"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false
+    }
+  },
+  {
+    "name": "pal_context",
+    "title": "Load PalSync context",
+    "description": "Load an on-demand PalSync contract section by exact id or keyword query (sync-workflow, creating-files, datasets). For LOCAL structural impact before an edit, use pal_impact({target}) instead.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string",
+          "enum": [
+            "sync-workflow",
+            "creating-files",
+            "datasets"
           ]
         },
-        "maxDiagnostics": {
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
-        },
-        "maxBytes": {
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
-        },
-        "includePassing": {
-          "type": "boolean"
-        },
-        "includeDebug": {
-          "type": "boolean"
+        "query": {
+          "description": "Keywords used when the exact section id is unknown.",
+          "type": "string"
         }
       },
       "$schema": "http://json-schema.org/draft-07/schema#"
@@ -154,37 +97,314 @@
     }
   },
   {
-    "name": "pal_tunnel_test",
-    "title": "Test tunnel workflow",
-    "description": "Call the last-pushed tunnel workflow and return its JSON response. askedUser:true is required and attests that action, workflow, and payload came from the user; never invent them. Credentials stay internal. An empty response indicates a likely runtime exception. Push first.",
+    "name": "pal_data_delete",
+    "title": "Delete pal Data map",
+    "description": "Delete a pal-level Data map by name from pal.json (and its data/<name>.json mirror). Local file edit only (no server call) — pal_push to send the removal.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "action": {
-          "description": "Value returned by request.getAction(); omitted means null.",
-          "type": "string"
+        "name": {
+          "type": "string",
+          "description": "The Data name to delete."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_data_set",
+    "title": "Set pal Data map",
+    "description": "Create or update a pal-level Data map (pal.getData(\"name\")) in pal.json — the MCP builds the correct serialized shape (values.entry[].string: [key, value]) so you never hand-write it. FULL REPLACE of that name's key/value set, not a delta. Local file edit only (no server call) — pal_push to send it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The Data name, read on the server via pal.getData(\"<name>\")."
         },
-        "payload": {
-          "description": "Top-level payload values; nested objects do not survive the wire.",
+        "values": {
           "type": "object",
           "propertyNames": {
             "type": "string"
           },
-          "additionalProperties": {}
-        },
-        "payloadFile": {
-          "description": "JSON payload path; alternative to payload.",
-          "type": "string"
-        },
-        "workflow": {
-          "description": "Tunnel workflow name; default is the registered tunnel workflow.",
-          "type": "string"
-        },
-        "askedUser": {
-          "description": "Required: values came from the user, not the agent.",
-          "type": "boolean"
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The complete key/value set for this Data — replaces any existing values under this name."
         }
       },
+      "required": [
+        "name",
+        "values"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_datalist_delete",
+    "title": "Delete pal DataList",
+    "description": "Delete a pal-level DataList by name from pal.json (and its datalists/<name>.json mirror). Local file edit only (no server call) — pal_push to send the removal.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The DataList name to delete."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_datalist_set",
+    "title": "Set pal DataList",
+    "description": "Create or update a pal-level DataList (pal.getDataList(\"name\")) in pal.json — the MCP builds the correct serialized shape (cols.string / recs[\"string-array\"][].string) so you never hand-write it. FULL REPLACE of that name's columns and rows, not a delta. Local file edit only (no server call) — pal_push to send it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The DataList name, read on the server via pal.getDataList(\"<name>\")."
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Column names, in order."
+        },
+        "rows": {
+          "description": "Each row is an array of cell values, one per column, in the same order as columns. Omit for an empty table.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "name",
+        "columns"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_dataset_count",
+    "title": "Count dataset records",
+    "description": "Count matching dataset records in the current Pal (read-only). Same filter vocabulary as pal_dataset_query but requests at most one row and returns only the total count.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "dataset": {
+          "type": "string",
+          "description": "Dataset name as defined in pal.json."
+        },
+        "mode": {
+          "description": "Top-level filter mode for conditions (default AND).",
+          "type": "string",
+          "enum": [
+            "AND",
+            "OR"
+          ]
+        },
+        "conditions": {
+          "description": "Flat filter conditions using the vendored operator vocabulary.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "column": {
+                "type": "string"
+              },
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "NULL",
+                  "NOT_NULL",
+                  "EQUAL",
+                  "NOT_EQUAL",
+                  "GREATER_THAN",
+                  "LESS_THAN",
+                  "GREATER_THAN_EQUAL",
+                  "LESS_THAN_EQUAL",
+                  "BETWEEN",
+                  "LIKE",
+                  "NOT_LIKE"
+                ]
+              },
+              "value1": {
+                "type": "string"
+              },
+              "value2": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "column",
+              "operator"
+            ]
+          }
+        },
+        "orderBy": {
+          "description": "Column ordering (validated but not needed for count).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "column": {
+                "type": "string"
+              },
+              "order": {
+                "type": "string",
+                "enum": [
+                  "ASC",
+                  "DESC",
+                  "NATURAL"
+                ]
+              }
+            },
+            "required": [
+              "column"
+            ]
+          }
+        }
+      },
+      "required": [
+        "dataset"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_dataset_query",
+    "title": "Query dataset rows",
+    "description": "Query a bounded page of dataset rows from the current Pal (read-only). Validates dataset and columns against the local pal.json before the server call. Uses the dedicated QUERY_DATASET operation only.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "dataset": {
+          "type": "string",
+          "description": "Dataset name as defined in pal.json."
+        },
+        "startRecord": {
+          "description": "Zero-based start row (default 0).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "limit": {
+          "description": "Max rows to return (1-100, default 20).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "mode": {
+          "description": "Top-level filter mode for conditions (default AND).",
+          "type": "string",
+          "enum": [
+            "AND",
+            "OR"
+          ]
+        },
+        "conditions": {
+          "description": "Flat filter conditions using the vendored operator vocabulary.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "column": {
+                "type": "string"
+              },
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "NULL",
+                  "NOT_NULL",
+                  "EQUAL",
+                  "NOT_EQUAL",
+                  "GREATER_THAN",
+                  "LESS_THAN",
+                  "GREATER_THAN_EQUAL",
+                  "LESS_THAN_EQUAL",
+                  "BETWEEN",
+                  "LIKE",
+                  "NOT_LIKE"
+                ]
+              },
+              "value1": {
+                "type": "string"
+              },
+              "value2": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "column",
+              "operator"
+            ]
+          }
+        },
+        "orderBy": {
+          "description": "Column ordering.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "column": {
+                "type": "string"
+              },
+              "order": {
+                "type": "string",
+                "enum": [
+                  "ASC",
+                  "DESC",
+                  "NATURAL"
+                ]
+              }
+            },
+            "required": [
+              "column"
+            ]
+          }
+        }
+      },
+      "required": [
+        "dataset"
+      ],
       "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
@@ -206,180 +426,6 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
-    }
-  },
-  {
-    "name": "pal_preview",
-    "title": "Preview rendered pal",
-    "description": "Inspect the last-pushed render. WEB: expect returns found/missing verdicts; summary is the default and full returns capped HTML. CONSOLE/transaction: open:true opens a browser only for human review. Push first.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "workflow": {
-          "type": "string",
-          "enum": [
-            "console",
-            "web",
-            "transaction"
-          ]
-        },
-        "detail": {
-          "description": "summary (default) returns metadata and failure context; full includes capped HTML.",
-          "type": "string",
-          "enum": [
-            "summary",
-            "full"
-          ]
-        },
-        "expect": {
-          "description": "Required strings; returns found/missing verdicts without HTML.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "selector": {
-          "description": "Simple tag, class, or id region selector.",
-          "type": "string"
-        },
-        "maxChars": {
-          "description": "Maximum returned markup characters.",
-          "type": "number"
-        },
-        "open": {
-          "description": "Open console/transaction preview for human review.",
-          "type": "boolean"
-        }
-      },
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true
-    }
-  },
-  {
-    "name": "pal_fetch",
-    "title": "Fetch rendered web page",
-    "description": "Verify one last-pushed WEB page renders. expect returns found/missing verdicts without the body; summary is the default and full returns capped HTML. A successful push does not prove render. path is site-root-relative.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "path": {
-          "type": "string",
-          "description": "Site-root-relative page path."
-        },
-        "detail": {
-          "description": "summary (default) returns metadata and failure context; full includes capped HTML.",
-          "type": "string",
-          "enum": [
-            "summary",
-            "full"
-          ]
-        },
-        "expect": {
-          "description": "Required strings; returns found/missing verdicts without HTML.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "selector": {
-          "description": "Simple tag, class, or id region selector.",
-          "type": "string"
-        },
-        "maxChars": {
-          "description": "Maximum returned markup characters.",
-          "type": "number"
-        }
-      },
-      "required": [
-        "path"
-      ],
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true
-    }
-  },
-  {
-    "name": "pal_screenshot",
-    "title": "Capture rendered pal screen",
-    "description": "Render the last-pushed pal, detect runtime errors, and return a browser-computed designAudit. Capture desktop and mobile; require zero audit errors and inspect pixels. imageless:true returns only the audit. Missing browser/auth is unavailable, never a pass. Optional workflow/workflowName select the engine/workflow explicitly (takes precedence over auto-detection, extension stripped); console/transaction action+params render the action state before capture (encoded via URLSearchParams).",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "page": {
-          "description": "WEB page path; default is home.",
-          "type": "string"
-        },
-        "feature": {
-          "description": "Work-history feature label.",
-          "type": "string"
-        },
-        "viewport": {
-          "description": "desktop (default) or mobile.",
-          "type": "string",
-          "enum": [
-            "desktop",
-            "mobile"
-          ]
-        },
-        "fullPage": {
-          "description": "Capture the full scroll height.",
-          "type": "boolean"
-        },
-        "imageless": {
-          "description": "Return designAudit without image data.",
-          "type": "boolean"
-        },
-        "workflow": {
-          "description": "Explicit workflow type — overrides auto-detection.",
-          "type": "string",
-          "enum": [
-            "console",
-            "web",
-            "transaction"
-          ]
-        },
-        "workflowName": {
-          "description": "Registered workflow name (with or without file extension — extension is stripped consistently).",
-          "type": "string"
-        },
-        "action": {
-          "description": "Console/transaction action name (appended as cp-ws-doaction before capture).",
-          "type": "string"
-        },
-        "params": {
-          "description": "Scalar query parameters appended with the action (reserved keys cp-auth/nxProfileId/cp-workflow/cp-ws-doaction are refused).",
-          "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "boolean"
-              }
-            ]
-          }
-        }
-      },
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": false,
-      "destructiveHint": true,
-      "idempotentHint": false
     }
   },
   {
@@ -512,6 +558,329 @@
     }
   },
   {
+    "name": "pal_fetch",
+    "title": "Fetch rendered web page",
+    "description": "Verify one last-pushed WEB page renders. expect returns found/missing verdicts without the body; summary is the default and full returns capped HTML. A successful push does not prove render. path is site-root-relative.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Site-root-relative page path."
+        },
+        "detail": {
+          "description": "summary (default) returns metadata and failure context; full includes capped HTML.",
+          "type": "string",
+          "enum": [
+            "summary",
+            "full"
+          ]
+        },
+        "expect": {
+          "description": "Required strings; returns found/missing verdicts without HTML.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "selector": {
+          "description": "Simple tag, class, or id region selector.",
+          "type": "string"
+        },
+        "maxChars": {
+          "description": "Maximum returned markup characters.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_impact",
+    "title": "Inspect local structural impact",
+    "description": "Inspect exact LOCAL structural impact before editing a page/fragment: direct dependencies, dependents, and registration state from pal.json + markup references. Deterministic and offline; never checks the live server or runtime-selected relationships. For contract sections use pal_context.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "description": "Exact POSIX workspace-relative pages/ or fragments/ markup path for local structural impact, e.g. fragments/navbar.html.",
+          "type": "string"
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_lock",
+    "title": "Acquire pal lock",
+    "description": "Acquire the pal lock. Reports the real holder (from teamInfo) when blocked; override is high-friction and typed.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "confirmOverride": {
+          "type": "string"
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_merge",
+    "title": "Merge pal changes",
+    "description": "Reconcile un-pushed LOCAL changes with SERVER changes since your last pull, keeping BOTH where they don't collide (3-way merge): yours-only stay, server-only are taken, a file BOTH changed is kept as YOURS with the server's beside it as <file>.server to combine by hand. Never overwrites your work silently. Use instead of force push/pull when both sides edited; a clean merge clears drift so pal_push isn't blocked.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false
+    }
+  },
+  {
+    "name": "pal_preview",
+    "title": "Preview rendered pal",
+    "description": "Inspect the last-pushed render. WEB: expect returns found/missing verdicts; summary is the default and full returns capped HTML. CONSOLE/transaction: open:true opens a browser only for human review. Push first.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workflow": {
+          "type": "string",
+          "enum": [
+            "console",
+            "web",
+            "transaction"
+          ]
+        },
+        "detail": {
+          "description": "summary (default) returns metadata and failure context; full includes capped HTML.",
+          "type": "string",
+          "enum": [
+            "summary",
+            "full"
+          ]
+        },
+        "expect": {
+          "description": "Required strings; returns found/missing verdicts without HTML.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "selector": {
+          "description": "Simple tag, class, or id region selector.",
+          "type": "string"
+        },
+        "maxChars": {
+          "description": "Maximum returned markup characters.",
+          "type": "number"
+        },
+        "open": {
+          "description": "Open console/transaction preview for human review.",
+          "type": "boolean"
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_pull",
+    "title": "Pull pal changes",
+    "description": "Pull (sync) the pal from the server. New un-pushed local files are preserved. Refuses if it would overwrite locally-modified server files (use force to override).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "force": {
+          "type": "boolean"
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false
+    }
+  },
+  {
+    "name": "pal_push",
+    "title": "Push pal changes",
+    "description": "Push local changes after validating changed files and cross-file contracts. Validation errors cannot be bypassed; force:true handles server drift only. Warnings never block. Refuses locks unless the user supplies the exact typed override. Standalone pal_validate checks the whole workspace; this gate does not re-block pre-existing errors in untouched files.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "force": {
+          "type": "boolean"
+        },
+        "confirmOverride": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string",
+          "enum": [
+            "summary",
+            "normal",
+            "full"
+          ]
+        },
+        "maxDiagnostics": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxBytes": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "includePassing": {
+          "type": "boolean"
+        },
+        "includeDebug": {
+          "type": "boolean"
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false
+    }
+  },
+  {
+    "name": "pal_regression",
+    "title": "Run regression check",
+    "description": "Brownfield regression check against baseline/baseline.json (pal-init Step 3). FIRST compares the baseline's mapped marker to the live server — moved => STALE, stops (never verdicts against a stale baseline). Then re-runs validate / pal_test / page-H1 checks vs the baseline, separating CAUSED failures from INHERITED (known_issues) ones; eyeball_only viewports are needs-human, never auto-passed.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_resources",
+    "title": "Refresh chain resources",
+    "description": "Refresh .resources/ from the server's GET_CHAIN: every pal in this pal's chain (module dependencies, resource pals, and cloud-wide system pals such as CloudPiston Resource) extracted read-only, one folder per chain pal (pages/fragments/workflows/etc., same shape as a pulled pal). Runs automatically at session start; call this again only if a chain pal (e.g. CloudPiston Resource) may have changed server-side, or the chain itself changed (a module was attached/detached). Never edit files under .resources/ — they are not part of this pal and are wiped and rewritten on every refresh.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_screenshot",
+    "title": "Capture rendered pal screen",
+    "description": "Render the last-pushed pal, detect runtime errors, and return a browser-computed designAudit. Capture desktop and mobile; require zero audit errors and inspect pixels. imageless:true returns only the audit. Missing browser/auth is unavailable, never a pass. Optional workflow/workflowName select the engine/workflow explicitly (takes precedence over auto-detection, extension stripped); console/transaction action+params render the action state before capture (encoded via URLSearchParams).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "description": "WEB page path; default is home.",
+          "type": "string"
+        },
+        "feature": {
+          "description": "Work-history feature label.",
+          "type": "string"
+        },
+        "viewport": {
+          "description": "desktop (default) or mobile.",
+          "type": "string",
+          "enum": [
+            "desktop",
+            "mobile"
+          ]
+        },
+        "fullPage": {
+          "description": "Capture the full scroll height.",
+          "type": "boolean"
+        },
+        "imageless": {
+          "description": "Return designAudit without image data.",
+          "type": "boolean"
+        },
+        "workflow": {
+          "description": "Explicit workflow type — overrides auto-detection.",
+          "type": "string",
+          "enum": [
+            "console",
+            "web",
+            "transaction"
+          ]
+        },
+        "workflowName": {
+          "description": "Registered workflow name (with or without file extension — extension is stripped consistently).",
+          "type": "string"
+        },
+        "action": {
+          "description": "Console/transaction action name (appended as cp-ws-doaction before capture).",
+          "type": "string"
+        },
+        "params": {
+          "description": "Scalar query parameters appended with the action (reserved keys cp-auth/nxProfileId/cp-workflow/cp-ws-doaction are refused).",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          }
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false
+    }
+  },
+  {
     "name": "pal_seo_audit",
     "title": "Audit web page SEO",
     "description": "Audit last-pushed WEB pages for on-page SEO and crawler files. Returns every problem, fix, and passing check. Read the palbuilder-seo skill before writing heads; this verifies the result. Not for console pals.",
@@ -552,138 +921,6 @@
     }
   },
   {
-    "name": "pal_context",
-    "title": "Load PalSync context",
-    "description": "Load an on-demand PalSync contract section by exact id or keyword query (sync-workflow, creating-files, datasets). For LOCAL structural impact before an edit, use pal_impact({target}) instead.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "section": {
-          "type": "string",
-          "enum": [
-            "sync-workflow",
-            "creating-files",
-            "datasets"
-          ]
-        },
-        "query": {
-          "description": "Keywords used when the exact section id is unknown.",
-          "type": "string"
-        }
-      },
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true
-    }
-  },
-  {
-    "name": "pal_impact",
-    "title": "Inspect local structural impact",
-    "description": "Inspect exact LOCAL structural impact before editing a page/fragment: direct dependencies, dependents, and registration state from pal.json + markup references. Deterministic and offline; never checks the live server or runtime-selected relationships. For contract sections use pal_context.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "target": {
-          "description": "Exact POSIX workspace-relative pages/ or fragments/ markup path for local structural impact, e.g. fragments/navbar.html.",
-          "type": "string"
-        }
-      },
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true
-    }
-  },
-  {
-    "name": "pal_resources",
-    "title": "Refresh chain resources",
-    "description": "Refresh .resources/ from the server's GET_CHAIN: every pal in this pal's chain (module dependencies, resource pals, and cloud-wide system pals such as CloudPiston Resource) extracted read-only, one folder per chain pal (pages/fragments/workflows/etc., same shape as a pulled pal). Runs automatically at session start; call this again only if a chain pal (e.g. CloudPiston Resource) may have changed server-side, or the chain itself changed (a module was attached/detached). Never edit files under .resources/ — they are not part of this pal and are wiped and rewritten on every refresh.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {},
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": false,
-      "destructiveHint": false,
-      "idempotentHint": true
-    }
-  },
-  {
-    "name": "pal_ast",
-    "title": "Search and rewrite code structure",
-    "description": "Syntax-aware STRUCTURAL search + conservative rewrite over the 14 manifest folders via the pinned ast-grep binary. Matches code SHAPES, not text: exact strings + $VAR/$$$ metavariables only; regex and plain-text search are grep/read territory (refused). lang: html|javascript|css|json. search returns file:line + matched text for whole matched nodes (bare patterns reach element TEXT, never attribute interiors). rewrite returns a dry-run diff; apply:true writes byte-identically, only inside the manifest folders (pal.json/.palsync.json never written; maxFiles overruns and preview drift refused) and lints ONLY the written files, advisory.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "mode": {
-          "description": "search (default) returns matches; rewrite returns a dry-run diff, written only with apply:true.",
-          "type": "string",
-          "enum": [
-            "search",
-            "rewrite"
-          ]
-        },
-        "pattern": {
-          "type": "string",
-          "description": "Complete AST node shape to match in the selected lang: exact strings + $VAR / $$$ metavariables only (no regex, no plain text)."
-        },
-        "rewrite": {
-          "description": "Full replacement node for mode:rewrite / apply:true (required there).",
-          "type": "string"
-        },
-        "lang": {
-          "type": "string",
-          "enum": [
-            "html",
-            "javascript",
-            "css",
-            "json"
-          ],
-          "description": "Language the pattern is parsed in."
-        },
-        "paths": {
-          "description": "Workspace-relative paths narrowing the search within the 14 manifest folders (default: all of them).",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "apply": {
-          "description": "Write the rewrite matching the last dry-run for these same inputs; refuses on drift.",
-          "type": "boolean"
-        },
-        "maxResults": {
-          "description": "Match cap for search (default 20).",
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
-        },
-        "maxFiles": {
-          "description": "Changed-file cap for rewrite/apply (default 25; explicit override allowed up to 500).",
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
-        }
-      },
-      "required": [
-        "pattern",
-        "lang"
-      ],
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": false,
-      "destructiveHint": true,
-      "idempotentHint": false
-    }
-  },
-  {
     "name": "pal_spec_lint",
     "title": "Lint pal specification",
     "description": "Lint a SPEC.md OFFLINE for the MECHANICAL half of pal-spec's reality check: placeholders (TBD/decide-later), dead §3 links, §8a primary-key/type/size/indexability against palbuilder-types.md, §5 dataset references, and the §12 floor (plus the REGRESSION criterion when a MAP.md sits beside it). Returns HARD_FLAG/FLAG/NOTE findings; capability->primitive mapping and component checks stay manual.",
@@ -704,12 +941,37 @@
     }
   },
   {
-    "name": "pal_regression",
-    "title": "Run regression check",
-    "description": "Brownfield regression check against baseline/baseline.json (pal-init Step 3). FIRST compares the baseline's mapped marker to the live server — moved => STALE, stops (never verdicts against a stale baseline). Then re-runs validate / pal_test / page-H1 checks vs the baseline, separating CAUSED failures from INHERITED (known_issues) ones; eyeball_only viewports are needs-human, never auto-passed.",
+    "name": "pal_status",
+    "title": "Report pal status",
+    "description": "Report whether the server is newer than your last pull, and who holds the lock (read-only).",
     "inputSchema": {
       "type": "object",
-      "properties": {},
+      "properties": {
+        "detail": {
+          "type": "string",
+          "enum": [
+            "summary",
+            "normal",
+            "full"
+          ]
+        },
+        "maxDiagnostics": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxBytes": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "includePassing": {
+          "type": "boolean"
+        },
+        "includeDebug": {
+          "type": "boolean"
+        }
+      },
       "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
@@ -774,172 +1036,25 @@
     }
   },
   {
-    "name": "pal_data_set",
-    "title": "Set pal Data map",
-    "description": "Create or update a pal-level Data map (pal.getData(\"name\")) in pal.json — the MCP builds the correct serialized shape (values.entry[].string: [key, value]) so you never hand-write it. FULL REPLACE of that name's key/value set, not a delta. Local file edit only (no server call) — pal_push to send it.",
+    "name": "pal_test",
+    "title": "Compile workflow on server",
+    "description": "Compile a workflow on the server and return validation notes. This does not render the pal; use pal_screenshot or pal_exercise for agent-visible verification. preview:true opens a credential-bearing URL only for human review; the URL is never returned.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "name": {
+        "workflow": {
           "type": "string",
-          "description": "The Data name, read on the server via pal.getData(\"<name>\")."
+          "enum": [
+            "console",
+            "web",
+            "transaction"
+          ]
         },
-        "values": {
-          "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "The complete key/value set for this Data — replaces any existing values under this name."
-        }
-      },
-      "required": [
-        "name",
-        "values"
-      ],
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": false,
-      "destructiveHint": false,
-      "idempotentHint": true
-    }
-  },
-  {
-    "name": "pal_data_delete",
-    "title": "Delete pal Data map",
-    "description": "Delete a pal-level Data map by name from pal.json (and its data/<name>.json mirror). Local file edit only (no server call) — pal_push to send the removal.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "The Data name to delete."
-        }
-      },
-      "required": [
-        "name"
-      ],
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": false,
-      "destructiveHint": true,
-      "idempotentHint": true
-    }
-  },
-  {
-    "name": "pal_datalist_set",
-    "title": "Set pal DataList",
-    "description": "Create or update a pal-level DataList (pal.getDataList(\"name\")) in pal.json — the MCP builds the correct serialized shape (cols.string / recs[\"string-array\"][].string) so you never hand-write it. FULL REPLACE of that name's columns and rows, not a delta. Local file edit only (no server call) — pal_push to send it.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "The DataList name, read on the server via pal.getDataList(\"<name>\")."
-        },
-        "columns": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Column names, in order."
-        },
-        "rows": {
-          "description": "Each row is an array of cell values, one per column, in the same order as columns. Omit for an empty table.",
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "required": [
-        "name",
-        "columns"
-      ],
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": false,
-      "destructiveHint": false,
-      "idempotentHint": true
-    }
-  },
-  {
-    "name": "pal_datalist_delete",
-    "title": "Delete pal DataList",
-    "description": "Delete a pal-level DataList by name from pal.json (and its datalists/<name>.json mirror). Local file edit only (no server call) — pal_push to send the removal.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "The DataList name to delete."
-        }
-      },
-      "required": [
-        "name"
-      ],
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": false,
-      "destructiveHint": true,
-      "idempotentHint": true
-    }
-  },
-  {
-    "name": "pal_pull",
-    "title": "Pull pal changes",
-    "description": "Pull (sync) the pal from the server. New un-pushed local files are preserved. Refuses if it would overwrite locally-modified server files (use force to override).",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "force": {
-          "type": "boolean"
-        }
-      },
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": false,
-      "destructiveHint": true,
-      "idempotentHint": false
-    }
-  },
-  {
-    "name": "pal_merge",
-    "title": "Merge pal changes",
-    "description": "Reconcile un-pushed LOCAL changes with SERVER changes since your last pull, keeping BOTH where they don't collide (3-way merge): yours-only stay, server-only are taken, a file BOTH changed is kept as YOURS with the server's beside it as <file>.server to combine by hand. Never overwrites your work silently. Use instead of force push/pull when both sides edited; a clean merge clears drift so pal_push isn't blocked.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {},
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": false,
-      "destructiveHint": true,
-      "idempotentHint": false
-    }
-  },
-  {
-    "name": "pal_push",
-    "title": "Push pal changes",
-    "description": "Push local changes after validating changed files and cross-file contracts. Validation errors cannot be bypassed; force:true handles server drift only. Warnings never block. Refuses locks unless the user supplies the exact typed override. Standalone pal_validate checks the whole workspace; this gate does not re-block pre-existing errors in untouched files.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "force": {
-          "type": "boolean"
-        },
-        "confirmOverride": {
+        "workflowName": {
           "type": "string"
+        },
+        "preview": {
+          "type": "boolean"
         },
         "detail": {
           "type": "string",
@@ -969,26 +1084,67 @@
       "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
-      "readOnlyHint": false,
-      "destructiveHint": true,
-      "idempotentHint": false
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
     }
   },
   {
-    "name": "pal_lock",
-    "title": "Acquire pal lock",
-    "description": "Acquire the pal lock. Reports the real holder (from teamInfo) when blocked; override is high-friction and typed.",
+    "name": "pal_testing",
+    "title": "Toggle automated testing",
+    "description": "Toggle CHIP runtime/self-tests for this session. false skips pal_test/preview/fetch/screenshot/exercise/regression/SEO/tunnel; true resumes. pal_validate and push validation stay on. Resets at session end.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "confirmOverride": {
-          "type": "string"
+        "enabled": {
+          "description": "false stops automated runtime/self-tests now; true resumes them. Omit to report the current setting.",
+          "type": "boolean"
         }
       },
       "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
-      "readOnlyHint": false,
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "pal_tunnel_test",
+    "title": "Test tunnel workflow",
+    "description": "Call the last-pushed tunnel workflow and return its JSON response. askedUser:true is required and attests that action, workflow, and payload came from the user; never invent them. Credentials stay internal. An empty response indicates a likely runtime exception. Push first.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "description": "Value returned by request.getAction(); omitted means null.",
+          "type": "string"
+        },
+        "payload": {
+          "description": "Top-level payload values; nested objects do not survive the wire.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        },
+        "payloadFile": {
+          "description": "JSON payload path; alternative to payload.",
+          "type": "string"
+        },
+        "workflow": {
+          "description": "Tunnel workflow name; default is the registered tunnel workflow.",
+          "type": "string"
+        },
+        "askedUser": {
+          "description": "Required: values came from the user, not the agent.",
+          "type": "boolean"
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true
     }
@@ -1009,193 +1165,37 @@
     }
   },
   {
-    "name": "pal_dataset_query",
-    "title": "Query dataset rows",
-    "description": "Query a bounded page of dataset rows from the current Pal (read-only). Validates dataset and columns against the local pal.json before the server call. Uses the dedicated QUERY_DATASET operation only.",
+    "name": "pal_validate",
+    "title": "Validate pal code",
+    "description": "Offline-check the whole workspace for restricted workflow JS, c:/XHTML markup, and cross-file contract violations. Returns each finding's location, severity, and fix. Run before finishing. pal_push gates changed files and narrow workspace contracts only.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "dataset": {
+        "detail": {
           "type": "string",
-          "description": "Dataset name as defined in pal.json."
+          "enum": [
+            "summary",
+            "normal",
+            "full"
+          ]
         },
-        "startRecord": {
-          "description": "Zero-based start row (default 0).",
+        "maxDiagnostics": {
           "type": "integer",
-          "minimum": 0,
+          "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
-        "limit": {
-          "description": "Max rows to return (1-100, default 20).",
+        "maxBytes": {
           "type": "integer",
-          "minimum": 1,
-          "maximum": 100
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
         },
-        "mode": {
-          "description": "Top-level filter mode for conditions (default AND).",
-          "type": "string",
-          "enum": [
-            "AND",
-            "OR"
-          ]
+        "includePassing": {
+          "type": "boolean"
         },
-        "conditions": {
-          "description": "Flat filter conditions using the vendored operator vocabulary.",
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "column": {
-                "type": "string"
-              },
-              "operator": {
-                "type": "string",
-                "enum": [
-                  "NULL",
-                  "NOT_NULL",
-                  "EQUAL",
-                  "NOT_EQUAL",
-                  "GREATER_THAN",
-                  "LESS_THAN",
-                  "GREATER_THAN_EQUAL",
-                  "LESS_THAN_EQUAL",
-                  "BETWEEN",
-                  "LIKE",
-                  "NOT_LIKE"
-                ]
-              },
-              "value1": {
-                "type": "string"
-              },
-              "value2": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "column",
-              "operator"
-            ]
-          }
-        },
-        "orderBy": {
-          "description": "Column ordering.",
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "column": {
-                "type": "string"
-              },
-              "order": {
-                "type": "string",
-                "enum": [
-                  "ASC",
-                  "DESC",
-                  "NATURAL"
-                ]
-              }
-            },
-            "required": [
-              "column"
-            ]
-          }
+        "includeDebug": {
+          "type": "boolean"
         }
       },
-      "required": [
-        "dataset"
-      ],
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true
-    }
-  },
-  {
-    "name": "pal_dataset_count",
-    "title": "Count dataset records",
-    "description": "Count matching dataset records in the current Pal (read-only). Same filter vocabulary as pal_dataset_query but requests at most one row and returns only the total count.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "dataset": {
-          "type": "string",
-          "description": "Dataset name as defined in pal.json."
-        },
-        "mode": {
-          "description": "Top-level filter mode for conditions (default AND).",
-          "type": "string",
-          "enum": [
-            "AND",
-            "OR"
-          ]
-        },
-        "conditions": {
-          "description": "Flat filter conditions using the vendored operator vocabulary.",
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "column": {
-                "type": "string"
-              },
-              "operator": {
-                "type": "string",
-                "enum": [
-                  "NULL",
-                  "NOT_NULL",
-                  "EQUAL",
-                  "NOT_EQUAL",
-                  "GREATER_THAN",
-                  "LESS_THAN",
-                  "GREATER_THAN_EQUAL",
-                  "LESS_THAN_EQUAL",
-                  "BETWEEN",
-                  "LIKE",
-                  "NOT_LIKE"
-                ]
-              },
-              "value1": {
-                "type": "string"
-              },
-              "value2": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "column",
-              "operator"
-            ]
-          }
-        },
-        "orderBy": {
-          "description": "Column ordering (validated but not needed for count).",
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "column": {
-                "type": "string"
-              },
-              "order": {
-                "type": "string",
-                "enum": [
-                  "ASC",
-                  "DESC",
-                  "NATURAL"
-                ]
-              }
-            },
-            "required": [
-              "column"
-            ]
-          }
-        }
-      },
-      "required": [
-        "dataset"
-      ],
       "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {

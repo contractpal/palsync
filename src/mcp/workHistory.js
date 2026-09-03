@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const usage = require("../core/usage");
+const { stableStringify } = require("../core/stableStringify");
 
 const HISTORY_DIR = ".agent-work-history";
 const workspaceIgnore = require("../core/workspaceIgnore");
@@ -71,19 +72,25 @@ function writeArtifactFile(run, fileName, data, encoding) {
     }
 }
 
-function writeContentAddressedArtifact(workspaceDir, tool, value) {
+function writeContentAddressedArtifact(workspaceDir, tool, value, encoding) {
     if (!workspaceDir) return null;
-    const data = typeof value === "string" ? value : JSON.stringify(value, null, 2) + "\n";
-    const digest = crypto.createHash("sha256").update(data).digest("hex");
+    // Binary-safe: a Buffer value is hashed/written byte-accurately (the only binary
+    // caller is the screenshot PNG path, hence the .png extension); every other value
+    // hashes its canonical text. Encoding passes through to fs.writeFileSync.
+    const isBinary = Buffer.isBuffer(value);
+    const data = isBinary ? value : typeof value === "string" ? value : stableStringify(value, 2) + "\n";
+    const digest = crypto.createHash("sha256").update(isBinary ? data : Buffer.from(data, "utf8")).digest("hex");
     const dir = path.join(workspaceDir, HISTORY_DIR, safeSlug(tool, "palsync"));
-    const filePath = path.join(dir, digest.slice(0, 16) + ".json");
+    const filePath = path.join(dir, digest.slice(0, 16) + (isBinary ? ".png" : ".json"));
     ensureGitignored(workspaceDir);
     try {
         fs.mkdirSync(dir, { recursive: true });
         if (!fs.existsSync(filePath)) {
             const tmp = filePath + ".tmp-" + process.pid + "-" + Math.random().toString(16).slice(2);
             try {
-                fs.writeFileSync(tmp, data, "utf8");
+                if (encoding) fs.writeFileSync(tmp, data, encoding);
+                else if (isBinary) fs.writeFileSync(tmp, data);
+                else fs.writeFileSync(tmp, data, "utf8");
                 fs.renameSync(tmp, filePath);
             } catch (e) {
                 try { fs.rmSync(tmp, { force: true }); } catch (ignored) { /* best-effort */ }
@@ -103,7 +110,7 @@ function writeRunMetadata(run, metadata) {
         tool: run.tool,
         feature: run.feature
     }, metadata || {});
-    return writeArtifactFile(run, "metadata.json", JSON.stringify(payload, null, 2) + "\n", "utf8");
+    return writeArtifactFile(run, "metadata.json", stableStringify(payload, 2) + "\n", "utf8");
 }
 
 function writeRunNotes(run, lines) {

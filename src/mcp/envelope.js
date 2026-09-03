@@ -1,6 +1,7 @@
 "use strict";
 
 const { writeContentAddressedArtifact } = require("./workHistory");
+const { stableStringify } = require("../core/stableStringify");
 
 const SEVERITY = { error: 0, warn: 1, warning: 1, info: 2, note: 2 };
 
@@ -31,10 +32,17 @@ function normalizeFinding(finding) {
     };
 }
 
+function cmpStr(a, b) {
+    // Code-point order, NOT localeCompare — locale/ICU dependent, wrong for determinism.
+    const x = String(a);
+    const y = String(b);
+    return x < y ? -1 : x > y ? 1 : 0;
+}
+
 function compare(a, b) {
     return (SEVERITY[a.severity] ?? 9) - (SEVERITY[b.severity] ?? 9) ||
-        String(a.file || "").localeCompare(String(b.file || "")) ||
-        (a.line || 0) - (b.line || 0) || a.code.localeCompare(b.code) || a.message.localeCompare(b.message);
+        cmpStr(a.file || "", b.file || "") ||
+        (a.line || 0) - (b.line || 0) || cmpStr(a.code, b.code) || cmpStr(a.message, b.message);
 }
 
 function collapseFindings(findings) {
@@ -116,13 +124,18 @@ function serializeEnvelope(workspaceDir, tool, source, options = {}) {
     // One canonical serialization feeds both the content-addressed artifact and usage
     // accounting. The envelope may use a smaller projection, but the artifact retains the
     // complete tool result for line-addressed follow-up inspection.
-    const serializedSource = JSON.stringify(source, null, 2) + "\n";
+    const serializedSource = stableStringify(source, 2) + "\n";
     const detailsRef = writeContentAddressedArtifact(workspaceDir, tool, serializedSource);
     const envelopeSource = options.envelopeSource || source;
     const envelope = buildEnvelope(Object.assign({}, envelopeSource, { detailsRef }), options);
     const trailer = "Full result: " + (detailsRef || "unavailable (artifact write failed)");
     return {
         envelope,
+        // The message keeps buildEnvelope's construction order (verdict fields front-loaded
+        // right after `ok` for truncating readers) — NOT stableStringify's sorted order, which
+        // would bury the verdict behind diagnostics. It is still byte-deterministic: every key
+        // order here is fixed by buildEnvelope above, independent of source insertion order.
+        // Only the artifact bytes (detailsRef/rawBytes) need the canonical sorted form.
         message: JSON.stringify(envelope) + "\n" + trailer,
         detailsRef,
         rawBytes: Buffer.byteLength(serializedSource)

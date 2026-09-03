@@ -18,6 +18,10 @@
 // SECURITY: console URLs are credential-bearing — results only ever carry sanitizeUrl()'d URLs.
 const { runTest } = require("./test");
 const { checkExpect } = require("./preview");
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+const { stableStringify } = require("./stableStringify");
 const { detectRenderError, sanitizeUrl, sanitizeResourceUrl, loadChromium, getBrowser, releaseBrowser, waitForRenderablePage, VIEWPORTS } = require("./screenshot");
 
 const MAX_STEPS = 10;
@@ -293,8 +297,43 @@ async function attachEvidence(result, pg, step, events, evidenceTimeout) {
 
 // ---- pure helpers (unit-testable without a server or browser) -------------------------------
 
-function makeRunId() {
-    return "run" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+// Deterministic-but-unique runId: identical steps + identical ordinal state → identical bytes;
+// the ordinal advances once per exercise run so sequential runs stay unique (runId is the
+// uniqueness token for records the exercise creates/finds/deletes). Ordinal 0 keeps the
+// helper pure for callers without a workspace (unit tests, offline paths).
+function makeRunId(steps, ordinal) {
+    const ord = Number.isFinite(ordinal) && ordinal >= 0 ? Math.floor(ordinal) : 0;
+    const digest = crypto.createHash("sha256").update(stableStringify(steps || [])).digest("hex");
+    return "run" + ord.toString(36) + "-" + digest.slice(0, 6);
+}
+
+// Ordinal source: <workspace>/.agent-work-history/pal_exercise/ordinal, a plain counter of
+// prior pal_exercise runs. Inspected alternatives and why neither works: .palsync/tool-evidence.jsonl
+// only records PASSING exercise runs (tools.js appends solely on ran && pass) and work-history
+// pal_exercise run dirs only record failure/blocked browser runs (persistExerciseFailure) — neither
+// is written for EVERY run (invalid/blocked/fetch-failure runs persist nothing), so neither can
+// back a uniqueness ordinal. This dedicated counter is advanced by every run that mints a runId
+// instead; a missing/unparseable file reads as 0 (best-effort, never throws).
+function exerciseOrdinalFile(workspaceDir) {
+    return path.join(workspaceDir, ".agent-work-history", "pal_exercise", "ordinal");
+}
+
+function readExerciseOrdinal(workspaceDir) {
+    if (!workspaceDir) return 0;
+    try {
+        const n = parseInt(String(fs.readFileSync(exerciseOrdinalFile(workspaceDir), "utf8")).trim(), 10);
+        return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+    } catch (e) { return 0; }
+}
+
+function takeExerciseOrdinal(workspaceDir) {
+    const current = readExerciseOrdinal(workspaceDir);
+    if (!workspaceDir) return current;
+    try {
+        fs.mkdirSync(path.dirname(exerciseOrdinalFile(workspaceDir)), { recursive: true });
+        fs.writeFileSync(exerciseOrdinalFile(workspaceDir), String(current + 1) + "\n", "utf8");
+    } catch (e) { /* best-effort — uniqueness degrades, determinism holds */ }
+    return current;
 }
 
 function substituteRunIdValue(v, runId) {
@@ -761,8 +800,8 @@ function failureEvidenceLines(res) {
 //   workflow: "console" | "web" | "transaction" (optional — auto-detected)
 //   viewport: "desktop" | "mobile" (browser mode only)
 // Stops at the first failing step (later steps usually depend on earlier writes).
-async function runExercise(session, guid, { steps, workflow, viewport } = {}, deps = {}) {
-    const runId = makeRunId();
+async function runExercise(session, guid, { steps, workflow, viewport, workspaceDir } = {}, deps = {}) {
+    const runId = makeRunId(steps, takeExerciseOrdinal(workspaceDir));
     const problems = validateSteps(steps);
     const lint = lintSteps(steps);
     const allProblems = problems.concat(lint.errors);
@@ -1086,4 +1125,4 @@ function formatExercise(res) {
     return lines.join("\n");
 }
 
-module.exports = { runExercise, exerciseByFetch, exerciseByBrowser, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, redactSecretFormsForSuccess, makeFinalSnapshot, BROWSER_EVENTS_CAP, EVIDENCE_TIMEOUT_MS, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };
+module.exports = { runExercise, exerciseByFetch, exerciseByBrowser, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, makeRunId, readExerciseOrdinal, takeExerciseOrdinal, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, redactSecretFormsForSuccess, makeFinalSnapshot, BROWSER_EVENTS_CAP, EVIDENCE_TIMEOUT_MS, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };

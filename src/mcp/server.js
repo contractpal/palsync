@@ -17,14 +17,20 @@ const lintCache = require("../core/lintCache");
 const { z } = require("zod");
 const toolMetadata = require("./pi-tools.json");
 const { routeTools } = require("../core/piHelpers");
+const { stableStringify } = require("../core/stableStringify");
 const pkg = require("../../package.json");
 const SERVER_INSTRUCTIONS = "PalSync runtime tools act on the LAST PUSHED server version. Push local changes with pal_push before runtime tests, previews, screenshots, fetches, exercises, tunnels, or SEO audits.";
-const LAZY_PROFILES = new Set(["pi-minimal", "pi-standard", "claude"]);
+const LAZY_PROFILES = new Set(["pi-minimal", "pi-standard"]);
+// Claude Code boots the FULL static set (eager): it re-renders the entire prompt prefix
+// when tools/list changes, so mid-session pal_tools activation guaranteed full-prefix
+// KV-cache invalidations, and every real session activated at least once (the 3-tool core
+// cannot push/test/preview). Pi keeps lazy activation (see docs/decisions/lazy-tool-activation.md).
 const PROFILE_TOOLS = {
     "pi-minimal": ["pal_validate", "pal_spec_lint", "pal_context"],
     "pi-standard": ["pal_validate", "pal_spec_lint", "pal_context", "pal_status", "pal_test", "pal_push", "pal_pull"],
     "pi-full": TOOLS.map(tool => tool.name),
-    claude: ["pal_validate", "pal_spec_lint", "pal_context"],
+    // Eager: full static set at boot, no pal_tools — stable prefix for Claude Code.
+    claude: TOOLS.map(tool => tool.name),
     codex: TOOLS.map(tool => tool.name),
     opencode: TOOLS.map(tool => tool.name)
 };
@@ -37,6 +43,11 @@ function instructionsForProfile(profile) {
     return SERVER_INSTRUCTIONS + (LAZY_PROFILES.has(profile)
         ? " Use pal_tools with task keywords to activate additional PalSync tools."
         : "");
+}
+
+function byToolName(a, b) {
+    // Code-point order, NOT localeCompare — locale/ICU dependent, wrong for a determinism patch.
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
 }
 
 // All server diagnostics go to stderr with a consistent prefix. The agent talks over stdio
@@ -55,7 +66,29 @@ function createServer(getCtx, workspaceDir, options = {}) {
         { instructions: instructionsForProfile(profile) }
     );
     const registered = new Map();
-    for (const t of TOOLS) {
+    // The MCP SDK's ListToolsRequestSchema handler returns tools in registration
+    // (insertion) order with no sort (verified: node_modules/@modelcontextprotocol/sdk/
+    // dist/cjs/server/mcp.js ~lines 78-102), so sorted insertion = sorted listing.
+    // Sort a COPY — never mutate the exported TOOLS order (tests/tools import it).
+    // pal_tools (lazy profiles only) joins the same sorted list so the final
+    // advertised list is fully sorted, not appended last.
+    const pending = TOOLS.map(t => ({ name: t.name, tool: t }));
+    if (LAZY_PROFILES.has(profile)) pending.push({ name: "pal_tools", palTools: true });
+    pending.sort(byToolName);
+    for (const entry of pending) {
+        if (entry.palTools) {
+            server.registerTool("pal_tools", {
+                title: "Activate PalSync tools",
+                description: "Activate additional PalSync tools additively by deterministic keyword or group.",
+                inputSchema: { query: z.string().describe("Task keywords or groups: sync, browser, runtime, project, spec.") }
+            }, async ({ query }) => {
+                const names = routeTools(query, toolMetadata);
+                for (const name of names) registered.get(name)?.enable();
+                return { content: [{ type: "text", text: names.length ? "Activated: " + names.join(", ") : "No PalSync tools matched that query." }] };
+            });
+            continue;
+        }
+        const t = entry.tool;
         const handle = server.registerTool(
             t.name,
             { description: t.description, inputSchema: t.inputShape, annotations: t.annotations, title: t.title },
@@ -87,7 +120,7 @@ function createServer(getCtx, workspaceDir, options = {}) {
                     // honor them. Otherwise fall back to the text message.
                     const content = (res && Array.isArray(res.content))
                         ? res.content
-                        : [{ type: "text", text: res.message || JSON.stringify(res, null, 2) }];
+                        : [{ type: "text", text: res.message || stableStringify(res, 2) }];
                     // T3: meter palsync's own context contribution (bytes + est. tokens returned to the agent).
                     if (ctx && ctx.workspaceDir) {
                         const stats = usage.contentStats(content);
@@ -119,17 +152,6 @@ function createServer(getCtx, workspaceDir, options = {}) {
         );
         registered.set(t.name, handle);
         if (!PROFILE_TOOLS[profile].includes(t.name)) handle.disable();
-    }
-    if (LAZY_PROFILES.has(profile)) {
-        server.registerTool("pal_tools", {
-            title: "Activate PalSync tools",
-            description: "Activate additional PalSync tools additively by deterministic keyword or group.",
-            inputSchema: { query: z.string().describe("Task keywords or groups: sync, browser, runtime, project, spec.") }
-        }, async ({ query }) => {
-            const names = routeTools(query, toolMetadata);
-            for (const name of names) registered.get(name)?.enable();
-            return { content: [{ type: "text", text: names.length ? "Activated: " + names.join(", ") : "No PalSync tools matched that query." }] };
-        });
     }
     return server;
 }

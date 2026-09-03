@@ -90,7 +90,9 @@ async function fetchAndExtract(session, resolved, workspaceDir) {
         });
     }
 
-    const index = { fetchedAt: new Date().toISOString(), entries };
+    // No fetchedAt timestamp: entries already persist server lastModifiedDate, and a fresh
+    // timestamp would make index.json byte-volatile for identical chain content.
+    const index = { entries };
     await fs.mkdir(path.join(workspaceDir, RESOURCES_DIR), { recursive: true });
     await fs.writeFile(path.join(workspaceDir, RESOURCES_DIR, "index.json"), JSON.stringify(index, null, 2), "utf8");
 

@@ -26,11 +26,21 @@ test("tool profiles expose exact initial sets", async () => {
     for (const profile of ["pi-minimal", "pi-standard", "pi-full", "claude", "codex", "opencode"]) {
         const { client, workspaceDir } = await connect(profile);
         const actual = (await client.listTools()).tools.map(tool => tool.name).sort();
-        const expected = PROFILE_TOOLS[profile].concat(["pi-minimal", "pi-standard", "claude"].includes(profile) ? ["pal_tools"] : []).sort();
+        const expected = PROFILE_TOOLS[profile].concat(["pi-minimal", "pi-standard"].includes(profile) ? ["pal_tools"] : []).sort();
         assert.deepStrictEqual(actual, expected, profile);
         await client.close();
         fs.rmSync(workspaceDir, { recursive: true, force: true });
     }
+});
+
+test("claude is the eager full set: sorted, no pal_tools", async () => {
+    const { client, workspaceDir } = await connect("claude");
+    const names = (await client.listTools()).tools.map(tool => tool.name);
+    assert.ok(!names.includes("pal_tools"), "eager claude profile must not list pal_tools");
+    assert.deepStrictEqual(names.slice().sort(), TOOLS.map(tool => tool.name).sort());
+    for (let i = 1; i < names.length; i++) assert.ok(names[i - 1] < names[i], "claude listing is code-point sorted");
+    await client.close();
+    fs.rmSync(workspaceDir, { recursive: true, force: true });
 });
 
 test("pal_impact is lazily reachable by weak-model words and not in the eager core", () => {
@@ -59,7 +69,7 @@ test("unknown/default profile fails open to the full static set", async () => {
 });
 
 test("lazy activation enables every routed tool for calls and only adds tools", async () => {
-    const { client, workspaceDir, changed } = await connect("claude");
+    const { client, workspaceDir, changed } = await connect("pi-minimal");
     const before = (await client.listTools()).tools.map(tool => tool.name);
     const reachable = new Set();
     for (const query of ["sync", "browser", "runtime", "project", "spec"]) {
