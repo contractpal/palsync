@@ -143,6 +143,8 @@ function syncDetails(palName, { cli = false, skillsDir = ".claude/skills" } = {}
         "**Building a whole project?** The `pal-spec` skill interviews the user and produces",
         "SPEC.md + EXECUTION.md; the `pal-loop` skill executes them task-by-task with on-disk",
         "checkpoints. If the workspace has an EXECUTION.md with unfinished tasks, read pal-loop first.",
+        "After a fresh reviewer overwrites `REVIEW.md`, run `palsync completion check`. Missing/stale",
+        "review evidence or a non-PASS result means the build is not done.",
         "",
         "- If a push is **refused for drift** (someone saved on the server since your last pull), you have",
         "  two good options: " + T.pull + " then redo your edit, OR **" + T.merge + "** to combine your changes",
@@ -297,49 +299,22 @@ function syncDetails(palName, { cli = false, skillsDir = ".claude/skills" } = {}
     ].join("\n");
 }
 
-function syncSection(palName, { cli = false, skillsDir = ".claude/skills" } = {}) {
-    const T = cli
-        ? { pull: "`palsync pull`", push: "`palsync push`", validate: "`palsync validate`", test: "`palsync test`", screenshot: "`palsync screenshot`" }
-        : { pull: "`pal_pull`", push: "`pal_push`", validate: "`pal_validate`", test: "`pal_test`", screenshot: "`pal_screenshot`" };
+function syncSection(palName, { cli = false } = {}) {
     return [
         "## palsync — essential sync contract (managed)",
         "",
         "This pal" + (palName ? " (**" + palName + "**)" : "") + " is connected to CloudPiston through " + (cli ? "the palsync CLI; locks are per-command." : "the palsync MCP server and is locked for your session."),
         "",
-        "Load every skill the task touches before writing PalBuilder code. For visible UI, load",
-        "Visible UI has a mandatory two-skill route: load both `palbuilder-frontend` and `design-build`;",
-        "load `design-system-init` first when design-system files are absent. Render desktop and mobile,",
-        "inspect pixels and `designAudit`, then fix failures. " + (skillsDir === ".claude/skills" ? "" : "Load skills through the skill tool; never additionally Read/cat files under `" + skillsDir + "`.").trim(),
+        "Visible UI work: load `palbuilder-frontend` + `design-build`; if no design system exists,",
+        "load `design-system-init`. When a meaningful change is ready, offer to push it — local-only",
+        "changes are not a shipped Pal. After pushed UI/workflow behavior changes, obtain runtime/render",
+        "evidence. A completed build requires fresh `REVIEW.md` PASS + `palsync completion check`.",
         "",
-        "**Call `pal_context` when the task touches sync, file creation, or datasets** — it returns",
-        "the detailed contract this summary is built from. No arguments lists the available",
-        "sections; pass `section:\"sync-workflow\"`, `section:\"creating-files\"`, or",
-        "`section:\"datasets\"` (or a `query`) to load the one you need before those operations.",
-        "",
-        "Working loop:",
-        "1. " + T.pull + " before significant work; it refuses rather than overwrite local edits.",
-        "2. Follow the owning skills. Use " + T.validate + " between edits, not immediately before push.",
-        "3. Offer " + T.push + " once per meaningful change. Push validates and has no agent bypass.",
-        "4. After workflow/UI pushes, run " + T.test + " for server compile and " + T.screenshot + " for",
-        "   actual render evidence. Compile success never proves the UI rendered or behavior worked.",
-        "5. Runtime checks inspect the last pushed version. Never narrate UI/data a tool did not show.",
-        "6. Completion gate: after a fresh reviewer overwrites `REVIEW.md`, run `palsync completion check`.",
-        "   Missing/stale review evidence or a non-PASS result means the build is not done. Claude",
-        "   blocks Stop, Pi queues a corrective follow-up, and other harnesses call this CLI manually.",
-        "",
-        "Use `pal_context` for the detailed `sync-workflow`, `creating-files`, or `datasets` contract",
-        "before those operations. It includes drift/lock handling, browser/runtime verification, exact",
-        "pal.json entries, creatable-file limits, dataset schemas, and destructive-sync rules.",
-        ...(cli ? [
-            "",
-            "CLI tools: `palsync push`, `palsync pull`, `palsync validate`, `palsync test`,",
-            "`palsync screenshot`, `palsync sync-datasets`. Do not use validation-skip flags."
-        ] : [
-            "",
-            "Use `pal_testing` when the user stops/resumes tests. Never run palsync sync commands in the",
-            "shell while MCP tools are active, and never kill a process matching `palsync`."
-        ])
-    ].filter(line => line !== "").join("\n").replace(/\n{3,}/g, "\n\n");
+        "**Before any sync, file-creation, or dataset operation, call `pal_context`.** No arguments",
+        "lists sections; load `section:\"sync-workflow\"`, `section:\"creating-files\"`, or",
+        "`section:\"datasets\"` (or a `query`) before the matching operation. That on-demand",
+        "contract contains detailed sync, file, and dataset rules."
+    ].join("\n");
 }
 
 function onDemandSyncSections(palName, opts = {}) {

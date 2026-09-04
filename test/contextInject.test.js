@@ -121,7 +121,7 @@ test("Claude CLAUDE.md @imports the owned doc (real import, not backticked)", as
     const doc = fs.readFileSync(path.join(ws, "CLAUDE.palsync.md"), "utf8");
     assert.ok(/<!--\s*palsync-context v/.test(doc), "owned doc carries a version stamp");
     assert.ok(doc.includes("GOLDEN RULES"), "owned doc includes the coding contract");
-    assert.ok(doc.includes("`pal_push`"), "owned doc references the MCP tool pal_push");
+    assert.ok(doc.includes("`pal_context`"), "owned doc routes sync details through pal_context");
     assert.ok(doc.includes("MCP server"), "owned doc describes the MCP server");
     assert.ok(!doc.includes("`palsync push`"), "Claude flavor must not use CLI subcommands");
     // A Claude pal carries ONLY Claude files — no AGENTS.md / .agents skills.
@@ -213,7 +213,7 @@ test("OpenCode pal carries AGENTS.md + .agents skills + slash commands, MCP flav
     assert.ok(palLoopCommand.includes("load `pal-loop`"), "OpenCode /pal-loop command loads the matching skill");
     assert.ok(palLoopCommand.includes("$ARGUMENTS"), "OpenCode command forwards additional user input");
     const md = fs.readFileSync(path.join(ws, "AGENTS.md"), "utf8");
-    assert.ok(md.includes("`pal_push`"), "OpenCode AGENTS.md uses the MCP tool pal_push");
+    assert.ok(md.includes("`pal_context`"), "OpenCode AGENTS.md routes sync details through pal_context");
     assert.ok(!md.includes("`palsync push`"), "OpenCode flavor must not use CLI subcommands");
     assert.ok(md.includes("locked for your session"), "OpenCode locks for the session like Codex, not per-command");
     assert.ok(!fs.existsSync(path.join(ws, "CLAUDE.palsync.md")), "OpenCode pal has no CLAUDE.palsync.md");
@@ -257,29 +257,34 @@ test("switching away from OpenCode removes only palsync-managed slash commands",
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("every injected flavor pushes pal_context as the first-step detailed contract", async () => {
+test("every injected flavor routes sync details through pal_context", async () => {
     for (const opts of [
         { cli: false, skillsDir: ".claude/skills" },
         { cli: false, skillsDir: ".agents/skills" },
         { cli: true, skillsDir: ".agents/skills" },
     ]) {
         const doc = await ci.buildPalsyncDoc("Demo", opts);
-        assert.match(doc, /\*\*Call `pal_context` when the task touches sync, file creation, or datasets\*\*/,
+        assert.match(doc, /\*\*Before any sync, file-creation, or dataset operation, call `pal_context`\.\*\*/,
             "callout must appear in every flavor");
         assert.match(doc, /`section:"sync-workflow"`,\s+`section:"creating-files"`,\s+or\s+`section:"datasets"`/,
             "callout must name the loadable sections");
-        assert.match(doc, /Use `pal_context` for the detailed `sync-workflow`, `creating-files`, or `datasets` contract/,
-            "trailing pointer must be unconditional");
+        assert.ok(doc.includes("detailed sync, file, and dataset rules"), "callout identifies the on-demand contract's coverage");
+        assert.match(doc, /Visible UI work: load `palbuilder-frontend` \+ `design-build`/);
+        assert.match(doc, /if no design system exists,\s+load `design-system-init`/);
+        assert.match(doc, /offer to push it — local-only\s+changes are not a shipped Pal/);
+        assert.match(doc, /After pushed UI\/workflow behavior changes, obtain runtime\/render\s+evidence/);
+        assert.match(doc, /fresh `REVIEW\.md` PASS \+ `palsync completion check`/);
         assert.ok(!doc.includes("owning bundled skill references"), "no flavor may redirect pal_context to skill files");
     }
 });
 
-test("Pi AGENTS.md uses the palsync CLI, not MCP", async () => {
+test("Pi sync details use the palsync CLI, not MCP", async () => {
     const ws = tmpWorkspace();
     await ci.inject(ws, { palName: "Demo", agent: "pi" });
     const md = fs.readFileSync(path.join(ws, "AGENTS.md"), "utf8");
+    const details = ci.syncDetails("Demo", { cli: true, skillsDir: ".agents/skills" });
     for (const cmd of ["`palsync push`", "`palsync pull`", "`palsync validate`", "`palsync sync-datasets`"]) {
-        assert.ok(md.includes(cmd), "Pi AGENTS.md should reference " + cmd);
+        assert.ok(details.includes(cmd), "Pi on-demand details should reference " + cmd);
     }
     assert.ok(!md.includes("`pal_push`"), "Pi must not reference MCP tools");
     assert.ok(!md.includes("locked for your session"), "Pi locks per-command, not per-session");
@@ -287,19 +292,12 @@ test("Pi AGENTS.md uses the palsync CLI, not MCP", async () => {
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("Claude doc references .claude/skills, never .agents/skills", async () => {
-    const doc = await ci.buildPalsyncDoc("Demo", { cli: false });
-    assert.ok(doc.includes(".claude/skills"), "Claude doc should reference .claude/skills");
-    assert.ok(!doc.includes(".agents/skills"), "Claude doc must not reference .agents/skills");
-    assert.ok(!doc.includes("never additionally Read/cat"), "the skill-tool-only line is non-Claude only");
-});
-
-test("Codex/OpenCode/Pi docs reference .agents/skills, never .claude/skills, and warn against raw-reading skill files", async () => {
+test("Codex/OpenCode/Pi on-demand details reference .agents/skills and warn against raw-reading skill files", () => {
     for (const opts of [{ cli: false }, { cli: true }]) {
-        const doc = await ci.buildPalsyncDoc("Demo", Object.assign({ skillsDir: ".agents/skills" }, opts));
-        assert.ok(doc.includes(".agents/skills"), "doc should reference .agents/skills");
-        assert.ok(!doc.includes(".claude/skills"), "doc must not reference .claude/skills");
-        assert.ok(doc.includes("never additionally Read/cat"), "non-Claude doc warns against raw-reading skill files");
+        const doc = ci.syncDetails("Demo", Object.assign({ skillsDir: ".agents/skills" }, opts));
+        assert.ok(doc.includes(".agents/skills"), "details should reference .agents/skills");
+        assert.ok(!doc.includes(".claude/skills"), "details must not reference .claude/skills");
+        assert.ok(doc.includes("never additionally Read/cat"), "non-Claude details warn against raw-reading skill files");
     }
 });
 
@@ -314,13 +312,13 @@ test("always-on fragment guidance agrees with the frontend skill", () => {
     assert.doesNotMatch(contract, /put init JS directly at the bottom of the fragment/i);
 });
 
-test("generated agent docs route every visible UI task through frontend + design-build and rendered review", async () => {
+test("on-demand sync details route every visible UI task through frontend + design-build and rendered review", () => {
     for (const opts of [
         { cli: false, skillsDir: ".claude/skills" },
         { cli: false, skillsDir: ".agents/skills" },
         { cli: true, skillsDir: ".agents/skills" },
     ]) {
-        const doc = await ci.buildPalsyncDoc("Demo", opts);
+        const doc = ci.syncDetails("Demo", opts);
         assert.match(doc, /mandatory two-skill route/i);
         assert.match(doc, /load both `palbuilder-frontend`.*`design-build`/s);
         assert.match(doc, /render desktop and mobile/i);
@@ -333,6 +331,7 @@ test("on-demand exercise guidance covers the delete-absent rule in both MCP and 
     const cliDoc = ci.syncDetails(null, { cli: true });
     for (const doc of [mcpDoc, cliDoc]) {
         assert.match(doc, /after a delete put the deleted name in `absent`/);
+        assert.match(doc, /After a fresh reviewer overwrites `REVIEW\.md`, run `palsync completion check`/);
     }
 });
 
