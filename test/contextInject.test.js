@@ -303,6 +303,17 @@ test("Codex/OpenCode/Pi docs reference .agents/skills, never .claude/skills, and
     }
 });
 
+test("always-on fragment guidance agrees with the frontend skill", () => {
+    const contract = fs.readFileSync(path.join(__dirname, "..", "bundled-context", "CLAUDE.md"), "utf8");
+    const frontend = fs.readFileSync(path.join(__dirname, "..", "bundled-context", "skills", "palbuilder-frontend", "SKILL.md"), "utf8");
+    for (const guidance of [contract, frontend]) {
+        assert.match(guidance, /(?:fragments? (?:cannot contain|with)|Never put `<script>` inside) (?:a )?(?:fragment|`<script>`)/i);
+        assert.match(guidance, /scripts\/\*\.js/);
+        assert.match(guidance, /load(?:ed)? (?:it )?once from the (?:page|PAGE)/);
+    }
+    assert.doesNotMatch(contract, /put init JS directly at the bottom of the fragment/i);
+});
+
 test("generated agent docs route every visible UI task through frontend + design-build and rendered review", async () => {
     for (const opts of [
         { cli: false, skillsDir: ".claude/skills" },

@@ -111,9 +111,10 @@ and no Fontshare import; marketing/web pals keep the Satoshi/Fontshare default.
 2. **Never use an undocumented `c:` attribute.** Each `c:` tag has a fixed attribute set;
    anything else throws a validation error. Check `palbuilder-frontend` before using an
    attribute you haven't used before.
-3. **AJAX fragments do not fire `DOMContentLoaded`.** A fragment loaded via `ajax-target`
-   arrives with the DOM already present — put init JS directly at the bottom of the fragment,
-   never inside a `DOMContentLoaded` wrapper. Full-page loads are the exception.
+3. **Fragments cannot contain `<script>`.** A fragment loaded via `ajax-target` arrives with
+   its DOM already present. Put client JS in `scripts/*.js`, load it once from the page, and use
+   a page-loaded module or workflow `runJS(...)` for fragment initialization — never a fragment
+   `<script>` or `DOMContentLoaded` wrapper. Full-page loads are the exception.
 4. **Never use `fetch` or ClientPal to call the server** unless there is genuinely no other
    way. `c:` tags are server-rendered and encrypt the action + query string;
    `fetch`/ClientPal expose everything in devtools. Use `c:a`, `c:upload`, `c:download`.
