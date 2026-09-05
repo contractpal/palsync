@@ -18,9 +18,13 @@
 //
 // SECURITY: the console URL is credential-bearing. Never return or log _previewUrl — the result
 // carries the image + a SANITIZED landing URL (origin + path only, query/credentials stripped).
-const { runTest, normalizeWorkflowName, RESERVED_QUERY_KEYS } = require("./test");
-// Reserved keys mirror test.js vendored evidence (cp-auth, nxProfileId, cp-workflow, cp-ws-doaction).
-// RESERVED_QUERY_KEYS is imported from test.js so screenshot and preview share one allow-list.
+const { normalizeWorkflowName } = require("./test");
+// Target normalization, the authenticated bootstrap and the state oracle are shared with
+// pal_exercise so the two tools can never interpret a console action differently.
+const { normalizeTarget, openAuthenticatedScreen, attemptWithFreshTest, deriveWebBase, describeTargetMismatch } = require("./browserTarget");
+
+// Bounded JPEG used only for FAILURE evidence (quality 0-100), mirroring pal_exercise's bound.
+const FAILURE_JPEG_QUALITY = 50;
 
 const VIEWPORTS = {
     desktop: { width: 1280, height: 800 },
@@ -577,199 +581,194 @@ function redactParamValuesFromRenderError(err, params) {
     return out;
 }
 
-// Build action-bearing console/transaction URL using URL + URLSearchParams (no manual concatenation).
-// Preserves existing token/auth/workflow query fields and encodes action + params once.
-function buildActionUrl(previewUrl, action, params) {
-    const u = new URL(previewUrl);
-    u.searchParams.append("cp-ws-doaction", String(action));
-    if (params && typeof params === "object") {
-        for (const [k, v] of Object.entries(params)) {
-            u.searchParams.append(k, String(v));
-        }
-    }
-    return u.toString();
-}
-
-// Render a WEB pal screen and return its PNG (base64) + the resolved landing URL + viewport used.
+// Render a pal screen and return its PNG (base64) + the resolved landing URL + viewport used.
 // Returns { captured, available, ... }. Never throws on a normal failure; `available:false` means
 // the capability itself is missing (Playwright/Chromium), distinct from a per-pal failure.
-async function runScreenshot(session, guid, { page, viewport, fullPage, imageless, workflow, workflowName, action, params } = {}) {
-    const chromium = loadChromium();
+//
+// A `captured:true` result means: we authenticated where authentication was required, reached the
+// requested state, verified it against the caller's expectations, and captured THAT state. It does
+// not mean "Playwright produced a PNG" — a capture of the wrong screen is returned as a targeting
+// FAILURE carrying the image as labelled failure evidence, never as accepted render evidence.
+async function runScreenshot(session, guid, { page, viewport, fullPage, imageless, workflow, workflowName, action, params, expect } = {}, deps = {}) {
+    const chromium = (deps.loadChromium || loadChromium)();
     if (!chromium) {
         return { captured: false, available: false,
                  reason: "Playwright/Chromium is not installed in this runtime — visual review falls back to the human eyeball gate. Enable with: npm i playwright && npx playwright install chromium" };
     }
 
-    // Pre-validate generic param map BEFORE any Test call: reserved keys are never allowed to
-    // overwrite auth/selection fields, and params require an action. Scalar validation keeps
-    // the URL encoding honest.
-    const hasParams = params != null && typeof params === "object" && Object.keys(params).length > 0;
-    const hasAction = action != null && String(action).trim() !== "";
-    if (params != null && (typeof params !== "object" || Array.isArray(params))) {
-        return { captured: false, available: true, blocked: "invalid-params", reason: "params must be a map of scalar query parameters." };
+    // Normalize the requested target BEFORE any Test call: reserved keys never overwrite
+    // auth/selection fields, params require an action, and an action string and a params map that
+    // disagree are rejected instead of silently resolved.
+    const norm = normalizeTarget({ action, params });
+    if (norm.blocked) {
+        return { captured: false, available: true, blocked: norm.blocked, reason: norm.reason,
+                 reservedKey: norm.reservedKey, conflictingKey: norm.conflictingKey };
     }
-    if (hasParams || hasAction) {
-        if (hasParams) {
-            for (const [k, v] of Object.entries(params)) {
-                if (RESERVED_QUERY_KEYS.has(k)) {
-                    return { captured: false, available: true, blocked: "reserved-param", reservedKey: k, reason: "Param key \"" + k + "\" is reserved and cannot be overwritten." };
-                }
-                if (!isScalarParamValue(v)) {
-                    return { captured: false, available: true, blocked: "invalid-params", reason: "Param \"" + k + "\" must be a scalar string/number/boolean." };
-                }
+    const target = norm.target;
+    if (expect != null && (!Array.isArray(expect) || expect.some(s => typeof s !== "string" || !s))) {
+        return { captured: false, available: true, blocked: "invalid-expect",
+                 reason: "expect must be an array of non-empty visible strings that prove the requested screen was reached." };
+    }
+    const wantExpect = Array.isArray(expect) ? expect : [];
+    const requestedState = {
+        workflow: workflow || null,
+        workflowName: workflowName ? normalizeWorkflowName(workflowName) : null,
+        page: page || null,
+        action: target ? target.action : null,
+        paramKeys: target ? target.paramKeys : [],
+        expect: wantExpect
+    };
+
+    const capture = async (t) => {
+        if (!t.ran) {
+            if (t.blocked === "unknown-workflow-type") {
+                const avail = t.availableKinds || [];
+                return { captured: false, available: true, blocked: t.blocked, kind: workflow || t.kind, availableKinds: avail,
+                         reason: "Unknown workflow type \"" + (workflow || t.kind) + "\" — available: " + (avail.length ? avail.join(", ") : "(none)") + "." };
             }
+            if (t.blocked === "unknown-workflow-name") {
+                const avail = t.availableWorkflowNames || [];
+                return { captured: false, available: true, blocked: t.blocked, kind: t.kind, workflowName, availableWorkflowNames: avail,
+                         reason: "Unknown workflow name \"" + (workflowName || t.workflowName || "") + "\" — available: " + (avail.length ? avail.join(", ") : "(none)") + "." };
+            }
+            return { captured: false, available: true, blocked: t.blocked,
+                     reason: t.blocked === "no-testable-workflow"
+                         ? "This pal has no testable workflow to screenshot."
+                         : "Could not start a test instance (" + (t.blocked || "unknown") + ")." };
         }
-        if (hasParams && !hasAction) {
-            return { captured: false, available: true, blocked: "params-require-action", reason: "params require an action — pass action with cp-ws-doaction." };
+        if (!t.validated) {
+            return { captured: false, available: true, kind: t.kind, validation: t.validation,
+                     reason: "The pal did not validate on the server, so it can't be rendered. Fix the validation notes, push, and screenshot again." };
         }
-    }
-    // Explicit workflow and workflowName are forwarded to runTest where pre-Test validation
-    // (explicit wins over auto-detection, unknown types/names list valid choices, no Test call)
-    // is enforced via URL-parsed normalization (normalizeWorkflowName strips file extensions).
-    const t = await runTest(session, guid, { kind: workflow, workflowName });
-    if (!t.ran) {
-        if (t.blocked === "unknown-workflow-type") {
-            const avail = t.availableKinds || [];
-            return { captured: false, available: true, blocked: t.blocked, kind: workflow || t.kind, availableKinds: avail,
-                     reason: "Unknown workflow type \"" + (workflow || t.kind) + "\" — available: " + (avail.length ? avail.join(", ") : "(none)") + "." };
+        // Actions are a console/transaction mechanism (cp-ws-doaction). WEB selects routes by path.
+        if (t.kind === "web" && target) {
+            return { captured: false, available: true, blocked: "web-action-not-allowed", kind: t.kind,
+                     reason: "Action and params are only allowed for console/transaction workflows — this pal rendered as web. Use page for WEB route selection." };
         }
-        if (t.blocked === "unknown-workflow-name") {
-            const avail = t.availableWorkflowNames || [];
-            return { captured: false, available: true, blocked: t.blocked, kind: t.kind, workflowName, availableWorkflowNames: avail,
-                     reason: "Unknown workflow name \"" + (workflowName || t.workflowName || "") + "\" — available: " + (avail.length ? avail.join(", ") : "(none)") + "." };
-        }
-        return { captured: false, available: true, blocked: t.blocked,
-                 reason: t.blocked === "no-testable-workflow"
-                     ? "This pal has no testable workflow to screenshot."
-                     : "Could not start a test instance (" + (t.blocked || "unknown") + ")." };
-    }
-    if (!t.validated) {
-        return { captured: false, available: true, kind: t.kind, validation: t.validation,
-                 reason: "The pal did not validate on the server, so it can't be rendered. Fix the validation notes, push, and screenshot again." };
-    }
 
-    // Action / params are ONLY for console/transaction. Refuse WEB action before navigation and
-    // already handled params-without-action above — this catches auto-detected WEB + action.
-    if (t.kind === "web" && (hasAction || hasParams)) {
-        return { captured: false, available: true, blocked: "web-action-not-allowed", kind: t.kind,
-                 reason: "Action and params are only allowed for console/transaction workflows — this pal rendered as web. Use page for WEB route selection." };
-    }
+        const isWeb = t.kind === "web";
+        const viewportName = VIEWPORTS[viewport] ? viewport : "desktop";
+        let styleEvents = { responses: [], failed: [] };
+        const open = await openAuthenticatedScreen(t, {
+            viewport: viewportName,
+            target,
+            expect: wantExpect,
+            onPage: (pg) => { styleEvents = watchStylesheetNetwork(pg); },
+            // WEB route selection happens after the token URL activates the session, so it runs
+            // inside the bootstrap — before the state oracle judges which screen we are on.
+            afterLanding: (page && isWeb)
+                ? async (pg) => {
+                    await (deps.waitForRenderablePage || waitForRenderablePage)(pg, deriveWebBase(pg.url()) + String(page).replace(/^\/+/, ""));
+                }
+                : null
+        }, deps);
 
-    // Build the navigable target. For console/transaction with an action, append cp-ws-doaction plus
-    // scalar params via URLSearchParams (encode once). Existing token fields survive.
-    const isWeb = t.kind === "web";
-    let target;
-    if (isWeb) {
-        target = t.rawToken;
-    } else if (hasAction) {
-        target = buildActionUrl(t._previewUrl, String(action).trim(), hasParams ? params : null);
-    } else {
-        target = t._previewUrl;
-    }
-    if (!target) {
-        return { captured: false, available: true, kind: t.kind,
-                 reason: isWeb
-                     ? "No web preview URL was returned — can't render; falls back to the human eyeball gate."
-                     : "No authenticated preview URL for this " + t.kind + " pal — can't drive the console screen; falls back to the human eyeball gate." };
-    }
-
-    const viewportName = VIEWPORTS[viewport] ? viewport : "desktop";
-    const vp = VIEWPORTS[viewportName];
-    // The module can be installed without its browser binary (npm i playwright without
-    // `npx playwright install`). launch() throws then — treat that as unavailable (eyeball-gate
-    // fallback), NOT a hard tool error, same as a missing module.
-    let browser;
-    try {
-        browser = await getBrowser();
-    } catch (e) {
-        return { captured: false, available: false,
-                 reason: "Playwright is installed but its Chromium browser is not — visual review falls back to the human eyeball gate. Install it with: npx playwright install chromium  (" +
-                     (e && e.message ? e.message.split("\n")[0] : String(e)) + ")" };
-    }
-    let bctx;
-    try {
-        bctx = await browser.newContext({ viewport: vp });
-        const pg = await bctx.newPage();
-        const styleEvents = watchStylesheetNetwork(pg);
-        // The target URL activates the session and lands the render. For WEB it's the no-auth
-        // rawToken; for CONSOLE/transaction it's the cp-auth'd URL — the browser absorbs the auth
-        // redirect chain, same as a human opening the preview link. A failed/timed-out auth replay
-        // throws here → caught below as a clean captured:false (eyeball-gate fallback).
-        await waitForRenderablePage(pg, target);
-        if (page && isWeb) {
-            // Sub-page navigation under the site root (web only; console renders one workflow).
-            // Same base derivation preview.js openInstanceSession uses: origin + first path segment.
-            const root = new URL(pg.url());
-            const seg = root.pathname.split("/").filter(Boolean)[0] || "";
-            const base = root.origin + "/" + (seg ? seg + "/" : "");
-            await waitForRenderablePage(pg, base + String(page).replace(/^\/+/, ""));
-        }
-        const landed = pg.url();
-        if (isLoginRedirect(landed)) {
+        const pg = open.pg;
+        try {
+            if (!open.ok) return await failedCapture(open, t, requestedState, target, viewportName, imageless);
+            const styleStatus = await inspectStyleStatus(pg, styleEvents);
+            let designAudit = await inspectDesignQuality(pg, { kind: t.kind, viewportName });
+            const buf = imageless ? null : await pg.screenshot({ fullPage: !!fullPage });
+            const pngBase64 = buf ? buf.toString("base64") : null;
+            // A pal that validated can still THROW at render time; the error block is text-detectable.
+            let renderError = null;
+            try { renderError = detectRenderError(await pg.innerText("body")); } catch (e) { /* best effort */ }
+            // The page may echo a param value into visible text, which then flows into these
+            // browser-derived structures — redact before they are persisted or projected.
+            const secretValues = target ? target.params : null;
+            if (secretValues && Object.keys(secretValues).length) {
+                designAudit = redactParamValuesFromAudit(designAudit, secretValues);
+                renderError = redactParamValuesFromRenderError(renderError, secretValues);
+            }
+            const small = pngBase64 ? await downscaleToJpeg(pg, pngBase64) : null;
+            const safeSelection = {};
+            if (workflow) safeSelection.workflow = workflow;
+            if (workflowName) safeSelection.workflowName = normalizeWorkflowName(workflowName);
+            if (target) safeSelection.action = target.action;
             return {
-                captured: false, available: true, kind: t.kind, authExpired: true,
-                url: sanitizeUrl(landed),
-                reason: "The preview redirected to the CloudPiston login page, so the authenticated test session expired. Re-run pal_screenshot to establish a fresh session; no UI evidence was captured."
+                captured: true, available: true, kind: t.kind,
+                viewport: open.viewport, viewportName,
+                // safe selection metadata (no param values)
+                selection: Object.keys(safeSelection).length ? safeSelection : null,
+                workflow: workflow || null,
+                workflowName: workflowName ? normalizeWorkflowName(workflowName) : null,
+                action: target ? target.action : null,
+                requestedState,
+                // true = every declared expectation was visible; null = the caller declared none, so
+                // the screen is NOT proven to be the requested one. Never silently true.
+                stateVerified: open.state.verified,
+                observedState: safeObservedState(open.state, secretValues),
+                // WEB landing is the webpals host (no creds). CONSOLE landing may retain cp-auth in
+                // the URL — sanitize to origin+path so no credential is ever returned.
+                url: isWeb ? pg.url() : sanitizeUrl(pg.url()),
+                renderError,
+                styleStatus,
+                designAudit,
+                pngBase64,
+                jpegSmallBase64: small ? small.dataUrl.replace(/^data:image\/jpeg;base64,/, "") : null,
+                smallDims: small ? { width: small.width, height: small.height } : null
             };
+        } catch (e) {
+            const msg = (e && e.message ? e.message.split("\n")[0] : String(e)).replace(/https?:\/\/\S+/g, "<url>");
+            return { captured: false, available: true, kind: t.kind, retryable: false,
+                     reason: (isWeb ? "Could not render the web page" : "Could not drive the authenticated " + t.kind + " screen") +
+                         " — visual review falls back to the human eyeball gate. (" + msg + ")" };
+        } finally {
+            try { if (open.bctx) await open.bctx.close(); }
+            finally { if (open.browser) (deps.releaseBrowser || releaseBrowser)(); }
         }
-        const styleStatus = await inspectStyleStatus(pg, styleEvents);
-        let designAudit = await inspectDesignQuality(pg, { kind: t.kind, viewportName });
-        const buf = imageless ? null : await pg.screenshot({ fullPage: !!fullPage });
-        const pngBase64 = buf ? buf.toString("base64") : null;
-        // Read the rendered text and check for a CloudPiston runtime-error block — a pal that
-        // validated can still throw at render time. Best-effort: a failure to read text must not
-        // sink the (successful) capture.
-        let renderError = null;
-        try { renderError = detectRenderError(await pg.innerText("body")); } catch (_e) { /* ignore */ }
-        // Redact exact supplied param values from browser-derived textual metadata before
-        // persistence/projection (designAudit samples and renderError text). The page may echo
-        // param values into visible text, which then flows into these structures.
-        if (hasParams) {
-            designAudit = redactParamValuesFromAudit(designAudit, params);
-            renderError = redactParamValuesFromRenderError(renderError, params);
-        }
-        const small = pngBase64 ? await downscaleToJpeg(pg, pngBase64) : null;
-        // Persist only safe selection metadata — workflow kind/name and action name are safe;
-        // param VALUES must never appear in any persisted artifact or returned evidence string.
-        const safeSelection = {};
-        if (workflow) safeSelection.workflow = workflow;
-        if (workflowName) safeSelection.workflowName = normalizeWorkflowName(workflowName);
-        if (hasAction) safeSelection.action = String(action).trim();
-        return {
-            captured: true, available: true, kind: t.kind,
-            viewport: vp, viewportName,
-            // safe selection metadata (no param values)
-            selection: Object.keys(safeSelection).length ? safeSelection : null,
-            workflow: workflow || null,
-            workflowName: workflowName ? normalizeWorkflowName(workflowName) : null,
-            action: hasAction ? String(action).trim() : null,
-            // WEB landing is the webpals host (no creds). CONSOLE landing may retain cp-auth in the
-            // URL — sanitize to origin+path so no credential is ever returned.
-            url: isWeb ? pg.url() : sanitizeUrl(pg.url()),
-            renderError,
-            styleStatus,
-            designAudit,
-            pngBase64,
-            jpegSmallBase64: small ? small.dataUrl.replace(/^data:image\/jpeg;base64,/, "") : null,
-            smallDims: small ? { width: small.width, height: small.height } : null
-        };
-    } catch (e) {
-        // Navigation/auth-replay/screenshot failure — degrade to the eyeball gate, never throw.
-        // Do NOT include the error verbatim if it could echo the credential URL; keep it to the
-        // first line and strip anything URL-shaped.
-        const msg = (e && e.message ? e.message.split("\n")[0] : String(e)).replace(/https?:\/\/\S+/g, "<url>");
-        return { captured: false, available: true, kind: t.kind,
-                 reason: (isWeb ? "Could not render the web page" : "Could not drive the authenticated " + t.kind + " screen") +
-                     " — visual review falls back to the human eyeball gate. (" + msg + ")" };
-    } finally {
-        try { if (bctx) await bctx.close(); }
-        finally { releaseBrowser(); }
+    };
+
+    const res = await attemptWithFreshTest(session, guid, { kind: workflow, workflowName }, capture, deps);
+    if (res && typeof res === "object") delete res.retryable;
+    return res;
+}
+
+// Bounded, credential-safe projection of what the browser actually showed.
+function safeObservedState(state, secretValues) {
+    const scrub = (s) => (secretValues && Object.keys(secretValues).length) ? redactParamValuesFromText(s, secretValues) : s;
+    const observed = (state && state.observed) || { headings: [], title: null };
+    return {
+        headings: (observed.headings || []).slice(0, 8).map(scrub),
+        title: observed.title ? scrub(observed.title) : null,
+        expect: (state && state.expect ? state.expect : []).map(r => ({ string: r.string, found: r.found }))
+    };
+}
+
+// A bootstrap that did not reach the requested state. The image (when one is available) rides as
+// LABELLED FAILURE EVIDENCE — captured:false, so it can never satisfy a completion gate.
+async function failedCapture(open, t, requestedState, target, viewportName, imageless) {
+    const base = {
+        captured: false, available: open.available !== false ? true : false,
+        kind: t.kind, viewportName,
+        status: open.status, category: open.category,
+        retryable: open.retryable === true, potentialMutationStarted: open.potentialMutationStarted === true,
+        requestedState
+    };
+    if (open.authExpired) base.authExpired = true;
+    if (open.pg) { try { base.url = sanitizeUrl(open.pg.url()); } catch (e) { /* page may be gone */ } }
+    if (open.category !== "targeting") {
+        return Object.assign(base, { reason: open.reason });
     }
+    const secretValues = target ? target.params : null;
+    base.blocked = open.code || "initial-state-not-reached";
+    base.stateVerified = false;
+    base.observedState = safeObservedState(open.state, secretValues);
+    base.failureEvidence = { label: "failure evidence — NOT accepted render evidence", jpegBase64: null };
+    if (!imageless && open.pg) {
+        try {
+            const buf = await open.pg.screenshot({ type: "jpeg", quality: FAILURE_JPEG_QUALITY });
+            base.failureEvidence.jpegBase64 = buf ? buf.toString("base64") : null;
+        } catch (e) { /* the screen may be gone; the observed-state summary still stands */ }
+    }
+    base.reason = "The browser did not reach the requested state, so this capture is NOT valid render evidence.\n  " +
+        describeTargetMismatch({ kind: t.kind, action: requestedState.action, paramKeys: requestedState.paramKeys }, open.state);
+    return base;
 }
 
 module.exports = {
     runScreenshot, detectRenderError, sanitizeUrl, sanitizeResourceUrl, isLoginRedirect, loadChromium,
     getBrowser, releaseBrowser, downscaleToJpeg, waitForStyles, waitForRenderablePage, inspectStyleStatus,
-    inspectDesignQuality, VIEWPORTS, buildActionUrl, isScalarParamValue,
+    inspectDesignQuality, VIEWPORTS, isScalarParamValue, safeObservedState,
     redactParamValuesFromText, redactParamValuesFromAudit, redactParamValuesFromRenderError
 };

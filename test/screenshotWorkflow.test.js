@@ -68,7 +68,7 @@ stub(path.join(__dirname, "..", "src", "core", "test.js"), { runTest: (...a) => 
 // Force re-require screenshot after stubbing test
 delete require.cache[require.resolve("../src/core/screenshot.js")];
 const screenshotHelpers = require("../src/core/screenshot.js");
-const { runScreenshot, buildActionUrl } = screenshotHelpers;
+const { runScreenshot } = screenshotHelpers;
 
 function resetScreenshotStub() {
     gotoCalls.length = 0;
@@ -236,17 +236,19 @@ describe("runScreenshot targeting", () => {
         assert.match(res.reason, /available/i);
     });
 
-    test("action and params encoded once via URLSearchParams, preserving token query", async () => {
+    test("params ride INSIDE the cp-ws-doaction action string, encoded once", async () => {
+        // The platform's own spelling of an action with parameters is the c:a form
+        // "name?key=value" (c-tags.md:44), which PalBuilder's IDE appends verbatim as
+        // cp-ws-doaction (TestConsoleAction.java:108). Params are NOT scattered as separate
+        // top-level query keys — that shape was never proven to reach the workflow action.
         nextRunTest = async () => ({ ran: true, validated: true, kind: "console", rawToken: null, _previewUrl: "https://secure.test/app?cp-auth=tok&cp-workflow=console&existing=1" });
         landedUrl = "https://secure.test/app";
         const res = await runScreenshot({}, "guid", { workflow: "console", workflowName: "console", action: "my action", params: { foo: "bar baz", num: 42 } });
         assert.equal(res.captured, true);
-        // goto should contain encoded action and params, and preserve existing
         const navigated = gotoCalls[0];
         const u = new URL(navigated);
-        assert.equal(u.searchParams.get("cp-ws-doaction"), "my action");
-        assert.equal(u.searchParams.get("foo"), "bar baz");
-        assert.equal(u.searchParams.get("num"), "42");
+        assert.equal(u.searchParams.get("cp-ws-doaction"), "my action?foo=bar+baz&num=42");
+        assert.equal(u.searchParams.get("foo"), null);
         assert.equal(u.searchParams.get("existing"), "1");
         assert.equal(u.searchParams.get("cp-workflow"), "console");
         // ensure single encoding (space => %20 or +, not double-encoded %2520)
@@ -317,14 +319,6 @@ describe("runScreenshot targeting", () => {
         }
     });
 
-    test("buildActionUrl preserves existing query and encodes correctly", () => {
-        const url = buildActionUrl("https://secure.test/app?cp-auth=tok&cp-workflow=console", "my action", { q: "a&b=c", n: 5 });
-        const u = new URL(url);
-        assert.equal(u.searchParams.get("cp-ws-doaction"), "my action");
-        assert.equal(u.searchParams.get("q"), "a&b=c");
-        assert.equal(u.searchParams.get("n"), "5");
-        assert.equal(u.searchParams.get("cp-auth"), "tok");
-    });
 
     test("param values are redacted from browser-derived designAudit samples and renderError", async () => {
         const SECRET = "REDACT_ME_SECRET_42";

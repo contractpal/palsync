@@ -57,8 +57,9 @@ function normalizeTarget({ action, params } = {}) {
 
     const qIndex = rawAction.indexOf("?");
     const name = (qIndex === -1 ? rawAction : rawAction.slice(0, qIndex)).trim();
+    // No character restrictions beyond emptiness: the dispatch string is encoded once through
+    // URLSearchParams, so any character an action name legitimately carries survives intact.
     if (!name) return { blocked: "invalid-action", reason: "action must start with the action name (e.g. \"openClientSetup\" or \"openClientSetup?id=9\")." };
-    if (/[\s#]/.test(name)) return { blocked: "invalid-action", reason: "action name \"" + name + "\" contains whitespace or #; use name or name?key=value." };
 
     const merged = new Map();
     if (qIndex !== -1) {
@@ -102,16 +103,29 @@ function buildTargetUrl(previewUrl, dispatch) {
     return u.toString();
 }
 
+// Time-bind one page call. A page that never answers must not hang the caller: state observation
+// resolves to the fallback and the run continues with an honest "nothing identifiable rendered".
+function withBound(promise, ms, fallback) {
+    let timer = null;
+    return new Promise((resolve) => {
+        const done = (value) => { if (timer) clearTimeout(timer); resolve(value); };
+        timer = setTimeout(() => done(fallback), ms);
+        Promise.resolve(promise).then(done, () => done(fallback));
+    });
+}
+
+const STATE_TIMEOUT_MS = 5000;
+
 // What is the browser actually showing? Bounded, credential-free, and cheap.
-async function observeScreen(pg) {
+async function observeScreen(pg, boundMs = STATE_TIMEOUT_MS) {
     try {
-        const seen = await pg.evaluate(() => {
+        const seen = await withBound(pg.evaluate(() => {
             const compact = (s) => String(s || "").replace(/\s+/g, " ").trim().slice(0, 80);
             const uniq = (xs) => Array.from(new Set(xs.filter(Boolean)));
             const headings = uniq(Array.from(document.querySelectorAll("h1,h2,[role='heading']"))
                 .map(el => compact(el.innerText || el.textContent)));
             return { title: compact(document.title), headings: headings.slice(0, 8) };
-        });
+        }), boundMs, null);
         return { title: (seen && seen.title) || null, headings: (seen && seen.headings) || [] };
     } catch (e) {
         return { title: null, headings: [] };
@@ -121,12 +135,11 @@ async function observeScreen(pg) {
 // The state oracle. `expect` is a small list of strings that MUST be visible on the screen the
 // caller asked for. Returns verified:null when the caller declared no expectation — that is an
 // honest "not proven", never a pass.
-async function verifyState(pg, expect) {
+async function verifyState(pg, expect, boundMs = STATE_TIMEOUT_MS) {
     const wanted = Array.isArray(expect) ? expect.filter(s => typeof s === "string" && s) : [];
-    const observed = await observeScreen(pg);
+    const observed = await observeScreen(pg, boundMs);
     if (!wanted.length) return { verified: null, expect: [], observed };
-    let text = "";
-    try { text = await pg.innerText("body"); } catch (e) { text = ""; }
+    const text = await withBound(Promise.resolve().then(() => pg.innerText("body")), boundMs, "");
     const results = wanted.map(s => ({ string: s, found: String(text).indexOf(s) !== -1 }));
     return { verified: results.every(r => r.found), expect: results, observed };
 }
@@ -191,7 +204,7 @@ function browserPrimitives(deps = {}) {
 // action could execute — a missing/failed browser, or a login redirect (an unauthenticated console
 // request is bounced to login, so the action was never dispatched). Any failure after an
 // action-bearing navigation was issued sets potentialMutationStarted and is never retryable.
-async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, onPage } = {}, deps = {}) {
+async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, onPage, afterLanding, contextTimeouts, stateTimeout } = {}, deps = {}) {
     const prim = browserPrimitives(deps);
     const isWeb = t.kind === "web";
     if (!prim.loadChromium()) {
@@ -219,6 +232,13 @@ async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, o
     let potentialMutationStarted = false;
     try {
         bctx = await browser.newContext({ viewport: vp });
+        // Opt-in context-level bounds. pal_exercise drives many sequential operations and caps each
+        // one; pal_screenshot deliberately keeps Playwright's own defaults so a slow console render
+        // still produces evidence. These are context METHODS, not newContext options.
+        if (contextTimeouts) {
+            try { if (bctx.setDefaultTimeout) bctx.setDefaultTimeout(contextTimeouts.action); } catch (e) { /* older/fake context */ }
+            try { if (bctx.setDefaultNavigationTimeout) bctx.setDefaultNavigationTimeout(contextTimeouts.navigation); } catch (e) { /* older/fake context */ }
+        }
         pg = await bctx.newPage();
         if (onPage) onPage(pg, bctx);
         // The action rides the first navigation, so from here a failure cannot prove the action
@@ -244,7 +264,19 @@ async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, o
                  reason: "The console preview redirected to the CloudPiston login page, so the authenticated test session expired. No UI evidence was captured." };
     }
 
-    const state = await verifyState(pg, expect);
+    // WEB selects its route after landing (the token URL activates the session first), so the
+    // state oracle runs once the caller has finished establishing the requested screen.
+    if (afterLanding) {
+        try { await afterLanding(pg); }
+        catch (e) {
+            const msg = (e && e.message ? e.message.split("\n")[0] : String(e)).replace(/https?:\/\/\S+/g, "<url>");
+            return { ok: false, browser, bctx, pg, viewport: vp, status: "blocked", category: "navigation",
+                     retryable: !resolved.dispatched, potentialMutationStarted,
+                     reason: "Could not reach the requested screen (" + msg + ")" };
+        }
+    }
+
+    const state = await verifyState(pg, expect, stateTimeout || STATE_TIMEOUT_MS);
     if (state.verified === false) {
         return { ok: false, browser, bctx, pg, viewport: vp, state,
                  status: "failed", category: "targeting", code: "initial-state-not-reached",
@@ -277,5 +309,5 @@ async function attemptWithFreshTest(session, guid, testOpts, attempt, deps = {})
 
 module.exports = {
     normalizeTarget, buildTargetUrl, observeScreen, verifyState, describeTargetMismatch, isScalar,
-    deriveWebBase, resolveTargetUrl, openAuthenticatedScreen, attemptWithFreshTest
+    deriveWebBase, resolveTargetUrl, openAuthenticatedScreen, attemptWithFreshTest, STATE_TIMEOUT_MS
 };
