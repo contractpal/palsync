@@ -15,6 +15,7 @@
 //   .palsync.usage.json         — MCP tool-call tally written by src/core/usage.js recordToolCall/flush; telemetry sidecar
 //   .palsync/session-cost.json  — harness-reported model spend written by src/core/usage.js recordSessionCost; telemetry sidecar
 //   .palsync/session-cost.lock  — lock directory for session-cost writer in src/core/usage.js; transient lock, never source
+//   .palsync/run-usage.json     — immutable Pi build/review usage windows written at pal-loop boundaries
 //   .palsync/pi-usage.jsonl     — Pi extension telemetry written by src/core/piHelpers.js appendPiUsage; telemetry sidecar
 //   .palsync/tool-evidence.jsonl — durable exercise/push evidence written by src/core/usage.js appendToolEvidence; queried via API, not committed as source (committed evidence is REVIEW.md/EXECUTION.md)
 //
@@ -34,6 +35,7 @@ const TRANSIENT_IGNORE_PATTERNS = [
     "/.palsync.usage.json",
     "/.palsync/session-cost.json",
     "/.palsync/session-cost.lock",
+    "/.palsync/run-usage.json",
     "/.palsync/pi-usage.jsonl",
     "/.palsync/tool-evidence.jsonl"
 ];

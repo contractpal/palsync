@@ -4,7 +4,7 @@ import metadata from "./tools.json";
 import helpers from "./helpers.js";
 
 const { routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision, appendPiUsage,
-  isPalsyncWorkspace, completionFingerprint, completionFollowUp, piWriteEvent, piAppendContent } = helpers;
+  isPalsyncWorkspace, piUsageSnapshot, piUsageBoundary, completionFingerprint, completionFollowUp, piWriteEvent, piAppendContent } = helpers;
 
 // Keep routing guidance in the entrypoint that consumes it. During setup or /reload, Pi can briefly
 // observe an older cached helpers.js; the entrypoint must never require a newly-added helper export.
@@ -190,6 +190,18 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
 
   // PreToolUse guard (finding #13): refuse edits to the workspace's own push-gate record.
   pi.on("tool_call", async (event, ctx) => {
+    const boundary = isPalsyncWorkspace(ctx.cwd) && piUsageBoundary(event);
+    if (boundary) {
+      try {
+        const snapshot = piUsageSnapshot(ctx.sessionManager.getEntries());
+        await pi.exec("palsync", ["usage", "capture", "--phase", boundary.phase, "--boundary", boundary.boundary,
+          "--snapshot", JSON.stringify(snapshot), "--model", ctx.model.id, "--provider", ctx.model.provider,
+          "--dir", ctx.cwd], { timeout: 5000 });
+      } catch (error) {
+        // Telemetry is evidence-only: a failed sidecar capture must never block a build handoff.
+        ctx.ui.notify("PalSync usage capture skipped (fail open): " + (error instanceof Error ? error.message : String(error)), "warning");
+      }
+    }
     const hookEvent = piWriteEvent(ctx.cwd, event);
     if (!hookEvent) return;
     try {

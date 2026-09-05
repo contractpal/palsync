@@ -123,6 +123,37 @@ function isPalsyncWorkspace(workspaceDir) {
     return !!workspaceDir && [".palsync.json", "EXECUTION.md"].some(file => fs.existsSync(path.join(workspaceDir, file)));
 }
 
+// Match Pi's getSessionStats() accumulation exactly: assistant/tool-result message usage plus
+// compaction and branch-summary usage. These are cumulative session totals, not current context.
+function piUsageSnapshot(entries) {
+    const snapshot = { input: 0, cacheRead: 0, output: 0, cacheWrite: 0, cost: 0 };
+    for (const entry of Array.isArray(entries) ? entries : []) {
+        let usage = null;
+        if (entry && (entry.type === "compaction" || entry.type === "branch_summary")) usage = entry.usage;
+        else if (entry && entry.type === "message" && entry.message &&
+            (entry.message.role === "assistant" || entry.message.role === "toolResult")) usage = entry.message.usage;
+        if (!usage) continue;
+        for (const field of ["input", "cacheRead", "output", "cacheWrite"]) {
+            const value = Number(usage[field]);
+            if (Number.isFinite(value) && value >= 0) snapshot[field] += value;
+        }
+        const cost = Number(usage.cost && usage.cost.total);
+        if (Number.isFinite(cost) && cost >= 0) snapshot.cost += cost;
+    }
+    return snapshot;
+}
+
+// Boundaries are deliberately narrow: pal-loop explicitly requests a start, while its required
+// session-summary is the automatic build handoff. No arbitrary Bash command is interpreted.
+function piUsageBoundary(event) {
+    if (!event || String(event.toolName || "").toLowerCase() !== "bash") return null;
+    const command = String(event.input && event.input.command || "");
+    const usage = command.match(/(?:^|[;&]\s*)palsync\s+usage\s+(start|end)\b[\s\S]*?--phase(?:\s+|=)(build|review)\b/);
+    if (usage) return { boundary: usage[1], phase: usage[2] };
+    if (/(?:^|[;&]\s*)palsync\s+session-summary\b/.test(command)) return { boundary: "end", phase: "build" };
+    return null;
+}
+
 // Pi's built-in editors are lowercase and name their path field `path`; Claude's are capitalised and
 // use `file_path`. The hook CORES speak the Claude shape (they were written against that event first),
 // so translate here rather than teaching every core two dialects. Returns null when there is nothing
@@ -170,6 +201,6 @@ function completionFollowUp(gate, fingerprint, previousFingerprint) {
 }
 
 module.exports = { CORE_TOOLS, routeItems, routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision,
-    imageTokens, contentStats, piUsageEntry, appendPiUsage, isPalsyncWorkspace,
+    imageTokens, contentStats, piUsageEntry, appendPiUsage, isPalsyncWorkspace, piUsageSnapshot, piUsageBoundary,
     completionFingerprint, completionFollowUp, piWriteEvent, piAppendContent, PI_WRITE_TOOLS,
     promptGuidelinesFor, activationGuidance };

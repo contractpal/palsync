@@ -113,6 +113,29 @@ test("report missing a required section is rejected by the structural check", ()
     fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
+test("QA report contract requires bounded usage and copied screenshot assets", () => {
+    const skill = read(SKILL);
+    const template = read(TEMPLATE);
+    assert.match(skill, /\.palsync\/run-usage\.json/);
+    assert.match(skill, /windows/);
+    assert.match(skill, /bounded PalSync build window/i);
+    assert.match(skill, /current Pi footer|\/info.*cumulative/i);
+    assert.match(skill, /not available/i);
+    assert.match(skill, /reports\/assets\/YYYY-MM-DD_<spec>_<harness>_<model>/);
+    assert.match(template, /^## Visual evidence$/m);
+    assert.match(template, /\*\*Source:\*\*.*agent-work-history/m);
+    assert.match(template, /\]\(assets\/YYYY-MM-DD_<spec>_<harness>_<model>\//);
+    assert.match(template, /Build phase[\s\S]*Review phase[\s\S]*Total measured PalSync run/);
+});
+
+test("pal-loop starts Pi usage before any session-start reads", () => {
+    const loop = read(PAL_LOOP);
+    const usageStart = loop.indexOf("palsync usage start --phase build");
+    const sessionStartRead = loop.indexOf("references/session-start.md");
+    assert.ok(usageStart >= 0 && usageStart < sessionStartRead, "usage boundary must precede session-start work");
+    assert.match(loop, /before reading any reference[\s\S]*doctor\/status\/pull\/smoke checks/);
+});
+
 test("pal-loop end-of-run guidance points to the qa-report skill", () => {
     const loop = read(PAL_LOOP);
     assert.match(loop, /qa-report/, "pal-loop must reference qa-report for report writing");

@@ -8,7 +8,7 @@ const os = require("node:os");
 const { spawnSync } = require("node:child_process");
 const metadata = require("../src/mcp/pi-tools.json");
 const { routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision, piUsageEntry, appendPiUsage,
-    isPalsyncWorkspace, completionFingerprint, completionFollowUp,
+    isPalsyncWorkspace, piUsageSnapshot, piUsageBoundary, completionFingerprint, completionFollowUp,
     piWriteEvent, piAppendContent, promptGuidelinesFor, activationGuidance } = require("../src/core/piHelpers");
 const { TOOLS } = require("../src/mcp/tools");
 const { serializeToolDefinitions } = require("../src/mcp/toolSchema");
@@ -101,6 +101,22 @@ test("Pi usage telemetry is local, schema-stable, and never estimates cost", () 
     assert.equal(stored.cost, null);
     assert.equal(appendPiUsage(ws, { toolName: "bash", content: [] }, null), null);
     fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("Pi usage snapshots match Pi's cumulative counters and boundaries stay narrow", () => {
+    const entries = [
+        { type: "message", message: { role: "assistant", usage: { input: 10, cacheRead: 4, output: 2, cacheWrite: 1, cost: { total: 0.01 } } } },
+        { type: "message", message: { role: "toolResult", usage: { input: 3, cacheRead: 1, output: 0, cacheWrite: 0, cost: { total: 0.02 } } } },
+        { type: "compaction", usage: { input: 2, cacheRead: 0, output: 1, cacheWrite: 0, cost: { total: 0.03 } } },
+        { type: "message", message: { role: "user", usage: { input: 999, cacheRead: 999, output: 999, cacheWrite: 999, cost: { total: 9 } } } }
+    ];
+    assert.deepEqual(piUsageSnapshot(entries), { input: 15, cacheRead: 5, output: 3, cacheWrite: 1, cost: 0.06 });
+    assert.deepEqual(piUsageBoundary({ toolName: "bash", input: { command: "palsync usage start --phase build" } }), { boundary: "start", phase: "build" });
+    assert.deepEqual(piUsageBoundary({ toolName: "bash", input: { command: "palsync session-summary --mode lite" } }), { boundary: "end", phase: "build" });
+    assert.equal(piUsageBoundary({ toolName: "bash", input: { command: "echo palsync usage start --phase build" } }), null);
+    const source = fs.readFileSync(path.join(__dirname, "..", "pi-extension", "index.ts"), "utf8");
+    assert.match(source, /piUsageSnapshot\(ctx\.sessionManager\.getEntries\(\)\)/);
+    assert.match(source, /palsync", \["usage", "capture"/);
 });
 
 test("Pi completion handling is settled, workspace-scoped, and loop-resistant", () => {

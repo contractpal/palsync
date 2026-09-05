@@ -41,8 +41,15 @@ nothing to say, write "none" and explain why.
 3. **Findings** — ordered by severity (High / Medium / Low). Each finding requires: symptom,
    live reproduction evidence (actual tool output, not paraphrase), root cause with
    `file:line`, and a "palsync improvement" line. No finding without evidence.
-4. **What worked well** — for balance and to protect features from being "fixed" away.
-5. **Run mechanics & PalSync efficiency** — evidence-only telemetry for the completed run:
+4. **Visual evidence** — immediately after Findings. When a screenshot materially supports a
+   finding, preserve its original tool path, copy the PNG to
+   `reports/assets/YYYY-MM-DD_<spec>_<harness>_<model>/`, and embed that copy with a relative
+   Markdown path. Include only failure, wrong-state, important final desktop/mobile, or meaningful
+   before/after evidence. A screenshot proves only what is visible; use tool output, transcript,
+   or `file:line` evidence for root cause. If copying fails, retain the source path and say image
+   copy unavailable; never invent an embedded path.
+5. **What worked well** — for balance and to protect features from being "fixed" away.
+6. **Run mechanics & PalSync efficiency** — evidence-only telemetry for the completed run:
    - PalSync version/commit used, when available.
    - Tasks attempted / completed / blocked / needs-human / needs-frontier.
    - Skill names actually loaded and extra references actually loaded, especially JIT references
@@ -59,16 +66,26 @@ nothing to say, write "none" and explain why.
      began or leaving browser-JS detail unloaded for markup-only work.
    - Whether the pal-loop state machine was followed cleanly: Start → Pick → Prepare → Execute →
      Verify → Resolve → Continue/Handoff.
-6. **Cost & usage** — Cost recording — IF harness is claude-code THEN skip `palsync cost record` (agent cannot read its own spend); IF pi THEN run `palsync cost record --model <model> --phase <build|review>` using the user-supplied footer figures. Then paste `palsync cost` output verbatim; never estimate unavailable figures.
-7. **Recommendations for palsync** — numbered, prioritized (P0 / P1 / P2), each naming the
+7. **Cost & usage** — Read `.palsync/run-usage.json` when present. Each phase contains immutable
+   `windows`; report each useful completed build window and sum only their exact `input`,
+   `cacheRead`, `output`, `cacheWrite`, and `cost` deltas for the Build phase. Keep review windows
+   separate, then sum completed build and review windows for Total measured PalSync run. Label the
+   source as `pi/sessionManager.getEntries`. This is a bounded PalSync build window, not the entire
+   Pi conversation. Never replace it with the current Pi footer or `/info` totals: those are
+   cumulative across the Pi session/branch history and later turns contaminate them. If no completed
+   bounded window exists, say `not available`. Do not estimate usage or cache hit rate. Keep the
+   existing `palsync cost` output as separate PalSync mechanics telemetry; do not record footer
+   figures manually.
+8. **Recommendations for palsync** — numbered, prioritized (P0 / P1 / P2), each naming the
    file or tool it targets.
-8. **Fix tasks** — checkbox list in pal-loop task format (file, change, success condition) so
+9. **Fix tasks** — checkbox list in pal-loop task format (file, change, success condition) so
    a future `pal-fix` / `pal-loop` run can consume it directly.
 
 ## Rules
 
 - **Evidence before claim.** Every finding must quote actual tool output, a screenshot path,
-  a `file:line`, or a verbatim transcript line. No paraphrase, no "code looks correct".
+  a `file:line`, or a verbatim transcript line. No paraphrase, no "code looks correct". For a
+  material screenshot, retain its original path and embed a copied relative report asset.
 - **Disclose reviewer == builder.** If the QA/review session is the same agent or context
   that built the pal, write a self-review caveat at the top of the report and treat the
   verdict as `CHANGES NEEDED` unless an independent fresh reviewer confirmed it.

@@ -49,6 +49,7 @@ const USAGE = [
     "                                                               Exercise workflow actions end-to-end; assert expect/absent strings in the rendered result",
     "  palsync cost   [--dir <workspace>]                           palsync's own context contribution: tool calls + bytes returned + injected-block size (offline)",
     "  palsync cost record --model X --provider Y --in N --cached N --out N [--cost N] [--currency USD] [--phase build|review] [--dir <ws>]",
+    "  palsync usage start|end --phase build|review [--dir <ws>]     Request a Pi run-usage boundary (Pi extension captures it)",
     "  palsync ctx inspect|diff [--dir <workspace>]                 Inspect locally stable context or compare the last changed generation (offline)",
     "  palsync review check|brief [--dir <workspace>]              Check REVIEW.md evidence or print the pre-review evidence ledger (offline)",
     "  palsync completion check [--dir <workspace>]                Enforce all-done independent review or allow a reasoned handoff (offline)",
@@ -126,14 +127,14 @@ function parseFlags(argv) {
         else if (a.startsWith("--steps=")) flags.steps = a.slice("--steps=".length);
         else if (a === "--steps-file") { flags.stepsFile = argv[++i]; if (!flags.stepsFile) throw new Error("--steps-file requires a path"); }
         else if (a.startsWith("--steps-file=")) flags.stepsFile = a.slice("--steps-file=".length);
-        else if (["--model", "--provider", "--in", "--cached", "--out", "--cost", "--currency", "--phase"].includes(a)) {
-            const key = { "--model": "model", "--provider": "provider", "--in": "tokensIn", "--cached": "tokensCached", "--out": "tokensOut", "--cost": "cost", "--currency": "currency", "--phase": "phase" }[a];
+        else if (["--model", "--provider", "--in", "--cached", "--out", "--cost", "--currency", "--phase", "--boundary", "--snapshot"].includes(a)) {
+            const key = { "--model": "model", "--provider": "provider", "--in": "tokensIn", "--cached": "tokensCached", "--out": "tokensOut", "--cost": "cost", "--currency": "currency", "--phase": "phase", "--boundary": "boundary", "--snapshot": "snapshot" }[a];
             flags[key] = argv[++i];
             if (flags[key] === undefined) throw new Error(a + " requires a value");
         }
-        else if (["--model=", "--provider=", "--in=", "--cached=", "--out=", "--cost=", "--currency=", "--phase="].some(prefix => a.startsWith(prefix))) {
+        else if (["--model=", "--provider=", "--in=", "--cached=", "--out=", "--cost=", "--currency=", "--phase=", "--boundary=", "--snapshot="].some(prefix => a.startsWith(prefix))) {
             const prefix = a.slice(0, a.indexOf("=") + 1);
-            const key = { "--model=": "model", "--provider=": "provider", "--in=": "tokensIn", "--cached=": "tokensCached", "--out=": "tokensOut", "--cost=": "cost", "--currency=": "currency", "--phase=": "phase" }[prefix];
+            const key = { "--model=": "model", "--provider=": "provider", "--in=": "tokensIn", "--cached=": "tokensCached", "--out=": "tokensOut", "--cost=": "cost", "--currency=": "currency", "--phase=": "phase", "--boundary=": "boundary", "--snapshot=": "snapshot" }[prefix];
             flags[key] = a.slice(prefix.length);
         }
         else if (a === "--dir") { flags.dir = argv[++i]; if (!flags.dir) throw new Error("--dir requires a value"); }
@@ -349,6 +350,26 @@ async function run(cmd, argv, opts) {
     }
     if (flags.help) { console.log(USAGE); return 0; }
     const dir = path.resolve(flags.dir || process.cwd());
+
+    if (cmd === "usage") {
+        const usage = require("../core/usage");
+        if (flags._positional === "capture") {
+            let snapshot;
+            try { snapshot = JSON.parse(flags.snapshot || ""); }
+            catch (e) { console.error("usage capture failed: --snapshot must be JSON"); return 1; }
+            const result = usage.captureRunUsage(dir, { phase: flags.phase, boundary: flags.boundary,
+                snapshot, model: flags.model, provider: flags.provider });
+            if (!result.ok) { console.error("usage capture failed: " + result.error); return 1; }
+            console.log(result.unchanged ? "Pi usage boundary already recorded." : "Pi usage boundary recorded.");
+            return 0;
+        }
+        if ((flags._positional === "start" || flags._positional === "end") && (flags.phase === "build" || flags.phase === "review")) {
+            console.log("Pi usage boundary requested; the Pi extension records it when active. Otherwise usage is not available.");
+            return 0;
+        }
+        console.error("Usage: palsync usage start|end --phase build|review [--dir <workspace>]");
+        return 1;
+    }
 
     if (cmd === "completion") {
         if (flags._positional !== "check") { console.error("Usage: palsync completion check [--dir <workspace>]"); return 1; }

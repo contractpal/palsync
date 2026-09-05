@@ -32,6 +32,7 @@ function ensureTransientIgnore(workspaceDir) {
 
 const USAGE_FILE = ".palsync.usage.json";
 const SESSION_COST_FILE = ".palsync/session-cost.json";
+const RUN_USAGE_FILE = ".palsync/run-usage.json";
 const PI_USAGE_FILE = ".palsync/pi-usage.jsonl";
 const TOOL_EVIDENCE_FILE = ".palsync/tool-evidence.jsonl";
 const TOOL_EVIDENCE_SCHEMA = "palsync/tool-evidence/1";
@@ -50,6 +51,7 @@ const SOFT_THRESHOLD_BYTES = 64 * 1024;
 
 function usagePath(workspaceDir) { return path.join(workspaceDir, USAGE_FILE); }
 function sessionCostPath(workspaceDir) { return path.join(workspaceDir, SESSION_COST_FILE); }
+function runUsagePath(workspaceDir) { return path.join(workspaceDir, RUN_USAGE_FILE); }
 
 function readJson(p) {
     try { return JSON.parse(fs.readFileSync(p, "utf8")); }
@@ -351,6 +353,87 @@ function recordSessionCost(workspaceDir, entry) {
     }
 }
 
+// Pi exposes these exact counters on Usage. Run snapshots are cumulative Pi session totals;
+// subtracting the durable start boundary keeps later conversation turns out of a completed phase.
+function normalizeRunUsageSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") return null;
+    const normalized = {};
+    for (const field of ["input", "cacheRead", "output", "cacheWrite", "cost"]) {
+        const value = Number(snapshot[field]);
+        if (!Number.isFinite(value) || value < 0) return null;
+        normalized[field] = value;
+    }
+    return normalized;
+}
+
+function runUsageDelta(start, end) {
+    const delta = {};
+    for (const field of ["input", "cacheRead", "output", "cacheWrite", "cost"]) {
+        delta[field] = Math.max(0, end[field] - start[field]);
+    }
+    return delta;
+}
+
+function readRunUsage(workspaceDir) {
+    const raw = readJson(runUsagePath(workspaceDir));
+    if (!raw || raw.schema !== "palsync/run-usage/1" || !raw.phases || typeof raw.phases !== "object") return null;
+    // The first shipped shape held one window directly on each phase. Normalize it on read so
+    // interrupted early adopters retain their bounded evidence when sessions begin appending.
+    const phases = {};
+    for (const [phase, value] of Object.entries(raw.phases)) {
+        if (!value || typeof value !== "object") continue;
+        phases[phase] = Array.isArray(value.windows) ? value : { windows: value.start ? [value] : [] };
+    }
+    return { schema: "palsync/run-usage/1", phases };
+}
+
+function runUsagePhaseTotal(runUsage, phase) {
+    const total = { input: 0, cacheRead: 0, output: 0, cacheWrite: 0, cost: 0 };
+    const windows = runUsage && runUsage.phases && runUsage.phases[phase] && runUsage.phases[phase].windows;
+    for (const window of Array.isArray(windows) ? windows : []) {
+        if (!window || !window.end || !window.delta) continue;
+        for (const field of Object.keys(total)) total[field] += Number(window.delta[field]) || 0;
+    }
+    return total;
+}
+
+// Persist immutable completed windows. A repeated start leaves an open baseline untouched; a
+// repeated end leaves the last completed window untouched. Later sessions append a new window.
+function captureRunUsage(workspaceDir, { phase, boundary, snapshot, model, provider } = {}) {
+    if (phase !== "build" && phase !== "review") return { ok: false, error: "phase must be build or review" };
+    if (boundary !== "start" && boundary !== "end") return { ok: false, error: "boundary must be start or end" };
+    const normalized = normalizeRunUsageSnapshot(snapshot);
+    if (!normalized) return { ok: false, error: "snapshot must contain finite non-negative Pi usage counters" };
+    try {
+        ensureTransientIgnore(workspaceDir);
+        const existing = readRunUsage(workspaceDir) || { schema: "palsync/run-usage/1", phases: {} };
+        const phaseRecord = existing.phases[phase] || { windows: [] };
+        const windows = phaseRecord.windows;
+        const open = windows.find(window => window && window.start && !window.end);
+        if (boundary === "start" && open) {
+            return { ok: true, unchanged: true, record: open, path: runUsagePath(workspaceDir) };
+        }
+        if (boundary === "end" && !open) {
+            if (windows.length) return { ok: true, unchanged: true, record: windows[windows.length - 1], path: runUsagePath(workspaceDir) };
+            return { ok: false, error: "cannot end a phase without a recorded start" };
+        }
+        const record = boundary === "start"
+            ? { source: "pi/sessionManager.getEntries", model: model || null, provider: provider || null, start: normalized }
+            : { ...open, end: normalized, delta: runUsageDelta(open.start, normalized) };
+        if (boundary === "start") windows.push(record);
+        else windows[windows.indexOf(open)] = record;
+        existing.phases[phase] = { windows };
+        const dest = runUsagePath(workspaceDir);
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        const tmp = dest + ".palsync-tmp-" + process.pid;
+        fs.writeFileSync(tmp, JSON.stringify(existing, null, 2) + "\n");
+        fs.renameSync(tmp, dest);
+        return { ok: true, record, path: dest };
+    } catch (e) {
+        return { ok: false, error: e && e.message ? e.message : String(e) };
+    }
+}
+
 function makeAcc() { return { tokensIn: 0, tokensCached: 0, tokensOut: 0, cost: 0, hasCost: false }; }
 function addEntry(acc, e) {
     acc.tokensIn += Number(e.tokensIn) || 0;
@@ -546,6 +629,7 @@ function formatCost(workspaceDir, tools) {
 
 module.exports = { recordToolCall, recordContextGeneration, contentBytes, contentStats, injectedContext,
     formatCost, skillDescription, readSessionCost, recordSessionCost, readPiUsage, formatPiUsage,
+    readRunUsage, captureRunUsage, normalizeRunUsageSnapshot, runUsageDelta, runUsagePhaseTotal,
     appendToolEvidence, readToolEvidence, filterToolEvidence,
-    phaseTotals, normalizeV2, USAGE_FILE, SESSION_COST_FILE, PI_USAGE_FILE, TOOL_EVIDENCE_FILE,
+    phaseTotals, normalizeV2, USAGE_FILE, SESSION_COST_FILE, RUN_USAGE_FILE, PI_USAGE_FILE, TOOL_EVIDENCE_FILE,
     SOFT_THRESHOLD_BYTES };

@@ -12,6 +12,8 @@
 **Run date:** `YYYY-MM-DD` → wall clock `HH:MM:SS – HH:MM:SS`
 **Harness:** `<harness name>`
 **PalSync revision:** `<commit/version or not available>`
+**Build usage window:** `<.palsync/run-usage.json build delta or not available>`
+**Review usage window:** `<.palsync/run-usage.json review delta or not available>`
 **Build model:** `<exact model id>` (effort `<reasoning effort>`)
 **QA/report model:** `<exact model id>` if different from build model
 **Run mode:** `<spec mode>` / `<run mode>` / review cadence `<cadence>`
@@ -54,6 +56,22 @@ Ordered by severity: High, then Medium, then Low.
 - **Root cause:** ...
 - **Palsync improvement:** ...
 
+## Visual evidence
+
+Include only screenshots that materially support a finding or important final desktop/mobile
+state. Keep the original tool artifact path even when the copied report asset is available.
+
+### `<finding / screen>`
+
+**Source:** `.agent-work-history/pal_screenshot/<artifact>.png`
+
+![`<specific visible state>`](assets/YYYY-MM-DD_<spec>_<harness>_<model>/<meaningful-name>.png)
+
+**Demonstrates:** `<only the visibly supported claim>`
+
+If the image cannot be copied, write `Image copy unavailable` and retain the Source; do not add
+an invented image link.
+
 ## What worked well
 
 - `<tool or behavior that functioned correctly, with evidence>`
@@ -83,23 +101,29 @@ Ordered by severity: High, then Medium, then Low.
 
 ## Cost & usage
 
+### Run-bounded Pi usage
+
+Read `.palsync/run-usage.json`; use only completed `phases.<phase>.windows` records (`start`,
+`end`, and `delta`). Each is a bounded PalSync build/review window, not the entire Pi conversation.
+Do not use the current Pi footer or `/info` totals, which are cumulative session/branch history.
+
+| Window | Input | Cache read | Output | Cache write | Cost | Evidence |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Build window 1 | `<delta or not available>` | | | | | `pi/sessionManager.getEntries` |
+| Build window 2+ | `<delta or not available>` | | | | | `<one row per additional completed window>` |
+| Build phase total | `<sum completed build windows>` | | | | | `<build windows only>` |
+| Review phase | `<sum completed review windows or not available>` | | | | | `<review windows only>` |
+| Total measured PalSync run | `<build + review completed deltas or not available>` | | | | | `<no open windows>` |
+
+Do not calculate a cache hit rate unless Pi provides an applicable run-bounded rate. Do not
+estimate missing values.
+
 ### `palsync cost` output
 
-> Before running it: if the harness exposes this session's token/cost figures, record them with
-> `palsync cost record --model X --provider Y --in N --cached N --out N [--cost N] --phase review`
-> so they appear in the phase totals below.
-
 ```
-<paste palsync cost output verbatim, including the model-token spend section with
-build/review phase totals>
+<paste `palsync cost` output verbatim; it is PalSync mechanics telemetry, not a replacement for
+the bounded Pi usage window above>
 ```
-
-### Model tokens / dollars
-
-- Build model: `<value or "not available">`
-- Review/QA model: `<value or "not available">`
-- These come from the sidecar totals in the `palsync cost` output above; if the sidecar is
-  absent, state that and do not estimate.
 
 ## Recommendations for palsync
 

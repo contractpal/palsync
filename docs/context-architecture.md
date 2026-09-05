@@ -28,7 +28,7 @@ basis that could not be reproduced.
 | All | `skill-body:design-system-init` | `bundled-context/skills/design-system-init/SKILL.md` | 18,144 | 4,536 | on-demand |
 | All | `skill-body:pal-fix` | `bundled-context/skills/pal-fix/SKILL.md` | 4,361 | 1,091 | on-demand |
 | All | `skill-body:pal-init` | `bundled-context/skills/pal-init/SKILL.md` | 10,041 | 2,511 | on-demand |
-| All | `skill-body:pal-loop` | `bundled-context/skills/pal-loop/SKILL.md` | 7,972 | 1,993 | on-demand |
+| All | `skill-body:pal-loop` | `bundled-context/skills/pal-loop/SKILL.md` | 8,194 | 2,049 | on-demand |
 | All | `skill-body:pal-review` | `bundled-context/skills/pal-review/SKILL.md` | 16,478 | 4,120 | on-demand |
 | All | `skill-body:pal-spec` | `bundled-context/skills/pal-spec/SKILL.md` | 9,831 | 2,458 | on-demand |
 | All | `skill-body:palbuilder-core` | `bundled-context/skills/palbuilder-core/SKILL.md` | 3,210 | 803 | on-demand |
@@ -38,7 +38,7 @@ basis that could not be reproduced.
 | All | `skill-body:palbuilder-realtime` | `bundled-context/skills/palbuilder-realtime/SKILL.md` | 4,992 | 1,248 | on-demand |
 | All | `skill-body:palbuilder-seo` | `bundled-context/skills/palbuilder-seo/SKILL.md` | 9,495 | 2,374 | on-demand |
 | All | `skill-body:palbuilder-workflow` | `bundled-context/skills/palbuilder-workflow/SKILL.md` | 11,993 | 2,999 | on-demand |
-| All | `skill-body:qa-report` | `bundled-context/skills/qa-report/SKILL.md` | 6,076 | 1,519 | on-demand |
+| All | `skill-body:qa-report` | `bundled-context/skills/qa-report/SKILL.md` | 7,332 | 1,833 | on-demand |
 
 <!-- palsync generated: end -->
 

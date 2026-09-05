@@ -22,9 +22,11 @@ Repeat this short cycle until handoff or a terminal blocker.
 
 ### 1. Start
 
-Read [references/session-start.md](references/session-start.md) before the first
-task. Ensure the spec is approved and reality-checked, the workspace is viable, git
-is initialized, reviewer dispatch is available, and the required smoke checks pass.
+In Pi, first run `palsync usage start --phase build`; do this before reading any reference,
+running doctor/status/pull/smoke checks, or using build tools. The extension captures the
+structured baseline automatically. Then read [references/session-start.md](references/session-start.md)
+before the first task. Ensure the spec is approved and reality-checked, the workspace is viable,
+git is initialized, reviewer dispatch is available, and the required smoke checks pass.
 Use its CLI transition procedure, session-start reads, doctor, server-status/pull,
 and just-in-time loading mechanics. On resume, trust EXECUTION.md over model memory.
 

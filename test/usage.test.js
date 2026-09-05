@@ -333,6 +333,34 @@ test("recordSessionCost retries a held lock", async () => {
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
+test("run-bounded Pi usage appends immutable build windows and sums them for QA", () => {
+    const ws = tmpWorkspace();
+    const firstStart = { input: 100, cacheRead: 20, output: 10, cacheWrite: 5, cost: 0.1 };
+    const firstEnd = { input: 130, cacheRead: 60, output: 25, cacheWrite: 8, cost: 0.17 };
+    const secondStart = { input: 200, cacheRead: 90, output: 40, cacheWrite: 10, cost: 0.25 };
+    const secondEnd = { input: 240, cacheRead: 120, output: 60, cacheWrite: 14, cost: 0.31 };
+    assert.equal(usage.readRunUsage(ws), null, "no bounded evidence means usage is not available");
+    assert.equal(usage.captureRunUsage(ws, { phase: "build", boundary: "start", snapshot: firstStart,
+        model: "pi-model", provider: "pi-provider" }).ok, true);
+    const repeatedStart = usage.captureRunUsage(ws, { phase: "build", boundary: "start", snapshot: secondStart });
+    assert.equal(repeatedStart.unchanged, true, "an open window keeps its original baseline");
+    const first = usage.captureRunUsage(ws, { phase: "build", boundary: "end", snapshot: firstEnd });
+    assert.deepEqual(first.record.delta, { input: 30, cacheRead: 40, output: 15, cacheWrite: 3, cost: 0.07 });
+    const repeatedEnd = usage.captureRunUsage(ws, { phase: "build", boundary: "end",
+        snapshot: { input: 999, cacheRead: 999, output: 999, cacheWrite: 999, cost: 9 } });
+    assert.equal(repeatedEnd.unchanged, true, "later unrelated turns cannot mutate a closed window");
+    assert.equal(usage.captureRunUsage(ws, { phase: "build", boundary: "start", snapshot: secondStart }).ok, true);
+    const second = usage.captureRunUsage(ws, { phase: "build", boundary: "end", snapshot: secondEnd });
+    assert.deepEqual(second.record.delta, { input: 40, cacheRead: 30, output: 20, cacheWrite: 4, cost: 0.06 });
+    const saved = usage.readRunUsage(ws);
+    assert.equal(saved.phases.build.windows.length, 2, "a later session appends rather than overwriting");
+    assert.deepEqual(usage.runUsagePhaseTotal(saved, "build"),
+        { input: 70, cacheRead: 70, output: 35, cacheWrite: 7, cost: 0.13 },
+        "QA build total is the sum of completed bounded windows");
+    assert.equal(fs.existsSync(path.join(ws, usage.RUN_USAGE_FILE)), true);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
 test("formatCost merges Pi telemetry without treating estimates as billing", () => {
     const ws = tmpWorkspace();
     const file = path.join(ws, usage.PI_USAGE_FILE);
