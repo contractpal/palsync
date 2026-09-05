@@ -14,7 +14,11 @@ then `pal_seo_audit` → `ok:true`, `diagnosticCount:0` (public pages).
 
 ## UI by task type
 
-UI-only: one desktop `pal_screenshot`. Behavior-only: one `pal_exercise`. Both: one of each. Merge same-page assertions into one exercise flow. Mobile screenshots are final-review-only — but final review is refused without it (`palsync review check` requires clean desktop+mobile captures per reviewed route), so budget the mobile pass into the review phase, ahead of writing REVIEW.md. A clean capture has `renderError:null`, loaded CSS, zero pal-content audit errors, and pixel critique. Apply `../../shared/references/console-chrome-exception.md` only with quoted sample evidence.
+Browser evidence is a completion requirement for rendered UI, not a debugging option. UI-only: one
+desktop `pal_screenshot`. Behavior-only: one `pal_exercise`. Both: one of each. A WEB pal whose
+change is markup/CSS/JS/responsive/interactive needs real browser evidence too — `pal_fetch` proves
+server-rendered text only; use `pal_screenshot`, or `pal_exercise` with `browser:true` when the
+behavior is JS/DOM/async. Keep `pal_fetch` for plain server-rendered text assertions. Merge same-page assertions into one exercise flow. Mobile screenshots are final-review-only — but final review is refused without it (`palsync review check` requires clean desktop+mobile captures per reviewed route), so budget the mobile pass into the review phase, ahead of writing REVIEW.md. A clean capture has `renderError:null`, loaded CSS, zero pal-content audit errors, and pixel critique. Apply `../../shared/references/console-chrome-exception.md` only with quoted sample evidence.
 
 ## UI screenshot rubric and fast re-check
 
@@ -30,6 +34,8 @@ server notes are clean, skip duplicate `pal_test` and re-check with
 Read `../../pal-review/references/console-render-verification.md`. A render error fails even after a clean compile. If capture is unavailable, record a `HUMAN GATE` naming what must be checked.
 
 Branch recovery (from `pal_screenshot`):
+- `captured:false` + `category:"targeting"` → you screenshotted the wrong screen. Fix the `action`/`params`/`expect`, re-capture; it counts for nothing.
+- `captured:true` + `stateVerified:null` → the image is not proven to be the screen you targeted; re-run with `expect:[...]`.
 - `captured:true` + `renderError` non-null → the workflow compiled but threw while rendering — fix, push, screenshot again; `pal_test` passing does NOT clear it.
 - `captured:true` + `renderError` null → judge the image against §12 VISUAL → `done`.
 - `captured:false` → do NOT guess from HTML: run `palsync task <id> needs-human --reason "HUMAN GATE: <what the human must confirm>" --tried "<command + error>"`, naming exactly what to eyeball. Continue with independent tasks. (Full rule: `../../pal-review/references/console-render-verification.md`.)
@@ -37,6 +43,15 @@ Branch recovery (from `pal_screenshot`):
 ## Exercise authoring
 
 Full rules: `../../shared/references/exercise-authoring.md`.
+
+### Console targeting
+
+A console/transaction pal reaches its FIRST screen through `initial:{action, params, expect}` — the
+action takes the `c:a` form (`"openClientSetup"` or `"openClientSetup?id=9"`). Every later screen is
+reached by clicking the rendered link text. A step-level `action`/`page` is rejected on a console pal
+(it has no dispatch mechanism there), never accepted and ignored. No step runs until `initial.expect`
+is actually visible; if it is not, the result is `category:"targeting"` with zero steps run and
+nothing mutated.
 
 ### Exercise failures
 

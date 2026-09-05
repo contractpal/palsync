@@ -197,6 +197,10 @@ test("platform chrome and screenshot auth failures are classified as tool eviden
         "verification owner must route platform-chrome handling to its owner");
     mustMatch(renderRule, /(?:login|auth)[^\n]*(?:redirect|expired|wrong page)|(?:redirect|wrong page)[^\n]*(?:login|auth)/i,
         "render verification must classify login/auth redirects as failed evidence");
-    mustMatch(renderRule, /(?:captured|final)\s+(?:URL|url)|URL[^\n]*(?:captured|final)/,
-        "render verification must require checking the final captured URL");
+    // Not the URL: c:a navigation leaves window.location stale (palbuilder-frontend
+    // references/platform-facts.md), so rendered text is the console state oracle.
+    mustMatch(renderRule, /stateVerified/,
+        "render verification must require checking that the captured screen is the requested one");
+    mustMatch(renderRule, /expect:\[/,
+        "render verification must tell the agent to declare the expected visible strings");
 });

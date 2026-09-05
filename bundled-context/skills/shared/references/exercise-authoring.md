@@ -10,8 +10,10 @@ visible click label, and row/card container used by `within`. Do not discover se
 exercise calls; a failed call stops at its first failure and later steps do not run.
 
 Batch a create → edit → delete flow into one `steps` call. Web steps use
-`{action, params, expect}`; console steps use `{fill:{name:value}, click:"<exact link text>", expect:[...]}`.
-A console opens on its list view, so click Add/Create before filling the create form. Split flows longer
+`{action, params, expect}`; console steps use `{fill:{name:value}, click:"<exact link text>", expect:[...]}`
+and select their first screen with `initial:{action, params, expect}` — a step-level `action`/`page`
+is rejected on a console pal. A console opens on its list view, so click Add/Create before filling
+the create form. Split flows longer
 than 10 steps. For every spec effect, read the record back and assert every named field, including fields
 not rendered by the default fragment.
 
@@ -21,7 +23,7 @@ Use unique `{{runId}}` data for every created record and subsequent expectation.
 actions through the identifying cell with
 `within: 'tr:has([data-label="Name"]:has-text("{{runId}}"))'` or an equivalent unique card selector.
 Unscoped duplicate-text clicks, the first matching action, list order, and a shared-name `:has-text()`
-scope are ambiguous. Console workflows use fill/click, not web action/page steps.
+scope are ambiguous. Console workflows use fill/click for every screen after the first, and `initial` for the first.
 
 Use full unique edit values such as `Old {{runId}}` and `New {{runId}}`; neither may be a substring of
 the other. An input `value` is not visible text, and CSS `text-transform` does not change source casing.
