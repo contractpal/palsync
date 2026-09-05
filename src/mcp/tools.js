@@ -1872,19 +1872,19 @@ const TOOLS = [
     },
     {
         name: "pal_push",
-        description: "Push local changes after validating changed files and cross-file contracts. Validation errors cannot be bypassed; force:true handles server drift only. Warnings never block. Refuses locks unless the user supplies the exact typed override. Standalone pal_validate checks the whole workspace; this gate does not re-block pre-existing errors in untouched files.",
+        description: "Push local changes after validating changed files and cross-file contracts. Validation errors cannot be bypassed; force:true handles server drift only. Warnings never block. Refuses locks unless the user supplies the exact typed override. Standalone pal_validate checks the whole workspace; this gate does not re-block pre-existing errors in untouched files. When the response reports sourceControlEnabled:true, decide for yourself (the developer never sees or writes this) whether this push is a completed piece of work or just exploratory/testing: for completed work, pass commitMessage with a concise summary of what changed and why — it is recorded verbatim, prefixed \"Chip: \"; for exploratory/testing pushes, omit it. commitMessage is ignored (never sent) when sourceControlEnabled is false — don't bother passing it.",
         // skipValidation is deliberately NOT in inputShape (the MCP layer strips unknown keys, so
         // agents cannot pass it). In the test-06 haiku run the agent read the "call pal_push with
         // skipValidation:true" hint in this tool's refusal message, decided the validator was
         // "overly cautious", and pushed past 9 real errors six times in a row. Agents fix errors.
         // run() still accepts it because the CLI's --skip-validation flag (human escape hatch)
         // calls run() directly, bypassing the MCP schema.
-        inputShape: Object.assign({ force: z.boolean().optional(), confirmOverride: z.string().optional() }, diagnosticInputShape),
+        inputShape: Object.assign({ force: z.boolean().optional(), confirmOverride: z.string().optional(), commitMessage: z.string().optional() }, diagnosticInputShape),
         async run(ctx, args = {}) {
-            const { force = false, confirmOverride, skipValidation = false } = args;
+            const { force = false, confirmOverride, skipValidation = false, commitMessage = null } = args;
             const palName = ctx.record.palName;
             const overrideLock = confirmOverride === overridePhrase(palName);
-            const res = await push(ctx.session, ctx.record, ctx.workspaceDir, { force: !!force, overrideLock, skipValidation: !!skipValidation });
+            const res = await push(ctx.session, ctx.record, ctx.workspaceDir, { force: !!force, overrideLock, skipValidation: !!skipValidation, commitMessage });
             // Pre-push lint refusal: errors found, push not attempted.
             if (res.refused === "validation") {
                 const source = Object.assign({ ok: false, cacheHits: null, cacheMisses: null }, res.lint);
@@ -1916,13 +1916,16 @@ const TOOLS = [
                     ? "\n\nPruned phantom folder registrations:\n" +
                       res.prunedFolders.map(f => "   - " + f.folderType + "/" + f.name + " (" + f.reason + ")").join("\n")
                     : "";
+                const commitBlock = res.commitMessage
+                    ? "\n\n📝 Recorded as a commit: \"" + res.commitMessage + "\""
+                    : "";
                 const findings = (res.lint && res.lint.findings || [])
                     .concat(serverFindings(res.validation, true), pushVisibilityFindings(res));
                 const source = Object.assign({}, res, {
                     ok: true,
                     filesChecked: res.lint ? res.lint.filesChecked : null,
                     findings,
-                    debug: [folderBlock, skippedBlock, warnBlock, webBlock, consoleBlock].filter(Boolean).join("\n") || null
+                    debug: [folderBlock, skippedBlock, warnBlock, webBlock, consoleBlock, commitBlock].filter(Boolean).join("\n") || null
                 });
                 const projection = pushEnvelopeProjection(source);
                 const out = Object.assign({
@@ -1931,7 +1934,9 @@ const TOOLS = [
                     filesPushed: res.filesPushed,
                     newMarker: res.newMarker,
                     webRegistered: res.webRegistered || null,
-                    consoleRegistered: res.consoleRegistered || null
+                    consoleRegistered: res.consoleRegistered || null,
+                    sourceControlEnabled: res.sourceControlEnabled,
+                    commitMessage: res.commitMessage || null
                 }, envelopeFields(ctx.workspaceDir, "pal_push", source, args, projection));
                 out.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, {
                     tool: "pal_push",

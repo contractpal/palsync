@@ -1109,7 +1109,7 @@
   {
     "name": "pal_push",
     "title": "Push pal changes",
-    "description": "Push local changes after validating changed files and cross-file contracts. Validation errors cannot be bypassed; force:true handles server drift only. Warnings never block. Refuses locks unless the user supplies the exact typed override. Standalone pal_validate checks the whole workspace; this gate does not re-block pre-existing errors in untouched files.",
+    "description": "Push local changes after validating changed files and cross-file contracts. Validation errors cannot be bypassed; force:true handles server drift only. Warnings never block. Refuses locks unless the user supplies the exact typed override. Standalone pal_validate checks the whole workspace; this gate does not re-block pre-existing errors in untouched files. When the response reports sourceControlEnabled:true, decide for yourself (the developer never sees or writes this) whether this push is a completed piece of work or just exploratory/testing: for completed work, pass commitMessage with a concise summary of what changed and why — it is recorded verbatim, prefixed \"Chip: \"; for exploratory/testing pushes, omit it. commitMessage is ignored (never sent) when sourceControlEnabled is false — don't bother passing it.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1117,6 +1117,9 @@
           "type": "boolean"
         },
         "confirmOverride": {
+          "type": "string"
+        },
+        "commitMessage": {
           "type": "string"
         },
         "detail": {

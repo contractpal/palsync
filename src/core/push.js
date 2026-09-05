@@ -297,7 +297,7 @@ function normalizeValidation(resp) {
 
 // Pushes workspaceDir to the pal identified by record.palGuid. Mutates record.lastModifiedDate
 // on success. Returns a result object (never throws on drift/lock — returns a refusal).
-async function push(session, record, workspaceDir, { force = false, overrideLock = false, skipValidation = false } = {}) {
+async function push(session, record, workspaceDir, { force = false, overrideLock = false, skipValidation = false, commitMessage = null } = {}) {
     // 0) PRE-PUSH LINT (offline): catch the mistakes that silently break in PalBuilder (invalid
     //    workflow JS, bad markup) BEFORE spending a network round-trip. ERRORS block unless
     //    skipValidation is set; WARNINGS never block. The gate holds the agent responsible only
@@ -349,8 +349,14 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
     const webRegistered = ensureWebRegistration(pal);
     const consoleRegistered = ensureConsoleRegistration(pal);
 
+    // sourceControlEnabled comes from the same GetPal response the lock acquisition already
+    // fetched (lk.getPalResp) — no extra round-trip. When false the server doesn't understand
+    // Source-Commit headers, so none are sent regardless of commitMessage.
+    const sourceControlEnabled = !!(lk.getPalResp && lk.getPalResp.sourceControlEnabled);
+    const finalCommitMessage = (sourceControlEnabled && commitMessage) ? "Chip: " + commitMessage : null;
     const injected = await pal.injectFileContent();
-    const saveResp = await CloudPistonAPIManager.savePal(session, pal, id);
+    const saveResp = await CloudPistonAPIManager.savePal(session, pal, id,
+        { sourceControlEnabled, commitMessage: finalCommitMessage });
     const validation = normalizeValidation(saveResp);
     const success = !!(saveResp && saveResp.success);
 
@@ -379,7 +385,8 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
     return { pushed: success, refused: success ? undefined : "save-rejected",
              forced: !!force, filesPushed: injected.length, strayCreatable, validation,
              newMarker: record.lastModifiedDate, skipped, lint, skippedValidation: skipValidation && lint.errors > 0,
-             serverPaths: pushedPaths, webRegistered, consoleRegistered, prunedFolders };
+             serverPaths: pushedPaths, webRegistered, consoleRegistered, prunedFolders,
+             sourceControlEnabled, commitMessage: finalCommitMessage };
 }
 
 module.exports = { push, buildSaveTask, normalizeValidation, gateLint, guardWorkflows, guardUncreatableTypes, findStrayCreatable, ensureWebRegistration, ensureConsoleRegistration };
