@@ -5,185 +5,116 @@ description: "Load for visible UI implementation or UI review. Enforces an exist
 
 # Design Build
 
-Build UI that conforms to the design system, decomposes cleanly, defines its interaction states, and passes review before shipping. First-pass AI output is mediocre; quality comes from up-front architecture and end self-critique.
+Use for visible UI implementation or review. Do not load for non-visible backend work.
+Build from the local design system, not a generic aesthetic. First-pass output is a draft;
+structure, states, and visual evidence make it shippable.
 
-## UI task contract — use this before the long reference material
+## UI task contract
 
-Weak models do better with a small executable contract than with vague requests to "make it
-modern." For every visible task:
+For every visible task:
 
 1. **Classify** the surface: marketing, CRUD/admin, dashboard/data, or form flow.
-2. **Brief** it in six lines before code: user; primary job; primary action; information order;
-   density; one deliberate visual idea. This can live in the task/checkpoint; do not create a new
-   artifact for a tiny edit.
-3. **Select recipes**, then build. Load `marketing-library.md` only for marketing; load
-   `component-library.md` for operational UI. Do not blend both visual profiles.
-4. **Close the loop**: implement default + applicable loading/empty/error/success states; run the
-   functional checks; capture desktop and mobile; inspect pixels plus `designAudit`; fix the three
-   highest-impact failures; capture the changed viewport again; re-run behavior after visual edits.
-5. **Keep the best checkpoint.** A functional fix can damage layout. Compare the final render to
-   the last clean render and do not ship a visual regression.
+2. **Brief** in six lines before code: user; primary job; primary action; information order;
+   density; one deliberate visual idea. Put this in the task/checkpoint for a tiny edit.
+3. **Select recipes, then build.** Marketing communicates audience, outcome, proof, and next
+   action; operational UI makes the next decision or action fast. Read `marketing-library.md`
+   only for marketing and `component-library.md` for operational UI; do not blend profiles.
+4. **Close the loop.** Implement default plus applicable loading, empty, error, and success
+   states; run functional checks; render desktop and mobile; inspect pixels and `designAudit`;
+   fix the highest-impact failures; rerender every changed viewport; rerun behavior after visual
+   edits.
+5. **Keep the best checkpoint.** Compare the final render to the last clean render; do not ship a
+   visual regression.
 
-Hard gates — any failure means the visible task is not done:
-- Primary journey works end to end; no runtime/render error.
-- No unintended horizontal overflow at desktop or mobile.
-- Inputs have visible associated labels; keyboard focus is visible; action targets are usable.
-- Applicable empty/error/success/destructive states are present and understandable.
-- Exactly one page-level H1 and one primary action per action group.
-- Both desktop and mobile screenshots were actually inspected; `designAudit.errors` is zero.
+Hard completion gates — a visible task is not done unless:
 
-### Archetype profile
-
-| | Marketing | CRUD/admin and data tools |
-|---|---|---|
-| First job | Communicate audience, outcome, proof, next action | Make the next operational decision/action fast |
-| Type scale | Fluid display H1, usually 48-72px desktop | Product H1, usually 28-40px; never hero scale |
-| Density | Spacious but every blank area must pace or group content | Productive; controls about 40-44px and rows about 44-52px |
-| Composition | Vary by content: split, process, proof, comparison, editorial | Header/action -> filters -> data; bounded single-column forms by default |
-| Actions | One clear CTA + quieter secondary | Save primary + Cancel secondary; destructive action separated |
-| Avoid | Floating pill nav, giant empty hero, three-card-only page, repeated dark CTA slabs | Bare controls, inline labels, raw action links, giant headings, sparse cards |
+- The primary journey works end to end with no runtime/render error.
+- Desktop and mobile have no unintended horizontal overflow.
+- Labels, visible keyboard focus, and usable action targets pass the applicable checks.
+- Applicable empty, error, success, and destructive states are understandable.
+- There is exactly one page-level H1 and one primary action per action group.
+- Both screenshots were inspected and `designAudit.errors == 0`.
 
 ## Step 0 — Load the system
 
-- Read `DESIGN_SYSTEM.md` and `COMPONENTS.md`. If absent and the task is non-trivial, recommend `design-system-init` first — building without a system drifts to generic output. If the user proceeds anyway, infer a minimal system from existing code and state your assumptions.
-- Look at `design/refs/` if present. Read the images, not just tokens — they encode composition and restraint tokens can't. **When references exist they are the primary design authority — the inspiration above all else.** Build toward how they look and feel; where a reference and a default choice disagree, the reference wins. Express the result in the pal-owned `styles/styles.css`, never by loading the reference catalog or flattening the reference back to a default.
-    - **Audit the CSS selection.** `design-system.css` is a reference-only parts catalog, not a
-      runtime file. The pal must not contain, register, link, or load it. Its
-      `styles/styles.css` must contain only dependency-complete tokens/base/component rules with real
-      consumers in current markup. Remove unused presets, dark-theme blocks, and component families.
-      Copy only the needed rules and dependencies; never copy unused components "just in case."
-- Verify page shell resource order against `../shared/references/css-conventions.md`: spacing before authored CSS, each used behavior script once, and no Bootstrap merely for spacing.
-- Fontshare loads through an `@import` at the top of `styles.css`; never add remote page-head font
-  resources or copy an unused import. Console pals use the system font stack and no Fontshare import;
-  `design-system-init` owns the literal stack. Marketing/web pals keep the Fontshare default.
-- For non-trivial UI, read `../design-system-init/references/design-principles.md` before building
-  or reviewing. It is the practical checklist for hierarchy, UX flow, Gestalt grouping, Fitts target
-  sizing, typography, color meaning, consistency, and simplicity.
-- For Palbuilder UI, read `../design-system-init/references/component-library.md` before implementing any non-trivial app/console component, or `../design-system-init/references/marketing-library.md` for marketing sections (hero, bento, pricing, testimonials, logo cloud, CTA, stats, mockups). Copy the selected recipe's CSS and dependencies from the reference catalog into `styles.css`; never copy unrelated families. Pair either with `palbuilder-frontend/references/c-tags.md` before using any `c:` attribute you have not verified.
-- Before styling any control, check whether COMPONENTS.md or the reference catalog already defines
-  its recipe. Copy catalogued recipes verbatim; a hand-rolled version of an existing component is a
-  review defect.
-- Enforce the current palsync visual stack unless the project explicitly overrides it: system or Fontshare typography, inline SVG icons from one approved family (Iconoir, Heroicons, or Phosphor), and `scripts/pb-motion.js` data attributes for scripted animation — no other motion library. Always grab the SVG version; see component-library.md Icons.
-- Chart.js is optional and only for chart-heavy pals: platform `<c:resource source="chartjs"
-  version="4.0.0" name="chart.js" />` plus opt-in `scripts/pb-charts.js`; it is not part of the
-  core four-file byte-identity set.
+1. Read `DESIGN_SYSTEM.md` and `COMPONENTS.md`, then inspect visual references in `design/refs/`
+   when present. References are the primary design authority: read the images, build toward their
+   composition and restraint, and let a reference beat a default choice.
+2. If the system is absent for non-trivial work, recommend `design-system-init`. If the user
+   proceeds, infer a minimal system from existing code and state the assumptions.
+3. Read `../shared/references/css-conventions.md`, then
+   `../design-system-init/references/design-principles.md` for hierarchy, grouping, target sizing,
+   typography, and responsive/accessibility guidance.
+4. Read `../design-system-init/references/component-library.md` for operational UI or
+   `../design-system-init/references/marketing-library.md` for marketing. Select a deliberate
+   recipe before styling; use the local component inventory before creating a variant.
+5. For PalBuilder markup, fragments, JEXL, or unfamiliar `c:` attributes, load
+   `../palbuilder-frontend/SKILL.md` and `../palbuilder-frontend/references/c-tags.md`.
+
+`design-system.css` is a **reference-only** parts catalog. Put only the selected, dependency-complete
+rules needed by current markup in pal-owned `styles/styles.css`; never copy, register, link, load, or
+ship `design-system.css` as runtime code. The libraries own exact recipes, resource/font/icon/motion
+rules, and catalog-selection details.
 
 ## Vision routing
 
-Reading `design/refs/` (Step 0) and critiquing rendered output (Step 4) require *seeing* pixels; the review gate is only meaningful against a rendered screenshot, not source. If the executing model can't accept images, route those steps to a vision-capable model and act on its findings. Canonical protocol: **read `../design-system-init/references/vision-routing.md`**.
+Steps 0 and 4 require pixels, not filenames or source guesses. If the executing model cannot inspect
+images, route reference reading and rendered-output critique to a vision-capable model; follow
+`../design-system-init/references/vision-routing.md`.
 
-## Step 1 — Decompose before you build
+## Step 1 — Decompose before building
 
-Use design restraint in order: remove only content unrelated to the user's current job; stage complexity through progressive disclosure; preserve usable target size/proximity; keep title/object/status/primary action/feedback/next step obvious; reuse local tokens and components before one-off CSS. The cleanest interface makes the next correct action easiest.
+Plan structure before code: map primitives → composites → layout shells to `COMPONENTS.md`; define
+interfaces and state ownership; reuse rather than fork near-duplicates. For non-trivial work, state
+the component breakdown before producing a wall of code. Read `design-principles.md` for the user
+journey, attention order, progressive disclosure, and grouping decisions.
 
-Plan structure first — one giant file is the top driver of AI-looking, unmaintainable UI.
+## Step 2 — Build to tokens and recipes
 
-- Break the target into atomic units mapped to `COMPONENTS.md`: primitives (Button, Input, Card...) → composites (form row, list item, nav) → layout shells. Units map to functions, classes, partials, or components — any stack.
-- Define each unit's interface before implementing: what it receives, its variants, what it renders. Decide where state lives; keep presentational units free of business logic.
-- Reuse before you create — don't fork a near-duplicate (a slop tell).
-- For non-trivial work, state the component breakdown before generating a wall of code, so a wrong structure is caught cheaply.
+Use semantic tokens; when the system lacks a needed value, add a named token rather than hardcoding
+one. Copy the selected library recipe and only its needed dependencies into `styles/styles.css`.
+Read the applicable library for component inventory and recipes; read `design-principles.md` for
+hierarchy, density, and layout posture.
 
-## Step 2 — Build to the tokens
+## Step 3 — Implement applicable states
 
-- Consume semantic tokens; never use arbitrary raw values (hex codes, off-scale spacing, one-off font sizes) when a token exists.
-- Pull the component recipe you need from the appropriate library, including only its required
-  tokens/base rules, and place it in `styles/styles.css` using human-readable blocks and comments.
-  That pal-owned file is the implementation surface; the full reference file never ships.
-- If the design needs a value the system lacks, add it as a named token, don't hardcode inline — the system stays the source of truth.
-- Get hierarchy from the system's stated mechanism — often spacing and size before weight, weight before color. A new accent color for emphasis usually means the spacing is wrong.
-- Honor the stated density and layout posture. If the system says airy, generous whitespace is the design; if it says break the grid, do so deliberately — uniform even spacing reads as templated.
-- Use the project's component inventory first. If no local component exists, adapt the closest recipe from `component-library.md` and record it in `COMPONENTS.md` when it becomes reusable.
-- If the screen needs a common modern primitive, do not improvise it from a bare card. Check for button group, dropdown/menu, drawer, command palette, combobox, accordion, segmented control, date picker, data-grid affordance, kanban, comments, attachments, code block, metrics panel, or review checklist recipes first.
-- Build the hierarchy path explicitly: title/object/status/first decision/primary action/feedback/next step. If those are not visible at a glance, fix composition before polishing color or shadows.
+Implement the full applicable state set for each element, not only resting: focusable controls need
+visible `focus-visible`; data and async surfaces need the applicable loading, empty, error, success,
+permission, and destructive states. Read `design-principles.md` and the selected library for state,
+motion, reduced-motion, accessibility, form, and table details.
 
-## Step 3 — Define every interaction state
+## Step 4 — Review gate
 
-Unstated states are where AI output gives itself away — implement the full applicable set per element, not just resting:
+Treat the first output as a junior draft. Render first: capture desktop and mobile, inspect
+`designAudit`, then inspect pixels. Fix high-impact failures, rerender every changed viewport, and
+rerun functional checks. Score the final render with
+`../shared/references/visual-rubric.md`; cite screenshot evidence. Fix failures or explicitly state
+why they remain, and report changes.
 
-- **default, hover, focus-visible, active, disabled** — always, for anything clickable or focusable.
-- **loading, error, empty** — wherever data or async work is involved; empty states are routinely skipped and routinely matter.
-- Transitions restrained and consistent (one duration scale, purposeful easing), per the system's motion tokens. Respect `prefers-reduced-motion`.
-- `focus-visible` is not optional. Keyboard users need a visible focus indicator that meets contrast; never remove outlines without replacing them.
+Read, when triggered:
 
-## Step 4 — The review gate (mandatory before "done")
-
-Treat your first output as a junior draft; review it like a demanding senior designer. Fix what fails, then hand off.
-
-**Render first.** Source review catches token violations but misses how it looks — where slop lives.
-For page-level work, capture both desktop and mobile. Read `designAudit` before subjective critique;
-its overflow, label, heading, target, skip-link, and action-affordance findings are external evidence,
-not optional suggestions. Then inspect the pixels. If rendering is genuinely impossible here, say
-so, run the code-level checks below, and flag that visual checks were skipped rather than silently
-passing them.
-
-For platform-chrome findings outside `#cp-root`, apply only the evidence-gated exceptions in `../shared/references/console-chrome-exception.md`.
-
-Score every render with the canonical seven-dimension ship gate in `../shared/references/visual-rubric.md`; cite screenshot evidence for every score.
-
-**Against the design system**
-- Does every color, space, size, and radius come from a token? Flag any arbitrary value.
-- Is hierarchy created by the system's intended mechanism, or did you reach for color/weight as a shortcut?
-- Do density and layout posture match the system's stated intent?
-
-**Against structure**
-- Decomposed per `COMPONENTS.md`, or collapsed into a monolith?
-- Any near-duplicate components that should be one?
-- Page content sits inside the shell's `pb-main`; fragment root is `pb-section`; sibling blocks are separated by layout primitives (`pb-stack`/`pb-cluster`/grid gaps), never touching and never spaced by hand-written margins.
-- Do Gestalt grouping rules make relationships obvious: proximity for labels/errors, similarity for
-  same-role controls, common regions only where needed, and clear figure-ground for overlays?
-
-**Against interaction**
-- Does every interactive element define its full state set, including focus-visible, disabled, loading, error, and empty where relevant?
-- Keyboard-operable? Contrast adequate for text and focus indicators?
-- Are frequent and primary actions large enough and near the user's likely path? Are destructive
-  actions separated enough to avoid accidental activation?
-- In every data-table Actions cell, are multiple controls wrapped by `.pb-row-actions` (never
-  merely given button classes)? Are state transitions mutually exclusive in the rendered row —
-  for example, available shows Check out while checked-out shows Check in, never both together?
-- Is complexity staged with progressive disclosure instead of dumped on the default view or removed
-  from the workflow?
-- Palbuilder-specific: no undocumented `c:` attributes, no inline scripts in fragments, no `onclick` on `c:a`, no ARIA attributes on `c:field`, and direct `${row.field}` access inside `c:list`.
-
-**Against anti-slop fingerprints**
-- Check generic gradient-blob hero, pill-everything uniform radius, and three-card-row-as-only-idea;
-  read `../shared/references/anti-slop.md` for the full list.
-- Does it resemble the references in feel, or just in surface palette?
-- Would it look credible next to shadcn/ui, Radix/Headless examples, or a mature product system like Polaris, Carbon, or Atlassian? If not, identify whether the failure is coverage, density, type, iconography, spacing, interaction states, or motion.
-- Palbuilder-specific modernity: no icon fonts, no Google Fonts default, no Lucide leftover unless the project explicitly chose it, no inline animation scripts, no giant tool-surface headings, and no flat teal-gray admin output without a product rationale.
-
-Report what you changed. If a check fails and you chose not to fix it, say why.
+- `../shared/references/console-chrome-exception.md` for platform chrome or platform-injected
+  findings outside `#cp-root`; only its evidence-gated exceptions are allowed.
+- `../design-system-init/references/design-principles.md` and the selected library for system,
+  structure, interaction, responsive, and accessibility review.
+- `../shared/references/anti-slop.md` for generic-output fingerprints and their remedies.
+- `../palbuilder-frontend/SKILL.md` and `c-tags.md` for PalBuilder markup constraints. For data-table
+  action cells, use `.pb-row-actions` and render only actions valid for the row's current state;
+  conflicting transitions must be mutually exclusive.
 
 ## Polish vocabulary
 
-Use precise, operational language — vague adjectives produce vague edits. Translate "make it better" into specific moves:
+Turn vague feedback into an operation:
 
-- "Information density is too low — tighten padding on list items to the next step down the spacing scale."
-- "Muted text is failing contrast — move it up one step toward the text token."
-- "Hierarchy is flat — increase the size jump between heading and body rather than bolding more."
-- "This transition is jarring — bring it to the standard duration token with ease-out."
-- "Spacing rhythm is irregular — snap all gaps to the scale."
+- Density too low → tighten list-item padding to the next spacing step.
+- Muted text lacks contrast → move it one text-token step stronger.
+- Hierarchy is flat → increase the heading/body size jump before adding weight.
+- Motion jars → use the standard duration token and ease-out.
+- Spacing rhythm is irregular → snap gaps to the scale.
 
-Apply the same vocabulary to yourself at the review gate.
+## Acceptance
 
-## Acceptance checklist
-- [ ] DESIGN_SYSTEM.md, COMPONENTS.md, and `design/refs/` loaded before building.
-- [ ] `design-system.css` is reference-only and must never be copied, registered, linked, loaded, or shipped; only needed rules go to `styles/styles.css`.
-- [ ] Shell owns `<main id="body" class="pb-main">`; every fragment root is `pb-section`; multi-field forms wrap fields in `pb-stack` or `pb-form-grid`.
-- [ ] Every multi-action table cell uses `.pb-row-actions`; only actions valid for the row's current
-      state render, and desktop/mobile captures show wrapping without collision or overflow.
-- [ ] Applied design-principles review: user journey, hierarchy, grouping, Fitts target sizing,
-      progressive disclosure, typography, color meaning, and consistency.
-- [ ] `component-library.md` (app/console) or `marketing-library.md` (marketing sections) consulted
-      for non-trivial UI and local reusable components recorded back into COMPONENTS.md.
-- [ ] Console pal with no recorded font decision: `styles.css` has no `@import` and
-      `--ds-font-ui` is the system stack.
-- [ ] No leftover scripted-animation vendor file or `<script>` reference remains anywhere in the
-      pal's own files.
-- [ ] Decomposed into atomic units with explicit interfaces; no monolith, no near-duplicates.
-- [ ] All values from tokens; any new need added to the system, not hardcoded.
-- [ ] Every interactive element defines its full state set, including focus-visible and loading/error/empty where relevant.
-- [ ] Review gate run; failures fixed or explicitly justified; changes reported.
-- [ ] Desktop and mobile captures inspected; `designAudit.errors` is zero; any changed viewport
-      was re-captured after fixes and functional checks still pass.
-- [ ] Result resembles the references in feel, not just palette, and trips no anti-slop fingerprints.
-- [ ] Then run every item in `../shared/references/ui-acceptance.md`.
+Before handoff, confirm the system, component inventory, and visual references were loaded; the
+reference catalog was not shipped; the review gate ran with justified exceptions only; and desktop
+and mobile captures were rechecked after fixes with `designAudit.errors == 0`. Then run every item in
+`../shared/references/ui-acceptance.md`.
