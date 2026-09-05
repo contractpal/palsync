@@ -86,8 +86,10 @@ test("validateSteps: rejects non-array, empty, and over-cap", () => {
 test("validateSteps: rejects a do-nothing step, params without action, bad expect", () => {
     assert.ok(validateSteps([{}]).some(p => /does nothing/.test(p)));
     assert.ok(validateSteps([{ params: { id: "1" } }]).some(p => /params but no action/.test(p)));
-    assert.ok(validateSteps([{ click: "Save", expect: [""] }]).some(p => /non-empty strings/.test(p)));
-    assert.ok(validateSteps([{ click: "Save", expect: "Camera" }]).some(p => /non-empty strings/.test(p)));
+    assert.ok(validateSteps([{ click: "Save", expect: [""] }]).some(p => /non-whitespace strings/.test(p)));
+    assert.ok(validateSteps([{ click: "Save", expect: [" "] }]).some(p => /non-whitespace strings/.test(p)));
+    assert.ok(validateSteps([{ click: "Save", absent: ["   "] }]).some(p => /non-whitespace strings/.test(p)));
+    assert.ok(validateSteps([{ click: "Save", expect: "Camera" }]).some(p => /non-whitespace strings/.test(p)));
     assert.ok(validateSteps([{ fill: { a: { nested: true } }, click: "Save" }]).some(p => /string\/number/.test(p)));
     assert.ok(validateSteps([{ within: "tr" }]).some(p => /within but no click/.test(p)));
     assert.ok(validateSteps([{ click: "Save", within: "" }]).some(p => /within must be/.test(p)));
@@ -799,6 +801,18 @@ test("runExercise: invalid steps return {invalid} without any session use", asyn
     assert.strictEqual(res.ran, false);
     assert.strictEqual(res.invalid, true);
     assert.ok(res.problems.length);
+});
+
+test("runExercise: whitespace-only assertions return invalid", async () => {
+    for (const input of [
+        { steps: [{ click: "Save", expect: [" "] }] },
+        { steps: [{ click: "Save", absent: ["   "] }] },
+        { steps: [{ click: "Save" }], initial: { expect: [" "] } }
+    ]) {
+        const res = await runExercise(null, "PAL-X", input);
+        assert.strictEqual(res.status, "invalid");
+        assert.strictEqual(res.invalid, true);
+    }
 });
 
 test("runExercise: lint errors short-circuit before session use", async () => {

@@ -238,6 +238,7 @@ describe("screenshotEvidenceIdentity route identities", () => {
         assert.strictEqual(screenshotEvidenceIdentity({ kind: "console" }), "console:default:entry");
         assert.strictEqual(screenshotEvidenceIdentity({ kind: "console", action: "openClientSetup?id=9" }), "console:default:openClientSetup");
         assert.strictEqual(screenshotEvidenceIdentity({ kind: "console", action: "openClientSetup", paramKeys: ["id", "secret"] }), "console:default:openClientSetup[id,secret]");
+        assert.strictEqual(screenshotEvidenceIdentity({ kind: "console", action: "openClientSetup", paramKeys: ["secret", "id"] }), "console:default:openClientSetup[id,secret]");
         assert.strictEqual(screenshotEvidenceIdentity({ kind: "transaction", workflowName: "setup.wf" }), "transaction:setup.wf:entry");
     });
 });

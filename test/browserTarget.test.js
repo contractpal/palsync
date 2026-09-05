@@ -196,6 +196,12 @@ describe("verifyState — rendered text, never window.location", () => {
         assert.ok(s.expect.every(r => r.found));
     });
 
+    test("a whitespace-only expectation cannot verify the state", async () => {
+        const s = await verifyState(makePage({ text: "anything" }), [" "]);
+        assert.strictEqual(s.verified, false);
+        assert.deepStrictEqual(s.expect, [{ string: " ", found: false }]);
+    });
+
     test("a missing expected string fails verification and reports which one", async () => {
         const s = await verifyState(makePage({ text: "Add Client\nStep 1", headings: ["Add Client"] }), ["Client Setup", "Step 8"]);
         assert.strictEqual(s.verified, false);

@@ -413,7 +413,7 @@ function recordScreenshotEvidence(ctx, { route, viewportName, clean }) {
 function screenshotEvidenceIdentity({ kind, workflowName, page, action, paramKeys } = {}) {
     const norm = (s) => String(s == null ? "" : s).trim();
     const actionName = norm(action).split("?")[0].trim().slice(0, 100);
-    const keys = (Array.isArray(paramKeys) ? paramKeys : []).map(k => norm(k).slice(0, 40)).filter(Boolean).slice(0, 20);
+    const keys = (Array.isArray(paramKeys) ? paramKeys : []).map(k => norm(k).slice(0, 40)).filter(Boolean).sort().slice(0, 20);
     const k = norm(kind).toLowerCase().slice(0, 40);
     if (k === "web" || (!k && !actionName)) {
         const p = norm(page).replace(/^\/+/, "").slice(0, 200);

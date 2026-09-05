@@ -368,8 +368,8 @@ function validateSteps(steps) {
         }
         if (s.params && !s.action) errs.push(at + " has params but no action to send them with");
         for (const k of ["expect", "absent"]) {
-            if (s[k] !== undefined && (!Array.isArray(s[k]) || s[k].some(x => typeof x !== "string" || !x))) {
-                errs.push(at + " " + k + " must be an array of non-empty strings");
+            if (s[k] !== undefined && (!Array.isArray(s[k]) || s[k].some(x => typeof x !== "string" || !x.trim()))) {
+                errs.push(at + " " + k + " must be an array of non-whitespace strings");
             }
         }
         for (const k of ["fill", "params"]) {
@@ -890,18 +890,19 @@ function validateInitial(initial) {
         Object.values(initial.params).some(v => typeof v !== "string" && typeof v !== "number" && typeof v !== "boolean"))) {
         errs.push("initial.params must be an object of name → string/number/boolean value");
     }
-    if (initial.expect !== undefined && (!Array.isArray(initial.expect) || initial.expect.some(x => typeof x !== "string" || !x))) {
-        errs.push("initial.expect must be an array of non-empty strings visible on the intended first screen");
+    if (initial.expect !== undefined && (!Array.isArray(initial.expect) || initial.expect.some(x => typeof x !== "string" || !x.trim()))) {
+        errs.push("initial.expect must be an array of non-whitespace strings visible on the intended first screen");
     }
     // A targeted initial (action/page) must declare what proves it landed: without an expect the
     // exercise would dispatch the targeting navigation and run steps against an UNVERIFIED screen.
     // An expect-only initial stays valid — it verifies the pal's default screen, which needs no
     // targeting navigation to reach. Caught here, in request validation, before any Test/browser
     // work starts.
-    if ((initial.action || initial.page) && !(Array.isArray(initial.expect) && initial.expect.some(x => typeof x === "string" && x.trim()))) {
+    if ((initial.action || initial.page) && (initial.expect === undefined ||
+        (Array.isArray(initial.expect) && initial.expect.every(x => typeof x === "string" && x.trim()) && !initial.expect.length))) {
         errs.push("initial.action/page targets a specific screen, so initial.expect must list at least one non-empty visible string proving that screen — a targeted exercise must verify its initial state before any step runs");
     }
-    if (!initial.action && !initial.page && !(initial.expect && initial.expect.length)) {
+    if (!initial.action && !initial.page && !(Array.isArray(initial.expect) && initial.expect.some(x => typeof x === "string" && x.trim()))) {
         errs.push("initial does nothing — give it an action, a page, or an expect");
     }
     return errs;

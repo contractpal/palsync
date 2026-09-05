@@ -145,11 +145,11 @@ async function observeScreen(pg, boundMs = STATE_TIMEOUT_MS) {
 // caller asked for. Returns verified:null when the caller declared no expectation — that is an
 // honest "not proven", never a pass.
 async function verifyState(pg, expect, boundMs = STATE_TIMEOUT_MS) {
-    const wanted = Array.isArray(expect) ? expect.filter(s => typeof s === "string" && s) : [];
+    const wanted = Array.isArray(expect) ? expect.filter(s => typeof s === "string") : [];
     const observed = await observeScreen(pg, boundMs);
     if (!wanted.length) return { verified: null, expect: [], observed };
     const text = await withBound(Promise.resolve().then(() => pg.innerText("body")), boundMs, "");
-    const results = wanted.map(s => ({ string: s, found: String(text).indexOf(s) !== -1 }));
+    const results = wanted.map(s => ({ string: s, found: !!s.trim() && String(text).indexOf(s) !== -1 }));
     return { verified: results.every(r => r.found), expect: results, observed };
 }
 

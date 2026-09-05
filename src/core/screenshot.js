@@ -460,9 +460,9 @@ async function runScreenshot(session, guid, { page, viewport, fullPage, imageles
                  reservedKey: norm.reservedKey, conflictingKey: norm.conflictingKey };
     }
     const target = norm.target;
-    if (expect != null && (!Array.isArray(expect) || expect.some(s => typeof s !== "string" || !s))) {
+    if (expect != null && (!Array.isArray(expect) || expect.some(s => typeof s !== "string" || !s.trim()))) {
         return { captured: false, available: true, blocked: "invalid-expect",
-                 reason: "expect must be an array of non-empty visible strings that prove the requested screen was reached." };
+                 reason: "expect must be an array of non-whitespace visible strings that prove the requested screen was reached." };
     }
     const wantExpect = Array.isArray(expect) ? expect : [];
     const requestedState = {

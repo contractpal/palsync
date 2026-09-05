@@ -229,5 +229,7 @@ describe("pal_screenshot request validation", () => {
         const h = harness({ pages: [fakePage({ url: "x", text: "" })], tests: [consoleTest()] });
         assert.strictEqual((await runScreenshot({}, "g", { expect: "Client Setup" }, h.deps)).blocked, "invalid-expect");
         assert.strictEqual((await runScreenshot({}, "g", { expect: [""] }, h.deps)).blocked, "invalid-expect");
+        assert.strictEqual((await runScreenshot({}, "g", { expect: [" "] }, h.deps)).blocked, "invalid-expect");
+        assert.strictEqual((await runScreenshot({}, "g", { expect: ["\n"] }, h.deps)).blocked, "invalid-expect");
     });
 });
