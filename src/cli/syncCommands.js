@@ -42,8 +42,8 @@ const USAGE = [
     "                                                               Render the pal (opens console/transaction previews in a browser by default)",
     "  palsync open    [--workflow console|web|transaction] [--keep-lock] [--dir <ws>]",
     "                                                               Open the rendered pal in a real browser window (human review)",
-    "  palsync screenshot [<page>] [--viewport desktop|mobile] [--full-page] [--workflow console|web|transaction] [--workflow-name <name>] [--action <name>] [--param k=v ...] [--keep-lock] [--dir <ws>]",
-    "                                                               Render a pal to a PNG (WEB page via [<page>]; console/transaction action state via --action+--param)",
+    "  palsync screenshot [<page>] [--viewport desktop|mobile] [--full-page] [--workflow console|web|transaction] [--workflow-name <name>] [--action <name>] [--param k=v ...] [--expect <string> ...] [--keep-lock] [--dir <ws>]",
+    "                                                               Render a pal to a PNG (WEB page via [<page>]; console/transaction action state via --action+--param; --expect proves the screen)",
     "  palsync seo-audit [--keep-lock] [--dir <ws>]             On-page SEO audit of a WEB pal's rendered page",
     "  palsync exercise --steps '<json>' | --steps-file <path> [--workflow console|web|transaction] [--viewport desktop|mobile] [--keep-lock] [--dir <ws>]",
     "                                                               Exercise workflow actions end-to-end; assert expect/absent strings in the rendered result",
@@ -78,7 +78,9 @@ const USAGE = [
     "  --viewport         screenshot: desktop (default 1280x800) | mobile (~390x844)",
     "  --full-page        screenshot: capture the whole scroll height, not just the viewport",
     "  --workflow-name    screenshot: workflow name to render (extension stripped consistently)",
-    "  --action           screenshot: console/transaction action (cp-ws-doaction) before capture",
+    "  --action           screenshot/exercise: console/transaction action, c:a form (name or name?key=value)",
+    "  --initial          exercise: JSON first-screen target, e.g. '{\"action\":\"openClientSetup?id=9\",\"expect\":[\"Client Setup\"]}'",
+    "  --browser          exercise: force a real browser for a WEB pal instead of fetch",
     "  --param k=v        screenshot: scalar query param for the action (repeatable; reserved keys refused)",
     "  --expect <str>     fetch/preview: assert the served page contains <str> (repeatable); prints found/missing per string, NOT the HTML",
     "  --selector <css>   fetch/preview: return only that region's markup (simple tag/.class/#id selector)",
@@ -92,7 +94,7 @@ const USAGE = [
 ].join("\n");
 
 function parseFlags(argv) {
-    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, workflowName: undefined, action: undefined, params: undefined, preview: false, open: undefined, skipValidation: false, datasets: undefined, recreate: false, viewport: undefined, fullPage: false, expect: undefined, selector: undefined, maxChars: undefined };
+    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, workflowName: undefined, action: undefined, params: undefined, initial: undefined, browser: false, preview: false, open: undefined, skipValidation: false, datasets: undefined, recreate: false, viewport: undefined, fullPage: false, expect: undefined, selector: undefined, maxChars: undefined };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--force" || a === "-f") flags.force = true;
@@ -108,6 +110,9 @@ function parseFlags(argv) {
         else if (a.startsWith("--workflow=")) flags.workflow = a.slice("--workflow=".length);
         else if (a === "--workflow-name") { flags.workflowName = argv[++i]; if (!flags.workflowName) throw new Error("--workflow-name requires a value"); }
         else if (a.startsWith("--workflow-name=")) flags.workflowName = a.slice("--workflow-name=".length);
+        else if (a === "--browser") flags.browser = true;
+        else if (a === "--initial") { flags.initial = argv[++i]; if (!flags.initial) throw new Error("--initial requires a value"); }
+        else if (a.startsWith("--initial=")) flags.initial = a.slice("--initial=".length);
         else if (a === "--action") { flags.action = argv[++i]; if (!flags.action) throw new Error("--action requires a value"); }
         else if (a.startsWith("--action=")) flags.action = a.slice("--action=".length);
         else if (a === "--param") { const kv = argv[++i]; if (!kv) throw new Error("--param requires key=value"); const eq = kv.indexOf("="); if (eq === -1) throw new Error("--param requires key=value, got " + kv); const k = kv.slice(0, eq); const v = kv.slice(eq + 1); if (!k) throw new Error("--param key must be non-empty"); (flags.params = flags.params || {}); flags.params[k] = v; }
@@ -554,7 +559,8 @@ async function run(cmd, argv, opts) {
         // Workflow-targeting flags mirror the MCP tool: workflow/workflow-name/action/param.
         const res = await toolByName("pal_screenshot").run(ctx, {
             page: flags._positional, viewport: flags.viewport, fullPage: flags.fullPage,
-            workflow: flags.workflow, workflowName: flags.workflowName, action: flags.action, params: flags.params
+            workflow: flags.workflow, workflowName: flags.workflowName, action: flags.action, params: flags.params,
+            expect: flags.expect
         });
         console.log(res.message); // includes the saved PNG path — CLI can't return the image inline
         if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
@@ -575,7 +581,12 @@ async function run(cmd, argv, opts) {
         let steps;
         try { steps = JSON.parse(raw); }
         catch (e) { console.error("--steps is not valid JSON: " + (e && e.message ? e.message : e)); return 1; }
-        const res = await toolByName("pal_exercise").run(ctx, { steps, workflow: flags.workflow, viewport: flags.viewport });
+        let initial;
+        if (flags.initial) {
+            try { initial = JSON.parse(flags.initial); }
+            catch (e) { console.error("--initial is not valid JSON: " + (e && e.message ? e.message : e)); return 1; }
+        }
+        const res = await toolByName("pal_exercise").run(ctx, { steps, initial, browser: flags.browser, workflow: flags.workflow, viewport: flags.viewport });
         console.log(res.message);
         if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
         return res.ran && res.pass ? 0 : 1;
