@@ -893,6 +893,14 @@ function validateInitial(initial) {
     if (initial.expect !== undefined && (!Array.isArray(initial.expect) || initial.expect.some(x => typeof x !== "string" || !x))) {
         errs.push("initial.expect must be an array of non-empty strings visible on the intended first screen");
     }
+    // A targeted initial (action/page) must declare what proves it landed: without an expect the
+    // exercise would dispatch the targeting navigation and run steps against an UNVERIFIED screen.
+    // An expect-only initial stays valid — it verifies the pal's default screen, which needs no
+    // targeting navigation to reach. Caught here, in request validation, before any Test/browser
+    // work starts.
+    if ((initial.action || initial.page) && !(Array.isArray(initial.expect) && initial.expect.some(x => typeof x === "string" && x.trim()))) {
+        errs.push("initial.action/page targets a specific screen, so initial.expect must list at least one non-empty visible string proving that screen — a targeted exercise must verify its initial state before any step runs");
+    }
     if (!initial.action && !initial.page && !(initial.expect && initial.expect.length)) {
         errs.push("initial does nothing — give it an action, a page, or an expect");
     }
@@ -911,11 +919,14 @@ function webInitialPath(start) {
 }
 
 // A structured "you asked for X, the browser showed Y" result. Never PASS, never accepted evidence.
-function initialStateFailure(t, start, state) {
+// potentialMutationStarted tells the caller whether a mutation-capable dispatch (a console
+// cp-ws-doaction navigation or a WEB ?action= navigation) was already issued before the wrong
+// screen rendered — the retry/remediation wording depends on it.
+function initialStateFailure(t, start, state, potentialMutationStarted) {
     return {
         ran: true, kind: t.kind, mode: "browser", pass: false,
         status: "failed", category: "targeting", code: "initial-state-not-reached",
-        retryable: false, potentialMutationStarted: false,
+        retryable: false, potentialMutationStarted: potentialMutationStarted === true,
         requestedState: {
             workflow: t.kind,
             action: start.target ? start.target.action : null,
@@ -933,7 +944,10 @@ function initialStateFailure(t, start, state) {
         reason: "The initial state was never reached, so no step was run.\n  " +
             describeTargetMismatch({ kind: t.kind, action: start.target ? start.target.action : null,
                                      paramKeys: start.target ? start.target.paramKeys : [] }, state),
-        remediation: "Fix the initial action/params (or the pal), then exercise again. No step ran, so nothing was mutated."
+        remediation: "Fix the initial action/params (or the pal), then exercise again." +
+            (potentialMutationStarted === true
+                ? " The initial action may already have executed — inspect current state before retrying."
+                : " No step ran and no mutation-capable action was dispatched.")
     };
 }
 
@@ -952,10 +966,12 @@ async function exerciseByFetch(t, steps, start = null) {
         }
         const chk = checkExpect(landing.html, start.expect || []);
         if ((start.expect || []).length && !chk.pass) {
+            // The initial fetch landed, so if it carried an action (?action=...) that action may
+            // already have executed — never claim pre-action safety here.
             return initialStateFailure(t, start, {
                 expect: chk.results.map(r => ({ string: r.string, found: r.found })),
                 observed: { headings: [], title: landing.title || null }
-            });
+            }, start.target);
         }
     }
     const results = [];
@@ -1019,7 +1035,10 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null) {
                 await (deps.waitForRenderablePage || waitForRenderablePage)(
                     pg, deriveWebBase(pg.url()) + String(webInitialPath(start)).replace(/^\/+/, ""), EXERCISE_NAV_OPTS);
             }
-            : null
+            : null,
+        // The WEB initial action rides the afterLanding navigation (?action=...), so its failure must
+        // never be replayed; a page-only initial navigation is pre-mutation and stays retryable.
+        afterLandingMutates: !!(isWeb && start && start.target)
     }, deps);
 
     const pg = open.pg;
@@ -1027,7 +1046,10 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null) {
     try {
         if (!open.ok) {
             if (open.category === "targeting") {
-                return attachEvidence(initialStateFailure(t, start, open.state), pg, null, events, evidenceTimeout);
+                // open.potentialMutationStarted already reflects whether the initial action navigation
+                // (console cp-ws-doaction or WEB afterLanding ?action=) was issued before the wrong
+                // screen rendered.
+                return attachEvidence(initialStateFailure(t, start, open.state, open.potentialMutationStarted), pg, null, events, evidenceTimeout);
             }
             const failed = {
                 ran: false, kind: t.kind, status: "blocked", category: open.category,
@@ -1203,8 +1225,13 @@ function formatExercise(res) {
         return lines.join("\n");
     }
     if (res.category === "targeting") {
-        // Not a behavior result: no step ran, so nothing about the pal's behavior was proven.
-        const lines = ["pal_exercise — TARGETING FAIL — the initial state was never reached; NO step ran and nothing was mutated",
+        // Not a behavior result: no step ran, so nothing about the pal's behavior was proven. The
+        // mutation line must never claim "nothing was mutated" when the initial action navigation
+        // was already issued — the agent has to inspect current state before retrying.
+        const mutationLine = res.potentialMutationStarted
+            ? "NO exercise step ran. The initial action may already have executed; inspect current state before retrying."
+            : "NO exercise step ran; no mutation-capable action was dispatched.";
+        const lines = ["pal_exercise — TARGETING FAIL — the initial state was never reached; " + mutationLine,
             "  code: " + (res.code || "initial-state-not-reached"),
             "  " + res.reason];
         if (res.remediation) lines.push("  next: " + res.remediation);

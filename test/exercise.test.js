@@ -1234,7 +1234,7 @@ test("pal_screenshot handler records a durable render row with audit findings re
         assert.deepEqual(rows[0], {
             schema: "palsync/tool-evidence/1", tool: "pal_screenshot", successful: true,
             palGuid: "PAL-1", marker: "M1", sourceDigest: "digest-1", ts: rows[0].ts,
-            route: "/board", viewportName: "mobile",
+            route: "page:board", viewportName: "mobile",
             renderClean: true, // audit error present, render itself clean — NOT screenshotClean
             auditErrors: 1,
             auditRules: ["horizontalOverflow", "targetSize"] // both tiers, deduped, info dropped
@@ -1263,7 +1263,7 @@ test("pal_screenshot render error and unavailable browser both leave durable row
         const rows = usage.readToolEvidence(ws);
         assert.equal(rows.length, 1);
         assert.equal(rows[0].viewportName, "desktop");
-        assert.equal(rows[0].route, "/");
+        assert.equal(rows[0].route, "page:/", "a WEB capture with no page keys on the page route");
         assert.equal(rows[0].renderClean, false, "a runtime render error is never a clean render");
     } finally { loaded.restore(); }
 
@@ -1286,7 +1286,7 @@ test("pal_screenshot render error and unavailable browser both leave durable row
         assert.equal(rows[1].renderClean, false);
         assert.equal(rows[1].unavailable, true);
         assert.equal(rows[1].testingDisabled, undefined);
-        assert.equal(rows[1].route, "/board");
+        assert.equal(rows[1].route, "page:board");
     } finally {
         loaded.restore();
         fs.rmSync(ws, { recursive: true, force: true });

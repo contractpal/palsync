@@ -24,9 +24,12 @@ function fakePage({ url = "https://cp.test/console", text = "", headings = [] } 
 
 function deps({ page, kind = "console", tests }) {
     const gotoCalls = [];
-    const state = { gotoCalls, released: 0 };
+    const state = { gotoCalls, released: 0, testsCalled: 0 };
     state.deps = {
-        runTest: async () => (tests ? tests() : { ran: true, validated: true, kind, _previewUrl: "https://cp.test/t.do?cp-auth=S", rawToken: "https://web.test/abc/" }),
+        runTest: async () => {
+            state.testsCalled++;
+            return typeof tests === "function" ? tests() : { ran: true, validated: true, kind, _previewUrl: "https://cp.test/t.do?cp-auth=S", rawToken: "https://web.test/abc/" };
+        },
         loadChromium: () => ({}),
         getBrowser: async () => ({ newContext: async () => ({ newPage: async () => page, close: async () => {} }) }),
         releaseBrowser: () => { state.released++; },
@@ -62,7 +65,7 @@ describe("console actions cannot be silently ignored", () => {
 
     test("initial.page is rejected on a console pal", async () => {
         const h = deps({ page: fakePage({ text: "ok" }) });
-        const res = await runExercise(null, "g", { steps: [{ expect: ["ok"] }], initial: { page: "x" }, workflow: "console" }, h.deps);
+        const res = await runExercise(null, "g", { steps: [{ expect: ["ok"] }], initial: { page: "x", expect: ["ok"] }, workflow: "console" }, h.deps);
         assert.strictEqual(res.status, "invalid");
         assert.match(res.problems[0], /initial\.action/);
     });
@@ -93,19 +96,23 @@ describe("initial target establishment", () => {
         assert.strictEqual(res.code, "initial-state-not-reached");
         assert.strictEqual(res.stateVerified, false);
         assert.deepStrictEqual(res.steps, [], "no step ran");
-        assert.strictEqual(res.potentialMutationStarted, false);
+        // The cp-ws-doaction navigation WAS issued before the wrong screen rendered, so the action
+        // may have executed — the result must never claim pre-mutation safety.
+        assert.strictEqual(res.potentialMutationStarted, true);
         assert.deepStrictEqual(res.requestedState.paramKeys, ["id"]);
         assert.deepStrictEqual(res.observedState.headings, ["Add Client"]);
         const report = formatExercise(res);
         assert.match(report, /TARGETING FAIL/);
-        assert.match(report, /NO step ran/);
+        assert.match(report, /NO exercise step ran/);
+        assert.match(report, /may already have executed/);
+        assert.ok(!/nothing was mutated/.test(report));
         assert.ok(!/PASS/.test(report));
     });
 
     test("an initial action conflicting with initial params is rejected before any browser work", async () => {
         const h = deps({ page: fakePage({ text: "ok" }) });
         const res = await runExercise(null, "g", {
-            steps: [{ expect: ["ok"] }], initial: { action: "openClient?id=9", params: { id: 10 } }, workflow: "console"
+            steps: [{ expect: ["ok"] }], initial: { action: "openClient?id=9", params: { id: 10 }, expect: ["ok"] }, workflow: "console"
         }, h.deps);
         assert.strictEqual(res.status, "invalid");
         assert.match(res.problems[0], /initial: Param "id"/);
@@ -115,7 +122,9 @@ describe("initial target establishment", () => {
     test("{{runId}} is substituted into initial params", async () => {
         const h = deps({ page: fakePage({ text: "ok", headings: [] }) });
         const res = await runExercise(null, "g", {
-            steps: [{ expect: ["ok"] }], initial: { action: "find", params: { q: "Rec {{runId}}" } }, workflow: "console"
+            // expect "ok" proves the substituted initial state actually landed (the fake page
+            // renders it), instead of relying on the old stateVerified:null "not proven" pass.
+            steps: [{ expect: ["ok"] }], initial: { action: "find", params: { q: "Rec {{runId}}" }, expect: ["ok"] }, workflow: "console"
         }, h.deps);
         assert.strictEqual(res.status, "passed");
         const dispatched = new URL(h.gotoCalls[0]).searchParams.get("cp-ws-doaction");
@@ -160,6 +169,11 @@ describe("initial state on WEB", () => {
             }, h.deps);
             assert.strictEqual(res.category, "targeting");
             assert.deepStrictEqual(res.steps, []);
+            // A page-only initial is a pure route fetch — no action was ever dispatched, so the
+            // failure provably mutated nothing.
+            assert.strictEqual(res.potentialMutationStarted, false);
+            const report = formatExercise(res);
+            assert.match(report, /no mutation-capable action was dispatched/);
         } finally { preview.openInstanceSessionFromTest = original; }
     });
 
@@ -177,6 +191,73 @@ describe("initial state on WEB", () => {
             webInitialPath({ page: "list.pal", target: { action: "openThing", params: { id: "9" } } }),
             "list.pal?action=openThing&id=9");
     });
+
+    test("a WEB initial action failure is never replayed (afterLanding mutation boundary)", async () => {
+        const h = deps({ page: fakePage({ url: "https://web.test/abc/index.html", text: "Equipment List" }), kind: "web" });
+        let calls = 0;
+        h.deps.waitForRenderablePage = async (_pg, url) => {
+            calls++;
+            if (calls === 2 && String(url).includes("?action=openThing")) {
+                // Call 1 (the token bootstrap) succeeded; call 2 is the action-bearing afterLanding
+                // navigation — the mutation itself. Record its URL, then fail it.
+                h.gotoCalls.push(url);
+                throw new Error("action navigation boom");
+            }
+            h.gotoCalls.push(url);
+        };
+        const res = await runExercise(null, "g", {
+            steps: [{ expect: ["Equipment List"] }],
+            initial: { action: "openThing", params: { id: 9 }, expect: ["Equipment List"] },
+            workflow: "web", browser: true
+        }, h.deps);
+        assert.strictEqual(res.status, "blocked");
+        assert.strictEqual(res.category, "navigation");
+        assert.strictEqual(h.testsCalled, 1, "an action-bearing failure must never be replayed");
+        assert.strictEqual(h.gotoCalls.filter(u => String(u).includes("?action=openThing")).length, 1, "the action-bearing navigation was issued exactly once");
+        assert.strictEqual(res.retryAttempted, false);
+        assert.strictEqual(res.potentialMutationStarted, true);
+    });
+
+    test("a pre-action WEB initial page failure stays retryable (fresh test, then passes)", async () => {
+        const h = deps({ page: fakePage({ url: "https://web.test/abc/index.html", text: "Equipment List" }), kind: "web" });
+        let calls = 0;
+        h.deps.waitForRenderablePage = async (_pg, url) => {
+            calls++;
+            // Attempt 1: token bootstrap ok (call 1); the page-only afterLanding navigation throws
+            // (call 2) — provably pre-action, so one retry against a fresh test instance is allowed.
+            // Attempt 2 (calls 3-4) succeeds end to end.
+            if (calls === 2) throw new Error("page navigation boom on first attempt");
+            h.gotoCalls.push(url);
+        };
+        const res = await runExercise(null, "g", {
+            steps: [{ expect: ["Equipment List"] }],
+            initial: { page: "equipment.pal", expect: ["Equipment List"] },
+            workflow: "web", browser: true
+        }, h.deps);
+        assert.strictEqual(res.status, "passed");
+        assert.strictEqual(res.retryAttempted, true);
+        assert.strictEqual(h.testsCalled, 2, "a provably pre-action failure mints a fresh test instance");
+        assert.strictEqual(res.potentialMutationStarted, false, "no mutation-capable dispatch ever happened");
+        assert.ok(h.gotoCalls.some(u => String(u).endsWith("equipment.pal")), "the retry re-issued the page navigation");
+    });
+
+    test("WEB targeting failure after a successful action navigation is not pre-mutation", async () => {
+        const h = deps({ page: fakePage({ url: "https://web.test/abc/index.html", text: "Home", headings: ["Home"] }), kind: "web" });
+        const res = await runExercise(null, "g", {
+            steps: [{ expect: ["Equipment List"] }],
+            initial: { action: "openThing", params: { id: 9 }, expect: ["Equipment List"] },
+            workflow: "web", browser: true
+        }, h.deps);
+        assert.strictEqual(res.category, "targeting");
+        assert.strictEqual(res.code, "initial-state-not-reached");
+        assert.deepStrictEqual(res.steps, []);
+        // The ?action= afterLanding navigation WAS issued and landed before the wrong screen
+        // rendered — the action may already have executed.
+        assert.strictEqual(res.potentialMutationStarted, true);
+        const report = formatExercise(res);
+        assert.match(report, /may already have executed/);
+        assert.ok(!/nothing was mutated/.test(report));
+    });
 });
 
 describe("initial request validation", () => {
@@ -186,5 +267,32 @@ describe("initial request validation", () => {
         assert.match(validateInitial({ nope: 1 })[0], /unknown key/);
         assert.match(validateInitial({})[0], /initial does nothing/);
         assert.match(validateInitial({ action: "" })[0], /initial\.action/);
+    });
+
+    test("a targeted initial (action or page) requires a non-empty expect proving that screen", () => {
+        const invalid = (initial) => {
+            const errs = validateInitial(initial);
+            assert.strictEqual(errs.length, 1, JSON.stringify(initial) + " must fail with exactly the expect error");
+            assert.match(errs[0], /initial\.expect/);
+        };
+        invalid({ action: "openX" });
+        invalid({ page: "list.pal" });
+        invalid({ action: "openX", expect: ["   "] }); // whitespace-only strings prove nothing
+        assert.deepStrictEqual(validateInitial({ action: "openX", expect: ["Setup"] }), []);
+        assert.deepStrictEqual(validateInitial({ page: "list.pal", expect: ["Items"] }), []);
+        // Expect-only initials stay valid — they verify the pal's default screen, which needs no
+        // targeting navigation.
+        assert.deepStrictEqual(validateInitial({ expect: ["Home"] }), []);
+    });
+
+    test("a targeted initial without expect is rejected before any Test/browser work", async () => {
+        const h = deps({ page: fakePage({ text: "ok" }) });
+        const res = await runExercise(null, "g", {
+            steps: [{ expect: ["ok"] }], initial: { action: "openX" }, workflow: "console"
+        }, h.deps);
+        assert.strictEqual(res.status, "invalid");
+        assert.match(res.problems[0], /initial\.expect/);
+        assert.strictEqual(h.testsCalled, 0, "the Test instance must never be minted");
+        assert.strictEqual(h.gotoCalls.length, 0, "nothing was navigated or dispatched");
     });
 });

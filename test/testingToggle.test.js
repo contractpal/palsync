@@ -75,7 +75,7 @@ test("testing off still writes a durable pal_screenshot signal row", async () =>
     const rows = usage.readToolEvidence(ctx.workspaceDir);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].tool, "pal_screenshot");
-    assert.equal(rows[0].route, "/board");
+    assert.equal(rows[0].route, "page:board");
     assert.equal(rows[0].viewportName, null);
     assert.equal(rows[0].renderClean, false);
     assert.equal(rows[0].unavailable, true);

@@ -401,6 +401,28 @@ function recordScreenshotEvidence(ctx, { route, viewportName, clean }) {
     return { complete, route: routeKey, viewportName, clean: clean === true, incomplete };
 }
 
+// One credential-safe identity per reviewed screen — the route key for BOTH the in-memory
+// (recordScreenshotEvidence) and durable (appendToolEvidence row.route) responsive-coverage
+// maps. Previously route = page || "/" so every Console action collided under "/", letting
+// desktop evidence of one action and mobile evidence of another satisfy responsive coverage
+// together. WEB keys on the page route; console/transaction keys on workflow kind, the
+// registered workflow name (or "default"), and the normalized action name (or "entry" for the
+// default entry screen). Parameter KEY names are safe to include; parameter VALUES never are —
+// the raw MCP action argument ("openClientSetup?id=9") carries values, so only the pre-"?"
+// action name is used.
+function screenshotEvidenceIdentity({ kind, workflowName, page, action, paramKeys } = {}) {
+    const norm = (s) => String(s == null ? "" : s).trim();
+    const actionName = norm(action).split("?")[0].trim().slice(0, 100);
+    const keys = (Array.isArray(paramKeys) ? paramKeys : []).map(k => norm(k).slice(0, 40)).filter(Boolean).slice(0, 20);
+    const k = norm(kind).toLowerCase().slice(0, 40);
+    if (k === "web" || (!k && !actionName)) {
+        const p = norm(page).replace(/^\/+/, "").slice(0, 200);
+        return ("page:" + (p || "/")).slice(0, 220);
+    }
+    return ((k || "unknown") + ":" + (norm(workflowName).slice(0, 80) || "default") + ":" +
+        (actionName || "entry") + (keys.length ? "[" + keys.join(",") + "]" : "")).slice(0, 220);
+}
+
 // Print the FULL text of every server validation note (group/object: message), not just a count —
 // a count hides content-affecting warnings (e.g. a page with no body tag that won't save).
 function formatValidation(notes) {
@@ -1255,12 +1277,18 @@ const TOOLS = [
             // its appendToolEvidence call: `palsync review check` is a separate offline process
             // that cannot see ctx, so every path — clean capture, unavailable browser, testing
             // switched off — must leave a row or the responsive gate is unenforceable there.
-            const evidenceBase = () => ({
+            // The workflow name is normalized once here (extension stripped) and reused by every
+            // selection/route derivation below; the inline require keeps stubbed test modules working.
+            let normalizedWorkflowName = null;
+            if (workflowName) {
+                try { const { normalizeWorkflowName: norm } = require("../core/test"); normalizedWorkflowName = norm(workflowName); } catch (e) { normalizedWorkflowName = String(workflowName); }
+            }
+            const evidenceBase = (route) => ({
                 tool: "pal_screenshot",
                 palGuid: ctx.record.palGuid,
                 marker: ctx.record.lastModifiedDate,
                 sourceDigest: ctx.record.localHash || undefined,
-                route: String(page || "/").slice(0, 200)
+                route: String(route || "/").slice(0, 220)
             });
             const persistWarning = "\n\n⚠ Render evidence persistence failed — " +
                 "palsync review check will not count this pal_screenshot call.";
@@ -1269,7 +1297,7 @@ const TOOLS = [
                 // Testing OFF returns before runScreenshot ever runs; ctx.testingEnabled is
                 // in-memory MCP state, so this signal row is the only durable trace of the
                 // human-gate fallback. viewportName:null keeps it out of any per-route viewport map.
-                disabled.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, Object.assign(evidenceBase(), {
+                disabled.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, Object.assign(evidenceBase(screenshotEvidenceIdentity({ kind: workflow, workflowName: normalizedWorkflowName, page, action })), {
                     viewportName: null, renderClean: false, unavailable: true, testingDisabled: true
                 }));
                 if (!disabled.evidenceRecorded) disabled.message += persistWarning;
@@ -1281,7 +1309,7 @@ const TOOLS = [
                 let persistNote = "";
                 if (res.available === false) {
                     ctx.renderVerified = "unavailable"; // accepted fallback: ask the user to eyeball it
-                    res.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, Object.assign(evidenceBase(), {
+                    res.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, Object.assign(evidenceBase(screenshotEvidenceIdentity({ kind: workflow, workflowName: normalizedWorkflowName, page, action })), {
                         viewportName: null, renderClean: false, unavailable: true
                     }));
                     if (!res.evidenceRecorded) persistNote = persistWarning;
@@ -1321,8 +1349,19 @@ const TOOLS = [
             // a renderError leaves renderVerified false so the reminder keeps firing until it's fixed.
             const auditClean = res.designAudit && res.designAudit.inspected && res.designAudit.errors === 0;
             const screenshotClean = stateOk && !res.renderError && (!res.styleStatus || res.styleStatus.likelyLoaded !== false) && auditClean;
+            // One credential-safe identity for this screenshot — derived from the NORMALIZED result
+            // metadata (res.kind/res.action/requestedState), never from the raw MCP `action` argument,
+            // which for combined c:a actions carries parameter VALUES in its "?k=v" suffix.
+            const identity = screenshotEvidenceIdentity({
+                kind: res.kind,
+                workflowName: normalizedWorkflowName,
+                page: (res.requestedState && res.requestedState.page) || page,
+                action: res.action,
+                paramKeys: (res.requestedState && Array.isArray(res.requestedState.paramKeys)) ? res.requestedState.paramKeys
+                    : (params && typeof params === "object" ? Object.keys(params) : [])
+            });
             const visualGate = recordScreenshotEvidence(ctx, {
-                route: page || "/",
+                route: identity,
                 viewportName: res.viewportName,
                 clean: screenshotClean
             });
@@ -1337,16 +1376,15 @@ const TOOLS = [
             // param VALUES must never enter tool-evidence or work-history metadata.
             const safeSelection = {};
             if (workflow) safeSelection.workflow = workflow;
-            if (workflowName) {
-                try { const { normalizeWorkflowName: norm } = require("../core/test"); safeSelection.workflowName = norm(workflowName); } catch (e) { safeSelection.workflowName = String(workflowName); }
-            }
-            if (action) safeSelection.action = String(action).trim();
-            // param keys are safe to list (without values) for observability; values are discarded.
-            // Sorted code-point (not localeCompare) for evidence-line determinism.
-            if (params && typeof params === "object" && Object.keys(params).length) {
-                safeSelection.paramKeys = Object.keys(params).sort((a, b) => a < b ? -1 : a > b ? 1 : 0).slice(0, 20);
-            }
-            const evidenceRecorded = appendToolEvidence(ctx.workspaceDir, Object.assign(evidenceBase(), {
+            if (normalizedWorkflowName) safeSelection.workflowName = normalizedWorkflowName;
+            // The RAW MCP `action` argument can be a combined c:a string ("openClientSetup?id=9") whose
+            // suffix carries parameter VALUES — never persist it. res.action is the normalized action
+            // name and res.requestedState.paramKeys the parameter key names.
+            if (res.action) safeSelection.action = res.action;
+            const resParamKeys = (res.requestedState && Array.isArray(res.requestedState.paramKeys)) ? res.requestedState.paramKeys
+                : (params && typeof params === "object" ? Object.keys(params) : []);
+            if (resParamKeys.length) safeSelection.paramKeys = [...resParamKeys].sort((a, b) => a < b ? -1 : a > b ? 1 : 0).slice(0, 20);
+            const evidenceRecorded = appendToolEvidence(ctx.workspaceDir, Object.assign(evidenceBase(identity), {
                 viewportName: res.viewportName,
                 renderClean: stateOk && res.captured === true && !res.renderError &&
                     (!res.styleStatus || res.styleStatus.likelyLoaded !== false),
@@ -1372,16 +1410,13 @@ const TOOLS = [
                 run = createWorkHistoryRun(ctx.workspaceDir, { tool: "pal_screenshot", feature: featureLabel });
                 if (!imageless) filePath = writeArtifactFile(run, "screenshot-" + res.viewportName + ".png", Buffer.from(res.pngBase64, "base64"));
                 auditPath = writeArtifactFile(run, "design-audit.json", JSON.stringify(res.designAudit || { inspected: false }, null, 2), "utf8");
-                // Work-history metadata persists only safe selection names — no param values
+                // Work-history metadata persists only safe selection names — no param values. Same
+                // normalized source as the durable row above (res.action + requestedState.paramKeys).
                 const metadataSelection = {};
                 if (workflow) metadataSelection.workflow = workflow;
-                if (workflowName) {
-                    try { const { normalizeWorkflowName: norm2 } = require("../core/test"); metadataSelection.workflowName = norm2(workflowName); } catch (e) { metadataSelection.workflowName = String(workflowName); }
-                }
-                if (action) metadataSelection.action = String(action).trim();
-                if (params && typeof params === "object" && Object.keys(params).length) {
-                    metadataSelection.paramKeys = Object.keys(params).sort((a, b) => a < b ? -1 : a > b ? 1 : 0).slice(0, 20);
-                }
+                if (normalizedWorkflowName) metadataSelection.workflowName = normalizedWorkflowName;
+                if (res.action) metadataSelection.action = res.action;
+                if (resParamKeys.length) metadataSelection.paramKeys = [...resParamKeys].sort((a, b) => a < b ? -1 : a > b ? 1 : 0).slice(0, 20);
                 writeRunMetadata(run, {
                     palGuid: ctx.record.palGuid,
                     palName: ctx.record.palName,
@@ -2207,7 +2242,7 @@ function safeTestResult(result) {
 }
 
 module.exports = { TOOLS, overridePhrase, blockedMessage, formatExpect, formatValidation, isBenignServerNote,
-    htmlRegionResult, recordScreenshotEvidence, safeTestResult, formatPushValidationRefusal, seoEnvelopeResults,
+    htmlRegionResult, recordScreenshotEvidence, screenshotEvidenceIdentity, safeTestResult, formatPushValidationRefusal, seoEnvelopeResults,
     pushVisibilityFindings, testEnvelopeFindings, datasetSaveFindings, testEnvelopeProjection,
     seoEnvelopeProjection, pushEnvelopeProjection, testActionFields, failureLineSummary, addExpectContext,
     expectBodyBlock, debugHasDiagnosticLines, debugFailed, screenshotEnvelopeProjection,

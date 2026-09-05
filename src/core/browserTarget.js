@@ -213,7 +213,7 @@ function browserPrimitives(deps = {}) {
 // action could execute — a missing/failed browser, or a login redirect (an unauthenticated console
 // request is bounced to login, so the action was never dispatched). Any failure after an
 // action-bearing navigation was issued sets potentialMutationStarted and is never retryable.
-async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, onPage, afterLanding, contextTimeouts, stateTimeout } = {}, deps = {}) {
+async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, onPage, afterLanding, afterLandingMutates, contextTimeouts, stateTimeout } = {}, deps = {}) {
     const prim = browserPrimitives(deps);
     const isWeb = t.kind === "web";
     if (!prim.loadChromium()) {
@@ -276,11 +276,15 @@ async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, o
     // WEB selects its route after landing (the token URL activates the session first), so the
     // state oracle runs once the caller has finished establishing the requested screen.
     if (afterLanding) {
+        // The WEB initial action rides the afterLanding navigation (?action=...), so the mutation
+        // safety boundary begins immediately before that request is issued — never earlier: the
+        // token/base-page bootstrap before it stays a safe retry point.
+        if (afterLandingMutates) potentialMutationStarted = true;
         try { await afterLanding(pg); }
         catch (e) {
             const msg = (e && e.message ? e.message.split("\n")[0] : String(e)).replace(/https?:\/\/\S+/g, "<url>");
             return { ok: false, browser, bctx, pg, viewport: vp, status: "blocked", category: "navigation",
-                     retryable: !resolved.dispatched, potentialMutationStarted,
+                     retryable: !potentialMutationStarted, potentialMutationStarted,
                      reason: "Could not reach the requested screen (" + msg + ")" };
         }
     }
