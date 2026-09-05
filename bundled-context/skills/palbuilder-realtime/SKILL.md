@@ -1,6 +1,6 @@
 ---
 name: palbuilder-realtime
-description: Use for CloudPiston background jobs, workflowType 11 workers, WebSockets, progress reporting, or long-running work. Load before creating a job/socket receiver or choosing between push updates and polling.
+description: "Load for background jobs/workflowType 11, WebSockets, progress updates, or long-running work."
 ---
 
 # CloudPiston Pal — Realtime (Jobs & WebSockets)

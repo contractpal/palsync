@@ -1,6 +1,6 @@
 ---
 name: pal-init
-description: "Onboards an existing pal into MAP.md and a regression baseline before handoff to pal-spec. Triggers: 'work on an existing pal', 'add X to <pal>', 'fix/change something in <pal>', 'onboard this pal', or a pulled workspace with no MAP.md. Does not build or re-spec the whole pal."
+description: "Load before significant work on an existing pal when MAP.md/baseline is missing. Maps current behavior, then hands off to pal-spec."
 ---
 
 # pal-init — map an existing pal, then scope the change

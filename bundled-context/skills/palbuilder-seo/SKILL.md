@@ -1,6 +1,6 @@
 ---
 name: palbuilder-seo
-description: "On-page SEO for PalBuilder WEB pals, from the FIRST push and alongside palbuilder-frontend: page-head recipe, loading-speed, JSON-LD, robots.txt/sitemap.xml/llms.txt, PalBuilder traps (relative og: URLs, non-ASCII attributes, c:a not crawlable), verify with pal_seo_audit. WEB pals only — console pals aren't crawled. Trigger when editing a web page's head, headings, images, or structured data."
+description: "Load with palbuilder-frontend for public WEB-pal SEO: head, content/structured data, sitemap/robots, performance, and pal_seo_audit. Not console pals."
 ---
 
 # PalBuilder SEO Skill (web pals)

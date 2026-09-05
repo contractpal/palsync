@@ -1,6 +1,6 @@
 ---
 name: pal-loop
-description: "Executes approved SPEC.md + EXECUTION.md tasks, verifies, checkpoints, and hands off to pal-review until PASS. Triggers: 'run the loop', 'build the spec', 'continue the build', 'resume the build', or a workspace with unfinished EXECUTION.md tasks. Does not change the approved spec."
+description: "Load to execute or resume approved SPEC.md + EXECUTION.md tasks. Implements, verifies, checkpoints; does not change the spec."
 ---
 
 # pal-loop — execute SPEC.md task by task

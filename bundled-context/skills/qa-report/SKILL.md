@@ -1,6 +1,6 @@
 ---
 name: qa-report
-description: "Writes an evidence-gated report after a pal-loop build or benchmark/eval run. Triggers: 'write a QA report', 'summarize the run', 'post-run evaluation report', or after a benchmark/eval run. Does not review without run evidence."
+description: "Load to report evidence from a completed build/eval run. Requires run evidence; not a substitute for pal-review."
 ---
 
 # qa-report — standardized QA report for pal-loop/eval runs

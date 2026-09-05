@@ -1,6 +1,6 @@
 ---
 name: pal-fix
-description: "Fixes and verifies a small existing-pal defect. Triggers: 'fix', 'broken', 'bug', 'stopped working', 'small change to X'. Does not add pages, datasets, or behavior; those escalate to pal-init/pal-spec."
+description: "Load for a small existing-pal bug/correction with no new pages, data, or behavior. Escalate broader changes to pal-init/pal-spec."
 ---
 
 # pal-fix — reproduce, minimal diff, verify

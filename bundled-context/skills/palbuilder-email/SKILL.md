@@ -1,6 +1,6 @@
 ---
 name: palbuilder-email
-description: "Sending email from a PalBuilder (CloudPiston) pal — OTP/login codes, notifications, reminders, transactional mail: the Email/TextEmail API (c.createEmail, template substitution, sendToAddress), the emails/ file + pal.json shape, and the Web-pal SMTP restriction. Trigger when calling c.createEmail or sendToAddress, or creating/editing files under emails/."
+description: "Load for email templates or sending mail (c.createEmail/Email/TextEmail/sendToAddress), including manifest and Web-pal SMTP constraints."
 ---
 
 # Email Sending — Palbuilder Skill

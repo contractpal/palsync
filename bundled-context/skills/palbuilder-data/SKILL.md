@@ -1,6 +1,6 @@
 ---
 name: palbuilder-data
-description: Use for CloudPiston datasets, DataViews/DataLists, payloads, schema/index work, storage, cache/session/cookies/files, or server-side HTTP. Load before querying, mutating, joining, or choosing where pal data belongs.
+description: "Load before datasets, DataViews/DataLists, payloads, schemas/indexes, storage/cache/session/files, or server-side HTTP."
 ---
 
 # CloudPiston Pal — Data Layer

@@ -1,6 +1,6 @@
 ---
 name: pal-review
-description: "Reviews a completed pal against SPEC.md in a fresh context and produces a verdict + fix tasks. Triggers: 'review the build', 'check it against the spec', 'QA this pal', or pal-loop build completion. Does not edit code or spec."
+description: "Load for fresh independent review of a completed build against SPEC.md. Produces verdict/fix tasks; does not edit."
 ---
 
 # pal-review — fresh-eyes evaluation against the spec

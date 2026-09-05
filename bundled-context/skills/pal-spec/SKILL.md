@@ -1,6 +1,6 @@
 ---
 name: pal-spec
-description: "Interviews and produces SPEC.md + EXECUTION.md in FULL (production) or LITE (prototype/MVP) mode. Triggers: 'spec out', 'plan this pal', 'interview me', 'create a spec', or starting a new pal from a description. Not for bug fixes (pal-fix) or visual design (design-system-init)."
+description: "Load to plan a new pal or significant change and produce SPEC.md + EXECUTION.md. Not for small fixes or visual-system setup."
 ---
 
 # pal-spec — interview → SPEC.md + EXECUTION.md

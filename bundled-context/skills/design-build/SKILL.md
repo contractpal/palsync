@@ -1,6 +1,6 @@
 ---
 name: design-build
-description: "Enforces DESIGN_SYSTEM.md while building/reviewing UI and self-critiques before done. Triggers: 'build this screen', 'make this component', 'implement the design', 'review this UI', or any interface work. Does not establish the system; design-system-init does."
+description: "Load for visible UI implementation or UI review. Enforces an existing design system; use design-system-init first when one is absent."
 ---
 
 # Design Build

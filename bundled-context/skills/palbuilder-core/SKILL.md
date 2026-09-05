@@ -1,6 +1,6 @@
 ---
 name: palbuilder-core
-description: Reference for CloudPiston pal.json, workflowType/palType values, folder registration, workspace structure, and the supported ES3 subset. Load when editing manifests or checking platform structure and syntax constraints.
+description: "Load for pal.json, workflowType/palType, workspace/folder structure, or restricted workflow-JS syntax."
 ---
 
 # CloudPiston Pal — Reference Library

@@ -1,6 +1,6 @@
 ---
 name: design-system-init
-description: "Establishes or extracts a Palbuilder system and writes DESIGN_SYSTEM.md + COMPONENTS.md before UI work. Triggers: set up a design system, redesign, visual direction, color palette, reference screenshots, component library, make it look professional, or any non-trivial new pal UI. Does not build screens; design-build does."
+description: "Load to create/extract DESIGN_SYSTEM.md + COMPONENTS.md before non-trivial new/redesigned UI. Does not build screens."
 ---
 
 # Design System Init
