@@ -301,14 +301,15 @@ test("Codex/OpenCode/Pi on-demand details reference .agents/skills and warn agai
     }
 });
 
-test("always-on fragment guidance agrees with the frontend skill", () => {
+test("always-on fragment routing agrees with the frontend skill", () => {
     const contract = fs.readFileSync(path.join(__dirname, "..", "bundled-context", "CLAUDE.md"), "utf8");
     const frontend = fs.readFileSync(path.join(__dirname, "..", "bundled-context", "skills", "palbuilder-frontend", "SKILL.md"), "utf8");
     for (const guidance of [contract, frontend]) {
         assert.match(guidance, /(?:fragments? (?:cannot contain|with)|Never put `<script>` inside) (?:a )?(?:fragment|`<script>`)/i);
         assert.match(guidance, /scripts\/\*\.js/);
-        assert.match(guidance, /load(?:ed)? (?:it )?once from the (?:page|PAGE)/);
     }
+    assert.match(contract, /load it from the page/i);
+    assert.match(frontend, /load(?:ed)? (?:it )?once from the (?:page|PAGE)/);
     assert.doesNotMatch(contract, /put init JS directly at the bottom of the fragment/i);
 });
 
@@ -346,13 +347,14 @@ test("on-demand file guidance requires a fragment stub and distinguishes DataVie
     }
 });
 
-test("inject() threads .agents/skills into the actual OpenCode/Codex/Pi AGENTS.md on disk", async () => {
+test("inject() carries the bundled routing contract into OpenCode/Codex/Pi AGENTS.md", async () => {
     for (const agent of ["codex", "opencode", "pi"]) {
         const ws = tmpWorkspace();
         await ci.inject(ws, { palName: "Demo", agent });
         const md = fs.readFileSync(path.join(ws, "AGENTS.md"), "utf8");
-        assert.ok(md.includes(".agents/skills"), agent + " AGENTS.md should reference .agents/skills");
-        assert.ok(!md.includes(".claude/skills"), agent + " AGENTS.md must not reference .claude/skills");
+        assert.match(md, /Load every skill the task touches\./);
+        assert.match(md, /Markup\/browser UI → `palbuilder-frontend`/);
+        assert.match(md, /Manifest\/structure\/restricted workflow-JS questions → `palbuilder-core`/);
         fs.rmSync(ws, { recursive: true, force: true });
     }
 });
