@@ -101,8 +101,11 @@ test("pal_exercise guidance uses precise row scope and teaches the full CRUD flo
         "edit verification must require the new value and reject the old value");
     mustMatch(exercise, /After a DELETE[\s\S]{0,180}absent/i,
         "delete verification must assert the deleted value is absent");
-    mustMatch(loop, /mandatory and non-skippable[\s\S]{0,80}exercise-authoring\.md/i,
-        "pal-loop body must still route agents to the exercise-authoring reference");
+    const verify = read("bundled-context/skills/pal-loop/references/verify-ladder.md");
+    mustMatch(loop, /references\/verify-ladder\.md/i,
+        "pal-loop must load verification mechanics at the Verify transition");
+    mustMatch(verify, /exercise-authoring\.md/i,
+        "verification mechanics must route agents to exercise authoring");
 });
 
 test("pal authoring guidance routes fragment and JEXL details to frontend", () => {
@@ -158,8 +161,9 @@ test("pal-level manifest guidance no longer dead-ends on data and datalists", ()
         "pal.json reference must warn against a bare fields array");
     mustMatch(manifest, /"Fragment"[\s\S]{0,260}"palType"\s*:\s*"palTypeConsole"[\s\S]{0,100}"parseable"\s*:\s*false/,
         "pal.json reference must show the typed console Fragment manifest shape");
-    mustMatch(read("bundled-context/skills/pal-loop/SKILL.md"), /mandatory and non-skippable[\s\S]{0,500}"Fragment"[\s\S]{0,500}"Dataset"/i,
-        "pal-loop must eagerly carry fragment and dataset entry shapes");
+    const loop = read("bundled-context/skills/pal-loop/SKILL.md");
+    mustMatch(loop, /Before creating the first[\s\S]{0,280}pal-json\.md[\s\S]{0,280}typed manifest wrapper/i,
+        "pal-loop must load the owning manifest reference immediately before creation");
     mustMatch(manifest, /^##+\s+`?datalists`?\b/im, "pal.json reference must document the datalists section");
     mustMatch(manifest, /pal\.getData\s*\(/, "data section must connect manifest shape to runtime read API");
     mustMatch(manifest, /pal\.getDataList\s*\(/, "datalists section must connect manifest shape to runtime read API");
@@ -183,10 +187,14 @@ test("platform chrome and screenshot auth failures are classified as tool eviden
     const review = read("bundled-context/skills/pal-review/SKILL.md");
     const renderRule = read("bundled-context/skills/pal-review/references/console-render-verification.md");
 
-    for (const [label, text] of [["design-build", build], ["pal-loop", loop], ["pal-review", review]]) {
+    for (const [label, text] of [["design-build", build], ["pal-review", review]]) {
         mustMatch(text, /platform(?:-| )chrome|platform-injected/i,
             label + " must distinguish platform chrome from pal-owned DOM");
     }
+    mustMatch(loop, /references\/verify-ladder\.md/i,
+        "pal-loop must load the screenshot verification owner");
+    mustMatch(read("bundled-context/skills/pal-loop/references/verify-ladder.md"), /console-chrome-exception\.md/i,
+        "verification owner must route platform-chrome handling to its owner");
     mustMatch(renderRule, /(?:login|auth)[^\n]*(?:redirect|expired|wrong page)|(?:redirect|wrong page)[^\n]*(?:login|auth)/i,
         "render verification must classify login/auth redirects as failed evidence");
     mustMatch(renderRule, /(?:captured|final)\s+(?:URL|url)|URL[^\n]*(?:captured|final)/,
