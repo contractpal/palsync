@@ -11,6 +11,7 @@
 **Pal:** `<pal name>` (`<pal id>`)
 **Run date:** `YYYY-MM-DD` → wall clock `HH:MM:SS – HH:MM:SS`
 **Harness:** `<harness name>`
+**PalSync revision:** `<commit/version or not available>`
 **Build model:** `<exact model id>` (effort `<reasoning effort>`)
 **QA/report model:** `<exact model id>` if different from build model
 **Run mode:** `<spec mode>` / `<run mode>` / review cadence `<cadence>`
@@ -57,6 +58,28 @@ Ordered by severity: High, then Medium, then Low.
 
 - `<tool or behavior that functioned correctly, with evidence>`
 - `<another positive observation>`
+
+## Run mechanics & PalSync efficiency
+
+**PalSync revision:** `<commit/version or not available>`
+
+| Metric | Result | Evidence / notes |
+| --- | ---: | --- |
+| Tasks attempted | `<n>` | `<EXECUTION/transcript>` |
+| Tasks completed | `<n>` | |
+| Blocked / needs-human / needs-frontier | `<n / n / n>` | |
+| Skills loaded | `<names>` | `<transcript>` |
+| Extra references loaded | `<names or none>` | |
+| Significant tool failures/retries | `<n>` | `<tool + reason>` |
+| User interventions | `<n>` | `<what required intervention>` |
+| Routing/context misses | `<n>` | `<what was missing/wrong>` |
+| Routing/context wins | `<n>` | `<what stayed JIT / avoided unnecessary context>` |
+
+**Validation/rework:** `<count and cause of significant validation/push/test failures requiring code changes, or not available>`
+
+**State-machine adherence:** `<clean | deviations>` — `<evidence>`
+
+**Context-quality note:** `<Did compressed/JIT guidance appear sufficient? Cite evidence; do not speculate.>`
 
 ## Cost & usage
 
