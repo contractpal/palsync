@@ -119,6 +119,31 @@ test("pal authoring guidance routes fragment and JEXL details to frontend", () =
         "frontend guidance must show the required accessor for non-JEXL-friendly keys");
 });
 
+test("frontend skill retains the core PalBuilder operating contract", () => {
+    const frontend = read("bundled-context/skills/palbuilder-frontend/SKILL.md");
+
+    mustMatch(frontend, /PalBuilder frontend is XHTML \+ platform `c:` tags \+ EL bindings/i,
+        "frontend skill must identify the platform markup contract");
+    mustMatch(frontend, /c:a[\s\S]{0,160}server action[\s\S]{0,160}action=/i,
+        "frontend skill must retain c:a server-action semantics");
+    for (const pattern of [/ordinary[\s\S]{0,30}<form>/i, /href="\?action=/i, /fetch/i, /ClientPal/i]) {
+        mustMatch(frontend, pattern, "fragment submission must reject generic transport replacements");
+    }
+    mustMatch(frontend, /c:fragment[\s\S]{0,160}registered[\s\S]{0,160}fragment/i,
+        "frontend skill must retain registered fragment insertion");
+    mustMatch(frontend, /c:list[\s\S]{0,160}server-provided[\s\S]{0,160}DataList/i,
+        "frontend skill must retain server list rendering");
+    mustMatch(frontend, /c:if[\s\S]{0,100}c:choose[\s\S]{0,160}conditional/i,
+        "frontend skill must retain conditional platform tags");
+    mustMatch(frontend, /c:field[\s\S]{0,160}PalBuilder-bound/i,
+        "frontend skill must retain bound-field guidance");
+    mustMatch(frontend, /Fragments cannot contain a `<script>`/i,
+        "frontend skill must forbid fragment scripts");
+    for (const pattern of [/\$\{row\.field\}/, /\.get\('name'\)/, /eq[\s\S]{0,20}ne/, /empty\(x\)/, /formatter/]) {
+        mustMatch(frontend, pattern, "frontend skill must retain the essential EL/JEXL dialect");
+    }
+});
+
 test("pal-level manifest guidance no longer dead-ends on data and datalists", () => {
     const manifest = read("bundled-context/skills/palbuilder-core/references/pal-json.md");
     const payloads = read("bundled-context/skills/palbuilder-data/references/payloads.md");

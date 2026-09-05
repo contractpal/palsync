@@ -5,441 +5,166 @@ description: "Load before pages/fragments/browser scripts or c: tags, XHTML/EL, 
 
 # CloudPiston Pal — Frontend
 
-The frontend layer is what the browser sees: pages (full HTML documents), fragments (partial
-HTML swapped into pages via AJAX), and the client-side JavaScript in `scripts/` that runs
-in the browser. Pages and fragments use CloudPiston's `c:` tag markup on top of XHTML.
+## PalBuilder frontend contract
 
-CLAUDE.md holds the always-on rules — several apply specifically to frontend:
-- **Rule 1** — XHTML strict for element structure, but not for `<script>`/`<style>` content
-- **Rule 2** — never use an undocumented `c:` attribute
-- **Rule 3** — AJAX fragments do not fire `DOMContentLoaded`
-- **Rule 4** — never use `fetch` or ClientPal to call the server
-- **Rule 5** — `onclick` is not valid on `c:a`
+**PalBuilder frontend is XHTML + platform `c:` tags + EL bindings.** `c:` markup is
+platform behavior, not a cosmetic convenience or an optional helper layer. Use plain HTML for
+ordinary document structure and genuinely browser-only behavior, but use the documented
+platform tag when rendering server data, inserting fragments, submitting a server action, or
+using another PalBuilder capability. Do not replace applicable `c:` behavior with generic
+HTML, query-string navigation, `fetch`, ClientPal, or invented client rendering.
 
-Tag reference (official): https://secure.cloudpiston.com/cpal/cp-api/console-tags/summary.html
+### Pages and fragments
 
----
-
-## Read [reference].md when
-
-- **`references/c-tags.md`** — Full attribute list for every `c:` tag. Consult this **before
-  using any attribute you haven't used before** (per CLAUDE.md rule 2 — undocumented attributes
-  are build errors).
-- **`references/platform-facts.md`** — Production gotchas beyond CLAUDE.md's rules: `noscript`
-  stripping, image format quirks, entity restrictions, the `c:a` `javascript:` href, why
-  regex-editing markup breaks things.
-- **`references/cpresource.md`** — The platform's bundled home-made UI libraries: lib-ui
-  (modals, toasts, inline/popup alerts, loading indicator, CR datalist widget), lib-paging,
-  client-side form validation, and the fragments they depend on (`modalShell`,
-  `toastContainer`, `static/paging`). Distinct from `c:resource`, which loads third-party
-  libraries (Bootstrap, Chart.js, etc.) — full table of those in `c-tags.md`.
-
----
-
-## Pages vs Fragments — different files, different rules
-
-A **page** is a complete HTML document — the entry point for a workflow response.
-A **fragment** is a partial file swapped into a page via AJAX (`ajax-target`) or
-`<c:fragment/>`. They have different shapes and are not interchangeable.
-
-### Every page uses the full shell
-
-Pages have `<html>` / `<head>` / `<body>` with a `<div id="cp-root">`. The server rejects a
-page without a `<body>` tag ("No body tag found, cannot save without losing content").
+A **page** is a complete PalBuilder document with `<html>`, `<head>`, `<body>`, and a
+`<div id="cp-root">` content root. A **fragment** is partial PalBuilder markup rendered into a
+page by the platform. Fragments cannot contain a `<script>` and contain no `<html>`, `<head>`,
+or `<body>`; their normal namespace wrapper is `<c:ignore xmlns:c="contractpal">`. `c:ignore` emits no wrapper
+markup. Insert a registered fragment with `<c:fragment name="..."/>`; do not invent includes,
+client loading, or generic template behavior.
 
 ```html
-<html xmlns:c="contractpal">
-    <head>
-        <title>Dashboard</title>
-        <c:resource source="bootstrap" version="5.3.5" name="bootstrap-min.css"/>
-        <link rel="STYLESHEET" type="text/css" href="../Styles/main.css"/>
-        <script type="module" src="../Scripts/console-main.js"></script>
-    </head>
-    <body>
-        <div id="cp-root">
-            <div id="nav"><c:fragment name="console/navbar"/></div>
-            <div id="body"><c:fragment name="${frag}"/></div>
-            <c:fragment name="cloudpiston/ui/modalShell"/>
-            <c:debug/>
-        </div>
-    </body>
-</html>
+<!-- page -->
+<html xmlns:c="contractpal"><head><title>Title</title></head><body>
+    <div id="cp-root"><c:fragment name="${frag}"/></div>
+</body></html>
+
+<!-- fragments/profile.html -->
+<c:ignore xmlns:c="contractpal"><div>Profile</div></c:ignore>
 ```
 
-### Fragments hold the namespace on a wrapper
+### XHTML
 
-Fragments contain only the inner content — no `<html>`, no `<head>`, no `<body>`. The XML
-namespace declaration lives on a wrapper element:
+Element structure is strict XHTML: close elements, self-close void elements (`<img .../>`,
+`<input .../>`, `<br/>`), and preserve valid nesting. Do not silently normalize PalBuilder
+markup into permissive HTML. This structural rule does not require escaping normal raw text
+inside page `<script>` or `<style>` blocks; see `platform-facts.md` for that boundary. Authored
+PalBuilder markup also has strict entity/character constraints: avoid unsupported named entities
+and non-ASCII authored markup; read `platform-facts.md` for the exact rule.
 
-```html
-<!-- fragments/lists/newList.html -->
-<c:ignore xmlns:c="contractpal">
-    <div class="list-container">
-        <!-- inner content only -->
-    </div>
-</c:ignore>
-```
+### Core `c:` tag model
 
-`c:ignore` is preferred over a plain `<div xmlns:c="...">` because it emits no wrapper
-element in the output — the fragment's own root element becomes the outermost node.
+Use this map to choose the platform primitive. Read `references/c-tags.md` for exact attributes
+before using an unfamiliar tag or **any** unfamiliar attribute — unsupported attributes are build
+errors.
 
----
-
-## EL binding — `${var}` and operators
-
-Server values bind into markup with EL-style `${...}` syntax:
-
-```html
-<p>${user.firstName}</p>
-<img src="${settings.logoUrl}" alt="Logo" />
-<div class="badge ${statusClass}">${status}</div>
-```
-
-Property access is dot-notation. **`c:list` rows use direct EL** (`${row.columnName}`), not
-`.getValue(...)`. Delimited-string list rows use `.get('col0')` (see `c-tags.md`).
-
-### EL operators and helpers
-
-PalBuilder evaluates expressions with Apache Commons JEXL plus platform extensions. Expressions
-are used in `test=`, `c:if`, `c:when`, `selected=`, and `checked=`. **`eq` compares as strings** —
-a boolean column stored as `"true"` reads `${x eq 'true'}`, not `${x}`; retain `eq` as the house
-style for string comparisons.
-
-Use `.get('name')` for property names that are not JEXL-friendly. This is a PalBuilder extension
-and the required access form for keys containing characters such as hyphens. For example,
-`data.set("first-name", "Bob")` is read as `${info.get('first-name')}`. Do not write
-`${info.first-name}`: JEXL parses the hyphen as an operator. Delimited-string `c:list` rows use the
-same extension, such as `${row.get('col0')}`.
-
-| Operator | Meaning | Example |
-|---|---|---|
-| `empty(x)` | true if null or empty string/list | `${empty(audits)}` |
-| `!empty(x)` | not empty (the common guard) | `${!empty(topCritical)}` |
-| `eq` / `ne` | equals / not-equals (string compare) | `${r.result eq 'FAIL'}` |
-| `!` | negation | `${!f.isInvited}` |
-| `and` / `or` | boolean combine | `${a eq 'x' and b eq 'y'}` |
-| `gt` / `lt` / `ge` / `le` | numeric compare | `${count gt 0}` |
-
-`empty()` takes a value as an argument — `empty(audits)`, not `empty audits`. Same for
-`!empty()`.
-
-### `formatter` is available in EL
-
-The `formatter` object is accessible directly from templates. Use it inline for
-date/number/string formatting:
-
-```html
-<p>Created: ${formatter.formatDateString(createDate, "MMM d, yyyy")}</p>
-<p>Total: ${formatter.formatCurrency(total)}</p>
-```
-
-Full formatter method list: https://secure.cloudpiston.com/cpal/cp-api/console/Formatter.html
-
----
-
-## The `c:` tags — quick summary
-
-Full attribute lists for every tag: `references/c-tags.md`. **Read that reference before
-using any attribute you haven't used before** — undocumented attributes are build errors,
-not warnings (CLAUDE.md rule 2).
-
-Most-used tags:
-
-| Tag | Use for |
+| Tag | Platform purpose |
 |---|---|
-| `c:a` | Action links, AJAX-target fragments, navigation (never `onclick` — CLAUDE.md rule 5) |
-| `c:fragment` | Insert a named fragment (`console/navbar`, `${frag}`) |
-| `c:list` | Iterate a DataList — `<c:list name="lists" id="l">${l.name}</c:list>` |
-| `c:if` / `c:choose`/`c:when`/`c:otherwise` | Conditional blocks |
-| `c:field` | Form inputs, especially `type="option"` inside a `<select>` |
-| `c:set` | Set a template variable (`<c:set name="activeClass" test="..." true="active" false=""/>`) |
-| `c:ignore` | Fragment wrapper (namespace declaration only) |
-| `c:resource` | Load a versioned platform library (Bootstrap, jQuery, etc.) — for the platform's own bundled UI libraries (modals, toasts, paging, validation) see `references/cpresource.md` instead |
-| `c:upload` | File upload widget (`allow` is required — keyword like `"image"`, not MIME) |
-| `c:download` | File-download link |
-| `c:debug` | Debug panel in dev; place inside `#cp-root` |
+| `c:a` | Server action, AJAX target, or PalBuilder navigation; server behavior uses `action=`. |
+| `c:fragment` | Insert a registered PalBuilder fragment. |
+| `c:list` | Iterate server-provided `DataList` data. |
+| `c:if`, `c:choose`, `c:when`, `c:otherwise` | Server-side conditional rendering. |
+| `c:field` | PalBuilder-bound field behavior, including applicable form/select fields. |
+| `c:set` | Set template values, including conditional classes. |
+| `c:ignore` | Fragment namespace wrapper that emits no wrapper element. |
+| `c:resource` | Load a registered platform-hosted third-party resource. |
+| `c:upload` / `c:download` | PalBuilder file-transfer behavior. |
 
-Also seen in production: `c:div`, `c:get`, `c:image`, `c:button`, `c:select`. All have their
-own attribute lists in `c-tags.md`.
+`c:button`, `c:select`, `c:div`, and other documented `c:` tags also carry platform behavior;
+check `c-tags.md` instead of guessing their syntax. Use the platform's existing UI resources for
+modals, toasts, validation, paging, and similar behavior when applicable; see `cpresource.md`.
 
-`test` is reliable on `c:` tags. For conditional rendering on ordinary markup, use
-`<c:if test="${expr}">` for a block or `<c:div test="${expr}" class="...">` when the element
-needs a class; do not rely on `test=` on plain `<div>`, `<p>`, or `<span>`.
+### Server actions and fragment submission
 
----
-
-## Fragment folder architecture
-
-Fragments live under `fragments/` and are organized by feature. Nested folders are common:
-
-```
-fragments/
-├── common/          shared: alert, loading, error, spinner
-├── auth/            sign-in, register, forgot-password
-├── console/
-│   ├── navbar
-│   ├── settings
-│   ├── users
-│   └── jobs
-├── lists/           feature-specific fragments
-├── exchange/
-└── modal/           modal-body fragments
-```
-
-Fragment names in `<c:fragment name="..."/>` are folder paths without the `.html`:
-`console/navbar` refers to `fragments/console/navbar.html`.
-
-**A page shell has two fragment slots by convention:**
-- A persistent nav slot (`<c:fragment name="console/navbar"/>`)
-- A swappable content slot bound to a workflow variable (`<c:fragment name="${frag}"/>`)
-
-Navigation actions set `frag` to the target fragment name; the page re-renders and the
-content slot updates.
-
----
-
-## Modal fragments
-
-The platform's modal shell is included once in the page (`cloudpiston/ui/modalShell`).
-Modal content is loaded into it via `ajax-target="modalContent"`.
-
-```html
-<c:a action="editProfile" ajax-target="modalContent">Edit</c:a>
-```
-
-The modal fragment itself contains `modal-header` / `modal-body` / `modal-footer`. Close
-buttons are plain `<button onclick="hideModal()">`; action buttons are `c:a`:
+Normal PalBuilder server actions use `c:a action="..."` (or another documented platform action
+tag). `onclick` is **not valid on `c:a`** and cannot replace its action. A fragment's Save/Cancel
+or navigation action uses `c:a action="..."`, not an ordinary `<form>` submission,
+`href="?action=..."`, `fetch`, ClientPal, or generic JavaScript request. `ajax-target` must name
+the real target/fragment contract. Use documented `confirm=` for destructive actions when
+applicable.
 
 ```html
 <c:ignore xmlns:c="contractpal">
-    <div class="modal-header">
-        <p class="mb-0">Add to group</p>
-        <button type="button" class="modal-close" onclick="hideModal()">
-            <i class="fas fa-times"></i>
-        </button>
-    </div>
-    <div class="modal-body">
-        <!-- content -->
-    </div>
-    <div class="modal-footer">
-        <c:a action="doShareList?listId=${activeList.listId}"
-             ajax-target="body"
-             class="btn btn-primary">Add</c:a>
-    </div>
+    <c:field type="text" name="displayName" value="${displayName}"/>
+    <c:a action="saveProfile" ajax-target="body">Save</c:a>
+    <c:a action="showProfile" ajax-target="body">Cancel</c:a>
 </c:ignore>
 ```
 
-- **`showModal(path)`** / **`hideModal()`** come from the `cloudpiston/ui/v5/lib-ui`
-  include (or equivalent for older Bootstrap versions). Full function signatures, plus
-  toasts, alerts, loading indicators, form validation, paging, and the CR datalist widget
-  that ship alongside them: `references/cpresource.md`.
-- CSS class names are project-specific — match the pal's design system.
+`c:a` can carry action parameters in its documented `action=` value. A plain `<button>` or
+`<a>` remains correct only for a genuinely browser-only interaction with no platform server
+behavior.
 
----
+**Choose the primitive by responsibility:** a server request or platform navigation is an
+`action=` on a documented platform tag; a server-provided collection is `c:list`; a server
+rendering decision is `c:if`/`c:choose`; and a registered partial is `c:fragment`. Do not move
+those responsibilities to the browser merely because browser code can manipulate the DOM.
+`c:resource` is specifically for registered platform-hosted third-party resources; project-local
+assets use ordinary page `<link>`/`<script>` tags. For platform-owned UI behavior, prefer the
+existing CPResource contract rather than copying a modal, toast, validation, loading, or paging
+implementation into the pal.
 
-## Navigation — active class idiom
+### Server rendering and conditions
 
-Nav links use `workflow=` (when navigating between console workflows) and an active-class
-variable set in the workflow (via `c:set` or a payload value):
-
-```html
-<c:a action="getDashboard" workflow="console" class="sidebar-item ${dashboard_active}">
-    Dashboard
-</c:a>
-<c:a action="getSettings" workflow="console" class="sidebar-item ${settings_active}">
-    Settings
-</c:a>
-```
-
-The workflow sets `dashboard_active = "active"` (empty string otherwise) so the current
-item highlights. `c:set` in the template is one way; setting the value on the payload from
-the workflow is the other.
-
-See `palbuilder-workflow/references/console.md` for `switchToWorkflow` /
-`switchToConsolePal` when the nav crosses into a different workflow or pal.
-
----
-
-## Page and fragment JavaScript
-
-Client-side JS runs in the browser and is **not restricted to ES3** — CLAUDE.md rule 6
-applies only to workflow `.js` files under `workflows/`. In `scripts/*.js` you have full
-modern JS: `let`, `const`, arrow functions, ES modules (`import`/`export`), `setInterval`,
-Promises. (Prefer `c:a` for server calls — CLAUDE.md rule 4 still applies.)
-
-### Never put `<script>` inside a fragment
-
-The server rejects any fragment with an inline `<script>` — "Tag script is not allowed". All
-client JS lives in `scripts/*.js` files, loaded once from the PAGE.
-
-### AJAX-loaded JS does not fire `DOMContentLoaded`
-
-An AJAX-loaded fragment runs with the DOM already present. If a fragment needs init code, it
-lives in a module the page already imported (available immediately when the fragment renders)
-or is invoked by workflow-generated JS via `runJS(...)` — see below.
-
----
-
-## The main-file + modules pattern
-
-Each page loads a **main file** (`app-main.js` for the app, `console-main.js` for the
-console, etc.) as an ES module. The main file imports the modules that page needs, exposes
-them on `window` so workflow-generated JS can call them, runs any page-wide init, and emits
-an `appReady` custom event.
-
-### Main file — `scripts/app-main.js`
-
-```js
-import { historyManager } from "../Scripts/history-manager.js";
-import { messageManager } from "../Scripts/message-manager.js";
-import createToast    from "../Scripts/notification-manager.js";
-import { generalUI }  from "../Scripts/ux/general.js";
-import { listsUI }    from "../Scripts/ux/lists.js";
-import { profileUI }  from "../Scripts/ux/profile.js";
-
-// The main file is a module — its imports live in module scope, not global.
-// Expose the modules workflow code needs to call (via addJavascript / onclick).
-window.historyManager = historyManager;
-window.createToast    = createToast;
-window.generalUI      = generalUI;
-window.listsUI        = listsUI;
-window.profileUI      = profileUI;
-
-function init() {
-    document.getElementById("body").scrollTop = 0;
-    messageManager.start();
-
-    document.addEventListener("click", function(e) {
-        if (e.target.closest("#navbarSideToggle")) {
-            document.getElementById("navSideMenu").classList.toggle("open");
-        }
-    });
-}
-init();
-
-// Signal to runJS() (see below) that modules are loaded and callable
-window.appIsReady = true;
-window.dispatchEvent(new CustomEvent("appReady"));
-```
-
-Loaded from the page:
+Render platform-provided lists and conditionals with the tags below rather than recreating them
+in browser JavaScript. `c:list` rows use direct EL property access:
 
 ```html
-<script type="module" src="../Scripts/app-main.js"></script>
+<c:list name="people" id="row">
+    <c:if test="${row.active eq 'true'}"><p>${row.firstName}</p></c:if>
+</c:list>
+
+<c:choose>
+    <c:when test="${status eq 'draft'}"><span>Draft</span></c:when>
+    <c:otherwise><span>Published</span></c:otherwise>
+</c:choose>
 ```
 
-A pal typically has one main file per page context — `app-main.js` for the web app,
-`console-main.js` for the console UI, etc. Each main file imports only the modules that
-page uses.
+Use ordinary HTML inputs only when the behavior is genuinely ordinary HTML and no documented
+PalBuilder field behavior is required. When binding, options, submission semantics, or other
+platform behavior are involved, use or check the documented `c:field` contract rather than
+assuming HTML input behavior is equivalent. Use `c:set` for template values/classes when
+appropriate. `test=` is reliable on documented
+`c:` tags; use `c:if` for a conditional ordinary HTML block rather than putting `test=` on a
+plain element.
 
-### Individual modules
+### EL / JEXL essentials
 
-Each module in `scripts/` exports a named object of its public functions:
+`${value}` binds a server value. PalBuilder expressions are Apache Commons JEXL with platform extensions.
+Use `${row.field}` for `DataList` rows and `.get('name')` where a key is not
+JEXL-friendly. For example, when workflow code does `data.set("first-name", "Bob")`, bind it
+as `${info.get('first-name')}` rather than `${info.first-name}`. Use `eq` / `ne` for string
+comparisons, `empty(x)` / `!empty(x)` for empty checks, and the available `formatter` for
+formatting. Read `c-tags.md` for delimited-list row access and attribute-specific expression
+examples. `${...}` inside inline page JavaScript collides with PalBuilder EL/template parsing;
+prefer external `scripts/*.js` or safe string construction, and read `platform-facts.md`.
 
-```js
-// scripts/ux/exchanges.js
-export const exchangesUI = {
-    selectMember,
-    assignGroupCode
-};
+## Reference routing
 
-function selectMember(el) {
-    let selected = el.dataset.selected;
-    el.classList.toggle("activeMember");
-    el.dataset.selected = selected === "true" ? "false" : "true";
-}
+- Read **`references/c-tags.md`** before using an unfamiliar `c:` tag or attribute. It owns
+  exhaustive attributes and uncommon-tag details, not the core `c:` operating model above.
+- Read **`references/platform-facts.md`** before unusual markup, images, URL interception, or
+  inline page JavaScript; it contains production gotchas.
+- Read **`references/cpresource.md`** when using platform UI resources (modals, toast/alerts,
+  loading, validation, paging, or CR datalist).
+- Read **`references/browser-js.md`** only when browser-JS module architecture, initialization,
+  workflow-emitted browser code, or post-AJAX widget initialization is relevant.
 
-function assignGroupCode(groupCode) {
-    // ... implementation
-}
-```
+## Browser JavaScript boundary
 
-Individual functions are declared with `function` (hoisted, so the `export const {...}` can
-reference them before they appear textually). Consumers call `exchangesUI.selectMember(el)`
-either from another module (via import) or from workflow-generated code (via `window` after
-the main file exposes it).
+Browser files under `scripts/*.js` are modern browser JavaScript; workflow `.js` is a different,
+restricted environment. Use a page-level entry: load once from the page; browser scripts never
+belong in a fragment. AJAX fragment insertion does not fire a new `DOMContentLoaded`, so initialization must already be available
+or be invoked through a verified integration pattern. Browser JS must not become an invented
+replacement for PalBuilder server actions: use documented `c:a action=...` or another documented
+platform action tag for server behavior. Consult `browser-js.md` only for the relevant,
+verified browser integration pattern.
 
-### Module-level setup — guard with a flag
+## Practical conventions
 
-Some modules need one-time browser wiring (event listeners on `window`, `history`, etc.).
-Guard the setup with a flag so re-imports don't double-register:
+Inspect the existing pal before choosing folder names, shell layout, CSS classes, Bootstrap
+version, or resource set; none is a universal default. A common page shell includes registered
+fragments such as a navigation area or the CPResource modal shell, but add only what the pal
+actually uses. A `c:fragment name=` must match the Fragment name registered in `pal.json`.
+Existing pals may organize names like paths, but inspect that registration instead of deriving or
+guessing the name from a filename.
 
-```js
-if (!window._popstateListenerAdded) {
-    window.addEventListener("popstate", (event) => {
-        if (event.state) {
-            ClientPal.sendAjaxRequest(event.state.action, ajaxHandler, "?fromBrowserNav=true");
-        }
-    });
-    window._popstateListenerAdded = true;
-}
-```
+When a page needs a modal, include the registered modal shell once and target the shell's actual
+content contract with the action response. The modal's close control may be browser-only HTML,
+but an operation such as save/delete/navigation remains a documented `c:a action=...`, with a
+confirmation mechanism for destructive actions where applicable. This distinction avoids
+mistaking a browser-only UI control for permission to bypass a platform action.
 
----
-
-## Calling client code from a workflow — `runJS`
-
-Workflows push client-side JS to the browser via `payload.addJavascript(...)`. Because the
-main file runs asynchronously (ES modules load in parallel), workflow-emitted JS might fire
-before the modules are ready — the callable functions on `window` won't exist yet.
-
-The standard workaround is a `runJS(js)` helper in a workflow library that wraps the JS in
-an `appReady` check:
-
-```js
-// libs/client.js  (or wherever your client-facing workflow helpers live)
-function runJS(js) {
-    payload.addJavascript(
-        "if(window.appIsReady){" + js + "}" +
-        "else{window.addEventListener('appReady', () => {" + js + "});}"
-    );
-}
-```
-
-Then in any workflow handler:
-
-```js
-runJS("historyManager.add(state, 'getDashboard', false)");
-runJS("createToast('Saved successfully')");
-runJS("listsUI.refresh()");
-```
-
-The wrapper runs the JS immediately if modules are loaded (subsequent handlers after the
-first request), or defers until `appReady` fires (the very first request that establishes
-the page).
-
----
-
-## Bootstrap dropdown init after AJAX
-
-Bootstrap dropdowns need explicit initialization on AJAX-loaded fragments. Put this in the
-relevant UI module and invoke it via `runJS(...)` after the fragment renders:
-
-```js
-// scripts/ux/general.js
-export const generalUI = { initDropdowns };
-
-function initDropdowns() {
-    document.querySelectorAll('[data-bs-toggle="dropdown"]').forEach((el) => {
-        new bootstrap.Dropdown(el);
-    });
-}
-```
-
-From the workflow: `runJS("generalUI.initDropdowns()");`
-
----
-
-## Common frontend gotchas beyond CLAUDE.md
-
-- **`.webp` images are served as `text/html`** and don't display. Use JPEG or PNG.
-- **`<noscript>` wrappers are stripped**, but their inner content is kept and rendered
-  unconditionally. Never use `<noscript>` for progressive-enhancement fallbacks.
-- **Only 5 named entities are safe:** `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`. Any other
-  named entity (or non-ASCII byte) triggers a validation flag. Write arrows as `-&gt;`.
-- **`c:a` renders as `javascript:` href** — any JS click-interceptor MUST guard
-  `a.protocol !== "http:" && a.protocol !== "https:"` or it silently breaks every `c:a`.
-- **Never edit markup or CSS with regex.** Read the region and hand-edit — regex surgery
-  has repeatedly caused orphan closing tags and corrupted stylesheets.
-
-Full details on each of these in `references/platform-facts.md`.
+For cross-workflow navigation, see `palbuilder-workflow/references/console.md`. For platform
+UI helpers, use the documented CPResource paths and contracts rather than reimplementing modal,
+alert, loading, validation, or paging behavior in generic JavaScript.
