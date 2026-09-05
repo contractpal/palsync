@@ -16,13 +16,15 @@
 //             production path (encrypted c:a AJAX included), not a simulation.
 //
 // SECURITY: console URLs are credential-bearing — results only ever carry sanitizeUrl()'d URLs.
-const { runTest } = require("./test");
 const { checkExpect } = require("./preview");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { stableStringify } = require("./stableStringify");
-const { detectRenderError, sanitizeUrl, sanitizeResourceUrl, loadChromium, getBrowser, releaseBrowser, waitForRenderablePage, VIEWPORTS } = require("./screenshot");
+const { detectRenderError, sanitizeUrl, sanitizeResourceUrl, releaseBrowser, waitForRenderablePage } = require("./screenshot");
+// Target normalization, the authenticated bootstrap, the state oracle and the retry boundary are
+// shared with pal_screenshot — neither tool may interpret a console action differently.
+const { normalizeTarget, openAuthenticatedScreen, attemptWithFreshTest, deriveWebBase, describeTargetMismatch } = require("./browserTarget");
 
 const MAX_STEPS = 10;
 
@@ -800,23 +802,32 @@ function failureEvidenceLines(res) {
 //   workflow: "console" | "web" | "transaction" (optional — auto-detected)
 //   viewport: "desktop" | "mobile" (browser mode only)
 // Stops at the first failing step (later steps usually depend on earlier writes).
-async function runExercise(session, guid, { steps, workflow, viewport, workspaceDir } = {}, deps = {}) {
+async function runExercise(session, guid, { steps, workflow, viewport, workspaceDir, initial, browser } = {}, deps = {}) {
     const runId = makeRunId(steps, takeExerciseOrdinal(workspaceDir));
-    const problems = validateSteps(steps);
+    const problems = validateSteps(steps).concat(validateInitial(initial));
     const lint = lintSteps(steps);
     const allProblems = problems.concat(lint.errors);
     if (allProblems.length) return { ran: false, invalid: true, status: "invalid", category: "steps", problems: allProblems, runId, warnings: lint.warnings };
 
     steps = applyRunId(steps, runId);
-    const testFn = deps.runTest || runTest;
-    const browserFn = deps.exerciseByBrowser || exerciseByBrowser;
-    let retryAttempted = false;
+    // The initial target is normalized ONCE, here, into the same canonical form pal_screenshot
+    // uses — so the two tools can never interpret the same console action differently.
+    let start = null;
+    if (initial) {
+        const withRunId = applyRunId([initial], runId)[0];
+        const norm = normalizeTarget({ action: withRunId.action, params: withRunId.params });
+        if (norm.blocked) {
+            return { ran: false, invalid: true, status: "invalid", category: "steps", runId,
+                     problems: ["initial: " + norm.reason], warnings: lint.warnings };
+        }
+        start = { target: norm.target, page: withRunId.page || null, expect: withRunId.expect || [] };
+    }
 
-    for (let attempt = 0; attempt < 2; attempt++) {
-        const t = await testFn(session, guid, { kind: workflow });
+    const browserFn = deps.exerciseByBrowser || exerciseByBrowser;
+    const res = await attemptWithFreshTest(session, guid, { kind: workflow }, async (t) => {
         if (!t.ran) {
-            return { ran: false, blocked: t.blocked, holder: t.holder, runId,
-                     status: "blocked", category: "environment", retryAttempted,
+            return { ran: false, blocked: t.blocked, holder: t.holder,
+                     status: "blocked", category: "environment", retryable: false,
                      potentialMutationStarted: false,
                      reason: t.blocked === "no-testable-workflow"
                          ? "This pal has no runnable workflow to exercise."
@@ -824,41 +835,128 @@ async function runExercise(session, guid, { steps, workflow, viewport, workspace
                      remediation: "Resolve the test environment, then run a new exercise." };
         }
         if (!t.validated) {
-            return { ran: false, kind: t.kind, validation: t.validation, runId,
-                     status: "blocked", category: "environment", retryAttempted,
+            return { ran: false, kind: t.kind, validation: t.validation,
+                     status: "blocked", category: "environment", retryable: false,
                      potentialMutationStarted: false,
                      reason: "The pal did not validate on the server, so it can't be exercised. Fix the validation notes, push, and exercise again." };
         }
 
         const isWeb = t.kind === "web";
-        if (!isWeb && !needsBrowser(steps) && steps.some(s => s.action || s.page)) {
-            return { ran: false, kind: t.kind, invalid: true, status: "invalid", category: "steps", runId,
-                     problems: ["a " + t.kind + " pal's actions run through the console screen — write steps as fill (inputs by name) + click (the action link/button text), not action/page"] };
+        // A console/transaction action is dispatched by clicking its rendered c:a link, or — for
+        // the FIRST screen only — through the initial target. A step-level action/page has no
+        // supported mechanism here, so it is rejected. It must never be accepted and ignored.
+        const offending = steps.findIndex(s => s.action || s.page);
+        if (!isWeb && offending !== -1) {
+            return { ran: false, kind: t.kind, invalid: true, status: "invalid", category: "steps",
+                     problems: ["step " + (offending + 1) + " carries action/page, but a " + t.kind +
+                         " pal dispatches actions by clicking the rendered c:a link. Put the FIRST screen's action in `initial` ({ action, params, expect }); reach later screens with click (the action link/button text)."] };
+        }
+        if (!isWeb && start && start.page) {
+            return { ran: false, kind: t.kind, invalid: true, status: "invalid", category: "steps",
+                     problems: ["initial.page is a WEB route selector; a " + t.kind + " pal selects its first screen with initial.action."] };
         }
 
-        const useFetch = isWeb && !needsBrowser(steps) && !hasWaitFor(steps);
-        const res = useFetch
-            ? await exerciseByFetch(t, steps)
-            : await browserFn(t, steps, viewport, deps);
-        if (res.status === "blocked" && !res.potentialMutationStarted && attempt === 0 &&
-            (res.category === "auth" || res.category === "navigation")) {
-            retryAttempted = true;
-            const wait = deps.wait || (ms => new Promise(resolve => setTimeout(resolve, ms)));
-            await wait(100);
-            continue;
+        const useFetch = isWeb && !browser && !needsBrowser(steps) && !hasWaitFor(steps);
+        const res = useFetch ? await exerciseByFetch(t, steps, start) : await browserFn(t, steps, viewport, deps, start);
+        // The retry rule lives here, once: only a blocked auth/navigation failure that provably
+        // preceded any mutation may be replayed against a fresh test instance.
+        if (res && res.retryable === undefined) {
+            res.retryable = res.status === "blocked" && res.potentialMutationStarted !== true &&
+                (res.category === "auth" || res.category === "navigation");
         }
-        res.retryAttempted = retryAttempted;
+        return res;
+    }, deps);
+
+    if (res && typeof res === "object") {
+        delete res.retryable;
         res.runId = runId;
         res.warnings = lint.warnings;
-        return res;
     }
+    return res;
+}
+
+// Validate the optional initial-target request. Shape only — target normalization happens once in
+// runExercise via the shared normalizeTarget.
+function validateInitial(initial) {
+    if (initial === undefined || initial === null) return [];
+    if (typeof initial !== "object" || Array.isArray(initial)) return ["initial must be an object with action/params/page/expect"];
+    const errs = [];
+    const known = new Set(["action", "params", "page", "expect"]);
+    for (const k of Object.keys(initial)) if (!known.has(k)) errs.push("initial has unknown key " + JSON.stringify(k));
+    if (initial.action !== undefined && (typeof initial.action !== "string" || !initial.action.trim())) errs.push("initial.action must be a non-empty action string");
+    if (initial.page !== undefined && (typeof initial.page !== "string" || !initial.page.trim())) errs.push("initial.page must be a non-empty WEB route");
+    if (initial.params !== undefined && (typeof initial.params !== "object" || Array.isArray(initial.params) ||
+        Object.values(initial.params).some(v => typeof v !== "string" && typeof v !== "number" && typeof v !== "boolean"))) {
+        errs.push("initial.params must be an object of name → string/number/boolean value");
+    }
+    if (initial.expect !== undefined && (!Array.isArray(initial.expect) || initial.expect.some(x => typeof x !== "string" || !x))) {
+        errs.push("initial.expect must be an array of non-empty strings visible on the intended first screen");
+    }
+    if (!initial.action && !initial.page && !(initial.expect && initial.expect.length)) {
+        errs.push("initial does nothing — give it an action, a page, or an expect");
+    }
+    return errs;
+}
+
+// The WEB query form for an initial target: the documented plain-link mechanism (?action=X&param=Y).
+function webInitialPath(start) {
+    if (!start) return null;
+    let path = start.page || "";
+    if (start.target) {
+        const qs = new URLSearchParams(Object.assign({ action: start.target.action }, start.target.params));
+        path += (path.indexOf("?") === -1 ? "?" : "&") + qs.toString();
+    }
+    return path;
+}
+
+// A structured "you asked for X, the browser showed Y" result. Never PASS, never accepted evidence.
+function initialStateFailure(t, start, state) {
+    return {
+        ran: true, kind: t.kind, mode: "browser", pass: false,
+        status: "failed", category: "targeting", code: "initial-state-not-reached",
+        retryable: false, potentialMutationStarted: false,
+        requestedState: {
+            workflow: t.kind,
+            action: start.target ? start.target.action : null,
+            paramKeys: start.target ? start.target.paramKeys : [],
+            page: start.page || null,
+            expect: start.expect || []
+        },
+        stateVerified: false,
+        observedState: {
+            headings: ((state.observed && state.observed.headings) || []).slice(0, 8),
+            title: (state.observed && state.observed.title) || null,
+            expect: (state.expect || []).map(r => ({ string: r.string, found: r.found }))
+        },
+        steps: [],
+        reason: "The initial state was never reached, so no step was run.\n  " +
+            describeTargetMismatch({ kind: t.kind, action: start.target ? start.target.action : null,
+                                     paramKeys: start.target ? start.target.paramKeys : [] }, state),
+        remediation: "Fix the initial action/params (or the pal), then exercise again. No step ran, so nothing was mutated."
+    };
 }
 
 // WEB fast path: plain fetches against the activated test session, no browser.
-async function exerciseByFetch(t, steps) {
+async function exerciseByFetch(t, steps, start = null) {
     const { openInstanceSessionFromTest } = require("./preview");
     const inst = await openInstanceSessionFromTest(t);
-    if (!inst.opened) return { ran: false, kind: "web", status: "blocked", category: "environment", potentialMutationStarted: false, reason: inst.reason };
+    if (!inst.opened) return { ran: false, kind: "web", status: "blocked", category: "environment", retryable: true, potentialMutationStarted: false, reason: inst.reason };
+    // Establish and verify the requested initial state BEFORE any step runs.
+    if (start) {
+        let landing;
+        try { landing = await inst.fetchPath(webInitialPath(start)); }
+        catch (e) {
+            return { ran: false, kind: "web", status: "blocked", category: "navigation", retryable: !start.target, potentialMutationStarted: !!start.target,
+                     reason: "Could not reach the initial state (" + (e && e.message ? e.message : String(e)) + ")." };
+        }
+        const chk = checkExpect(landing.html, start.expect || []);
+        if ((start.expect || []).length && !chk.pass) {
+            return initialStateFailure(t, start, {
+                expect: chk.results.map(r => ({ string: r.string, found: r.found })),
+                observed: { headings: [], title: landing.title || null }
+            });
+        }
+    }
     const results = [];
     let lastHtml = "";
     for (let i = 0; i < steps.length; i++) {
@@ -886,57 +984,63 @@ async function exerciseByFetch(t, steps) {
 }
 
 // Browser path: drive the real screen (console/transaction always; web when steps fill/click).
-async function exerciseByBrowser(t, steps, viewport, deps = {}) {
-    const chromium = (deps.loadChromium || loadChromium)();
-    if (!chromium) {
-        return { ran: false, available: false, status: "blocked", category: "environment", potentialMutationStarted: false,
-                 reason: "Playwright/Chromium is not installed in this runtime, and these steps need a real browser (console screen or fill/click). Enable with: npm i playwright && npx playwright install chromium — or verify this behavior at the human eyeball gate." };
-    }
+// The authenticated bootstrap, the initial target dispatch and its state verification are shared
+// with pal_screenshot; only the step loop below is exercise-specific. No step runs until the
+// browser has positively reached the requested initial state.
+async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null) {
     const isWeb = t.kind === "web";
-    const target = isWeb ? t.rawToken : t._previewUrl;
-    if (!target) {
-        return { ran: false, kind: t.kind, status: "blocked", category: "navigation", potentialMutationStarted: false,
-                 reason: "No runnable URL for this " + t.kind + " pal — can't drive the screen." };
-    }
-    const vp = VIEWPORTS[viewport] ? VIEWPORTS[viewport] : VIEWPORTS.desktop;
-    let browser;
-    try { browser = await (deps.getBrowser || getBrowser)(); }
-    catch (e) {
-        return { ran: false, available: false, status: "blocked", category: "environment", potentialMutationStarted: false,
-                 reason: "Playwright is installed but its Chromium browser is not — install it with: npx playwright install chromium (" + (e && e.message ? e.message.split("\n")[0] : String(e)) + ")" };
-    }
     const results = [];
     const evidenceTimeout = deps.evidenceTimeout || EVIDENCE_TIMEOUT_MS;
-    let bctx, pg, events = [], potentialMutationStarted = false;
+    let events = [];
+    const acceptedDialogs = [];
     let finalVisibleText = "";
+    let potentialMutationStarted = false;
+
+    const open = await openAuthenticatedScreen(t, {
+        viewport,
+        target: isWeb ? null : (start && start.target),
+        expect: start ? start.expect : [],
+        navOpts: EXERCISE_NAV_OPTS,
+        contextTimeouts: { action: ACTION_TIMEOUT_MS, navigation: NAV_TIMEOUT_MS },
+        stateTimeout: evidenceTimeout,
+        onPage: (pg) => {
+            // Listeners attach BEFORE any navigation so console/page errors, failed requests and
+            // HTTP >= 400 responses during the auth redirect are captured too.
+            events = attachBrowserEvidence(pg);
+            pg.on("dialog", async (dialog) => {
+                acceptedDialogs.push(dialog.type() + (dialog.message() ? ": " + dialog.message() : ""));
+                try { await dialog.accept(); } catch (e) { /* dialog may already be gone */ }
+            });
+        },
+        // WEB reaches its initial screen by route, after the token URL activates the session.
+        afterLanding: (isWeb && start && (start.page || start.target))
+            ? async (pg) => {
+                await (deps.waitForRenderablePage || waitForRenderablePage)(
+                    pg, deriveWebBase(pg.url()) + String(webInitialPath(start)).replace(/^\/+/, ""), EXERCISE_NAV_OPTS);
+            }
+            : null
+    }, deps);
+
+    const pg = open.pg;
+    potentialMutationStarted = open.potentialMutationStarted === true;
     try {
-        // Context-level defaults bound actions/navigations the per-call timeouts below don't cover.
-        // These are context methods in Playwright, not browser.newContext options.
-        bctx = await browser.newContext({ viewport: vp });
-        try { if (bctx.setDefaultTimeout) bctx.setDefaultTimeout(ACTION_TIMEOUT_MS); } catch (e) { /* older/fake context */ }
-        try { if (bctx.setDefaultNavigationTimeout) bctx.setDefaultNavigationTimeout(NAV_TIMEOUT_MS); } catch (e) { /* older/fake context */ }
-        pg = await bctx.newPage();
-        // Listeners attach BEFORE any navigation so console/page errors, failed requests, and
-        // HTTP >= 400 responses during the auth redirect and every step navigation are captured.
-        events = attachBrowserEvidence(pg);
-        const acceptedDialogs = [];
-        pg.on("dialog", async (dialog) => {
-            acceptedDialogs.push(dialog.type() + (dialog.message() ? ": " + dialog.message() : ""));
-            try { await dialog.accept(); } catch (e) { /* dialog may already be gone */ }
-        });
-        await (deps.waitForRenderablePage || waitForRenderablePage)(pg, target, EXERCISE_NAV_OPTS);
-        if (!isWeb && isLoginRedirect(pg.url())) {
-            return attachEvidence({ ran: false, kind: t.kind, status: "blocked", category: "auth",
-                     potentialMutationStarted, reason: "console session expired / not authenticated",
-                     remediation: "Refresh authentication before trying again.", steps: results }, pg, null, events, evidenceTimeout);
+        if (!open.ok) {
+            if (open.category === "targeting") {
+                return attachEvidence(initialStateFailure(t, start, open.state), pg, null, events, evidenceTimeout);
+            }
+            const failed = {
+                ran: false, kind: t.kind, status: "blocked", category: open.category,
+                retryable: open.retryable === true, potentialMutationStarted, steps: results,
+                reason: open.reason,
+                remediation: open.category === "auth"
+                    ? "Refresh authentication before trying again."
+                    : "Refresh navigation/authentication before trying again."
+            };
+            if (open.available === false) failed.available = false;
+            return pg ? attachEvidence(failed, pg, null, events, evidenceTimeout) : failed;
         }
-        // Web base for page/action navigation — same derivation screenshot.js uses.
-        let base = null;
-        if (isWeb) {
-            const u = new URL(pg.url());
-            const seg = u.pathname.split("/").filter(Boolean)[0] || "";
-            base = u.origin + "/" + (seg ? seg + "/" : "");
-        }
+        // Web base for step-level page/action navigation.
+        const base = isWeb ? deriveWebBase(pg.url()) : null;
         for (let i = 0; i < steps.length; i++) {
             const step = steps[i];
             const fail = async (why) => {
@@ -984,6 +1088,7 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}) {
                     return attachEvidence({
                         ran: potentialMutationStarted, kind: t.kind, mode: "browser", pass: false,
                         status: "blocked", category, potentialMutationStarted,
+                        retryable: !potentialMutationStarted,
                         reason: browserFailureMessage(e, pg, isWeb, t.kind), steps: results,
                         remediation: potentialMutationStarted
                             ? "Data may already have changed. Inspect current state before deciding whether to run anything again."
@@ -1064,12 +1169,13 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}) {
         const category = !isWeb && pageIsLoginRedirect(pg) ? "auth" : "navigation";
         return attachEvidence({
             ran: false, kind: t.kind, status: "blocked", category, potentialMutationStarted,
+            retryable: !potentialMutationStarted,
             reason: browserFailureMessage(e, pg, isWeb, t.kind),
             remediation: "Refresh navigation/authentication before trying again.", steps: results
         }, pg, null, events, evidenceTimeout);
     } finally {
-        try { if (bctx) await bctx.close(); }
-        finally { (deps.releaseBrowser || releaseBrowser)(); }
+        try { if (open.bctx) await open.bctx.close(); }
+        finally { if (open.browser) (deps.releaseBrowser || releaseBrowser)(); }
     }
 }
 
@@ -1092,6 +1198,15 @@ function formatExercise(res) {
                 lines.push("    " + (s.pass ? "✓" : "✗") + " step " + s.step + " [" + s.label + "]");
             }
         }
+        lines.push(...failureEvidenceLines(res));
+        return lines.join("\n");
+    }
+    if (res.category === "targeting") {
+        // Not a behavior result: no step ran, so nothing about the pal's behavior was proven.
+        const lines = ["pal_exercise — TARGETING FAIL — the initial state was never reached; NO step ran and nothing was mutated",
+            "  code: " + (res.code || "initial-state-not-reached"),
+            "  " + res.reason];
+        if (res.remediation) lines.push("  next: " + res.remediation);
         lines.push(...failureEvidenceLines(res));
         return lines.join("\n");
     }
@@ -1125,4 +1240,4 @@ function formatExercise(res) {
     return lines.join("\n");
 }
 
-module.exports = { runExercise, exerciseByFetch, exerciseByBrowser, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, makeRunId, readExerciseOrdinal, takeExerciseOrdinal, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, redactSecretFormsForSuccess, makeFinalSnapshot, BROWSER_EVENTS_CAP, EVIDENCE_TIMEOUT_MS, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };
+module.exports = { runExercise, exerciseByFetch, exerciseByBrowser, validateSteps, validateInitial, webInitialPath, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, makeRunId, readExerciseOrdinal, takeExerciseOrdinal, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, redactSecretFormsForSuccess, makeFinalSnapshot, BROWSER_EVENTS_CAP, EVIDENCE_TIMEOUT_MS, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };

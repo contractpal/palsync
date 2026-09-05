@@ -431,7 +431,7 @@
   {
     "name": "pal_exercise",
     "title": "Exercise pal behavior",
-    "description": "Exercise last-pushed actions end-to-end and assert results. Read local markup first; do not discover fields or selectors by retries. Steps stop at the first failure. WEB uses action+params; console/transaction fills inputs and clicks exact text. Scope duplicate controls with within and unique {{runId}}. waitFor waits a bounded time for the step's existing expect/absent to become true by polling visible text only (never replaying the mutation); waiting WEB steps use browser mode. Use after create/edit/delete.",
+    "description": "Exercise last-pushed actions end-to-end and assert results. Read local markup first; do not discover fields or selectors by retries. Steps stop at the first failure. WEB steps use action+params; console/transaction opens its first screen with initial and reaches later screens by clicking rendered link text (step action/page is rejected there, never ignored). Scope duplicate controls with within and unique {{runId}}. waitFor waits a bounded time for the step's existing expect/absent to become true by polling visible text only (never replaying the mutation). Use after create/edit/delete.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -528,6 +528,47 @@
           },
           "description": "Ordered; stops at first failure."
         },
+        "initial": {
+          "description": "First screen to establish and verify before step 1.",
+          "type": "object",
+          "properties": {
+            "action": {
+              "description": "Console/transaction action, c:a form: name or name?key=value.",
+              "type": "string"
+            },
+            "params": {
+              "description": "Action params; conflicts with the action suffix are rejected.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              }
+            },
+            "page": {
+              "description": "WEB route to load first.",
+              "type": "string"
+            },
+            "expect": {
+              "description": "Visible strings proving this screen; no step runs until seen.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
         "workflow": {
           "description": "Engine; default auto-detected.",
           "type": "string",
@@ -536,6 +577,10 @@
             "web",
             "transaction"
           ]
+        },
+        "browser": {
+          "description": "Force a real browser for a WEB pal instead of fetch.",
+          "type": "boolean"
         },
         "viewport": {
           "description": "Viewport; default desktop.",
@@ -851,8 +896,15 @@
           "type": "string"
         },
         "action": {
-          "description": "Console/transaction action name (appended as cp-ws-doaction before capture).",
+          "description": "Console/transaction action, c:a form: name or name?key=value.",
           "type": "string"
+        },
+        "expect": {
+          "description": "Visible strings proving the intended screen; without them the capture is state-unverified.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "params": {
           "description": "Scalar query parameters appended with the action (reserved keys cp-auth/nxProfileId/cp-workflow/cp-ws-doaction are refused).",

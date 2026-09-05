@@ -1,11 +1,11 @@
 {
   "schema": "palsync/efficiency-baseline/1",
   "eagerContextBytes": {
-    "total": 34180,
-    "releaseStable": 33338,
+    "total": 35142,
+    "releaseStable": 34300,
     "workspaceStable": 842
   },
-  "toolSchemaBytes": 27717,
+  "toolSchemaBytes": 28679,
   "lintCache": {
     "coldMisses": 2,
     "repeatedHits": 2,

@@ -372,7 +372,13 @@ function screenshotEnvelopeProjection(res, fields = {}) {
             findings: (audit.findings || []).filter(f => f.severity === "error" || f.severity === "warning"),
             error: audit.error || null
         } : null,
-        smallDims: res.smallDims || null
+        smallDims: res.smallDims || null,
+        // What was asked for vs what the browser actually showed. stateVerified is true only when
+        // every declared expectation was visible; null means the caller declared none, so the
+        // screen is NOT proven to be the requested one.
+        requestedState: res.requestedState || null,
+        stateVerified: res.stateVerified === undefined ? null : res.stateVerified,
+        observedState: res.observedState || null
     }, fields);
 }
 
@@ -1240,10 +1246,11 @@ const TOOLS = [
             imageless: z.boolean().optional().describe("Return designAudit without image data."),
             workflow: z.enum(["console", "web", "transaction"]).optional().describe("Explicit workflow type — overrides auto-detection."),
             workflowName: z.string().optional().describe("Registered workflow name (with or without file extension — extension is stripped consistently)."),
-            action: z.string().optional().describe("Console/transaction action name (appended as cp-ws-doaction before capture)."),
+            action: z.string().optional().describe("Console/transaction action, c:a form: name or name?key=value."),
+            expect: z.array(z.string()).optional().describe("Visible strings proving the intended screen; without them the capture is state-unverified."),
             params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional().describe("Scalar query parameters appended with the action (reserved keys cp-auth/nxProfileId/cp-workflow/cp-ws-doaction are refused).")
         },
-        async run(ctx, { page, feature, viewport, fullPage, imageless, workflow, workflowName, action, params } = {}) {
+        async run(ctx, { page, feature, viewport, fullPage, imageless, workflow, workflowName, action, params, expect } = {}) {
             // Durable render evidence (.palsync/tool-evidence.jsonl), mirroring pal_exercise at
             // its appendToolEvidence call: `palsync review check` is a separate offline process
             // that cannot see ctx, so every path — clean capture, unavailable browser, testing
@@ -1268,7 +1275,7 @@ const TOOLS = [
                 if (!disabled.evidenceRecorded) disabled.message += persistWarning;
                 return disabled;
             }
-            const res = await runScreenshot(ctx.session, ctx.record.palGuid, { page, viewport, fullPage, imageless, workflow, workflowName, action, params });
+            const res = await runScreenshot(ctx.session, ctx.record.palGuid, { page, viewport, fullPage, imageless, workflow, workflowName, action, params, expect });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             if (!res.captured) {
                 let persistNote = "";
@@ -1287,6 +1294,15 @@ const TOOLS = [
                     reason += " Available names: " + (res.availableWorkflowNames.length ? res.availableWorkflowNames.join(", ") : "(none)");
                 } else if (res.blocked === "reserved-param") {
                     reason += " Reserved keys: cp-auth, nxProfileId, cp-workflow, cp-ws-doaction";
+                }
+                // A capture of the wrong screen is a targeting FAILURE. It records no render
+                // evidence, so it can never satisfy the visual gate; the image is retained only as
+                // labelled failure evidence.
+                if (res.category === "targeting") {
+                    return Object.assign(res, {
+                        message: "⚠ STATE NOT REACHED — this is a FAIL, not evidence. The browser rendered a different screen than requested.\n  " +
+                            reason + "\nFix the action/params (or the pal), then capture again. Do not treat the retained image as render evidence."
+                    });
                 }
                 return Object.assign(res, {
                     message: (res.available === false ? "Screenshot unavailable: " : "Could not screenshot: ") + reason +
@@ -1410,8 +1426,16 @@ const TOOLS = [
                 : "";
             const echoedPng = stablePngRef || filePath;
             const echoedAudit = stableAuditRef || auditPath;
+            // State is reported truthfully next to the image: verified, or explicitly unproven.
+            const stateLine = res.stateVerified === true
+                ? "\n  state: VERIFIED — " + (res.requestedState.expect || []).map(s => JSON.stringify(s)).join(", ") + " all visible"
+                : (res.requestedState && (res.requestedState.action || res.requestedState.page)
+                    ? "\n  ⚠ state: NOT VERIFIED — you targeted " + (res.requestedState.action ? "action " + res.requestedState.action : "page " + res.requestedState.page) +
+                        " but declared no expect:[...], so this image is not proven to be that screen." +
+                        " Observed headings: " + ((res.observedState && res.observedState.headings.length) ? res.observedState.headings.map(h => JSON.stringify(h)).join(", ") : "(none)") + "."
+                    : "");
             const text = (res.kind ? res.kind.toUpperCase() : "WEB") + " screenshot captured — " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height +
-                (fullPage ? " (full page)" : "") + "\n  url=" + res.url +
+                (fullPage ? " (full page)" : "") + "\n  url=" + res.url + stateLine +
                 "\n  " + formatStyleStatus(res.styleStatus) +
                 "\n  " + formatDesignAudit(res.designAudit) +
                 "\n  Visual gate: " + (visualGate.complete ? "complete" : "incomplete; clean desktop + mobile still required for " + visualGate.incomplete.join(", ")) +
@@ -1446,7 +1470,7 @@ const TOOLS = [
     },
     {
         name: "pal_exercise",
-        description: "Exercise last-pushed actions end-to-end and assert results. Read local markup first; do not discover fields or selectors by retries. Steps stop at the first failure. WEB uses action+params; console/transaction fills inputs and clicks exact text. Scope duplicate controls with within and unique {{runId}}. waitFor waits a bounded time for the step's existing expect/absent to become true by polling visible text only (never replaying the mutation); waiting WEB steps use browser mode. Use after create/edit/delete.",
+        description: "Exercise last-pushed actions end-to-end and assert results. Read local markup first; do not discover fields or selectors by retries. Steps stop at the first failure. WEB steps use action+params; console/transaction opens its first screen with initial and reaches later screens by clicking rendered link text (step action/page is rejected there, never ignored). Scope duplicate controls with within and unique {{runId}}. waitFor waits a bounded time for the step's existing expect/absent to become true by polling visible text only (never replaying the mutation). Use after create/edit/delete.",
         inputShape: {
             steps: z.array(z.object({
                 page: z.string().optional().describe("WEB page path to load first."),
@@ -1462,13 +1486,20 @@ const TOOLS = [
                     intervalMs: z.number().int().min(100).max(60000).optional().describe("Poll interval in ms (default 500, min 100).")
                 }).optional().describe("Bounded wait for existing expect/absent to become true; polls visible text only, never replays the mutation.")
             })).min(1).max(10).describe("Ordered; stops at first failure."),
+            initial: z.object({
+                action: z.string().optional().describe("Console/transaction action, c:a form: name or name?key=value."),
+                params: z.record(z.union([z.string(), z.number(), z.boolean()])).optional().describe("Action params; conflicts with the action suffix are rejected."),
+                page: z.string().optional().describe("WEB route to load first."),
+                expect: z.array(z.string()).optional().describe("Visible strings proving this screen; no step runs until seen.")
+            }).optional().describe("First screen to establish and verify before step 1."),
             workflow: z.enum(["console", "web", "transaction"]).optional().describe("Engine; default auto-detected."),
+            browser: z.boolean().optional().describe("Force a real browser for a WEB pal instead of fetch."),
             viewport: z.enum(["desktop", "mobile"]).optional().describe("Viewport; default desktop.")
         },
-        async run(ctx, { steps, workflow, viewport } = {}) {
+        async run(ctx, { steps, workflow, viewport, initial, browser } = {}) {
             const disabled = testingDisabledResult(ctx, "pal_exercise");
             if (disabled) return disabled;
-            const res = await runExercise(ctx.session, ctx.record.palGuid, { steps, workflow, viewport, workspaceDir: ctx.workspaceDir });
+            const res = await runExercise(ctx.session, ctx.record.palGuid, { steps, workflow, viewport, initial, browser, workspaceDir: ctx.workspaceDir });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             // Failure-only durable artifacts: a failed/blocked browser run with captured evidence
             // persists steps.json, browser-events.json, the accessibility snapshot (or screen-hints
