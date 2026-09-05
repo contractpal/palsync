@@ -114,8 +114,12 @@ describe("normalizeTarget — one canonical console target", () => {
         assert.strictEqual(normalizeTarget({ action: "?id=9" }).blocked, "invalid-action");
     });
 
-    test("an action name containing whitespace is invalid", () => {
-        assert.strictEqual(normalizeTarget({ action: "open Client" }).blocked, "invalid-action");
+    test("an action name with characters needing encoding is kept, not rejected", () => {
+        // The dispatch string is encoded once on the way into cp-ws-doaction, so no character
+        // restriction is needed — and inventing one could block a legal action name.
+        const { target } = normalizeTarget({ action: "my action" });
+        assert.strictEqual(target.action, "my action");
+        assert.strictEqual(new URL(buildTargetUrl("https://x.test/t", target.dispatch)).searchParams.get("cp-ws-doaction"), "my action");
     });
 });
 

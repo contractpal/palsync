@@ -19,6 +19,15 @@
 //   `params` map is normalized INTO it rather than being scattered as separate top-level query
 //   keys. Encoded once through URLSearchParams, so a value containing & or = survives.
 //
+//   LIVE-VERIFIED 2026-09-05 against secure.cloudpiston.com (console pal Audithelm V1):
+//     cp-ws-doaction=openClientSetup             -> setup wizard, "STEP 1 OF 8" visible
+//     cp-ws-doaction=openClientSetup?id=999999   -> client list, wizard absent (id parsed, no match)
+//     cp-ws-doaction=openClientSetup?id=NOT-A-NUMBER -> server threw For input string: "NOT-A-NUMBER"
+//                                                    in findClientInWorkspace
+//   The exception proves the value reached request.getData().get("id") verbatim, and the first two
+//   prove it changes the rendered outcome. The landed URL was byte-identical in all three cases,
+//   which is why rendered text — not the URL — is the state oracle.
+//
 //   This is the INITIAL target only. Every action AFTER the first screen is dispatched by clicking
 //   the real rendered `c:a` (pal_exercise's existing click path) — that is the production path,
 //   javascript: href and AJAX fragment included. PalSync never simulates the dispatcher with its
