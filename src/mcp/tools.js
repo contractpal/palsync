@@ -1937,7 +1937,8 @@ const TOOLS = [
                     consoleRegistered: res.consoleRegistered || null,
                     sourceControlEnabled: res.sourceControlEnabled,
                     commitMessage: res.commitMessage || null
-                }, envelopeFields(ctx.workspaceDir, "pal_push", source, args, projection));
+                }, envelopeFields(ctx.workspaceDir, "pal_push", source, args, projection,
+                    { sourceControlEnabled: res.sourceControlEnabled }));
                 out.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, {
                     tool: "pal_push",
                     palGuid: ctx.record.palGuid,
@@ -1993,7 +1994,8 @@ const TOOLS = [
                 });
                 const projection = pushEnvelopeProjection(source);
                 return Object.assign({ pushed: false, refused: "save-rejected" },
-                    envelopeFields(ctx.workspaceDir, "pal_push", source, args, projection));
+                    envelopeFields(ctx.workspaceDir, "pal_push", source, args, projection,
+                        { sourceControlEnabled: res.sourceControlEnabled }));
             }
             return Object.assign(res, { message: "Push failed: " + (res.reason || res.refused || "unknown") });
         }

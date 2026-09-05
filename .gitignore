@@ -65,3 +65,7 @@ AGENTS.md
 # codex agent config + unrelated generated outputs
 .codex/
 outputs/
+
+# editor/IDE project files — per-developer, not part of the public tool
+.idea/
+.junie/
