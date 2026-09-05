@@ -1,121 +1,145 @@
-# PalSync — ethos & mission
+# PalSync — Ethos
 
-> Read this at the start of every session. It is the *why* behind the rules in
-> `CLAUDE.md`. When a decision isn't covered by a rule, decide the way this document
-> would.
+> PalSync should be the **smallest, cheapest harness that reliably helps models produce correct Pals**.
 
-## Mission
+Every engineering decision should improve at least one of three goals without unnecessarily harming the others:
 
-**Make a weak or lazy model ship a correct Pal.** PalSync is the harness that closes
-the gap between what a model does by default and what "correct" actually requires. We
-optimize the harness, not the model.
+**Simple. Efficient. Effective.**
 
-## The thesis: the harness is the product
+## 1. Simple
 
-Most agent failures are **configuration failures, not model failures** — a missing
-tool, a rule written too loosely, a gate the agent was trusted to run by hand and
-skipped, a skill doc that reads like an essay instead of a checklist. When Haiku
-produces a bad Pal, suspect the harness first.
+PalSync should contain only what it needs.
 
-This is confirmed empirically by our own eval reports: every recurring failure was a
-**lifecycle transition the agent was trusted to perform manually and didn't** —
-declaring "Build complete" with no review, marking a task `done` after six *failed*
-verification attempts. The fix is never "hope the model tries harder." The fix is to
-make the transition non-optional.
+Prefer, in order:
 
-## PalSync follows the SDLC
+1. Delete unnecessary behavior.
+2. Reuse an existing mechanism.
+3. Simplify or generalize an existing mechanism.
+4. Improve instructions or deterministic validation.
+5. Add a new mechanism only when the simpler options are insufficient.
 
-A Pal build is a software development lifecycle, not a single `push`. PalSync must
-support **and enforce the transition between every phase** — not just the final
-deploy. Today we are strong in the middle (implement → validate → push) and weak at
-the boundaries the model is trusted to cross on its own.
+A feature is not free because it works. It adds code, maintenance, context, surface area, interactions, and future failure modes.
 
-| SDLC phase | PalSync surface | Gate that must hold before advancing |
-|---|---|---|
-| **Requirements** | `pal-spec` skill, `SPEC.md`, prior reports for the same spec | spec is complete; known prior lessons surfaced |
-| **Design** | `design-build`, `design-system-init`, the design-brief checkpoint | design brief recorded before any markup |
-| **Implementation** | MCP write tools, `palbuilder-*` skills | `pal_validate` clean *per write*, not only at push |
-| **Testing** | `pal_test`, `pal_exercise`, `pal_screenshot`, `pal-review` | a **successful** exercise + captured evidence per behavior-touching task |
-| **Deployment** | `pal_push`, `palsync review check` | fresh independent `REVIEW.md` with `result: PASS` |
-| **Maintenance** | `drift`, `regression`, `reports/` mining | real-run lessons fed back into the harness |
+Complexity must earn its place through evidence.
 
-The failure mode is always the same: a phase declared done without the evidence the
-next phase depends on. Gates convert "the model said it's done" into "a tool proved
-it's done."
+Do not preserve a mechanism simply because an old model once failed without it. Fix the general failure class where possible, and periodically remove guardrails that no longer justify themselves.
 
-## Hooks are how we enforce the lifecycle
+## 2. Efficient
 
-A rule in a skill doc is advice the model can rationalize around. A **hook** is
-mechanism — it fires whether or not the model remembers to. Hooks are how the SDLC
-gates above stop being suggestions. We target **Claude Code and Pi** (both support
-hooks); other entrypoints get the same rule as a documented contract until they do.
+PalSync should reduce the total cost of getting from request to correct Pal.
 
-- **PreToolUse** — gate *before* a costly or irreversible action. E.g. block a
-  `pal_push` whose workspace hasn't passed `pal_validate`; block writes to protected
-  files. A deny-before-run rule, mechanically verifiable (path/shape match) — never an
-  LLM judgment call.
-- **PostToolUse** — validate *immediately after* a write, before the mistake
-  compounds. This is our answer to feedback latency: the console-page script rejection
-  that today only surfaces one tool-call later at `pal_test` should fail the instant
-  the file is written.
-- **Stop** — refuse to end the turn / narrate "Build complete" while the deployment
-  gate is unmet (no fresh `REVIEW.md`, a task marked `done` with no successful
-  exercise). This single hook would have caught the top finding in every eval report.
+Optimize for:
 
-Hooks are the automation of two principles below (shorten the feedback loop; writer ≠
-checker). They earn their place the same way validators do — evidence first.
+* model-visible context
+* tool-schema size
+* inference tokens and cost
+* unnecessary tool calls
+* retries and failed iterations
+* latency
+* duplicated work
 
-## Principles
+Prefer deterministic computation over asking the model to reason about something PalSync can cheaply know.
 
-1. **The harness is the product.** Optimize tools, gates, docs, and evals so a weak
-   model still succeeds. Blame config before capability.
+Prefer progressive disclosure over always-on context.
 
-2. **Terminate in server-verified evidence, never "looks right."** A tool call turns a
-   guess into a fact. `done` requires a passing tool result, not a self-assessment.
+Prefer concise, actionable tool results over explanations the model does not need.
 
-3. **Guardrails must earn their place.** A wrong blocking rule is worse than a missing
-   one. Evidence first (cite the server source, a live repro, or a bundled doc).
-   Cheapest deterministic layer first (AST/regex); LLM judgment only for what that
-   can't catch. Unverified rules ship as `warn`, promoted to `error` only after a live
-   verification. (See `CLAUDE.md` → Validator rule policy.)
+Caching is useful, but **removing unnecessary context is better than making unnecessary context cheaper to cache**.
 
-4. **Shorten the feedback loop.** Validate close to the mistake, not only at the end.
-   Weak models compound wrong assumptions across steps. Prefer per-write validation
-   (a PostToolUse hook) over a single end-of-build gate.
+Measure efficiency alongside correctness.
 
-5. **Writer ≠ checker.** Verification must not share context with generation — the same
-   context inherits the blind spots that produced the bug. Review runs fresh and
-   verifies claims structurally (via tools), not by re-reading its own diff.
+## 3. Effective
 
-6. **Docs are workflows, not essays.** Agents follow checklists with exit criteria and
-   skim prose. One concrete correct example beats a paragraph. Attach an
-   anti-rationalization rebuttal to each top failure mode. Load only the
-   phase-relevant skill (progressive disclosure).
+PalSync's job is to make models reliably write correct, maintainable PalBuilder code.
 
-7. **Build the simplest thing that passes evals.** Add a rule, skill, tool, or hook
-   only *after* an eval or report demonstrates the specific gap it closes. This is the
-   brake on everything above. Don't overbuild.
+The model's claim that something works is not evidence.
 
-8. **Measure the harness in layers.** Score capability (can the model use the tools at
-   all), trajectory (did it take the right steps — coverage, not call count), and
-   final response (does the shipped Pal work). North star: goal-completion rate per
-   model. Ask not just "did the model pass" but "is routing this task to this model
-   the right call."
+Use the cheapest reliable evidence available:
 
-## What we do NOT build (until an eval proves the need)
+1. deterministic local checks
+2. server validation
+3. rendered/runtime verification when behavior requires it
+4. independent review only when it provides demonstrated value
 
-- Cross-session autonomy loops (Ralph-style), self-reported confidence scores.
-- LLM-based guardrail layers where a deterministic check would do.
-- RAG / fine-tuning / multi-agent orchestration as a first move.
+Keep feedback close to the mistake so errors do not compound.
 
-Prove the simpler prompting / skill-doc / hook fix is insufficient first.
+Guardrails should be based on observed platform behavior, documentation, or reproducible failures. Unverified assumptions should not become blocking rules.
+
+## Evals decide
+
+We do not add architecture because it sounds useful.
+
+A new tool, hook, rule, skill, abstraction, workflow, or agent-facing instruction should correspond to a demonstrated problem.
+
+When evaluating a change, measure both benefit and cost:
+
+* task completion / acceptance criteria
+* correctness and regressions
+* token usage and inference cost
+* tool calls and retries
+* model-visible context
+* tool-schema size
+* implementation complexity
+
+Prefer the simpler design when outcomes are equivalent.
+
+A change that improves one eval while making the entire harness permanently larger should face a high bar.
+
+## Fix classes of failures, not incidents
+
+Eval failures are evidence, not requirements.
+
+When an agent behaves badly, ask:
+
+* What actually caused the failure?
+* Can an existing mechanism handle it?
+* Can the failure be prevented deterministically?
+* Can the instruction be made shorter or clearer?
+* Is this specific to one model or a general PalBuilder problem?
+* Would adding a mechanism create more complexity than the failure justifies?
+
+Avoid accumulating permanent special cases for individual model mistakes.
+
+## Context is a budget
+
+Anything automatically shown to the model consumes a limited resource.
+
+Always-on instructions should contain only rules that are broadly necessary. Detailed platform knowledge belongs in focused skills or on-demand context.
+
+Tool descriptions and schemas should be as small as possible while remaining unambiguous.
+
+Do not make the model repeatedly read information it does not need for the current task.
+
+## Tools should earn their surface area
+
+A model-facing tool should exist separately only when that separation materially helps the model perform the job.
+
+Prefer a small, coherent interface over exposing every internal capability directly.
+
+Internal implementation boundaries do not have to become agent-facing tools.
+
+## Guardrails should earn their friction
+
+Use deterministic enforcement when failure would be costly and evidence shows models actually need the protection.
+
+Do not turn every best practice into a blocking gate.
+
+A bad guardrail can be worse than no guardrail.
+
+Warnings, validation, hard blocks, and independent review should each be used only at the level justified by the risk.
+
+## Preserve what works
+
+Simplification does not mean removing proven safety or correctness mechanisms merely to reduce line count.
+
+PalSync's sync protections, deterministic validators, platform verification, and other mechanisms should remain when evidence shows they materially improve successful completion.
+
+The goal is not minimal code at any cost.
+
+The goal is **minimal necessary complexity**.
 
 ---
 
-*Sources folded into this ethos: Martin Fowler (guardrail cost/benefit, evals as
-thresholds, simplest-architecture-first); Addy Osmani (config-not-model failures,
-workflows-over-essays, writer≠checker, spec-driven); Google/Kaggle Agents +
-Agent Companion whitepapers (model/tools/orchestration split, layered agent
-evaluation); coleam00/harness-engineering-demo (the plan→implement→validate→review
-lifecycle enforced by Pre/Post/Stop hooks). Grounded against PalSync's own eval
-reports and validator-rule policy.*
+When uncertain, choose the design that best satisfies this sentence:
+
+> **Build the simplest and most efficient PalSync that still reliably produces correct Pals.**

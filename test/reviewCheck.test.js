@@ -244,7 +244,7 @@ test("review completion gate is identical across claude-code, pi, and opencode",
         for (const entry of screenshotEntries()) appendEvidence(ws, entry.tool, entry);
         fs.writeFileSync(path.join(ws, "REVIEW.md"), REVIEW);
         const managedDoc = fs.readFileSync(path.join(ws, agent === "claude" ? "CLAUDE.palsync.md" : "AGENTS.md"), "utf8");
-        assert.match(managedDoc, /Completion gate[\s\S]*palsync completion check/);
+        assert.match(managedDoc, /completed build requires fresh `REVIEW\.md` PASS \+ `palsync completion check`/);
 
         const oldLog = console.log;
         const logged = [];

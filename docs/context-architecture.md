@@ -14,15 +14,13 @@ basis that could not be reproduced.
 | Runtime | Section | Source | Bytes | Est. tokens | Loading |
 |---|---|---|---:|---:|---|
 | All | `tool-definitions` | `src/mcp/tools.js` | 27,213 | 6,804 | release-stable |
-| Claude | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 12,551 | 3,138 | release-stable |
-| Codex/OpenCode/Pi | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 12,551 | 3,138 | release-stable |
+| All | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 3,192 | 798 | release-stable |
 | All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 4,613 | 1,154 | release-stable |
-| Claude | `sync-section` | `src/launcher/contextInject.js#syncSection` | 2,107 | 527 | workspace-stable |
-| Codex/OpenCode | `sync-section` | `src/launcher/contextInject.js#syncSection` | 2,200 | 550 | workspace-stable |
-| Pi | `sync-section` | `src/launcher/contextInject.js#syncSection` | 2,194 | 549 | workspace-stable |
-| Claude | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,727 | 2,182 | on-demand |
-| Codex/OpenCode | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,960 | 2,240 | on-demand |
-| Pi | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 7,023 | 1,756 | on-demand |
+| Claude/Codex/OpenCode | `sync-section` | `src/launcher/contextInject.js#syncSection` | 842 | 211 | workspace-stable |
+| Pi | `sync-section` | `src/launcher/contextInject.js#syncSection` | 827 | 207 | workspace-stable |
+| Claude | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,886 | 2,222 | on-demand |
+| Codex/OpenCode | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 9,119 | 2,280 | on-demand |
+| Pi | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 7,182 | 1,796 | on-demand |
 | All | `creating-files` | `src/launcher/contextInject.js#syncDetails` | 3,327 | 832 | on-demand |
 | Claude/Codex/OpenCode | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,539 | 885 | on-demand |
 | Pi | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,567 | 892 | on-demand |
@@ -33,7 +31,7 @@ basis that could not be reproduced.
 | All | `skill-body:pal-loop` | `bundled-context/skills/pal-loop/SKILL.md` | 19,397 | 4,850 | on-demand |
 | All | `skill-body:pal-review` | `bundled-context/skills/pal-review/SKILL.md` | 16,590 | 4,148 | on-demand |
 | All | `skill-body:pal-spec` | `bundled-context/skills/pal-spec/SKILL.md` | 9,985 | 2,497 | on-demand |
-| All | `skill-body:palbuilder-core` | `bundled-context/skills/palbuilder-core/SKILL.md` | 3,397 | 850 | on-demand |
+| All | `skill-body:palbuilder-core` | `bundled-context/skills/palbuilder-core/SKILL.md` | 3,325 | 832 | on-demand |
 | All | `skill-body:palbuilder-data` | `bundled-context/skills/palbuilder-data/SKILL.md` | 16,054 | 4,014 | on-demand |
 | All | `skill-body:palbuilder-email` | `bundled-context/skills/palbuilder-email/SKILL.md` | 5,912 | 1,478 | on-demand |
 | All | `skill-body:palbuilder-frontend` | `bundled-context/skills/palbuilder-frontend/SKILL.md` | 16,985 | 4,247 | on-demand |

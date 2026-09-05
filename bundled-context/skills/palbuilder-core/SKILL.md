@@ -5,12 +5,9 @@ description: Reference for CloudPiston pal.json, workflowType/palType values, fo
 
 # CloudPiston Pal — Reference Library
 
-This skill is a **reference library**, not a task skill. CLAUDE.md holds the always-on
-contract for every pal edit; other `palbuilder-*` skills teach how to do each kind of work.
-This SKILL.md is a router — the depth lives in the references below.
-
-Nothing here duplicates CLAUDE.md. If a rule seems missing from this skill, check CLAUDE.md
-first.
+This skill owns the detailed reference knowledge for `pal.json`, workspace structure, and
+restricted workflow JS. Other `palbuilder-*` skills teach how to do each kind of work; this
+reference supplies the platform facts they share.
 
 ---
 
@@ -30,16 +27,16 @@ Read when:
 
 Read when you are writing workflow code and would normally reach for:
 
-- Object literals `{ }` (banned — use `c.createData()` for maps, `c.createDataList()` or
-  `ds.createRecord()` for rows)
-- `let` / `const` (not available — use `var`)
-- Arrow functions `=>` (not available — use `function`)
-- Template literals `` `${ }` `` (not available — use string concat or `c.createBuffer()`)
-- Destructuring, `for…of` / `for…in`, `.map` / `.filter` / `.forEach` / `.reduce`
-- `JSON.parse` into an object (banned — use `c.createJsonParser()`)
+- Object literals `{ }` (confirmed blocker — use `c.createData()` for maps,
+  `c.createDataList()` or `ds.createRecord()` for rows)
+- `let` / `const` (confirmed blocker — use `var`)
+- Arrow functions `=>`, template literals, destructuring, `for…of` / `for…in`,
+  `.map` / `.filter` / `.forEach` / `.reduce`, or `JSON.parse` into an object
 
-Also read when you're not sure whether a JS construct is safe. There is no external validator
-for workflow JS — treat anything not on the "confirmed safe" list as unsupported.
+Also read when you're not sure whether a JS construct is safe. `pal_validate` catches many
+confirmed workflow-JS breakers, but passing validation is not proof that every unrecognized
+construct is supported. Follow the evidence level recorded in this reference and the validator
+rather than treating every unfamiliar construct as a confirmed hard failure.
 
 ### `references/pal-structure.md` — how a pal is organized
 

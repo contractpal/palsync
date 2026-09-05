@@ -105,14 +105,14 @@ test("pal_exercise guidance uses precise row scope and teaches the full CRUD flo
         "pal-loop body must still route agents to the exercise-authoring reference");
 });
 
-test("pal authoring guidance prevents empty fragments and documents platform JEXL access", () => {
-    const contract = read("bundled-context/CLAUDE.md") + "\n" + read("src/launcher/contextInject.js");
+test("pal authoring guidance routes fragment and JEXL details to frontend", () => {
+    const contract = read("bundled-context/CLAUDE.md");
     const frontend = read("bundled-context/skills/palbuilder-frontend/SKILL.md");
 
-    mustMatch(contract, /fragment[^\n]*(?:must|needs?)[^\n]*(?:non-empty|stub)|(?:empty fragment|empty content)[^\n]*(?:fails?|invalid)/i,
-        "the injected contract must warn that empty fragment content fails");
-    mustMatch(contract, /<c:ignore\s+xmlns:c=["']contractpal["']\s*>/i,
-        "the injected contract must provide a valid fragment stub");
+    mustMatch(contract, /Markup\/browser UI → `palbuilder-frontend`/,
+        "the injected contract must route markup work to the frontend skill");
+    mustMatch(contract, /Use only documented `c:` attributes[^\n]*`palbuilder-frontend`/,
+        "the injected contract must direct unfamiliar tags to the owning skill");
     mustMatch(frontend, /Apache Commons JEXL[^\n]*platform extensions/i,
         "frontend guidance must identify the actual expression engine");
     mustMatch(frontend, /data\.set\(["']first-name["'][\s\S]{0,240}\$\{info\.get\(["']first-name["']\)\}/i,
