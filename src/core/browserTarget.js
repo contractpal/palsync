@@ -189,11 +189,11 @@ function resolveTargetUrl(t, target) {
     return { url: buildTargetUrl(base, target.dispatch), dispatched: true };
 }
 
-// Lazily resolved so screenshot.js can require this module at load time without a cycle: the
-// browser lifecycle (Chromium launch/reuse, navigation settle, login detection) lives in
-// screenshot.js, the target/state contract lives here.
+// The browser lifecycle (Chromium launch/reuse, navigation settle, login detection) lives in
+// browser.js — this module depends straight down on it, and screenshot.js/exercise.js depend on
+// both. No cycles, no lazy resolution.
 function browserPrimitives(deps = {}) {
-    const s = require("./screenshot");
+    const s = require("./browser");
     return {
         loadChromium: deps.loadChromium || s.loadChromium,
         getBrowser: deps.getBrowser || s.getBrowser,

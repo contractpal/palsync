@@ -110,6 +110,26 @@ describe("normalizeTarget — one canonical console target", () => {
         assert.strictEqual(normalizeTarget({ action: "x", params: { id: { a: 1 } } }).blocked, "invalid-params");
     });
 
+    test("combined and separate forms normalize IDENTICALLY", () => {
+        assert.deepStrictEqual(
+            normalizeTarget({ action: "foo?id=9" }).target,
+            normalizeTarget({ action: "foo", params: { id: 9 } }).target);
+    });
+
+    test("encoding edge cases: unicode, empty string, boolean, and &-in-value", () => {
+        const { target } = normalizeTarget({ action: "find", params: { q: "caf\u00e9 & t\u00eb", empty: "", flag: true } });
+        assert.strictEqual(target.dispatch, "find?q=caf%C3%A9+%26+t%C3%AB&empty=&flag=true");
+        const back = new URLSearchParams(target.dispatch.split("?")[1]);
+        assert.strictEqual(back.get("q"), "caf\u00e9 & t\u00eb");
+        assert.strictEqual(back.get("empty"), "");
+        assert.strictEqual(back.get("flag"), "true");
+    });
+
+    test("a value containing = survives as one query value", () => {
+        const { target } = normalizeTarget({ action: "find", params: { q: "a=b" } });
+        assert.strictEqual(new URLSearchParams(target.dispatch.split("?")[1]).get("q"), "a=b");
+    });
+
     test("an action that is only a query string is invalid", () => {
         assert.strictEqual(normalizeTarget({ action: "?id=9" }).blocked, "invalid-action");
     });

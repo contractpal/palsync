@@ -82,7 +82,9 @@ const RESPONSIVE_ROUTE_CAP = 10; // brief/check route lines render on every revi
 
 function viewportState(entry) {
     if (!entry) return "missing";
-    return entry.renderClean ? "clean" : "render-error";
+    if (entry.renderClean) return "clean";
+    // "we cannot prove this is the right screen" is a different remedy from "the page threw".
+    return entry.stateUnverified ? "state-unverified" : "render-error";
 }
 
 function routeAuditRules(cov) {
@@ -114,6 +116,7 @@ function responsiveEvidence(entries, palGuid, marker, sourceDigest) {
         if (!routes[route]) routes[route] = {};
         routes[route][String(row.viewportName)] = {
             renderClean: row.renderClean === true,
+            stateUnverified: row.stateUnverified === true,
             auditErrors: Number(row.auditErrors) || 0,
             auditRules: Array.isArray(row.auditRules) ? row.auditRules.map(String) : []
         };

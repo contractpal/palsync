@@ -1309,10 +1309,18 @@ const TOOLS = [
                         (res.validation ? "\n" + formatValidation(res.validation) : "") + persistNote
                 });
             }
+            // A capture only counts as render evidence when it is a capture of the REQUESTED screen.
+            // A capture that targeted an action/route but declared no expect:[...] proves a page
+            // rendered, not WHICH page — so it stays out of the gate instead of silently passing it.
+            // A capture that targeted nothing has no ambiguity to resolve: the pal's own entry screen
+            // is the only screen it could be, and the login-redirect check already proved it isn't
+            // the login page. Requiring an expectation there would be pure ceremony.
+            const stateTargeted = !!(res.requestedState && (res.requestedState.action || res.requestedState.page));
+            const stateOk = stateTargeted ? res.stateVerified === true : res.stateVerified !== false;
             // A clean capture (no renderError) is the only thing that actually proves the UI renders —
             // a renderError leaves renderVerified false so the reminder keeps firing until it's fixed.
             const auditClean = res.designAudit && res.designAudit.inspected && res.designAudit.errors === 0;
-            const screenshotClean = !res.renderError && (!res.styleStatus || res.styleStatus.likelyLoaded !== false) && auditClean;
+            const screenshotClean = stateOk && !res.renderError && (!res.styleStatus || res.styleStatus.likelyLoaded !== false) && auditClean;
             const visualGate = recordScreenshotEvidence(ctx, {
                 route: page || "/",
                 viewportName: res.viewportName,
@@ -1340,8 +1348,11 @@ const TOOLS = [
             }
             const evidenceRecorded = appendToolEvidence(ctx.workspaceDir, Object.assign(evidenceBase(), {
                 viewportName: res.viewportName,
-                renderClean: res.captured === true && !res.renderError &&
+                renderClean: stateOk && res.captured === true && !res.renderError &&
                     (!res.styleStatus || res.styleStatus.likelyLoaded !== false),
+                // Distinguishes "the page threw" from "we cannot prove this is the right page" in
+                // `palsync review check` output; both are equally not-clean for the gate.
+                stateUnverified: stateOk ? undefined : true,
                 auditErrors: (res.designAudit && res.designAudit.errors) || 0,
                 auditRules: [...new Set(((res.designAudit && res.designAudit.findings) || [])
                     .filter(f => f.severity === "error" || f.severity === "warning")
@@ -1429,9 +1440,10 @@ const TOOLS = [
             // State is reported truthfully next to the image: verified, or explicitly unproven.
             const stateLine = res.stateVerified === true
                 ? "\n  state: VERIFIED — " + (res.requestedState.expect || []).map(s => JSON.stringify(s)).join(", ") + " all visible"
-                : (res.requestedState && (res.requestedState.action || res.requestedState.page)
+                : (stateTargeted
                     ? "\n  ⚠ state: NOT VERIFIED — you targeted " + (res.requestedState.action ? "action " + res.requestedState.action : "page " + res.requestedState.page) +
-                        " but declared no expect:[...], so this image is not proven to be that screen." +
+                        " but declared no expect:[...], so this image is not proven to be that screen and does NOT count toward the render gate." +
+                        " Re-capture with expect:[<visible strings that prove the screen>]." +
                         " Observed headings: " + ((res.observedState && res.observedState.headings.length) ? res.observedState.headings.map(h => JSON.stringify(h)).join(", ") : "(none)") + "."
                     : "");
             const text = (res.kind ? res.kind.toUpperCase() : "WEB") + " screenshot captured — " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height +

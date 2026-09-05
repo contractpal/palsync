@@ -2,7 +2,8 @@
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { loadChromium, inspectDesignQuality } = require("../src/core/screenshot.js");
+const { loadChromium } = require("../src/core/browser.js");
+const { inspectDesignQuality } = require("../src/core/screenshot.js");
 const { recordScreenshotEvidence } = require("../src/mcp/tools.js");
 
 test("responsive visual gate requires both viewports and clears on a later failure", () => {

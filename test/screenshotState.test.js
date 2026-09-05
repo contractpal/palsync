@@ -76,6 +76,29 @@ describe("pal_screenshot state verification", () => {
         assert.strictEqual(new URL(h.gotoCalls[0]).searchParams.get("cp-ws-doaction"), "openClientSetup?id=9");
     });
 
+    test("requested Client Setup/Step 8 but observed Overview is NOT verified evidence", async () => {
+        const pg = fakePage({ url: "https://secure.test/console", text: "Overview\nNo client activity yet.", headings: ["Overview"] });
+        const h = harness({ pages: [pg], tests: [consoleTest()] });
+        const res = await runScreenshot({}, "g", {
+            workflow: "console", action: "openClientSetup", params: { id: 9 }, expect: ["Client Setup", "Step 8"]
+        }, h.deps);
+        assert.strictEqual(res.captured, false);
+        assert.strictEqual(res.category, "targeting");
+        assert.ok(res.reason.includes("Overview"), res.reason);
+        assert.ok(!res.pngBase64, "no accepted image rides a targeting failure");
+    });
+
+    test("requested an existing client but observed Add Client/Step 1 is NOT verified evidence", async () => {
+        const pg = fakePage({ url: "https://secure.test/console", text: "Add Client\nStep 1 of 9", headings: ["Add Client"] });
+        const h = harness({ pages: [pg], tests: [consoleTest()] });
+        const res = await runScreenshot({}, "g", {
+            workflow: "console", action: "openClientSetup", params: { id: 9 }, expect: ["Client Setup", "Step 8"]
+        }, h.deps);
+        assert.strictEqual(res.captured, false);
+        assert.strictEqual(res.stateVerified, false);
+        assert.deepStrictEqual(res.observedState.headings, ["Add Client"]);
+    });
+
     test("the WRONG screen is a targeting failure — captured:false, image labelled failure evidence", async () => {
         const pg = fakePage({ url: "https://secure.test/console", text: "Add Client\nStep 1 of 9", headings: ["Add Client"] });
         const h = harness({ pages: [pg], tests: [consoleTest()] });

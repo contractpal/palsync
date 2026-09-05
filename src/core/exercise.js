@@ -21,7 +21,8 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { stableStringify } = require("./stableStringify");
-const { detectRenderError, sanitizeUrl, sanitizeResourceUrl, releaseBrowser, waitForRenderablePage } = require("./screenshot");
+const { detectRenderError } = require("./screenshot");
+const { sanitizeUrl, sanitizeResourceUrl, releaseBrowser, waitForRenderablePage } = require("./browser");
 // Target normalization, the authenticated bootstrap, the state oracle and the retry boundary are
 // shared with pal_screenshot — neither tool may interpret a console action differently.
 const { normalizeTarget, openAuthenticatedScreen, attemptWithFreshTest, deriveWebBase, describeTargetMismatch } = require("./browserTarget");

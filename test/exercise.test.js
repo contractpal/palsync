@@ -12,7 +12,7 @@ const { InMemoryTransport } = require("@modelcontextprotocol/sdk/inMemory.js");
 const { tmpWorkspace } = require("./helpers");
 const usage = require("../src/core/usage");
 const { runExercise, exerciseByBrowser, validateSteps, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, formatExercise, applyRunId, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, BROWSER_EVENTS_CAP, MAX_STEPS } = require("../src/core/exercise");
-const { waitForRenderablePage } = require("../src/core/screenshot");
+const { waitForRenderablePage } = require("../src/core/browser");
 
 function loadStubbedTools({ exerciseResult, pushResult, screenshotResult, workHistoryModule } = {}) {
     const toolsPath = require.resolve("../src/mcp/tools");

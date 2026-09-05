@@ -438,6 +438,23 @@ test("a later render-error capture overwrites a prior clean pass for the same ro
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
+test("a state-unverified capture keeps the route incomplete and is labelled, not a render error", () => {
+    // UNVERIFIED != PASS: the page rendered, but nothing proves it is the requested screen — a
+    // different remedy (re-capture with expect) from a page that threw.
+    const ws = evidenceWorkspace({
+        review: NO_BEHAVIOR_REVIEW,
+        entries: [
+            { tool: "pal_screenshot", route: "/", viewportName: "desktop", renderClean: true },
+            { tool: "pal_screenshot", route: "/", viewportName: "mobile", renderClean: false, stateUnverified: true }
+        ]
+    });
+    const result = checkWorkspace(ws);
+    assert.equal(result.ok, false);
+    assert.equal(result.responsive.complete, false);
+    assert.match(formatReviewCheck(result), /\/ — desktop: clean, mobile: state-unverified/);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
 test("a push changing the source digest invalidates prior screenshot evidence", () => {
     const ws = evidenceWorkspace({
         review: NO_BEHAVIOR_REVIEW,

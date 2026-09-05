@@ -124,7 +124,7 @@ function collectProbes({ env = process.env } = {}) {
     probes.envPassword = Boolean(env.CP_PASS);
 
     // Playwright/Chromium (screenshot/exercise capability). executablePath() never launches.
-    const { loadChromium } = require("./screenshot");
+    const { loadChromium } = require("./browser");
     const chromium = loadChromium();
     if (!chromium) {
         probes.chromium = { module: false, browser: false };
