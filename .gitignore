@@ -69,3 +69,8 @@ outputs/
 # editor/IDE project files — per-developer, not part of the public tool
 .idea/
 .junie/
+
+# Electron GUI build output (gui/node_modules already covered by node_modules/ above)
+gui/dist/
+gui/dist-renderer/
+gui/out/
