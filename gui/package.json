@@ -10,6 +10,8 @@
     "build:renderer": "vite build",
     "build:win": "npm run build:renderer && electron-builder --win",
     "build:win:dir": "npm run build:renderer && electron-builder --win --dir",
+    "build:mac": "npm run build:renderer && electron-builder --mac",
+    "build:mac:dir": "npm run build:renderer && electron-builder --mac --dir",
     "postinstall": "patch-package && electron-rebuild -f -w node-pty"
   },
   "dependencies": {
@@ -46,6 +48,12 @@
     },
     "nsis": {
       "artifactName": "ChipPalBuilder.exe"
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
     }
   },
   "allowScripts": {
