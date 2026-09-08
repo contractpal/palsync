@@ -1061,6 +1061,7 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null) {
                     : "Refresh navigation/authentication before trying again."
             };
             if (open.available === false) failed.available = false;
+            if (open.authDiagnostics) failed.authDiagnostics = open.authDiagnostics;
             return pg ? attachEvidence(failed, pg, null, events, evidenceTimeout) : failed;
         }
         // Web base for step-level page/action navigation.

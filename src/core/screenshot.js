@@ -601,6 +601,7 @@ async function failedCapture(open, t, requestedState, target, viewportName, imag
         requestedState
     };
     if (open.authExpired) base.authExpired = true;
+    if (open.authDiagnostics) base.authDiagnostics = open.authDiagnostics;
     if (open.pg) { try { base.url = sanitizeUrl(open.pg.url()); } catch (e) { /* page may be gone */ } }
     if (open.category !== "targeting") {
         return Object.assign(base, { reason: open.reason });
