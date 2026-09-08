@@ -8,18 +8,57 @@
 - **Detect a pal folder pinned to an outdated palsync CLI and offer to update it**
   When a pal project's hooks/skills (e.g. the completion `Stop` hook expecting `palsync review check` / `palsync completion check` / `palsync task`) were wired up against an old resolvable `palsync` (global install or local dependency), an agent working in that folder hits a hard mechanical gate it can't pass — subcommands the pinned CLI simply doesn't have. The GUI already resolves and runs `palsync` per pal folder (`palFolder.js`, `dependencyCheck.js`) and already has an update-check pattern for itself (`versionCheck.js`'s `compareVersions` + the notice banner in `LauncherView.jsx`). Extend `validatePalFolder` (`palFolder.js:14`) to also resolve/run the `palsync` that folder would actually invoke (e.g. `palsync --version` from that folder's context) and compare it against the latest published version; if it's behind, surface an "This pal's palsync is outdated (0.20.0 → 0.22.1) and may be missing subcommands its hooks expect — update it?" prompt when adding/opening the folder, with a one-click path to run the upgrade (`npm i -g palsync@latest`, or bump the local dependency if it's pinned in that project's `package.json`).
 
+- **"Chip assistant" — multiple simultaneous Chip identities on one pal (ON HOLD, blocked on CloudPiston server-side work)**
+  Idea: let two or more Chip instances act as their own team on the same pal (analogous to multiple human PalBuilder developers in Team Builder, but all driven by Chip). Blocked because CloudPiston's pal lock is currently "re-granted to whoever asks last" — no concept of multiple legitimate concurrent holders — and would need server-side support for each Chip instance/checkout to be recognized as a distinct team-member identity with its own non-conflicting lock/session. David is pursuing the CloudPiston-side piece himself, separately from the GUI. GUI-side foundation (multi-checkout folder naming/`resolveAvailableDir`, folder-based tab labeling, per-tab MCP registration) is already in place to plug into this once the server side exists. Check with David on status before resuming.
+
+- **Codex agent support (ON HOLD)**
+  Codex (OpenAI's coding-agent CLI) is known to palsync's agent registry (`src/launcher/agents.js`) but not surfaced in Chip's agent picker (`agentLaunch.js`'s `REGISTRARS` only lists `claude-code`/`opencode`). Blocker: Codex's MCP registration (`src/mcp/registerCodex.js`) writes to a single **global** `~/.codex/config.toml` (one shared `palsync` entry, last-registered-wins) rather than a per-project config — two Chip tabs both using Codex would silently redirect each other's MCP connection. Options discussed, no decision made: leave unsupported / support single-Codex-tab-only / support with a clear warning.
+
+- **Team Builder multi-checkout awareness (deferred)**
+  CloudPiston/PalBuilder's Team Builder feature (multiple devs/agents editing the same pal concurrently, file lock-gated) isn't yet MCP-aware. David: "we will hold off on this" until the MCP side supports it. When picked back up: tabs sharing a `cloudPalId` need a disambiguating label, and self-inflicted lock conflicts (two of the user's own tabs racing on the same file) should surface as a friendly in-console message rather than being prevented proactively.
+
+- **Multi-workspace-at-once (decided against for now)**
+  Single active workspace per window is the current design. Revisit only if real usage shows people need two workspaces open side by side.
+
+- **"Set Up Dependencies" checklist screen — already partly built, worth extending**
+  Help → "Check Dependencies…" exists with Agent Detected + Preview Browser (Chromium) checks. Could grow to cover more first-run setup in one place instead of scattered lazy prompts.
+
 ## Bugs
 
-- **Can't paste into the agent console input (unconfirmed)**
-  Reported that pasting doesn't work in the agent input field — not yet confirmed which input or whether it reproduces on another machine. Best guess: the agent console (`ConsoleTab.jsx`) is an `@xterm/xterm` terminal (`renderer/components/ConsoleTab.jsx:27`), and xterm.js doesn't bind plain `Ctrl+V` to paste by default (it's a raw control byte a real terminal would send to the shell) — paste normally needs `Ctrl+Shift+V`, a middle-click, or a custom keybinding via `attachCustomKeyEventHandler`, none of which are wired up here. Needs reproduction/confirmation before fixing.
+_None open right now._
 
-- **Low-contrast text in Claude Code output (upstream, not a palsync bug)**
-  Some chunks of Claude-generated code/text render as black-on-near-black, illegible. Reproduces in IntelliJ's terminal and in the GUI's embedded console (`ConsoleTab.jsx`) alike, so it's Claude Code's own ANSI color output (likely assuming a light-background terminal theme) rather than anything palsync's GUI controls. Nothing to fix here directly — flagged as feedback to Anthropic; if it persists, check whether Claude Code has a theme/no-color setting to force high-contrast output.
+## To verify / polish
 
-- **Claude Code hook commands written from inside the GUI relaunch the GUI instead of running palsync — a new window opens, waits, then closes**
-  `gui/src/main/cloudWizard.js` requires `palsync/src/launcher/workspace.js`, whose `workspace.js:190` calls `contextInject.inject()`, which (`contextInject.js:672`) calls `claudeHooks.configure(workspaceDir, { install: true })` to write the Stop/PreToolUse/PostToolUse hook commands into that pal's `.claude/settings.json`. `claudeHooks.js:11` builds those commands from `NODE_EXECUTABLE = path.resolve(process.execPath)`, computed at module load — inside Electron's main process that's `electron.exe`, not plain Node, same underlying issue `agentLaunch.js:29` already documents and patches for `.mcp.json`/`opencode.json` via `ensureElectronRunAsNode`, but that patch never covers hook commands. Result: every pal set up through the GUI gets a Stop hook (fires after every agent turn) that shells out to `electron.exe` without `ELECTRON_RUN_AS_NODE=1`, booting a second GUI instance that opens and then exits a few seconds later — repeating on every turn. Fix needs a hook-specific equivalent, since `.claude/settings.json` hook entries are a plain command string (no `env` field like the MCP config JSON does) — e.g. patch the written command post-`configure()` to prefix an env-var-setting wrapper (`cmd /c "set ELECTRON_RUN_AS_NODE=1 && ..."` / `ELECTRON_RUN_AS_NODE=1 ...`) without breaking `claudeHooks.js`'s strict `isOwnedCommand`/`parseGeneratedCommand` anchoring used for hook migration/detection, or add a `nodePath` override to `claudeHooks.configure()`/`generateCommand()` (mirroring `mcp/register.js`'s existing `nodePath` param) so GUI callers can pass a real Node path instead of `process.execPath`.
+- **"Open from cloud" adding a brand-new custom cloud URL — untested**
+  Create/open wizards' cloud picker has only been verified against an already-known cloud; adding a new custom cloud URL from inside that flow hasn't been tried yet.
+
+- **About screen copyright text not confirmed**
+  `AboutModal.jsx` defaults to "© {current year} ContractPal. All rights reserved." — David hasn't confirmed this exact text/holder is correct.
+
+- **Terminal scrollbar visual treatment is a placeholder**
+  `.xterm-viewport` styling in `gui/src/renderer/styles.css` — sizing/reflow bug is fixed, but the scrollbar's look is left as a placeholder pending feedback from David's team.
+
+## Build / Infra
+
+- **macOS `.dmg` build target intermittently fails**
+  `hdiutil resize ... error 35 (Resource temporarily unavailable)` on the Mac build machine (`benjamins`). Confirmed not a disk-space issue (295GB free) — known `hdiutil` flakiness. Signed+notarized `.zip` is a fully valid distributable in the meantime (Gatekeeper treats it identically to a `.dmg`), so this is deprioritized. Next attempt: either retry the build (may just work) or drop `dmg` from `gui/package.json`'s mac target list if it keeps failing.
+
+- **Linux build machine blocked on git auth to clone the repo**
+  VM `ubuntu-palsync-build` (VirtualBox, Ubuntu Server 24.04.3 LTS, host `192.168.1.59`-reachable via port 2222→22 forward) has the full toolchain installed (build-essential, git, curl, python3, Node 20.20.2) but cloning `contractpal/palsync` is blocked — the GitHub PAT approach that worked on the Mac build got flagged by the Claude Code auto-mode permission classifier as needing explicit approval on this machine/session. Options to try next: (a) have David paste the git-credential-setup command himself so the token never passes through the sandboxed tool, (b) switch to an SSH deploy key for this VM instead of a PAT (cleaner long-term for a non-interactive build box), or (c) approve the specific blocked action if permission settings allow a rule for it. Once cloned: `npm install` (root + `gui/`), verify `node-pty` native rebuild under Ubuntu's toolchain, then `electron-builder --linux` (AppImage first — simplest, no signing/notarization needed on Linux at all).
 
 ## Fixed
+
+- **Version-check banner sends raw `process.platform` as `os=`** — confirmed no change needed
+  `versionCheck.js` sends Node's raw values (`win32`/`darwin`/`linux`) to `getVersionInfo.do?ide=chip&os=<platform>`. David confirmed the endpoint is fine with these tokens as-is.
+
+- **Claude Code hook commands written from inside the GUI relaunch the GUI instead of running palsync** — fixed (needs more real-world testing)
+  Hooks written via `contextInject.js`/`claudeHooks.js` used `process.execPath` for the command's Node binary, which inside Electron's main process is `electron.exe`, not plain Node — same root cause `agentLaunch.js` already patched for MCP config, but that patch never covered hook commands. Fixed by a new `ensureElectronRunAsNodeForHooks(workspaceDir)` in `gui/src/main/agentLaunch.js`, which finds palsync-owned hook commands in `.claude/settings.json` and prefixes them with `set ELECTRON_RUN_AS_NODE=1 &&` (Windows) / `ELECTRON_RUN_AS_NODE=1 ` (POSIX), relying on the shell Claude Code already runs the command through. Wired into `ensureMcpRegistered()` (self-healing on every console launch) and `cloudWizard.js`'s `materialize()` (create-new/open-from-cloud path). Marked done per David; not yet confirmed against a live repeated-Stop-hook scenario — flag if it resurfaces.
+
+- **Low-contrast text in Claude Code output** — fixed (GUI-side mitigation)
+  Some chunks of Claude-generated code/text rendered as black-on-near-black, illegible — Claude Code's own ANSI color output likely assumes a light-background terminal theme, upstream of palsync's control. Mitigated in `ConsoleTab.jsx` by setting xterm.js's `minimumContrastRatio: 4.5`, which auto-adjusts a cell's foreground color to meet that contrast ratio against the terminal's background regardless of the color the CLI requested. Confirmed fixed by David.
+
+- **Can't paste into the agent console input with Ctrl+V/Cmd+V** — fixed
+  Confirmed: right-click paste worked, but keyboard paste didn't — xterm.js doesn't bind plain `Ctrl+V` to paste by default (it's a raw control byte a real terminal would send to the shell). Fixed in `ConsoleTab.jsx` by adding `term.attachCustomKeyEventHandler` to intercept Ctrl+V/Cmd+V, read `navigator.clipboard.readText()`, and call `term.paste(text)`.
 
 - **Stale docs still tell the agent it can't create/edit a `datalist`** — fixed
   `bundled-context/skills/palbuilder-core/references/pal-json.md:127-130` said `data`/`datalists`/`dataviews` are "PalBuilder-provisioned... does not provision new ones via push... Create a new object in PalBuilder first" — stale for `data`/`datalists`, which are agent-editable via `pal_data_set`/`pal_data_delete` and `pal_datalist_set`/`pal_datalist_delete` (`src/mcp/tools.js:1836`, `:1873`; `src/core/dataObjects.js:120`, `:134`). Only `datasets`/`dataviews` still require PalBuilder. Reworded the summary paragraph to match what the detailed `data`/`datalists` sections already documented correctly.

@@ -44,7 +44,8 @@
       "build-info.json"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.png"
     },
     "nsis": {
       "artifactName": "ChipPalBuilder.exe"
@@ -53,7 +54,8 @@
       "target": ["dmg", "zip"],
       "category": "public.app-category.developer-tools",
       "hardenedRuntime": true,
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "icon": "build/icon.png"
     }
   },
   "allowScripts": {

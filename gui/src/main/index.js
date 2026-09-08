@@ -100,6 +100,7 @@ function createWindow() {
         width: 1180,
         height: 780,
         title: "Chip Pal Builder",
+        icon: path.join(__dirname, "assets", "icon.png"),
         webPreferences: {
             preload: path.join(__dirname, "preload.js"),
             contextIsolation: true,

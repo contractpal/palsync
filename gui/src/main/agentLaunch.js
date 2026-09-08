@@ -45,6 +45,36 @@ async function ensureElectronRunAsNode(filePath, configFile) {
     await fs.writeFile(filePath, JSON.stringify(json, null, 2), "utf8");
 }
 
+// Claude Code's hook commands hit the same electron.exe-as-node problem as the MCP config
+// (see ensureElectronRunAsNode above), but .claude/settings.json hook entries are a plain
+// command string with no `env` field to carry the fix — so instead the env var is prefixed
+// onto the command itself and left for the shell Claude Code already runs it through to
+// interpret ("set VAR=1 && cmd" on Windows, "VAR=1 cmd" elsewhere). Self-healing: re-run on
+// every console launch so a config written before this fix existed gets corrected too.
+async function ensureElectronRunAsNodeForHooks(workspaceDir) {
+    const filePath = path.join(workspaceDir, ".claude", "settings.json");
+    let settings;
+    try { settings = JSON.parse(await fs.readFile(filePath, "utf8")); }
+    catch (e) { return; }
+    if (!settings || typeof settings.hooks !== "object" || !settings.hooks) return;
+    const prefix = process.platform === "win32" ? "set ELECTRON_RUN_AS_NODE=1 && " : "ELECTRON_RUN_AS_NODE=1 ";
+    let changed = false;
+    for (const groups of Object.values(settings.hooks)) {
+        if (!Array.isArray(groups)) continue;
+        for (const group of groups) {
+            if (!group || !Array.isArray(group.hooks)) continue;
+            for (const hook of group.hooks) {
+                if (!hook || hook.type !== "command" || typeof hook.command !== "string") continue;
+                if (hook.command.indexOf("ELECTRON_RUN_AS_NODE") !== -1) continue; // already patched
+                if (hook.command.toLowerCase().indexOf("palsync.js") === -1) continue; // not our hook
+                hook.command = prefix + hook.command;
+                changed = true;
+            }
+        }
+    }
+    if (changed) await fs.writeFile(filePath, JSON.stringify(settings, null, 2), "utf8");
+}
+
 // Idempotent on the registration itself, but self-healing on the Electron-as-Node patch — an
 // already-registered config from before this fix existed still gets corrected.
 async function ensureMcpRegistered(agentId, workspaceDir) {
@@ -55,7 +85,10 @@ async function ensureMcpRegistered(agentId, workspaceDir) {
     let result = { filePath };
     if (!alreadyRegistered) result = await reg.register(workspaceDir);
     await ensureElectronRunAsNode(filePath, reg.configFile);
+    await ensureElectronRunAsNodeForHooks(workspaceDir);
     return Object.assign({ alreadyRegistered }, result);
 }
 
-module.exports = { detectAgents, resolveAgent: resolve, ensureMcpRegistered, ensureElectronRunAsNode };
+module.exports = {
+    detectAgents, resolveAgent: resolve, ensureMcpRegistered, ensureElectronRunAsNode, ensureElectronRunAsNodeForHooks
+};

@@ -27,13 +27,31 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
         const term = new Terminal({
             fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
             fontSize: 13,
-            theme: { background: "#0b0c0e", foreground: "#d8d8d2" }
+            theme: { background: "#0b0c0e", foreground: "#d8d8d2" },
+            // Some agent CLIs (e.g. Claude Code) emit ANSI colors assuming a light-background
+            // terminal, which can render near-invisible against our dark theme. xterm.js
+            // auto-adjusts a cell's foreground color to meet this contrast ratio against
+            // whatever background it's drawn on, regardless of what color the CLI requested.
+            minimumContrastRatio: 4.5
         });
         const fit = new FitAddon();
         term.loadAddon(fit);
         term.open(hostRef.current);
         termRef.current = term;
         fitRef.current = fit;
+
+        // xterm.js doesn't bind Ctrl+V/Cmd+V to paste by default — a real terminal would
+        // treat it as a raw control byte for the shell. Right-click-paste already works via
+        // the browser's native context menu; this adds the keyboard shortcut on top of it.
+        term.attachCustomKeyEventHandler(event => {
+            if (event.type !== "keydown") return true;
+            const isPaste = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === "v";
+            if (!isPaste) return true;
+            navigator.clipboard.readText().then(text => {
+                if (text) term.paste(text);
+            }).catch(() => {});
+            return false;
+        });
 
         const offData = window.palsyncGui.onConsoleData(pal.cloudPalId + ":" + pal.path, chunk => term.write(chunk));
         term.onData(data => window.palsyncGui.writeToConsole(pal.cloudPalId + ":" + pal.path, data));

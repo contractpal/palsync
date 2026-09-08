@@ -11,7 +11,7 @@ const { CloudPistonAPIManager } = require("palsync/lib/apiManager");
 const { createNewPal } = require("palsync/src/core/createPal");
 const workspace = require("palsync/src/launcher/workspace");
 const palFolder = require("./palFolder");
-const { ensureElectronRunAsNode } = require("./agentLaunch");
+const { ensureElectronRunAsNode, ensureElectronRunAsNodeForHooks } = require("./agentLaunch");
 const fs = require("fs");
 const path = require("path");
 
@@ -184,6 +184,7 @@ async function materialize({ profile, palGuid, palName, workspaceDir, agentKey, 
     });
     const configFile = AGENT_KEY_TO_CONFIG_FILE[resolvedAgentKey];
     if (configFile) await ensureElectronRunAsNode(path.join(workspaceDir, configFile), configFile);
+    await ensureElectronRunAsNodeForHooks(workspaceDir);
     const validation = await palFolder.validatePalFolder(workspaceDir);
     if (!validation.ok) throw new Error("Pal created, but the local folder didn't validate afterward: " + validation.reason);
     return palFolder.tabFromRecord(workspaceDir, validation.record);
