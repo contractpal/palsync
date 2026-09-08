@@ -19,9 +19,9 @@ basis that could not be reproduced.
 | Claude | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,100 | 275 | workspace-stable |
 | Codex/OpenCode | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,100 | 275 | workspace-stable |
 | Pi | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,085 | 272 | workspace-stable |
-| Claude | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,484 | 2,121 | on-demand |
-| Codex/OpenCode | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,717 | 2,180 | on-demand |
-| Pi | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 6,772 | 1,693 | on-demand |
+| Claude | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,613 | 2,154 | on-demand |
+| Codex/OpenCode | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,846 | 2,212 | on-demand |
+| Pi | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 6,901 | 1,726 | on-demand |
 | All | `creating-files` | `src/launcher/contextInject.js#syncDetails` | 3,327 | 832 | on-demand |
 | Claude/Codex/OpenCode | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,539 | 885 | on-demand |
 | Pi | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,567 | 892 | on-demand |
@@ -29,7 +29,7 @@ basis that could not be reproduced.
 | All | `skill-body:design-system-init` | `bundled-context/skills/design-system-init/SKILL.md` | 18,126 | 4,532 | on-demand |
 | All | `skill-body:pal-fix` | `bundled-context/skills/pal-fix/SKILL.md` | 4,167 | 1,042 | on-demand |
 | All | `skill-body:pal-loop` | `bundled-context/skills/pal-loop/SKILL.md` | 8,303 | 2,076 | on-demand |
-| All | `skill-body:pal-review` | `bundled-context/skills/pal-review/SKILL.md` | 16,478 | 4,120 | on-demand |
+| All | `skill-body:pal-review` | `bundled-context/skills/pal-review/SKILL.md` | 16,686 | 4,172 | on-demand |
 | All | `skill-body:pal-spec` | `bundled-context/skills/pal-spec/SKILL.md` | 10,045 | 2,512 | on-demand |
 | All | `skill-body:palbuilder-core` | `bundled-context/skills/palbuilder-core/SKILL.md` | 3,210 | 803 | on-demand |
 | All | `skill-body:palbuilder-data` | `bundled-context/skills/palbuilder-data/SKILL.md` | 15,960 | 3,990 | on-demand |

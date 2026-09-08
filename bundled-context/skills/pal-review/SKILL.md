@@ -5,6 +5,9 @@ description: "Load for fresh independent review of a completed build against SPE
 
 # pal-review — fresh-eyes evaluation against the spec
 
+`pal-review` is a thorough **final** review. Run it only when the user requests it or the active
+review setting is Automatic, after implementation is complete — never between tasks.
+
 Run in a **fresh session or subagent — never the context that wrote the code**. That session
 is biased toward its own output; bias separation is the whole point. Open cold, judge whether
 the build meets the contract. pal-loop ran the *tests* (compile/validate); you run the *eval*
@@ -163,8 +166,8 @@ from the pal workspace and paste its complete output into REVIEW.md. It reports 
 source-bound exercise evidence rather than a call count; behavior evidence is required only when
 §5/action-trace/happy-path PASS rows declare testable behavior. Any flag, stale-review failure, or
 verdict cap forces `CHANGES-NEEDED`; do not write PASS until the check reports `result: PASS`.
-The build session runs `palsync completion check`: Claude blocks Stop, Pi queues a corrective
-follow-up, and other harnesses invoke the same CLI gate manually.
+The build session runs `palsync completion check`; configured harness hooks may surface an unmet
+gate, and other harnesses invoke the same CLI gate manually.
 
 ## Rules
 - **Never edit code or the spec.** Findings become fix tasks for pal-loop; a *spec* problem
@@ -201,8 +204,8 @@ follow-up, and other harnesses invoke the same CLI gate manually.
   rewrite instead of a one-line change.)
 
 ## How it fits the loop
-pal-loop builds and tests, then hands off here in a fresh context. You return the verdict;
-pal-loop turns CHANGES-NEEDED items into fix tasks and re-reviews until PASS.
+When final review is requested, pal-loop hands off here in a fresh context after the build. You
+return the verdict; pal-loop turns CHANGES-NEEDED items into fix tasks and re-reviews until PASS.
 
 ## What this skill does NOT do
 - Does not build or fix anything — verdict and fix tasks only.

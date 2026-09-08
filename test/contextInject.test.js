@@ -315,7 +315,7 @@ test("always-on fragment routing agrees with the frontend skill", () => {
     assert.doesNotMatch(contract, /put init JS directly at the bottom of the fragment/i);
 });
 
-test("on-demand sync details route every visible UI task through frontend + design-build and rendered review", () => {
+test("on-demand sync details route UI skills while leaving verification to the active policy", () => {
     for (const opts of [
         { cli: false, skillsDir: ".claude/skills" },
         { cli: false, skillsDir: ".agents/skills" },
@@ -324,7 +324,12 @@ test("on-demand sync details route every visible UI task through frontend + desi
         const doc = ci.syncDetails("Demo", opts);
         assert.match(doc, /mandatory two-skill route/i);
         assert.match(doc, /load both `palbuilder-frontend`.*`design-build`/s);
-        assert.match(doc, /render desktop and mobile/i);
+        assert.match(doc, /Standard uses one[\s\S]*Thorough adds the desktop\/mobile pair/);
+        assert.doesNotMatch(doc, /render desktop and mobile/i,
+            "the injected contract must not override Standard with a two-viewport suite");
+        assert.match(doc, /verification plan calls for compile proof/);
+        assert.match(doc, /verification plan calls for SEO proof/);
+        assert.match(doc, /verification plan calls for behavior proof/);
         assert.match(doc, /`designAudit`/);
     }
 });

@@ -21,6 +21,8 @@ const palSpec = fs.readFileSync(path.join(SKILLS, "pal-spec", "SKILL.md"), "utf8
 const routing = fs.readFileSync(path.join(__dirname, "..", "bundled-context", "CLAUDE.md"), "utf8");
 const verifyLadder = fs.readFileSync(path.join(SKILLS, "pal-loop", "references", "verify-mechanics.md"), "utf8");
 const handoff = fs.readFileSync(path.join(SKILLS, "pal-loop", "references", "handoff.md"), "utf8");
+const sessionStart = fs.readFileSync(path.join(SKILLS, "pal-loop", "references", "session-start.md"), "utf8");
+const verificationPolicy = fs.readFileSync(path.join(SKILLS, "shared", "references", "verification.md"), "utf8");
 
 test("pal-fix proves the fix proportionally instead of running the whole ladder", () => {
     assert.match(palFix, /Verification is proportional, not optional/, "pal-fix defers to the policy");
@@ -118,6 +120,13 @@ test("pal-loop completion follows the review setting, and only at the end", () =
         "regression at completion must be conditional");
     assert.match(palLoop, /### 8\. Complete[\s\S]*follow the `review` setting/);
     assert.match(palLoop, /\*\*off\*\* → finish[\s\S]*\*\*ask\*\* → offer[\s\S]*\*\*auto\*\* → dispatch/);
+    assert.match(palReview, /thorough \*\*final\*\* review[\s\S]*user requests it[\s\S]*Automatic/,
+        "pal-review must identify itself as an optional or Automatic final review");
+    for (const [label, text] of [["pal-loop", palLoop], ["handoff", handoff],
+        ["session start", sessionStart], ["routing", routing], ["verification policy", verificationPolicy]]) {
+        assert.doesNotMatch(text, /review cadence|each-task|every-N|mandatory review|final reviewer/i,
+            label + " must not revive the old review schedule");
+    }
 });
 test("pal-loop loads verification mechanics at Verify and policy from one place", () => {
     for (const pattern of [/Push \/ validate/, /WEB page checks/, /Screenshots/, /Exercises/, /Warnings/]) {
