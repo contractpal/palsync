@@ -1526,6 +1526,7 @@ const TOOLS = [
                 fill: z.record(z.union([z.string(), z.number()])).optional().describe("Input name/value pairs to fill before clicking."),
                 click: z.string().optional().describe("Exact visible text or simple selector to click."),
                 within: z.string().optional().describe("CSS scope when click text matches multiple elements."),
+                upload: z.string().optional().describe("Workspace-relative file for the screen's c:upload widget; submitted for you."),
                 expect: z.array(z.string()).optional().describe("Visible strings required after this step."),
                 absent: z.array(z.string()).optional().describe("Unique visible strings forbidden after this step."),
                 waitFor: z.object({
