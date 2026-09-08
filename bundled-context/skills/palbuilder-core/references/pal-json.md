@@ -124,11 +124,14 @@ The authoritative `fieldType` values from `com/contractpal/pal/DatasetField.java
 `Remote File Encrypted`, `Primary key`, `Pal id`, `Transaction id`, `Profile id`,
 `Pal id auto populate`, `Transaction id auto populate`, and `Profile id auto populate`.
 
-`data`, `datalists`, and `dataviews` are PalBuilder-provisioned manifest objects. Palsync preserves
-existing entries during pull/push but does not provision new ones via push. The examples below are
-the exact serialized shapes you will see in a pulled/exported pal and may safely maintain for an
-existing object. Create a new object in PalBuilder first. Runtime DataViews are the exception:
-`pal.createDataViewBuilder(true)` constructs a view in workflow code without a manifest entry.
+`data`, `datalists`, and `dataviews` are PalBuilder-provisioned manifest objects — `datasets` and
+`dataviews` are never created or destroyed by any tool, and push only preserves existing entries
+for them; create a new dataset/dataview in PalBuilder first. `data` and `datalists` are the
+exception: use `pal_data_set`/`pal_data_delete` and `pal_datalist_set`/`pal_datalist_delete` to
+create, update, or delete entries locally (then `push` to send them) — don't hand-edit those
+manifest sections. The examples below are the exact serialized shapes you will see in a
+pulled/exported pal. Runtime DataViews are a separate case: `pal.createDataViewBuilder(true)`
+constructs a view in workflow code without a manifest entry.
 
 ---
 
