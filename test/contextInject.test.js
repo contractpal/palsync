@@ -272,8 +272,10 @@ test("every injected flavor routes sync details through pal_context", async () =
         assert.match(doc, /Visible UI work: load `palbuilder-frontend` \+ `design-build`/);
         assert.match(doc, /if no design system exists,\s+load `design-system-init`/);
         assert.match(doc, /offer to push it — local-only\s+changes are not a shipped Pal/);
-        assert.match(doc, /After pushed UI\/workflow behavior changes, obtain runtime\/render\s+evidence/);
-        assert.match(doc, /fresh `REVIEW\.md` PASS \+ `palsync completion check`/);
+        assert.match(doc, /Verify in proportion to the change/);
+        assert.match(doc, /PalSync: Standard checks · Final review: Ask/,
+            "every flavor states the saved verification/review policy");
+        assert.match(doc, /shared\/references\/verification\.md/, "every flavor points at the one policy");
         assert.ok(!doc.includes("owning bundled skill references"), "no flavor may redirect pal_context to skill files");
     }
 });

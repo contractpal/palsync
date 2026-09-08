@@ -187,7 +187,9 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
     log("injecting CLAUDE.md + skills" +
         (agent === "codex" ? " + AGENTS.md/.agents (Codex)" : agent === "pi" ? " + AGENTS.md/.agents (Pi)" :
          agent === "opencode" ? " + AGENTS.md/.agents (OpenCode)" : ""));
-    const injected = await contextInject.inject(workspaceDir, { palName: sel.pal.name, agent });
+    const injected = await contextInject.inject(workspaceDir, {
+        palName: sel.pal.name, agent, policy: require("../core/policy").resolve()
+    });
     if (injected.hookSettings && injected.hookSettings.skipped) {
         log("  Claude hook settings skipped: " + injected.hookSettings.error + ". " + injected.hookSettings.manualRemediation);
     }

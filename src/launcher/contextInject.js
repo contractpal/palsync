@@ -24,6 +24,11 @@ function getWorkspaceIgnoreSync() {
     return workspaceIgnoreSync;
 }
 
+const policyModule = require("../core/policy");
+// Measurement paths (tests, bench, manifest) must be deterministic, so the doc renders the DEFAULT
+// policy unless a caller passes the live one; only the launcher does.
+const policyDefaults = policyModule.DEFAULTS;
+
 const BUNDLE_DIR = path.join(__dirname, "..", "..", "bundled-context");
 const VERSION = require("../../package.json").version;
 const SHARED_REFERENCES = "shared";
@@ -300,16 +305,20 @@ function syncDetails(palName, { cli = false, skillsDir = ".claude/skills" } = {}
     ].join("\n");
 }
 
-function syncSection(palName, { cli = false } = {}) {
+function syncSection(palName, { cli = false, policy = policyDefaults, skillsDir = ".claude/skills" } = {}) {
     return [
         "## palsync — essential sync contract (managed)",
         "",
         "This pal" + (palName ? " (**" + palName + "**)" : "") + " is connected to CloudPiston through " + (cli ? "the palsync CLI; locks are per-command." : "the palsync MCP server and is locked for your session."),
         "",
+        "**" + policyModule.summaryLine(policy) + "** — say this line once when work starts. It is the",
+        "user's saved preference (`palsync settings`). `" + skillsDir + "/shared/references/verification.md`",
+        "is the single verification policy: how much proof a change gets, and when a final review runs.",
+        "",
         "Visible UI work: load `palbuilder-frontend` + `design-build`; if no design system exists,",
         "load `design-system-init`. When a meaningful change is ready, offer to push it — local-only",
-        "changes are not a shipped Pal. After pushed UI/workflow behavior changes, obtain runtime/render",
-        "evidence. A completed build requires fresh `REVIEW.md` PASS + `palsync completion check`.",
+        "changes are not a shipped Pal. Verify in proportion to the change, and say in one plain",
+        "sentence why an expensive check is running before you run it.",
         "",
         "**Before any sync, file-creation, or dataset operation, call `pal_context`.** No arguments",
         "lists sections; load `section:\"sync-workflow\"`, `section:\"creating-files\"`, or",
@@ -613,7 +622,7 @@ async function contextStatus(workspaceDir) {
 //            support is unreliable; Claude Code does not read .agents/ or AGENTS.md — verified).
 //            Pi uses the CLI flavor (palsync subcommands, no session lock); Codex and OpenCode use
 //            the MCP flavor (both get a registered MCP server — see workspace.js).
-async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
+async function inject(workspaceDir, { palName, agent = "claude", policy = policyDefaults } = {}) {
     // Ensure transient artifacts are ignored and already-tracked copies are migrated
     // out of the index. This keeps task commits focused on source while leaving disk
     // content and unrelated staging untouched. Best-effort: warnings do not block setup.
@@ -632,7 +641,7 @@ async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
         const openCodeCommands = agent === "opencode"
             ? await syncOpenCodeCommands(workspaceDir, skills)
             : { written: [], skipped: [], removed: await cleanOpenCodeCommands(workspaceDir) };
-        const docOpts = { cli: agent === "pi", skillsDir: ".agents/skills" };
+        const docOpts = { cli: agent === "pi", skillsDir: ".agents/skills", policy };
         const agentsDoc = await buildPalsyncDoc(palName, docOpts);
         const agentsPath = path.join(workspaceDir, "AGENTS.md");
         const existingAgents = await readIfExists(agentsPath);
@@ -661,7 +670,7 @@ async function inject(workspaceDir, { palName, agent = "claude" } = {}) {
     await copySkillSet(workspaceDir, ".claude", skills);
     await copySharedReferences(workspaceDir, ".claude");
     const prunedClaude = await pruneSkills(workspaceDir, ".claude", keep);
-    const docOpts = { cli: false };
+    const docOpts = { cli: false, policy };
     await writeIfChanged(path.join(workspaceDir, "CLAUDE.palsync.md"),
         await buildPalsyncDoc(palName, docOpts));
     const claudePath = path.join(workspaceDir, "CLAUDE.md");

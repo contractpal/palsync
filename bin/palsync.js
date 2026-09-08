@@ -22,7 +22,7 @@ if (argv.includes("--version") || argv.includes("-v")) {
 // Subcommands: `palsync push|pull|status` — headless sync that needs NO MCP server and NO agent
 // (the recovery path when a session ends before a push, and a plain terminal workflow). They
 // skip the launcher preflight entirely: no Claude/Codex required, just .palsync.json + keychain.
-const SUBCOMMANDS = ["push", "pull", "merge", "status", "test", "preview", "open", "fetch", "screenshot", "validate", "doctor", "sync-datasets", "seo-audit", "exercise", "cost", "ctx", "review", "completion", "hook", "hooks", "regression", "spec-lint", "task", "checkpoint", "session-summary"];
+const SUBCOMMANDS = ["push", "pull", "merge", "status", "test", "preview", "open", "fetch", "screenshot", "validate", "doctor", "sync-datasets", "seo-audit", "exercise", "cost", "ctx", "review", "completion", "hook", "hooks", "regression", "spec-lint", "settings", "verify", "task", "checkpoint", "session-summary"];
 // Normalize underscores so `palsync sync_datasets` runs sync-datasets instead of falling through.
 // In the test-07 run that fall-through opened the interactive launcher inside an agent's shell,
 // which hung on a prompt — and the agent's `pkill -f palsync` to unstick it killed the session's
@@ -80,6 +80,7 @@ if (argv[0] === "help" || argv.includes("--help") || argv.includes("-h")) {
         "  palsync upgrade [--check]   self-update to the latest commit on the default branch\n" +
         "  palsync --agent codex|pi|opencode   use Codex, Pi, or OpenCode instead of Claude Code (default: claude)\n" +
         "  palsync --eval [spec]   benchmark-harness mode: pick a spec, force create-pal, inject SPEC.md\n" +
+        "  palsync --settings      choose how much checking PalSync does, and whether to review at the end\n" +
         "  palsync --version       print the build\n\n" +
         require("../src/cli/syncCommands").USAGE + "\n"
     );
@@ -143,6 +144,13 @@ const evalFlag = parseEvalFlag(argv);
     await preflight.run({ agent: agentFlag || "claude" }); // Node >= 18 + the chosen agent's CLI
     const clack = await loadClack(); // @clack/prompts is ESM-only; dynamic import works on Node 18+
     clack.intro("palsync — PalBuilder + Claude Code");
+    const policy = require("../src/core/policy");
+    if (argv.includes("--settings")) {
+        const chosen = await require("../src/launcher/prompts").pickSettings(policy.resolve(), clack);
+        policy.set("verification", chosen.verification);
+        policy.set("review", chosen.review);
+    }
+    clack.log.info(policy.summaryLine() + "   (change: palsync settings)");
     const result = await run({ agent: agentFlag, evalSpec: evalFlag, log: (m) => clack.log.step(m) });
     if (!result) { clack.cancel("Cancelled."); process.exit(1); }
     clack.log.info(

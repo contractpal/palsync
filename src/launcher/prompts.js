@@ -215,4 +215,31 @@ async function pickEvalSpec(specs) {
     return clack.isCancel(v) ? null : v;
 }
 
-module.exports = { selectionPrompts, suggest, autocompletePick, driftPrompt, pickEvalSpec };
+// The launcher/GUI control for the two preferences. Plain language only: no tool names, no
+// "levels". Cancelling keeps the current value.
+async function pickSettings(current, clackLib) {
+    const policy = require("../core/policy");
+    const clack = clackLib || await loadClack();
+    const next = { verification: current.verification, review: current.review };
+
+    const v = await clack.select({
+        message: "How much should PalSync check your work?",
+        initialValue: current.verification,
+        options: policy.VERIFICATION_LEVELS.map(key => ({
+            value: key, label: policy.VERIFICATION_LABEL[key], hint: policy.VERIFICATION_HELP[key]
+        }))
+    });
+    if (!clack.isCancel(v)) next.verification = v;
+
+    const r = await clack.select({
+        message: "Final review when the work is done?",
+        initialValue: current.review,
+        options: policy.REVIEW_MODES.map(key => ({
+            value: key, label: policy.REVIEW_LABEL[key], hint: policy.REVIEW_HELP[key]
+        }))
+    });
+    if (!clack.isCancel(r)) next.review = r;
+    return next;
+}
+
+module.exports = { selectionPrompts, suggest, autocompletePick, driftPrompt, pickEvalSpec, pickSettings };

@@ -31,6 +31,8 @@ const USAGE = [
     "Usage:",
     "  palsync validate [--dir <workspace>]                         Offline code check (no server/login needed)",
     "  palsync doctor                                               Offline environment report: Node, keychain, credentials, Chromium, git, gh (always exits 0)",
+    "  palsync settings [verification fast|standard|thorough] [review off|ask|auto]   Show or change how much checking PalSync does (saved in ~/.palsync/config.json)",
+    "  palsync verify [--dir <ws>]                                  Show what PalSync will check for the current local changes, and what it will skip (offline)",
     "  palsync push   [--force] [--skip-validation] [--keep-lock] [--dir <ws>]   Push local changes (no MCP server needed)",
     "  palsync pull   [--force] [--dir <workspace>]                 Pull/sync from the server",
     "  palsync merge  [--keep-lock] [--dir <workspace>]            3-way merge local + server changes (keeps both where they don't collide)",
@@ -225,6 +227,31 @@ async function runSessionSummary(argv) {
 
 // `palsync task` / `palsync checkpoint` — OFFLINE EXECUTION.md edits (no login/lock). Their args
 // aren't the shared --force/--workflow set, so they get their own tolerant parsing.
+// `palsync settings` — the saved verification/review preferences (~/.palsync/config.json). No
+// workspace, no login. Bare + a real terminal opens the same picker the launcher uses.
+async function runSettings(argv) {
+    const policy = require("../core/policy");
+    const args = argv.filter(a => a.charAt(0) !== "-");
+    if (args.length % 2 !== 0) {
+        console.error("Usage: palsync settings [verification fast|standard|thorough] [review off|ask|auto]");
+        return 1;
+    }
+    try {
+        for (let i = 0; i < args.length; i += 2) policy.set(args[i], args[i + 1]);
+    } catch (e) { console.error(e.message); return 1; }
+    if (!args.length && process.stdin.isTTY && process.stdout.isTTY) {
+        const chosen = await require("../launcher/prompts").pickSettings(policy.resolve());
+        policy.set("verification", chosen.verification);
+        policy.set("review", chosen.review);
+    }
+    const current = policy.resolve();
+    console.log(policy.summaryLine(current));
+    console.log("  verification: " + policy.VERIFICATION_LABEL[current.verification] + " — " + policy.VERIFICATION_HELP[current.verification]);
+    console.log("  review:       " + policy.REVIEW_LABEL[current.review] + " — " + policy.REVIEW_HELP[current.review]);
+    console.log("Change with: palsync settings verification standard review ask");
+    return 0;
+}
+
 async function runTaskCommand(cmd, argv) {
     const ts = require("../core/taskState");
     let dir = process.cwd(); const pos = []; let ready = false; let reason; let tried;
@@ -336,6 +363,7 @@ async function runHookCommand(argv, inputText) {
 // Returns the process exit code (0 ok, 1 refused/failed). `opts` is passed through to the hooks
 // command (test seam for the user-level settings file location); other commands ignore it.
 async function run(cmd, argv, opts) {
+    if (cmd === "settings") return runSettings(argv);
     if (cmd === "task" || cmd === "checkpoint") return runTaskCommand(cmd, argv);
     if (cmd === "session-summary" || cmd === "session_summary") return runSessionSummary(argv);
     if (cmd === "hook") return runHookCommand(argv);
@@ -403,6 +431,12 @@ async function run(cmd, argv, opts) {
         console.log("palsync validate — " + dir + "\n");
         console.log(formatLint(lint, { context: "validate" }));
         return lint.errors > 0 ? 1 : 0;
+    }
+
+    // verify is OFFLINE: local diff + local structural impact + the policy decision table.
+    if (cmd === "verify") {
+        console.log(await require("./verifyCommand").describe(dir));
+        return 0;
     }
 
     // doctor is fully OFFLINE and workspace-independent: an informational environment health
