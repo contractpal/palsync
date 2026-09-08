@@ -36,7 +36,7 @@ Run: date __________ · model __________ · orch __________ · palbuilder ______
 | G1 | [ ] | `pal_validate` reports 0 errors | |
 | G2 | [ ] | `pal_test` console workflow VALIDATED, 0 notes | |
 | G3 | [ ] | every §3 nav link routes (no dead links): list, showForm, showCheckout, saveEquipment, checkoutEquipment, checkinEquipment, deleteEquipment | |
-| G4 | [ ] | REGRESSION: the pal-init baseline still passes and untouched UI did not shift. | |
+| G4 | [ ] | REGRESSION: the captured baseline still passes and untouched UI did not shift. | |
 
 **Console pages**
 | # | Check | Criterion | Evidence |
@@ -72,7 +72,7 @@ Run: date __________ · model __________ · orch __________ · palbuilder ______
 | G1 | [ ] | `pal_validate` reports 0 errors | |
 | G2 | [ ] | `pal_test` console workflow VALIDATED, 0 notes | |
 | G3 | [ ] | every §3 nav link routes (no dead links): list, showForm, saveEmployee, filterByOffice | |
-| G4 | [ ] | REGRESSION: the pal-init baseline still passes and untouched UI did not shift. | |
+| G4 | [ ] | REGRESSION: the captured baseline still passes and untouched UI did not shift. | |
 
 **Console pages**
 | # | Check | Criterion | Evidence |
@@ -111,7 +111,7 @@ Run: date __________ · model __________ · orch __________ · palbuilder ______
 | G1 | [ ] | `pal_validate` reports 0 errors | |
 | G2 | [ ] | `pal_test` console workflow VALIDATED, transaction workflow VALIDATED, 0 notes | |
 | G3 | [ ] | every §3 nav link routes (no dead links): list, showForm, createRequest, viewRequest, cancelRequest, tx page, completeRequest | |
-| G4 | [ ] | REGRESSION: the pal-init baseline still passes and untouched UI did not shift. | |
+| G4 | [ ] | REGRESSION: the captured baseline still passes and untouched UI did not shift. | |
 
 **Console + transaction pages**
 | # | Check | Criterion | Evidence |
@@ -145,7 +145,7 @@ Run: date __________ · model __________ · orch __________ · palbuilder ______
 | G1 | [ ] | `pal_validate` reports 0 errors | |
 | G2 | [ ] | `pal_test` console workflow VALIDATED, tunnel workflow VALIDATED, console webservice workflow VALIDATED, 0 notes | |
 | G3 | [ ] | every §3 nav link routes (no dead links): dashboard, syncCatalog, checkProviderHealth, quoteAvailability, bridgeStatus | |
-| G4 | [ ] | REGRESSION: the pal-init baseline still passes and untouched UI did not shift. | |
+| G4 | [ ] | REGRESSION: the captured baseline still passes and untouched UI did not shift. | |
 
 **Console + integration**
 | # | Check | Criterion | Evidence |
@@ -177,7 +177,7 @@ Run: date __________ · model __________ · orch __________ · palbuilder ______
 | G1 | [ ] | `pal_validate` reports 0 errors | |
 | G2 | [ ] | `pal_test` web workflow VALIDATED, 0 notes | |
 | G3 | [ ] | every §3 nav link routes (no dead links): home, services, about, contact, robots.txt, sitemap.xml, llms.txt | |
-| G4 | [ ] | REGRESSION: the pal-init baseline still passes and untouched UI did not shift. | |
+| G4 | [ ] | REGRESSION: the captured baseline still passes and untouched UI did not shift. | |
 
 **Web pages**
 | # | Check | Criterion | Evidence |

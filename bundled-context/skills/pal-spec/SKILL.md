@@ -51,11 +51,12 @@ The spec is re-read on every build task, so every word costs tokens repeatedly.
 
 ## 2. Run the interview
 
-**Brownfield (MAP.md present — handoff from pal-init):** do NOT re-interview the whole pal.
-MAP.md is ground truth for what exists; scope the interview and spec to the CHANGE pal-init
-scoped. Four template places change (§6 layout, §8b consumed datasets, §11 NEVER, §12
-acceptance — each marked "Brownfield" inline in the template) plus one added REALITY CHECK
-item. No MAP.md → greenfield.
+**Existing pal:** do NOT re-interview the whole pal, and do not map it up front. Inspect the
+surface the change actually touches — `pal.json` for the inventory, the pages/fragments/workflows
+and datasets the change names, and `pal_impact` on any existing page or fragment other files
+reference. Scope the interview and the spec to the CHANGE. Four template places differ for an
+existing pal (§6 layout, §8b consumed datasets, §11 NEVER, §12 acceptance). A `MAP.md` may be read
+if one happens to exist, but nothing requires it and nothing generates one.
 
 **Step 1 — Mine before you ask.** Turn what already exists (the pulled workspace, any live
 site/doc the user points at, DESIGN_SYSTEM.md, the first description) into PROPOSED answers.
@@ -96,9 +97,10 @@ came from.
 - **SEO** *(usually web; a publicly indexed console landing/login page can qualify; never a
   webservice/tunnel action)* — Q16 Domain? Per §3 page: publicly indexable? Target phrase for
   each page that is (propose from approved copy).
-- **Constraints & ops** — Q17 Push policy: free or checkpoint? Q18 Review cadence: each-task,
-  every-N (pick N), or end (default)? Q19 What must the agent NEVER touch? Non-negotiable
-  decisions to protect, with rationale?
+- **Constraints & ops** — Q17 Push policy: free or checkpoint? Q18 What must the agent NEVER
+  touch? Non-negotiable decisions to protect, with rationale? (Verification depth and final
+  review are user settings, not spec fields — see
+  `../shared/references/verification.md`.)
 
 **Step 3 — LOCK ASSUMPTIONS (gate).** Before writing, list every assumption and open question
 in one block and ask the user to correct it now:

@@ -6,7 +6,7 @@ You are editing a **CloudPiston pal**, a proprietary server-side Java/JavaScript
 
 Load every skill the task touches.
 
-- New pal → `pal-spec`; existing-pal feature/change → `pal-init`; bug/small correction → `pal-fix`.
+- New pal or significant change → `pal-spec`; bug/small correction → `pal-fix`. In an existing pal, inspect the area you are about to touch just in time — there is no mapping phase.
 - Existing `SPEC.md` / `EXECUTION.md` work → `pal-loop`; independent finished-build review → `pal-review`.
 - Markup/browser UI → `palbuilder-frontend`; workflow code → `palbuilder-workflow`; data/datasets → `palbuilder-data`.
 - Visible UI also requires `design-build`; if no real design system exists, load `design-system-init` first.

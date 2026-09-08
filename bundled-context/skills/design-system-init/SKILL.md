@@ -68,8 +68,8 @@ state the assumption.
 
 ### Extract mode
 
-Triggers when `MAP.md` exists and no `DESIGN_SYSTEM.md` / `COMPONENTS.md` exists yet. The existing
-pal is the reference. Extract from `MAP.md`, live screenshots, `styles/*.css`, `pages/*.html`, and
+Triggers in an existing pal with no `DESIGN_SYSTEM.md` / `COMPONENTS.md` yet. The existing pal is
+the reference. Extract from live screenshots, `styles/*.css`, `pages/*.html`, and
 `fragments/*.html`. Do not invent new tokens in extract mode; cite source files for every token.
 Flag inconsistencies in Do / Don't instead of "fixing" them silently.
 

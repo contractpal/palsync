@@ -159,7 +159,7 @@ GLOBAL FLOOR:
       VALIDATED, 0 notes
 - [ ] every §3 nav link routes (no dead links): dashboard, syncCatalog, checkProviderHealth, quoteAvailability,
       bridgeStatus
-- [ ] REGRESSION: the pal-init baseline still passes and untouched UI did not shift.
+- [ ] REGRESSION: the captured baseline still passes and untouched UI did not shift.
 
 CONSOLE + INTEGRATION:
 - [ ] VISUAL (Bridge dashboard): H1 `Partner bridge`, action row, DetailPanel statuses, DataTable,

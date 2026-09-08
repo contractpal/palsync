@@ -1746,7 +1746,7 @@ const TOOLS = [
     },
     {
         name: "pal_spec_lint",
-        description: "Lint a SPEC.md OFFLINE for the MECHANICAL half of pal-spec's reality check: placeholders (TBD/decide-later), dead §3 links, §8a primary-key/type/size/indexability against palbuilder-types.md, §5 dataset references, and the §12 floor (plus the REGRESSION criterion when a MAP.md sits beside it). Returns HARD_FLAG/FLAG/NOTE findings; capability->primitive mapping and component checks stay manual.",
+        description: "Lint a SPEC.md OFFLINE for the MECHANICAL half of pal-spec's reality check: placeholders (TBD/decide-later), dead §3 links, §8a primary-key/type/size/indexability against palbuilder-types.md, §5 dataset references, and the §12 floor (plus the REGRESSION criterion when a regression baseline sits beside it). Returns HARD_FLAG/FLAG/NOTE findings; capability->primitive mapping and component checks stay manual.",
         needsCtx: false,
         inputShape: { spec: z.string().optional().describe("Path to the SPEC.md (default: SPEC.md in the workspace).") },
         async run(ctx, { spec } = {}) {
@@ -1759,7 +1759,7 @@ const TOOLS = [
                 rel: pathMod.relative(ctx.workspaceDir, specPath).split(pathMod.sep).join("/"),
                 content: text,
                 mode: "spec-lint",
-                deps: [{ path: "MAP.md#present", content: String(fs.existsSync(pathMod.join(specWorkspace, "MAP.md"))) }]
+                deps: [{ path: "baseline/baseline.json#present", content: String(fs.existsSync(pathMod.join(specWorkspace, "baseline", "baseline.json"))) }]
             }, () => lintSpec(text, { workspaceDir: specWorkspace }));
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             return Object.assign({ ran: true }, res, { message: formatSpecLint(res) });
@@ -1767,7 +1767,7 @@ const TOOLS = [
     },
     {
         name: "pal_regression",
-        description: "Brownfield regression check against baseline/baseline.json (pal-init Step 3). FIRST compares the baseline's mapped marker to the live server — moved => STALE, stops (never verdicts against a stale baseline). Then re-runs validate / pal_test / page-H1 checks vs the baseline, separating CAUSED failures from INHERITED (known_issues) ones; eyeball_only viewports are needs-human, never auto-passed.",
+        description: "Brownfield regression check against baseline/baseline.json (optional; captured on demand). FIRST compares the baseline's mapped marker to the live server — moved => STALE, stops (never verdicts against a stale baseline). Then re-runs validate / pal_test / page-H1 checks vs the baseline, separating CAUSED failures from INHERITED (known_issues) ones; eyeball_only viewports are needs-human, never auto-passed.",
         inputShape: {},
         async run(ctx, args = {}) {
             const disabled = testingDisabledResult(ctx, "pal_regression");

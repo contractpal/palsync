@@ -192,9 +192,11 @@ render-and-critique review gate).
 
 1. **`pal-spec`** interviews you and writes `SPEC.md` (real copy, real schemas, tool-checkable acceptance criteria) plus `EXECUTION.md`, a task list with per-task model tiers.
 2. **`pal-loop`** executes it: one task → verify with the palsync tools → checkpoint → git commit → next. Any new session resumes from `EXECUTION.md`; blocked tasks escalate with the exact decision needed. Write-the-least-code restraint applies by default.
-3. **`pal-init`** onboards an *existing* pal first — maps it into `MAP.md`, captures a regression baseline — then hands off to `pal-spec`.
-4. **`pal-review`** checks the finished build against the spec in a fresh context and returns a verdict + fix tasks.
-5. **`pal-fix`** handles bugs without the full spec ceremony: reproduce → minimal diff → verify → regression-check.
+3. **`pal-review`** checks a finished build against the spec in a fresh context and returns a verdict + fix tasks. It runs at the end only, and only when your review setting asks for it.
+4. **`pal-fix`** handles bugs without the full spec ceremony: reproduce → minimal diff → prove the fix.
+
+Existing pals need no onboarding phase: inspect the area you are changing, use `pal_impact` when
+dependency risk is unclear, edit, and verify in proportion to the change.
 
 Say *"spec out \<what you want\>"* to start, *"run the loop"* to execute, *"fix \<what's broken\>"*
 for a correction. Deep detail lives in each skill's `references/*.md`, loaded on demand.

@@ -102,12 +102,12 @@ status: draft
 `;
 
 test("valid spec: no findings", () => {
-    const r = lintSpec(VALID, { hasMap: false });
+    const r = lintSpec(VALID, { hasBaseline: false });
     assert.deepEqual(r.findings, [], "expected zero findings, got:\n" + r.findings.map(f => f.severity + " " + f.summary).join("\n"));
 });
 
 test("defect spec: exactly one finding per lintable defect, correct severity", () => {
-    const r = lintSpec(DEFECTS, { hasMap: true }); // MAP present -> REGRESSION criterion required
+    const r = lintSpec(DEFECTS, { hasBaseline: true }); // baseline present -> REGRESSION criterion required
     const has = (sev, re) => r.findings.filter(f => f.severity === sev && re.test(f.summary)).length;
 
     assert.equal(has("HARD_FLAG", /Placeholder text "TBD"/), 1, "placeholder");
@@ -120,16 +120,16 @@ test("defect spec: exactly one finding per lintable defect, correct severity", (
     assert.equal(has("FLAG", /String with no size/), 1, "String needs size");
     assert.equal(has("FLAG", /references dataset "orphans"/), 1, "undeclared §5 dataset");
     assert.equal(has("FLAG", /missing the pal_test criterion/), 1, "§12 missing floor line");
-    assert.equal(has("HARD_FLAG", /no REGRESSION criterion/), 1, "§12 regression (brownfield)");
+    assert.equal(has("HARD_FLAG", /no REGRESSION criterion/), 1, "§12 regression (baseline present)");
 
     // and nothing extra crept in
     assert.equal(r.counts.HARD_FLAG, 6, "HARD_FLAG total");
     assert.equal(r.counts.FLAG, 5, "FLAG total");
 });
 
-test("REGRESSION criterion only required when a MAP.md is present", () => {
-    const noMap = lintSpec(DEFECTS, { hasMap: false });
-    assert.equal(noMap.findings.filter(f => /REGRESSION/.test(f.summary)).length, 0);
+test("REGRESSION criterion only required when a regression baseline is present", () => {
+    const noBaseline = lintSpec(DEFECTS, { hasBaseline: false });
+    assert.equal(noBaseline.findings.filter(f => /REGRESSION/.test(f.summary)).length, 0);
 });
 
 test("drift guard: STORED_TYPES matches palbuilder-types.md exactly", () => {
@@ -264,7 +264,7 @@ test("blank and — spec ref cells are skipped, not errors, in lint and renderRe
         for (const raw of ["", "   ", "\u2014", "-", "\u2014 \u2014"]) {
             const exec = `# EXECUTION\n\n## Tasks\n| id | task | spec ref | status |\n| T1 | do a | ${raw} | todo |\n\n## Checkpoints\n`;
             fs.writeFileSync(path.join(tmp, "EXECUTION.md"), exec, "utf8");
-            const r = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasMap: false });
+            const r = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasBaseline: false });
             assert.equal(r.findings.filter(f => f.section === "EXECUTION.md").length, 0, `blank/— raw "${raw}" must not flag`);
         }
         // renderReadyTicket with blank/— spec ref still succeeds (no badRef), §11 still required
@@ -305,18 +305,18 @@ test("EXECUTION.md spec ref check: hard flag for unresolvable token, absent is n
         const specPath = path.join(tmp, "SPEC.md");
         fs.writeFileSync(specPath, SPEC_SUB, "utf8");
         // absent EXECUTION.md -> no finding
-        const rAbsent = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasMap: false });
+        const rAbsent = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasBaseline: false });
         const badAbsent = rAbsent.findings.filter(f => f.section === "EXECUTION.md");
         assert.equal(badAbsent.length, 0, "absent EXECUTION.md must produce no finding");
         // valid EXECUTION.md -> no finding
         const execOk = `# EXECUTION\n\n## Tasks\n| id | task | spec ref | status |\n| T1 | do a | \u00A74 | todo |\n| T2 | do b | \u00A78a, \u00A78b | todo |\n\n## Checkpoints\n`;
         fs.writeFileSync(path.join(tmp, "EXECUTION.md"), execOk, "utf8");
-        const rOk = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasMap: false });
+        const rOk = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasBaseline: false });
         assert.equal(rOk.findings.filter(f => f.section === "EXECUTION.md").length, 0, "valid refs must not flag");
         // one bad token -> hard flag naming task and token
         const execBad = `# EXECUTION\n\n## Tasks\n| id | task | spec ref | status |\n| T1 | do a | \u00A74 | todo |\n| T2 | do b | \u00A799 | todo |\n\n## Checkpoints\n`;
         fs.writeFileSync(path.join(tmp, "EXECUTION.md"), execBad, "utf8");
-        const rBad = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasMap: false });
+        const rBad = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasBaseline: false });
         const bad = rBad.findings.filter(f => f.severity === "HARD_FLAG" && f.section === "EXECUTION.md");
         assert.equal(bad.length, 1, "exactly one hard flag");
         assert.match(bad[0].summary, /T2/);
@@ -324,7 +324,7 @@ test("EXECUTION.md spec ref check: hard flag for unresolvable token, absent is n
         // malformed token also flags
         const execMal = `# EXECUTION\n\n## Tasks\n| id | task | spec ref | status |\n| T9 | bad | abc | todo |\n\n## Checkpoints\n`;
         fs.writeFileSync(path.join(tmp, "EXECUTION.md"), execMal, "utf8");
-        const rMal = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasMap: false });
+        const rMal = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasBaseline: false });
         const mal = rMal.findings.filter(f => f.severity === "HARD_FLAG" && f.section === "EXECUTION.md");
         assert.equal(mal.length, 1);
         assert.match(mal[0].summary, /T9/);
@@ -332,7 +332,7 @@ test("EXECUTION.md spec ref check: hard flag for unresolvable token, absent is n
         // comma list with one bad entry flags that entry
         const execList = `# EXECUTION\n\n## Tasks\n| id | task | spec ref | status |\n| T3 | mix | \u00A74, \u00A799, \u00A78b | todo |\n\n## Checkpoints\n`;
         fs.writeFileSync(path.join(tmp, "EXECUTION.md"), execList, "utf8");
-        const rList = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasMap: false });
+        const rList = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasBaseline: false });
         const listBad = rList.findings.filter(f => f.section === "EXECUTION.md");
         assert.equal(listBad.length, 1);
         assert.match(listBad[0].summary, /\u00A799/);

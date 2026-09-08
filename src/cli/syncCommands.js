@@ -442,7 +442,7 @@ async function run(cmd, argv, opts) {
         return 1;
     }
 
-    // spec-lint is OFFLINE: reads a SPEC.md (+ optional sibling MAP.md), no login/lock.
+    // spec-lint is OFFLINE: reads a SPEC.md (+ optional sibling baseline/), no login/lock.
     if (cmd === "spec-lint") {
         const { lintSpec, formatSpecLint } = require("../core/specLint");
         const specPath = path.resolve(flags._positional || path.join(dir, "SPEC.md"));

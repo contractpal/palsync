@@ -364,10 +364,10 @@ async function seedImpactBaseline({
     await persist(workspaceDir, record);
 
     // These are brownfield tasks, so `palsync regression` is one of the oracle's acceptance
-    // commands — but it needs baseline/baseline.json (pal-init Step 3), which nothing here wrote,
+    // commands — but it needs baseline/baseline.json, which nothing here wrote,
     // so it answered "regression does not apply" on every arm and left the recorder (which demands
     // pass|fail) with nothing to record but an invented value. The moment right after the baseline
-    // push IS pal-init Step 3: the workspace is the pristine, freshly pushed baseline.
+    // push IS the baseline capture point: the workspace is the pristine, freshly pushed baseline.
     //
     // Only the validate arm is recorded. pal_regression's freshness gate refuses to verdict once
     // the server marker moves, so a meaningful call happens BEFORE the agent pushes (the order

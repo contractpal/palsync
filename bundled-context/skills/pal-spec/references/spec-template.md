@@ -38,8 +38,8 @@ without specifying them. Omit for pure static pages; mandatory for anything with
 
 **§6 Layout** — composition and UX flow only, NO colors/fonts: sections in order, each naming a
 COMPONENTS.md component, plus the primary path, hierarchy order, target placement, feedback/next
-step, and progressive disclosure notes. Brownfield (MAP.md present): new UI MUST match the
-conventions + design reality recorded in MAP.md — reuse before building; no DESIGN_SYSTEM.md yet →
+step, and progressive disclosure notes. Existing pal: new UI MUST match the conventions and design
+reality already in the pal — inspect them and reuse before building; no DESIGN_SYSTEM.md yet →
 run design-system-init in EXTRACT mode against the map. Every UI page follows `../../shared/references/css-conventions.md`. Existing pals are not retrofitted.
 
 **§7 SEO** — publicly indexable pages only; mark which §3 rows apply (usually `web`-tagged, but a
@@ -50,9 +50,9 @@ run design-system-init in EXTRACT mode against the map. Every UI page follows `.
 field named `<dataset>Id`; types come from `references/palbuilder-types.md`. §8b datasets CONSUMED
 (existing, read-only — the build must NOT create or alter these): declare EXACTLY which existing
 fields you depend on; an unlisted field is an unverifiable dependency the reality check flags.
-Brownfield (MAP.md present): populate §8b from MAP.md's Dataset inventory — existing datasets are
-§8b (from the map), NEVER §8a; map-sourced fields count as verified only while `pal_status` shows
-no server drift since MAP.md's `mapped` date; if it drifted, re-verify against the live dataset.
+Existing pal: populate §8b from the datasets already in `pal.json` — existing datasets are
+§8b, NEVER §8a. Verify the fields you depend on against the live dataset when `pal_status` shows
+the server has moved since your last pull.
 
 **§9 Required skills** — list only what §5/§7/§8 actually require; this scopes the build's context.
 `palbuilder-workflow` keys off real server-side logic, validation, response handling, or workflow
@@ -169,9 +169,9 @@ GLOBAL FLOOR (both modes):
 - [ ] pal_validate: `ok:true`, `diagnosticCount:0`   - [ ] pal_test: `ok:true`, `diagnosticCount:0`
 - [ ] every §3 nav link routes (no dead links)
 - [ ] every new-pal UI page follows `../../shared/references/css-conventions.md`
-- [ ] [brownfield/MAP.md present — mandatory] REGRESSION: MAP.md's Step-3 baseline still passes
+- [ ] [only when `baseline/baseline.json` exists] REGRESSION: the captured baseline still passes
       (pal_validate/pal_test at least as clean as the baseline) and untouched UI didn't visually
-      shift (pal_screenshot before/after the map's saved references).
+      shift.
 WEB pages add (every §3 row tagged `web`):
 - [ ] pal_preview: rendered page contains the exact H1s from §4
 - [ ] VISUAL (one per visually-significant web-tagged §3 page): the hero/key screen renders per

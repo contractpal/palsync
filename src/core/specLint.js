@@ -132,12 +132,12 @@ function tableRows(bodyLines) {
 function bodyText(section) { return section ? section.bodyLines.map(b => b.text).join("\n") : ""; }
 
 // --- the lint ---
-function lintSpec(text, { workspaceDir, hasMap } = {}) {
+function lintSpec(text, { workspaceDir, hasBaseline } = {}) {
     const findings = [];
     const add = (severity, section, line, summary, fix) => findings.push({ severity, section, line, summary, fix });
     const { lines, sections } = parseSpec(text);
-    const mapPresent = typeof hasMap === "boolean" ? hasMap
-        : (workspaceDir ? fs.existsSync(path.join(workspaceDir, "MAP.md")) : false);
+    const baselinePresent = typeof hasBaseline === "boolean" ? hasBaseline
+        : (workspaceDir ? fs.existsSync(path.join(workspaceDir, "baseline", "baseline.json")) : false);
 
     // A. Placeholders anywhere (TBD / placeholder / decide later / ???).
     lines.forEach((ln, i) => {
@@ -252,8 +252,8 @@ function lintSpec(text, { workspaceDir, hasMap } = {}) {
         if (!/pal_validate/.test(t12)) add("FLAG", "§12", s12.start, "§12 global floor is missing the pal_validate criterion.", "Add: pal_validate 0 errors.");
         if (!/pal_test/.test(t12)) add("FLAG", "§12", s12.start, "§12 global floor is missing the pal_test criterion.", "Add: pal_test returns ok:true, diagnosticCount:0.");
         if (!/nav link|routes|dead link/i.test(t12)) add("FLAG", "§12", s12.start, "§12 global floor is missing the nav-links-route criterion.", "Add: every §3 nav link routes (no dead links).");
-        if (mapPresent && !/regression/i.test(t12)) {
-            add("HARD_FLAG", "§12", s12.start, "A MAP.md exists (brownfield) but §12 has no REGRESSION criterion.", "Add the REGRESSION criterion: the pal-init baseline still passes and untouched UI didn't shift.");
+        if (baselinePresent && !/regression/i.test(t12)) {
+            add("HARD_FLAG", "§12", s12.start, "A regression baseline exists but §12 has no REGRESSION criterion.", "Add the REGRESSION criterion: baseline/baseline.json still passes and untouched UI didn't shift.");
         }
     }
 
@@ -300,7 +300,7 @@ function lintSpec(text, { workspaceDir, hasMap } = {}) {
         FLAG: findings.filter(f => f.severity === "FLAG").length,
         NOTE: findings.filter(f => f.severity === "NOTE").length
     };
-    return { findings, counts, mapPresent };
+    return { findings, counts, baselinePresent };
 }
 
 function parseExecutionTasks(text) {
@@ -332,9 +332,9 @@ function parseExecutionTasks(text) {
 }
 
 function formatSpecLint(result) {
-    const { findings, counts, mapPresent } = result;
+    const { findings, counts, baselinePresent } = result;
     const head = (counts.HARD_FLAG > 0 ? "SPEC LINT: HARD FLAGS PRESENT" : findings.length ? "SPEC LINT: soft findings only" : "SPEC LINT: clean") +
-        " — " + counts.HARD_FLAG + " HARD_FLAG, " + counts.FLAG + " FLAG, " + counts.NOTE + " NOTE" + (mapPresent ? " (brownfield: MAP.md present)" : "") + ".";
+        " — " + counts.HARD_FLAG + " HARD_FLAG, " + counts.FLAG + " FLAG, " + counts.NOTE + " NOTE" + (baselinePresent ? " (regression baseline present)" : "") + ".";
     if (!findings.length) return head + "\nThe mechanical checks pass. Still do the JUDGMENT items in reality-check.md by hand (capability->primitive, components in COMPONENTS.md, scope honesty).";
     const lines = [head, "", "HARD_FLAG keeps the spec draft (reality_check: blocked); FLAG/NOTE can ship as recorded caveats."];
     for (const f of findings) lines.push("   [" + f.severity + "] " + f.section + (f.line ? " (line " + f.line + ")" : "") + ": " + f.summary + "\n      fix: " + f.fix);

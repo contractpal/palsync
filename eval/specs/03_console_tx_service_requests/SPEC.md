@@ -173,7 +173,7 @@ GLOBAL FLOOR:
 - [ ] pal_test: console workflow VALIDATED, transaction workflow VALIDATED, 0 notes
 - [ ] every §3 nav link routes (no dead links): list, showForm, createRequest, viewRequest, cancelRequest, tx page,
       completeRequest
-- [ ] REGRESSION: the pal-init baseline still passes and untouched UI did not shift.
+- [ ] REGRESSION: the captured baseline still passes and untouched UI did not shift.
 
 CONSOLE + TRANSACTION pages:
 - [ ] VISUAL (Request list): H1 `Service requests`, Status filter, StatusBadge values per

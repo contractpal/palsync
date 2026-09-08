@@ -91,5 +91,4 @@ it's a module.
 - **Existing pal:** don't ask — infer it. If the pal's workflows already `//@include` a
   `cloudpiston/...` library, or its pages already load `lib-ui.js`/`lib-ui.css`, it's in use;
   match that. If nothing under `cloudpiston/` is referenced anywhere in the pal, it isn't in use;
-  don't introduce it in passing as part of an unrelated change. (`pal-init`'s MAP.md "Loaded
-  libraries" inventory step is where this gets recorded.)
+  don't introduce it in passing as part of an unrelated change.

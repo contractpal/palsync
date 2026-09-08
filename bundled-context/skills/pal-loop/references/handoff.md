@@ -23,7 +23,7 @@ handoff — NOT per-task (step 5 already catches immediate breakage).
 
 - **Run `pal_regression`** and act on its structured result. It does the
   whole mechanical check: freshness gate (stale → returns `{stale}`; set
-  `needs-human`, re-run pal-init Step 3), validate/`pal_test`/page-`h1s`
+  `needs-human`, recapture the baseline), validate/`pal_test`/page-`h1s`
   vs `baseline.json`, `eyeball_only` viewports → `needs_human`, inherited
   (`known_issues`) vs caused split. `caused` empty → pass.
   `inherited`/`needs_human` never block.

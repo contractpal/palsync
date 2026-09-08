@@ -3,7 +3,7 @@
 **Run `pal_spec_lint <SPEC.md>` FIRST.** It automates the mechanical + platform-realism checks
 deterministically: placeholders (TBD/decide-later), dead §3 links, §8a primary-key/type/size/
 indexability against `palbuilder-types.md`, §5 dataset references, and the §12 floor (plus the
-REGRESSION criterion when a MAP.md sits beside the spec). It returns HARD_FLAG / FLAG / NOTE
+REGRESSION criterion when a regression baseline sits beside the spec). It returns HARD_FLAG / FLAG / NOTE
 findings — clear every HARD_FLAG before approving. The items below that the linter CANNOT judge
 remain yours to do by hand: **capability→primitive mapping (Platform realism #5), component
 existence in COMPONENTS.md (Consistency #5), consumed-field verification against the live dataset
@@ -29,8 +29,8 @@ and FLAGs.
 6. [FULL] every §5 behavior has a matching §12 criterion; [LITE] every primary action has a
    happy-path criterion. Console screens have a pal_screenshot VISUAL line plus its human-eyeball
    fallback.
-7. [brownfield/MAP.md present] §12 GLOBAL FLOOR includes the REGRESSION criterion (baseline still
-   passes, untouched UI didn't shift) — missing it when a MAP.md exists is a **HARD FLAG**.
+7. [regression baseline present] §12 GLOBAL FLOOR includes the REGRESSION criterion (baseline still
+   passes, untouched UI didn't shift) — missing it when `baseline/baseline.json` exists is a **HARD FLAG**.
 8. Every acceptance criterion names a real tool, a checkable string/state, or an explicit
    human-eyeball gate (console fallback only — not the default).
 9. [visually-significant, web or console] §12 includes at least one VISUAL criterion verifiable via
@@ -68,6 +68,6 @@ and FLAGs.
 Any **hard flag** — dead link, undeclared/unverified consumed field, uncreatable or unverified type,
 picker-label type, non-indexable query key, a §5 capability with no primitive/skill, invented
 primitive, missing pal_test compile-verify for workflow JS, a console screen with no eyeball gate,
-or (brownfield) a missing §12 REGRESSION criterion when a MAP.md exists — keeps `status: draft` and
+or a missing §12 REGRESSION criterion when a regression baseline exists — keeps `status: draft` and
 `reality_check: blocked` until resolved. When all hard flags clear, set `reality_check: pass` (and
 `status: approved`). Soft notes can ship as recorded caveats in §13.

@@ -46,7 +46,8 @@ const RETIRED_SKILLS = [
     "palbuilder-websockets",
     "pal-restraint",
     "palbuilder-backend",
-    "seo-core"
+    "seo-core",
+    "pal-init"
 ];
 
 // Every skill in the bundle loads every session — the bundle dir IS the inventory, discovered at
@@ -191,7 +192,7 @@ function syncDetails(palName, { cli = false, skillsDir = ".claude/skills" } = {}
         "  actually work\" — after building any create/edit/delete action, run it; after an edit put the OLD value",
         "  in `absent` to catch a duplicate insert; after a delete put the deleted name in `absent`, never",
         "  empty-state text), " + T.specLint + " lints a SPEC.md offline",
-        "  (pal-spec), " + T.regression + " runs a brownfield baseline regression check (pal-init/pal-loop). Lock",
+        "  (pal-spec), " + T.regression + " runs a regression check against an optional captured baseline. Lock",
         "  handling is automatic; use `pal_lock`/`pal_unlock` (`palsync lock`/`unlock` on the CLI) only to take or",
         "  release the pal lock by hand.",
         "",

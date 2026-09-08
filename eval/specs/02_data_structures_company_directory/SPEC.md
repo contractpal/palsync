@@ -151,7 +151,7 @@ GLOBAL FLOOR:
 - [ ] pal_validate: 0 errors
 - [ ] pal_test: console workflow VALIDATED, 0 notes
 - [ ] every §3 nav link routes (no dead links): list, showForm, saveEmployee, filterByOffice
-- [ ] REGRESSION: the pal-init baseline still passes and untouched UI did not shift.
+- [ ] REGRESSION: the captured baseline still passes and untouched UI did not shift.
 
 CONSOLE pages:
 - [ ] VISUAL (Directory): H1 `Employee directory`, FilterBar, striped table, Department and Office

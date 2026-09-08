@@ -162,7 +162,7 @@ GLOBAL FLOOR:
 - [ ] pal_test: console workflow VALIDATED, 0 notes
 - [ ] every §3 nav link routes (no dead links): list, showForm, showCheckout, saveEquipment, checkoutEquipment,
       checkinEquipment, deleteEquipment
-- [ ] REGRESSION: the pal-init baseline still passes and untouched UI did not shift.
+- [ ] REGRESSION: the captured baseline still passes and untouched UI did not shift.
 
 CONSOLE pages:
 - [ ] VISUAL hierarchy (Equipment list): compact PageHeader `Equipment` + one Add primary action;

@@ -1,7 +1,7 @@
 "use strict";
-// pal_regression core: check a brownfield pal against baseline/baseline.json (captured by pal-init
-// Step 3). This is the MECHANICAL half of pal-loop's 7b regression re-check and pal-review's
-// regression arm — deterministic comparison, not judgment (the LOOK-shifted question stays with
+// pal_regression core: check an existing pal against baseline/baseline.json (an OPTIONAL artifact;
+// see shared/references/regression-baseline.md). This is the MECHANICAL half of the regression check
+// pal-loop and pal-review run when a baseline exists — deterministic comparison, not judgment (the LOOK-shifted question stays with
 // pal-review's visual arm).
 //
 // Order is load-bearing:
@@ -34,7 +34,7 @@ function makeInheritedTest(knownIssues) {
 }
 
 function formatSummary(r) {
-    if (r.noBaseline) return "No baseline/baseline.json — regression does not apply (greenfield, or pal-init never mapped this pal).";
+    if (r.noBaseline) return "No baseline/baseline.json — regression does not apply (no baseline was ever captured for this pal).";
     if (r.stale) return r.summary;
     const head = r.pass ? "REGRESSION PASSED" : "REGRESSION FAILED";
     const lines = [head + " — " + r.caused.length + " caused, " + r.inherited.length + " inherited (known), " + r.needs_human.length + " needs-human."];
@@ -73,7 +73,7 @@ async function runRegression(session, record, workspaceDir, deps = {}) {
     if (current && mapped && drift.serverAdvanced(mapped, current)) {
         const stale = { ran: true, stale: true, mapped, current };
         stale.summary = "STALE baseline — the server moved since mapped (" + mapped + " -> " + current +
-            "). Re-run pal-init Step 3 to refresh baseline/. No regression verdict produced.";
+            "). Recapture baseline/ before comparing again. No regression verdict produced.";
         return stale;
     }
 

@@ -205,7 +205,7 @@ test("markup dependency fingerprints invalidate parseable and design-system chan
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("pal_spec_lint cache invalidates when a sibling MAP.md appears", async () => {
+test("pal_spec_lint cache invalidates when a regression baseline appears", async () => {
     const ws = tmpWorkspace({ "SPEC.md": "# SPEC\n" });
     const tool = TOOLS.find(value => value.name === "pal_spec_lint");
     const first = await tool.run({ workspaceDir: ws }, {});
@@ -213,11 +213,12 @@ test("pal_spec_lint cache invalidates when a sibling MAP.md appears", async () =
     await tool.run({ workspaceDir: ws }, {});
     const afterRepeat = readStats(ws);
     assert.equal(afterRepeat.hits, afterFirst.hits + 1);
-    fs.writeFileSync(path.join(ws, "MAP.md"), "# MAP\n");
-    const brownfield = await tool.run({ workspaceDir: ws }, {});
-    const afterMap = readStats(ws);
-    assert.equal(afterMap.misses, afterRepeat.misses + 1);
-    assert.equal(first.mapPresent, false);
-    assert.equal(brownfield.mapPresent, true);
+    fs.mkdirSync(path.join(ws, "baseline"), { recursive: true });
+    fs.writeFileSync(path.join(ws, "baseline", "baseline.json"), "{}\n");
+    const withBaseline = await tool.run({ workspaceDir: ws }, {});
+    const afterBaseline = readStats(ws);
+    assert.equal(afterBaseline.misses, afterRepeat.misses + 1);
+    assert.equal(first.baselinePresent, false);
+    assert.equal(withBaseline.baselinePresent, true);
     fs.rmSync(ws, { recursive: true, force: true });
 });

@@ -2,7 +2,7 @@
 
 The single source of truth for how a console screen's **render** is verified, and when it falls back
 to a human. Every skill that touches console verification points here instead of restating it
-(pal-loop, pal-review, pal-spec's §12 + reality check, pal-init baseline capture).
+(pal-loop, pal-review, pal-spec's §12 + reality check).
 
 ## The distinction
 - **Compile** is agent-verifiable, always: `pal_test` runs `TestConsole.do` and returns fresh server

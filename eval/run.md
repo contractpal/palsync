@@ -50,7 +50,7 @@ because it passed §12 — it is better because it passed §12 **at equal-or-low
 therefore records BOTH the §12 score (via `eval/scoring.md`) AND the cost block below.
 
 Two work streams are being measured independently on this same benchmark:
-- the **orchestration skills** (pal-init / pal-loop / pal-review / pal-spec / pal-fix …) — the user's refactor;
+- the **orchestration skills** (pal-loop / pal-review / pal-spec / pal-fix …) — the user's refactor;
 - the **palbuilder domain skills** (palbuilder-core / -workflow / -data / -frontend / -realtime / -email / -seo) — a teammate's rebuild.
 
 The whole point of the pinning rules below is to keep those two streams separable. A row that

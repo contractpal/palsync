@@ -163,7 +163,7 @@ GLOBAL FLOOR:
 - [ ] pal_validate: 0 errors
 - [ ] pal_test: web workflow VALIDATED, 0 notes
 - [ ] every §3 nav link routes (no dead links): home, services, about, contact, robots.txt, sitemap.xml, llms.txt
-- [ ] REGRESSION: the pal-init baseline still passes and untouched UI did not shift.
+- [ ] REGRESSION: the captured baseline still passes and untouched UI did not shift.
 
 WEB pages:
 - [ ] pal_preview/pal_fetch Home contains exact H1 `Field operations that stay on schedule`.
