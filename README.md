@@ -144,7 +144,9 @@ profile and activates tools lazily.
 ### Verification and final review settings
 
 Run `palsync --settings` for the terminal picker, or set values directly with `palsync settings`.
-PalSync has no separate desktop GUI; the launcher is its user interface.
+PalSync has two front ends over the same preferences: the terminal launcher and the Electron
+desktop GUI in `gui/` (Chip Pal Builder), whose **File → PalSync Settings…** dialog reads and
+writes the same `~/.palsync/config.json`.
 
 - **Verification:** Fast — basic checks; Standard (default) — check what changed without testing
   everything; Thorough — run the full set of relevant checks.

@@ -11,6 +11,7 @@ const cloudWizard = require("./cloudWizard");
 const versionCheck = require("./versionCheck");
 const dependencyCheck = require("./dependencyCheck");
 const appState = require("./appState");
+const palsyncSettings = require("./palsyncSettings");
 
 const isDev = !app.isPackaged;
 let mainWindow = null;
@@ -32,6 +33,9 @@ ipcMain.handle("app:getInfo", () => {
     };
 });
 
+ipcMain.handle("settings:describe", () => palsyncSettings.describe());
+ipcMain.handle("settings:update", (event, { key, value }) => palsyncSettings.update(key, value));
+
 ipcMain.handle("deps:check", () => dependencyCheck.checkAll());
 ipcMain.handle("deps:installChromium", async () => {
     return dependencyCheck.installChromium(chunk => {
@@ -42,7 +46,17 @@ ipcMain.handle("deps:installChromium", async () => {
 function buildMenu() {
     const template = [
         ...(process.platform === "darwin" ? [{ label: app.name, role: "appMenu" }] : []),
-        { label: "File", submenu: [{ role: "quit" }] },
+        {
+            label: "File",
+            submenu: [
+                {
+                    label: "PalSync Settings…",
+                    click: () => { if (mainWindow) mainWindow.webContents.send("settings:open"); }
+                },
+                { type: "separator" },
+                { role: "quit" }
+            ]
+        },
         {
             label: "Edit",
             submenu: [

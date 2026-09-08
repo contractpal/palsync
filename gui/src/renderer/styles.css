@@ -131,6 +131,9 @@ button:focus-visible, .tab:focus-visible, .card:focus-visible{
 .dep-badge.ok{background:var(--success);color:#fff;}
 .dep-badge.missing{background:transparent;border:2px solid var(--border-strong);color:transparent;}
 .dep-recommended{font-size:11px;color:var(--accent);font-weight:600;}
+.setting-option{display:flex;flex-direction:column;gap:2px;}
+.setting-option.selected{border-color:var(--accent);}
+.setting-option-label{font-weight:600;}
 
 .wizard-progress-log{
   font-family:"IBM Plex Mono", ui-monospace, monospace;font-size:11.5px;line-height:1.6;

@@ -30,6 +30,9 @@ In scope right now:
   `opencode.json` is written into the pal's folder if it isn't already there, then the agent
   CLI itself spawns the MCP server as its own child process — the GUI does not spawn or track
   MCP processes directly.
+- **File → PalSync Settings…** edits the same two preferences as `palsync settings` (verification
+  and final review), through palsync's own policy module into `~/.palsync/config.json` — no GUI
+  copy of the policy, no second config file.
 - Credentials are reused from the OS keychain the CLI already wrote to for the "existing
   folder" flow — no separate login UI there. The cloud-backed flows *do* have their own login
   form (cloud picker + username/password, or silent auto-login if exactly one cached account

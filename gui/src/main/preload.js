@@ -11,6 +11,14 @@ contextBridge.exposeInMainWorld("palsyncGui", {
         return () => ipcRenderer.removeListener("about:open", listener);
     },
 
+    describeSettings: () => ipcRenderer.invoke("settings:describe"),
+    updateSetting: (key, value) => ipcRenderer.invoke("settings:update", { key, value }),
+    onOpenSettings: (callback) => {
+        const listener = () => callback();
+        ipcRenderer.on("settings:open", listener);
+        return () => ipcRenderer.removeListener("settings:open", listener);
+    },
+
     checkDependencies: () => ipcRenderer.invoke("deps:check"),
     installChromium: () => ipcRenderer.invoke("deps:installChromium"),
     onInstallChromiumOutput: (callback) => {
