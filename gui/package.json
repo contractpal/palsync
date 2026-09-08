@@ -41,7 +41,9 @@
       "dist-renderer/**/*",
       "src/main/**/*",
       "package.json",
-      "build-info.json"
+      "build-info.json",
+      "!node_modules/palsync/gui/**",
+      "!node_modules/palsync/.git/**"
     ],
     "win": {
       "target": "nsis",

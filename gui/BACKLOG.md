@@ -48,6 +48,9 @@ _None open right now._
 
 ## Fixed
 
+- **Windows build ballooned from ~193MB to 1.3GB+ after repeated rebuilds** — fixed
+  Root cause: `gui/node_modules/palsync` (from `"palsync": "file:.."` in `gui/package.json`) is a Windows junction pointing at the entire repo root — `gui/node_modules/palsync/gui` **is** `gui/` itself, junction and all. Since `electron-builder`'s `files` allowlist doesn't restrict `node_modules/**`, every rebuild packaged the *previous* build's own output (a full `electron.exe` + Chromium, ~200MB+) sitting inside `gui/dist`, which was itself already packaged inside `gui/node_modules/palsync/gui/dist` — compounding on every rebuild. Fixed by adding `"!node_modules/palsync/gui/**"` and `"!node_modules/palsync/.git/**"` to `build.files` in `gui/package.json`. Confirmed fixed: installer back to 198MB, real `palsync` runtime code (`src/`, `bin/`, `bundled-context/`) still present in the asar. This almost certainly affects the Mac build the same way (same `file:..` mechanism) — make sure this fix is pulled before rebuilding there.
+
 - **Version-check banner sends raw `process.platform` as `os=`** — confirmed no change needed
   `versionCheck.js` sends Node's raw values (`win32`/`darwin`/`linux`) to `getVersionInfo.do?ide=chip&os=<platform>`. David confirmed the endpoint is fine with these tokens as-is.
 
