@@ -1423,3 +1423,94 @@ test("one passing MCP pal_exercise records one evidence row without usage succes
         fs.rmSync(ws, { recursive: true, force: true });
     }
 });
+
+// ---- upload: getting a workspace file into the browser ----------------------
+
+// The c:upload widget renders its <input type="file"> and its submit control inside a CHILD FRAME
+// (live-verified against the CloudPiston console), so the fake page below mirrors that shape.
+function uploadPage({ frames = ["child"], withSubmit = true, calls } = {}) {
+    const frameFor = (name) => ({
+        locator(sel) {
+            const isFile = sel === "input[type=file]";
+            const present = name === "child" ? (isFile || (withSubmit && !isFile)) : false;
+            return {
+                async count() { return present ? 1 : 0; },
+                first() { return this; },
+                async setInputFiles(p) { calls.push("setInputFiles:" + path.basename(p)); },
+                async click() { calls.push("submitClick"); }
+            };
+        }
+    });
+    return {
+        on() {},
+        url: () => "https://example.test/app",
+        frames() { return ["main", ...frames].map(frameFor); },
+        locator() { return { async count() { return 0; }, first() { return this; } }; },
+        async evaluate() { return { text: "", htmlLength: 0, htmlTail: "" }; },
+        async innerText() { return "Logo updated"; },
+        async content() { return "<body>Logo updated</body>"; },
+        async goto() {}, async waitForLoadState() {}, async waitForFunction() {}, async waitForTimeout() {},
+        async screenshot() { return Buffer.from("x"); }
+    };
+}
+
+test("upload attaches a workspace file to the iframe-backed widget and submits it", async () => {
+    const ws = tmpWorkspace({ "fixtures/logo.png": "PNG" });
+    const calls = [];
+    try {
+        const res = await exerciseByBrowser(
+            { kind: "console", _previewUrl: "https://example.test/app" },
+            [{ upload: "fixtures/logo.png", expect: ["Logo updated"] }],
+            undefined,
+            { loadChromium: () => ({}), releaseBrowser: () => {},
+              getBrowser: async () => ({ newContext: async () => ({ newPage: async () => uploadPage({ calls }), close: async () => {} }) }) },
+            null, ws);
+        assert.equal(res.status, "passed");
+        assert.deepEqual(calls, ["setInputFiles:logo.png", "submitClick"]);
+        assert.match(res.steps[0].label, /upload "fixtures\/logo\.png"/);
+        assert.equal(res.potentialMutationStarted, true);
+    } finally { fs.rmSync(ws, { recursive: true, force: true }); }
+});
+
+test("a screen with no file input fails with screen hints instead of silently passing", async () => {
+    const ws = tmpWorkspace({ "fixtures/logo.png": "PNG" });
+    try {
+        const res = await exerciseByBrowser(
+            { kind: "console", _previewUrl: "https://example.test/app" },
+            [{ upload: "fixtures/logo.png", expect: ["Logo updated"] }],
+            undefined,
+            { loadChromium: () => ({}), releaseBrowser: () => {},
+              getBrowser: async () => ({ newContext: async () => ({ newPage: async () => uploadPage({ frames: [], calls: [] }), close: async () => {} }) }) },
+            null, ws);
+        assert.equal(res.status, "failed");
+        assert.match(res.steps[0].error, /no file input on the current screen/);
+    } finally { fs.rmSync(ws, { recursive: true, force: true }); }
+});
+
+test("upload paths are confined to the pal workspace", async () => {
+    const ws = tmpWorkspace({ "fixtures/logo.png": "PNG", "dir/keep.txt": "x" });
+    const outside = tmpWorkspace({ "secret.txt": "nope" });
+    try {
+        fs.symlinkSync(path.join(outside, "secret.txt"), path.join(ws, "escape.png"));
+        const refuse = async (upload, pattern) => {
+            const res = await runExercise({}, "PAL-1", { steps: [{ upload, expect: ["x"] }], workspaceDir: ws },
+                { runTest: async () => ({ ran: true, kind: "console", validated: true }) });
+            assert.equal(res.status, "invalid", upload);
+            assert.match(res.problems.join("\n"), pattern, upload);
+        };
+        await refuse(path.join(outside, "secret.txt"), /absolute path/);
+        await refuse("../secret.txt", /does not exist|outside the pal workspace/);
+        await refuse("fixtures/missing.png", /does not exist/);
+        await refuse("dir", /not a regular file/);
+        await refuse("escape.png", /outside the pal workspace/);
+    } finally {
+        fs.rmSync(ws, { recursive: true, force: true });
+        fs.rmSync(outside, { recursive: true, force: true });
+    }
+});
+
+test("a valid workspace upload passes preflight and reaches the browser path", () => {
+    assert.equal(needsBrowser([{ upload: "fixtures/logo.png" }]), true);
+    assert.deepEqual(validateSteps([{ upload: "  " }]).filter(e => /upload must be/.test(e)).length, 1);
+    assert.deepEqual(validateSteps([{ upload: "fixtures/logo.png" }]), []);
+});

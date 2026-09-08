@@ -189,6 +189,44 @@ function resolveTargetUrl(t, target) {
     return { url: buildTargetUrl(base, target.dispatch), dispatched: true };
 }
 
+// Safe, credential-free facts about the bootstrap attempt. A login redirect used to report only
+// "the session expired", which told the agent nothing about WHERE the authenticated path broke.
+// Booleans only: the preview URL is credential-bearing, so its values never appear here.
+function authDiagnostics(t, resolved) {
+    const d = {
+        testRan: t.ran === true,
+        workflowValidated: t.validated === true,
+        previewUrl: false, cpAuth: false, nxProfileId: false, cpWorkflow: false,
+        dispatchedAction: !!(resolved && resolved.dispatched)
+    };
+    const base = t.kind === "web" ? t.rawToken : t._previewUrl;
+    if (base) {
+        d.previewUrl = true;
+        try {
+            const q = new URL(base).searchParams;
+            d.cpAuth = !!q.get("cp-auth");
+            d.nxProfileId = !!q.get("nxProfileId");
+            d.cpWorkflow = !!q.get("cp-workflow");
+        } catch (e) { /* an unparseable token URL is itself reported by previewUrl/landing */ }
+    }
+    return d;
+}
+
+function formatAuthDiagnostics(d) {
+    if (!d) return "";
+    const yn = (v) => v === true ? "yes" : (v === false ? "no" : "n/a");
+    const bits = [
+        "test ran: " + yn(d.testRan), "workflow validated: " + yn(d.workflowValidated),
+        "preview URL: " + yn(d.previewUrl), "cp-auth: " + yn(d.cpAuth),
+        "nxProfileId: " + yn(d.nxProfileId), "cp-workflow: " + yn(d.cpWorkflow),
+        "initial action dispatched: " + yn(d.dispatchedAction),
+        "login redirect: " + yn(d.loginRedirect)
+    ];
+    if (d.landing) bits.push("landed: " + d.landing);
+    if (d.freshTestRetry !== undefined) bits.push("fresh-test retry: " + yn(d.freshTestRetry));
+    return "auth diagnostics — " + bits.join("; ");
+}
+
 // The browser lifecycle (Chromium launch/reuse, navigation settle, login detection) lives in
 // browser.js — this module depends straight down on it, and screenshot.js/exercise.js depend on
 // both. No cycles, no lazy resolution.
@@ -199,7 +237,9 @@ function browserPrimitives(deps = {}) {
         getBrowser: deps.getBrowser || s.getBrowser,
         waitForRenderablePage: deps.waitForRenderablePage || s.waitForRenderablePage,
         isLoginRedirect: deps.isLoginRedirect || s.isLoginRedirect,
-        VIEWPORTS: s.VIEWPORTS
+        sanitizeUrl: deps.sanitizeUrl || s.sanitizeUrl,
+        VIEWPORTS: s.VIEWPORTS,
+        contextOptions: s.contextOptions
     };
 }
 
@@ -237,10 +277,16 @@ async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, o
     }
 
     const vp = prim.VIEWPORTS[viewport] ? prim.VIEWPORTS[viewport] : prim.VIEWPORTS.desktop;
+    const diag = authDiagnostics(t, resolved);
+    const withLanding = (page) => {
+        try { diag.landing = prim.sanitizeUrl(page.url()); diag.loginRedirect = prim.isLoginRedirect(page.url()); }
+        catch (e) { /* the page may be gone */ }
+        return diag;
+    };
     let bctx = null, pg = null;
     let potentialMutationStarted = false;
     try {
-        bctx = await browser.newContext({ viewport: vp });
+        bctx = await browser.newContext(prim.contextOptions(viewport));
         // Opt-in context-level bounds. pal_exercise drives many sequential operations and caps each
         // one; pal_screenshot deliberately keeps Playwright's own defaults so a slow console render
         // still produces evidence. These are context METHODS, not newContext options.
@@ -257,7 +303,7 @@ async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, o
     } catch (e) {
         const landedLogin = (() => { try { return !isWeb && prim.isLoginRedirect(pg.url()); } catch { return false; } })();
         const msg = (e && e.message ? e.message.split("\n")[0] : String(e)).replace(/https?:\/\/\S+/g, "<url>");
-        return { ok: false, browser, bctx, pg, viewport: vp,
+        return { ok: false, browser, bctx, pg, viewport: vp, authDiagnostics: withLanding(pg),
                  status: "blocked", category: landedLogin ? "auth" : "navigation",
                  retryable: landedLogin || !resolved.dispatched,
                  potentialMutationStarted: landedLogin ? false : potentialMutationStarted,
@@ -268,9 +314,10 @@ async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, o
     if (!isWeb && prim.isLoginRedirect(pg.url())) {
         // Unauthenticated console requests are bounced to login before the workflow runs, so the
         // requested action provably did not execute — this is the one failure a retry may replay.
-        return { ok: false, browser, bctx, pg, viewport: vp, authExpired: true,
+        return { ok: false, browser, bctx, pg, viewport: vp, authExpired: true, authDiagnostics: withLanding(pg),
                  status: "blocked", category: "auth", retryable: true, potentialMutationStarted: false,
-                 reason: "The console preview redirected to the CloudPiston login page, so the authenticated test session expired. No UI evidence was captured." };
+                 reason: "The console preview redirected to the CloudPiston login page, so the authenticated test session is not usable. " +
+                     "Minting another test instance for the same pal invalidates any earlier unopened preview URL, so a browser call that raced another pal_test/pal_screenshot/pal_exercise on this pal lands here. No UI evidence was captured." };
     }
 
     // WEB selects its route after landing (the token URL activates the session first), so the
@@ -284,6 +331,7 @@ async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, o
         catch (e) {
             const msg = (e && e.message ? e.message.split("\n")[0] : String(e)).replace(/https?:\/\/\S+/g, "<url>");
             return { ok: false, browser, bctx, pg, viewport: vp, status: "blocked", category: "navigation",
+                     authDiagnostics: withLanding(pg),
                      retryable: !potentialMutationStarted, potentialMutationStarted,
                      reason: "Could not reach the requested screen (" + msg + ")" };
         }
@@ -299,28 +347,56 @@ async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, o
     return { ok: true, browser, bctx, pg, viewport: vp, state, potentialMutationStarted };
 }
 
+// LIVE-VERIFIED 2026-09-08 against secure.cloudpiston.com (console pal Audithelm V1): minting a
+// second test instance for the SAME pal invalidates the first instance's preview URL — opening it
+// afterwards lands on /login/GetConsole.do. An ALREADY-OPEN browser session survives (its reload
+// stayed on RunConsoleApp.do), and a mint for a DIFFERENT pal does not invalidate it. So the unsafe
+// window is mint -> first navigation, and two browser tool calls on one pal (the parallel
+// desktop+mobile screenshot pair an agent naturally issues) raced each other into the login page.
+// One promise chain per pal closes that window; different pals still run concurrently.
+const palTestTurns = new Map();
+
+function withPalTestTurn(guid, fn) {
+    const key = String(guid);
+    const prev = palTestTurns.get(key) || Promise.resolve();
+    const run = prev.then(fn, fn);
+    const tail = run.then(() => {}, () => {});
+    palTestTurns.set(key, tail);
+    tail.then(() => { if (palTestTurns.get(key) === tail) palTestTurns.delete(key); });
+    return run;
+}
+
 // One retry loop shared by every browser-oriented tool: mint a FRESH test instance and try again
 // exactly once, and only when the previous attempt reported a provably pre-action failure. The
 // token URL activates a single test session, so a retry must re-run the Test endpoint rather than
 // replay the spent URL.
 async function attemptWithFreshTest(session, guid, testOpts, attempt, deps = {}) {
-    const testFn = deps.runTest || require("./test").runTest;
-    const wait = deps.wait || (ms => new Promise(resolve => setTimeout(resolve, ms)));
-    let retryAttempted = false;
-    for (let i = 0; i < 2; i++) {
-        const t = await testFn(session, guid, testOpts);
-        const res = await attempt(t, { retryAttempted });
-        if (i === 0 && res && res.retryable === true && res.potentialMutationStarted !== true) {
-            retryAttempted = true;
-            await wait(100);
-            continue;
+    return withPalTestTurn(guid, async () => {
+        const testFn = deps.runTest || require("./test").runTest;
+        const wait = deps.wait || (ms => new Promise(resolve => setTimeout(resolve, ms)));
+        let retryAttempted = false;
+        for (let i = 0; i < 2; i++) {
+            const t = await testFn(session, guid, testOpts);
+            const res = await attempt(t, { retryAttempted });
+            if (i === 0 && res && res.retryable === true && res.potentialMutationStarted !== true) {
+                retryAttempted = true;
+                await wait(100);
+                continue;
+            }
+            if (res && typeof res === "object") {
+                res.retryAttempted = retryAttempted;
+                if (res.authDiagnostics) {
+                    res.authDiagnostics.freshTestRetry = retryAttempted;
+                    if (res.reason) res.reason += "\n  " + formatAuthDiagnostics(res.authDiagnostics);
+                }
+            }
+            return res;
         }
-        if (res && typeof res === "object") res.retryAttempted = retryAttempted;
-        return res;
-    }
+    });
 }
 
 module.exports = {
     normalizeTarget, buildTargetUrl, observeScreen, verifyState, describeTargetMismatch, isScalar,
-    deriveWebBase, resolveTargetUrl, openAuthenticatedScreen, attemptWithFreshTest, STATE_TIMEOUT_MS
+    deriveWebBase, resolveTargetUrl, openAuthenticatedScreen, attemptWithFreshTest, STATE_TIMEOUT_MS,
+    authDiagnostics, formatAuthDiagnostics, withPalTestTurn
 };

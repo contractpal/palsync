@@ -7,8 +7,10 @@ const { test, describe } = require("node:test");
 const assert = require("node:assert");
 const {
     normalizeTarget, buildTargetUrl, resolveTargetUrl, verifyState, deriveWebBase,
-    describeTargetMismatch, openAuthenticatedScreen, attemptWithFreshTest
+    describeTargetMismatch, openAuthenticatedScreen, attemptWithFreshTest,
+    authDiagnostics, formatAuthDiagnostics
 } = require("../src/core/browserTarget");
+const { contextOptions } = require("../src/core/browser");
 
 // ---- fakes -----------------------------------------------------------------------------------
 
@@ -335,4 +337,90 @@ describe("attemptWithFreshTest", () => {
         }, { runTest: async () => CONSOLE_TEST, wait: async () => {} });
         assert.strictEqual(attempts, 1);
     });
+
+    // Minting a second test instance for the same pal invalidates the first one's unopened preview
+    // URL (live-verified), so two browser calls on one pal must never overlap their mint->navigate
+    // window — that race is what sent console review to the login page.
+    test("calls on the SAME pal never overlap their mint -> navigate window", async () => {
+        let live = 0, maxLive = 0;
+        const call = () => attemptWithFreshTest(null, "same-pal", {}, async () => {
+            live++; maxLive = Math.max(maxLive, live);
+            await new Promise(r => setTimeout(r, 5));
+            live--;
+            return { status: "passed" };
+        }, { runTest: async () => { live++; maxLive = Math.max(maxLive, live); await new Promise(r => setTimeout(r, 5)); live--; return CONSOLE_TEST; }, wait: async () => {} });
+        await Promise.all([call(), call(), call()]);
+        assert.strictEqual(maxLive, 1);
+    });
+
+    test("calls on DIFFERENT pals still run concurrently", async () => {
+        let live = 0, maxLive = 0;
+        const call = (guid) => attemptWithFreshTest(null, guid, {}, async () => {
+            live++; maxLive = Math.max(maxLive, live);
+            await new Promise(r => setTimeout(r, 5));
+            live--;
+            return { status: "passed" };
+        }, { runTest: async () => CONSOLE_TEST, wait: async () => {} });
+        await Promise.all([call("pal-a"), call("pal-b")]);
+        assert.strictEqual(maxLive, 2);
+    });
+
+    test("a thrown attempt still releases the pal's turn", async () => {
+        const boom = attemptWithFreshTest(null, "release", {}, async () => { throw new Error("nope"); },
+            { runTest: async () => CONSOLE_TEST, wait: async () => {} });
+        await assert.rejects(boom, /nope/);
+        const res = await attemptWithFreshTest(null, "release", {}, async () => ({ status: "passed" }),
+            { runTest: async () => CONSOLE_TEST, wait: async () => {} });
+        assert.strictEqual(res.status, "passed");
+    });
+
+    test("auth diagnostics record the fresh-test retry and never carry credential values", async () => {
+        const res = await attemptWithFreshTest(null, "diag", {}, async () => ({
+            retryable: false, potentialMutationStarted: false, status: "blocked", category: "auth",
+            reason: "redirected to login",
+            authDiagnostics: authDiagnostics(CONSOLE_TEST, { dispatched: true })
+        }), { runTest: async () => CONSOLE_TEST, wait: async () => {} });
+        assert.strictEqual(res.authDiagnostics.freshTestRetry, false);
+        assert.strictEqual(res.authDiagnostics.cpAuth, true);
+        assert.match(res.reason, /auth diagnostics/);
+        assert.strictEqual(JSON.stringify(res).indexOf("SECRET"), -1);
+    });
 });
+
+describe("viewport context options", () => {
+    // The design system gates larger touch targets on @media (pointer: coarse); a narrow desktop
+    // context reports pointer:fine, so mobile review would audit the desktop rules.
+    test("mobile asks for real touch semantics, desktop stays a plain mouse context", () => {
+        const mobile = contextOptions("mobile");
+        assert.deepStrictEqual(mobile.viewport, { width: 390, height: 844 });
+        assert.strictEqual(mobile.hasTouch, true);
+        assert.strictEqual(mobile.isMobile, true);
+
+        const desktop = contextOptions("desktop");
+        assert.deepStrictEqual(desktop, { viewport: { width: 1280, height: 800 } });
+        assert.deepStrictEqual(contextOptions(undefined), desktop);
+        assert.deepStrictEqual(contextOptions("phone"), desktop);
+    });
+});
+
+describe("auth diagnostics", () => {
+    test("report presence, never values, of the credential-bearing preview fields", () => {
+        const t = { ran: true, kind: "console", validated: true,
+                    _previewUrl: "https://cp.example/CreateTestConsole.do?cp-auth=SECRET&nxProfileId=P1" };
+        const d = authDiagnostics(t, { dispatched: false });
+        assert.deepStrictEqual(d, { testRan: true, workflowValidated: true, previewUrl: true,
+                                    cpAuth: true, nxProfileId: true, cpWorkflow: false, dispatchedAction: false });
+        const line = formatAuthDiagnostics(Object.assign({ landing: "https://cp.example/login/GetConsole.do", loginRedirect: true }, d));
+        assert.match(line, /cp-auth: yes/);
+        assert.match(line, /cp-workflow: no/);
+        assert.match(line, /login redirect: yes/);
+        assert.strictEqual(line.indexOf("SECRET"), -1);
+    });
+
+    test("a test that never produced a preview URL says so", () => {
+        const d = authDiagnostics({ ran: true, kind: "console", validated: false }, null);
+        assert.strictEqual(d.previewUrl, false);
+        assert.strictEqual(d.workflowValidated, false);
+    });
+});
+

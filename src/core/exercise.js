@@ -363,8 +363,11 @@ function validateSteps(steps) {
     steps.forEach((s, i) => {
         const at = "step " + (i + 1);
         if (!s || typeof s !== "object") { errs.push(at + " is not an object"); return; }
-        if (!s.action && !s.page && !s.fill && !s.click && !(s.expect && s.expect.length) && !(s.absent && s.absent.length)) {
-            errs.push(at + " does nothing — give it an action, page, fill, click, expect, or absent");
+        if (!s.action && !s.page && !s.fill && !s.click && !s.upload && !(s.expect && s.expect.length) && !(s.absent && s.absent.length)) {
+            errs.push(at + " does nothing — give it an action, page, fill, click, upload, expect, or absent");
+        }
+        if (s.upload !== undefined && (typeof s.upload !== "string" || !s.upload.trim())) {
+            errs.push(at + " upload must be a workspace-relative path to the file to attach (e.g. \"fixtures/logo.png\")");
         }
         if (s.params && !s.action) errs.push(at + " has params but no action to send them with");
         for (const k of ["expect", "absent"]) {
@@ -583,6 +586,7 @@ function stepLabel(step) {
         bits.push("action=" + scrubCredentials(step.action) + params);
     }
     if (step.fill) bits.push("fill{" + Object.keys(step.fill).join(",") + "}");
+    if (step.upload) bits.push("upload " + JSON.stringify(scrubCredentials(step.upload)));
     if (step.click) bits.push("click " + JSON.stringify(scrubCredentials(step.click)));
     if (step.within) bits.push("within " + JSON.stringify(scrubCredentials(step.within)));
     if (!bits.length) bits.push("assert-only");
@@ -671,8 +675,51 @@ async function resolveClickTarget(pg, step) {
     return { locator: loc.first() };
 }
 
+// Getting a LOCAL workspace file into the browser is the whole capability: the path is resolved
+// against the pal workspace and must stay inside it. realpath first, so a symlink cannot point out.
+function resolveUploadPath(workspaceDir, rel) {
+    const shown = JSON.stringify(String(rel));
+    if (!workspaceDir) return { error: "upload " + shown + " cannot be resolved — this run has no pal workspace directory" };
+    if (path.isAbsolute(rel) || /^[a-zA-Z]:[\\/]/.test(rel)) {
+        return { error: "upload " + shown + " must be a path inside the pal workspace, not an absolute path" };
+    }
+    let root;
+    try { root = fs.realpathSync(workspaceDir); }
+    catch (e) { return { error: "upload " + shown + " cannot be resolved — the pal workspace directory is unreadable" }; }
+    let real;
+    try { real = fs.realpathSync(path.resolve(root, rel)); }
+    catch (e) { return { error: "upload " + shown + " does not exist in the pal workspace — create the fixture file first" }; }
+    const inside = path.relative(root, real);
+    if (!inside || inside === ".." || inside.startsWith(".." + path.sep) || path.isAbsolute(inside)) {
+        return { error: "upload " + shown + " resolves outside the pal workspace; uploads are limited to workspace files" };
+    }
+    if (!fs.statSync(real).isFile()) return { error: "upload " + shown + " is not a regular file" };
+    return { path: real };
+}
+
+// Where the file input actually lives. LIVE-VERIFIED 2026-09-08 (console pal Audithelm V1 on
+// secure.cloudpiston.com): c:upload renders no input in the main document — it renders a
+// RenderUpload.do CHILD FRAME containing
+//   <form action="PerformPalUpload.do" method="post" enctype="multipart/form-data">
+//     <input type="file" name="file"><input name="continueButton" type="submit" value="Upload logo">
+// so setInputFiles alone posts nothing: the frame's own submit control must be clicked, and the
+// result lands in the PARENT page (the frame's finishUpload() calls back into parent ContractPal).
+async function findUploadTarget(pg) {
+    for (const frame of pg.frames()) {
+        try {
+            if (await frame.locator("input[type=file]").count() === 0) continue;
+            const submits = frame.locator("input[type=submit], button[type=submit]");
+            return {
+                input: frame.locator("input[type=file]").first(),
+                submit: (await submits.count()) > 0 ? submits.first() : null
+            };
+        } catch (e) { /* a frame that detached mid-search is simply not the upload frame */ }
+    }
+    return null;
+}
+
 function needsBrowser(steps) {
-    return steps.some(s => s.fill || s.click);
+    return steps.some(s => s.fill || s.click || s.upload);
 }
 
 function hasWaitFor(steps) {
@@ -799,13 +846,20 @@ function failureEvidenceLines(res) {
 // ---- the runner ------------------------------------------------------------------------------
 
 // Exercise the pal. Returns a structured result; never throws on a normal failure.
-//   steps: [{ page?, action?, params?, fill?, click?, within?, expect?, absent? }]
+//   steps: [{ page?, action?, params?, fill?, click?, within?, upload?, expect?, absent? }]
 //   workflow: "console" | "web" | "transaction" (optional — auto-detected)
 //   viewport: "desktop" | "mobile" (browser mode only)
 // Stops at the first failing step (later steps usually depend on earlier writes).
 async function runExercise(session, guid, { steps, workflow, viewport, workspaceDir, initial, browser } = {}, deps = {}) {
     const runId = makeRunId(steps, takeExerciseOrdinal(workspaceDir));
-    const problems = validateSteps(steps).concat(validateInitial(initial));
+    const problems = validateSteps(steps).concat(validateInitial(initial))
+        // Resolve upload paths before a test instance is minted: a missing fixture or a path that
+        // escapes the workspace is a request problem, not a browser failure.
+        .concat((Array.isArray(steps) ? steps : []).map((s, i) => {
+            if (!s || typeof s !== "object" || typeof s.upload !== "string" || !s.upload.trim()) return null;
+            const r = resolveUploadPath(workspaceDir, s.upload);
+            return r.error ? "step " + (i + 1) + " " + r.error : null;
+        }).filter(Boolean));
     const lint = lintSteps(steps);
     const allProblems = problems.concat(lint.errors);
     if (allProblems.length) return { ran: false, invalid: true, status: "invalid", category: "steps", problems: allProblems, runId, warnings: lint.warnings };
@@ -858,7 +912,7 @@ async function runExercise(session, guid, { steps, workflow, viewport, workspace
         }
 
         const useFetch = isWeb && !browser && !needsBrowser(steps) && !hasWaitFor(steps);
-        const res = useFetch ? await exerciseByFetch(t, steps, start) : await browserFn(t, steps, viewport, deps, start);
+        const res = useFetch ? await exerciseByFetch(t, steps, start) : await browserFn(t, steps, viewport, deps, start, workspaceDir);
         // The retry rule lives here, once: only a blocked auth/navigation failure that provably
         // preceded any mutation may be replayed against a fresh test instance.
         if (res && res.retryable === undefined) {
@@ -1005,7 +1059,7 @@ async function exerciseByFetch(t, steps, start = null) {
 // The authenticated bootstrap, the initial target dispatch and its state verification are shared
 // with pal_screenshot; only the step loop below is exercise-specific. No step runs until the
 // browser has positively reached the requested initial state.
-async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null) {
+async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, workspaceDir = null) {
     const isWeb = t.kind === "web";
     const results = [];
     const evidenceTimeout = deps.evidenceTimeout || EVIDENCE_TIMEOUT_MS;
@@ -1061,6 +1115,7 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null) {
                     : "Refresh navigation/authentication before trying again."
             };
             if (open.available === false) failed.available = false;
+            if (open.authDiagnostics) failed.authDiagnostics = open.authDiagnostics;
             return pg ? attachEvidence(failed, pg, null, events, evidenceTimeout) : failed;
         }
         // Web base for step-level page/action navigation.
@@ -1097,6 +1152,21 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null) {
                         try { await pg.fill(sel, String(value), { timeout: ACTION_TIMEOUT_MS }); }
                         catch (e) { await pg.selectOption(sel, String(value), { timeout: ACTION_TIMEOUT_MS }); } // <select> fallback
                     }
+                }
+                if (step.upload) {
+                    const file = resolveUploadPath(workspaceDir, step.upload);
+                    if (file.error) return fail(file.error);
+                    const upload = await findUploadTarget(pg);
+                    if (!upload) {
+                        return fail("no file input on the current screen — reach the screen that renders the c:upload widget first." +
+                            formatScreenHints(await screenHints(pg, evidenceTimeout)));
+                    }
+                    const before = await screenFingerprint(pg, evidenceTimeout);
+                    potentialMutationStarted = true;
+                    await upload.input.setInputFiles(file.path, { timeout: ACTION_TIMEOUT_MS });
+                    // The widget's own form does the posting; without this click nothing is sent.
+                    if (upload.submit) await upload.submit.click({ timeout: ACTION_TIMEOUT_MS });
+                    await waitForScreenSettle(pg, before);
                 }
                 if (step.click) {
                     const target = await resolveClickTarget(pg, step);
@@ -1269,4 +1339,4 @@ function formatExercise(res) {
     return lines.join("\n");
 }
 
-module.exports = { runExercise, exerciseByFetch, exerciseByBrowser, validateSteps, validateInitial, webInitialPath, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, makeRunId, readExerciseOrdinal, takeExerciseOrdinal, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, redactSecretFormsForSuccess, makeFinalSnapshot, BROWSER_EVENTS_CAP, EVIDENCE_TIMEOUT_MS, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };
+module.exports = { runExercise, exerciseByFetch, exerciseByBrowser, resolveUploadPath, findUploadTarget, validateSteps, validateInitial, webInitialPath, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, makeRunId, readExerciseOrdinal, takeExerciseOrdinal, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, redactSecretFormsForSuccess, makeFinalSnapshot, BROWSER_EVENTS_CAP, EVIDENCE_TIMEOUT_MS, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };

@@ -513,6 +513,10 @@
                 "description": "CSS scope when click text matches multiple elements.",
                 "type": "string"
               },
+              "upload": {
+                "description": "Workspace-relative file for the screen's c:upload widget; submitted for you.",
+                "type": "string"
+              },
               "expect": {
                 "description": "Visible strings required after this step.",
                 "type": "array",
