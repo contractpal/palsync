@@ -45,7 +45,9 @@ function installChromium(onOutput) {
         try { cli = playwrightCliPath(); }
         catch (e) { resolve({ ok: false, error: e.message }); return; }
 
-        const child = spawn(process.execPath, [cli, "install", "chromium"]);
+        const child = spawn(process.execPath, [cli, "install", "chromium"], {
+            env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" }
+        });
         child.stdout.on("data", d => onOutput(d.toString()));
         child.stderr.on("data", d => onOutput(d.toString()));
         child.on("exit", code => resolve({ ok: code === 0 }));

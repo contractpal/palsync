@@ -88,7 +88,10 @@ export default function LauncherView({ onOpened }) {
             </div>
 
             {showNameModal && (
-                <div className="modal-backdrop" onClick={() => setShowNameModal(false)}>
+                <div
+                    className="modal-backdrop"
+                    onMouseDown={e => { if (e.target === e.currentTarget) setShowNameModal(false); }}
+                >
                     <div className="modal" onClick={e => e.stopPropagation()}>
                         <h3>Name your workspace</h3>
                         <input
