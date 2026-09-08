@@ -158,7 +158,7 @@ Canonical base: <https://...>
 - Sockets: <createClientSocket + receiver — only if real-time>
 
 ## 11. Constraints (Always / Ask-first / Never)
-- ALWAYS: <validate before every push; copy ships verbatim>
+- ALWAYS: <push runs the validation gate; standalone validate is only for diagnosis between edits; copy ships verbatim>
 - ASK FIRST: <dataset schema change; touching shared fragments>
 - NEVER: <out-of-scope pages/datasets the build must not create, edit, or delete>
 

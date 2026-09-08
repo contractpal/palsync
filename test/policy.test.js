@@ -97,7 +97,8 @@ test("standard low-risk UI work gets one render and nothing else", () => {
 
 test("standard escalates with the blast radius", () => {
     const medium = policy.plan({ verification: "standard", risk: "medium", surface: true, behavior: true, hasBaseline: true });
-    assert.equal(ran(medium, "compile"), true);
+    assert.equal(ran(medium, "compile"), false, "the exercise already starts with a fresh server compile");
+    assert.match(medium.steps.find(s => s.id === "compile").why, /separate compile call is not needed/);
     assert.equal(ran(medium, "behavior"), true, "the behavior that changed is tested");
     assert.equal(ran(medium, "regression"), false, "one workflow is not the whole app");
 
@@ -109,10 +110,11 @@ test("standard escalates with the blast radius", () => {
     assert.equal(ran(noBaseline, "regression"), false, "no baseline means regression cannot apply");
 });
 
-test("thorough keeps broad verification even for a low-risk change", () => {
+test("thorough keeps broad verification without duplicating the exercise compile", () => {
     const plan = policy.plan(Object.assign({ verification: "thorough", risk: "low", hasBaseline: true, publicWeb: true },
         { surface: true, behavior: true }));
-    for (const id of ["compile", "render", "render-mobile", "behavior", "regression", "seo"]) {
+    assert.equal(ran(plan, "compile"), false, "the behavior exercise includes compile proof");
+    for (const id of ["render", "render-mobile", "behavior", "regression", "seo"]) {
         assert.equal(ran(plan, id), true, id + " must run in Thorough mode");
     }
 });
@@ -138,8 +140,8 @@ test("benchmark: standard is materially cheaper than the legacy ladder", () => {
         "button-padding": [9, 2, 3, 4],
         "static-copy": [9, 2, 3, 4],
         "responsive-card": [9, 2, 3, 4],
-        "form-interaction": [11, 2, 5, 6],
-        "workflow-action": [9, 2, 4, 4],
+        "form-interaction": [11, 2, 4, 5],
+        "workflow-action": [9, 2, 3, 3],
         "shared-fragment": [10, 2, 4, 5]
     };
     for (const row of result.scenarios) {

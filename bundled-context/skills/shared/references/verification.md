@@ -41,7 +41,7 @@ resulting plan for the current local diff, and `pal_impact` answers dependency q
 | Risk | What it looks like | What Standard does |
 | --- | --- | --- |
 | **Low** | CSS, colors, type, static copy, simple markup, an isolated leaf component, no known dependents | push, then **one** targeted render/screenshot if seeing it materially helps. Nothing else. |
-| **Medium** | one interaction, one form, one action handler, page-specific dynamic behavior, a file with 1–2 dependents | push, `pal_test` if workflow code changed, then prove **the behavior that changed** (`pal_exercise`, or `pal_fetch`/`pal_screenshot` with `expect`). |
+| **Medium** | one interaction, one form, one action handler, page-specific dynamic behavior, a file with 1–2 dependents | push, then prove **the behavior that changed** (`pal_exercise`, or `pal_fetch`/`pal_screenshot` with `expect`). `pal_exercise` starts with a fresh server compile, so do not call `pal_test` first. |
 | **High** | shared fragment/workflow with 3+ consumers, auth, transactions, destructive actions, dataset schema, tunnels/webservices, 8+ files at once | `pal_impact` first, then targeted tests plus the affected regression coverage (`pal_regression` when `baseline/baseline.json` exists). |
 
 Do NOT automatically run, in Standard: broad workflow smoke tests, `pal_exercise` for a
@@ -49,10 +49,10 @@ presentation-only edit, full regression, desktop+mobile screenshot suites, or `p
 
 ## Thorough
 
-The full relevant set: compile checks, render proof on desktop and mobile, behavior exercises,
+The full relevant set: compile proof, render proof on desktop and mobile, behavior exercises,
 regression when a baseline exists, SEO audit for public web pages, and the final review the
-`review` setting asks for. Still do not repeat work an authoritative gate already did (push
-already validated; don't validate again).
+`review` setting asks for. Still do not repeat work an authoritative gate already did: push
+already validated, and an exercise already starts with a fresh server compile.
 
 ## Final review
 

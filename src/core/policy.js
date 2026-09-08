@@ -141,9 +141,13 @@ function plan({ verification = DEFAULTS.verification, risk = "low", surface = fa
     add("static", true, "Local diagnostics catch problems while editing; no separate validate call is needed before push.");
     add("push", true, "Runtime checks only see pushed code, so the change is pushed first.");
 
-    add("compile", behavior && !fast,
+    const behaviorRun = behavior && !fast && (thorough || risk !== "low");
+    const compileRun = behavior && !fast && !behaviorRun;
+    add("compile", compileRun,
         behavior
-            ? (fast ? "Workflow compile check skipped in Fast mode." : "Checking the workflow still compiles because its code changed.")
+            ? (fast ? "Workflow compile check skipped in Fast mode."
+                : behaviorRun ? "The behavior check starts with a fresh server compile, so a separate compile call is not needed."
+                    : "Checking the workflow still compiles because its code changed.")
             : "No workflow changed, so there is nothing to compile-check.");
 
     const renderRun = surface && !fast;
@@ -157,7 +161,6 @@ function plan({ verification = DEFAULTS.verification, risk = "low", surface = fa
             ? (thorough ? "Also rendering at mobile width, because Thorough checks both." : "One render is enough for this change; the mobile pass is a Thorough-mode check.")
             : "Nothing visible changed, so no mobile render is needed.");
 
-    const behaviorRun = behavior && !fast && (thorough || risk !== "low");
     add("behavior", behaviorRun,
         behavior
             ? (behaviorRun ? "Testing the behavior that changed, end to end." : "Behavior check skipped: no action or write behavior changed here.")

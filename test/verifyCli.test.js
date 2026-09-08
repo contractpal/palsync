@@ -80,7 +80,7 @@ test("verify describes one interaction as medium and proves the changed behavior
     try {
         const output = await describe(dir);
         assert.match(output, /Change: medium risk/);
-        assert.match(output, /✓ workflow compile check/);
+        assert.match(output, /– workflow compile check — The behavior check starts with a fresh server compile/);
         assert.match(output, /✓ behavior check/);
         assert.match(output, /– render check/);
     } finally {

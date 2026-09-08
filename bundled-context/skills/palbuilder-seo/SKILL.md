@@ -161,8 +161,9 @@ canonical/og:url point at THAT page's URL.
 
 ## The verify loop (not optional)
 
-1. Write the page following this skill → `pal_validate` (offline) → `pal_push`.
-2. **`pal_seo_audit`** — it fetches the rendered page and checks: title/description lengths,
+1. Write the page following this skill → `pal_push` (its gate includes offline validation; use
+   standalone `pal_validate` only for diagnosis between edits).
+2. When the active verification plan includes SEO, run **`pal_seo_audit`** — it fetches the rendered page and checks: title/description lengths,
    canonical, the 5 og: tags + absolute og:image/og:url, twitter:card, one `<h1>`, viewport,
    JSON-LD presence, img alt coverage, non-ASCII attribute values, and robots.txt/sitemap.xml/
    llms.txt (fallthrough-to-homepage, content-type, required content).

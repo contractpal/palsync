@@ -59,12 +59,14 @@ EVIDENCE LEDGER in the dispatch payload. The reviewer treats it as primary evide
 source only for the ledger's `NO EVIDENCE` criteria or a failed/ambiguous proof.
 
 ## 3. After the subagent returns — every time, no exceptions
-1. **Re-verify independently — never trust the report.** Run the task's tools yourself:
-   - `pal_validate` before push; read push output for the stray-file warning.
-   - Web → `pal_fetch` each touched page with `expect:[the promised strings/H1/CSS class]`.
-     Not found in served HTML = it didn't ship.
-   - Console → `pal_screenshot` (check `renderError`); `captured:false` → the human-eyeball
-     gate, never an assumed pass.
+1. **Re-verify independently — never trust the report.** Inspect the diff, then use the active
+   verification plan for the smallest proof that covers the task. Push is the validation gate, so
+   never call `pal_validate` immediately before it. When live proof applies:
+   - Server-rendered Web text → one `pal_fetch` with the promised strings in `expect`.
+   - Visible UI → one targeted `pal_screenshot` (check `renderError`); `captured:false` → the
+     human-eyeball gate, never an assumed pass.
+   - Changed behavior → one focused `pal_exercise`; do not call `pal_test` first because the
+     exercise starts with a fresh server compile.
 2. **Pass** → mark `done`, checkpoint, commit. **Fail or over-claim** → restore the good
    state: `git checkout` the subagent's local changes. Already pushed? Re-push the restored
    local to overwrite the server (`pal_pull`/`pal_merge` first if drift-refused) — git fixes

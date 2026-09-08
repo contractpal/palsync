@@ -23,6 +23,9 @@ const verifyLadder = fs.readFileSync(path.join(SKILLS, "pal-loop", "references",
 const handoff = fs.readFileSync(path.join(SKILLS, "pal-loop", "references", "handoff.md"), "utf8");
 const sessionStart = fs.readFileSync(path.join(SKILLS, "pal-loop", "references", "session-start.md"), "utf8");
 const verificationPolicy = fs.readFileSync(path.join(SKILLS, "shared", "references", "verification.md"), "utf8");
+const delegation = fs.readFileSync(path.join(SKILLS, "pal-loop", "references", "delegation.md"), "utf8");
+const seo = fs.readFileSync(path.join(SKILLS, "palbuilder-seo", "SKILL.md"), "utf8");
+const specTemplate = fs.readFileSync(path.join(SKILLS, "pal-spec", "references", "spec-template.md"), "utf8");
 
 test("pal-fix proves the fix proportionally instead of running the whole ladder", () => {
     assert.match(palFix, /Verification is proportional, not optional/, "pal-fix defers to the policy");
@@ -128,6 +131,15 @@ test("pal-loop completion follows the review setting, and only at the end", () =
             label + " must not revive the old review schedule");
     }
 });
+test("active instructions do not duplicate push validation or an exercise's server compile", () => {
+    for (const [label, text] of [["delegation", delegation], ["SEO", seo], ["spec template", specTemplate]]) {
+        assert.doesNotMatch(text, /pal_validate[^\n]*(?:→|before)[^\n]*pal_push|validate before every push/i,
+            label + " must not require validate immediately before push");
+    }
+    assert.match(delegation, /exercise starts with a fresh server compile/);
+    assert.match(verificationPolicy, /do not call `pal_test` first/);
+});
+
 test("pal-loop loads verification mechanics at Verify and policy from one place", () => {
     for (const pattern of [/Push \/ validate/, /WEB page checks/, /Screenshots/, /Exercises/, /Warnings/]) {
         assert.match(verifyLadder, pattern);
