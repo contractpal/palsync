@@ -131,13 +131,17 @@ test("pal-loop completion follows the review setting, and only at the end", () =
             label + " must not revive the old review schedule");
     }
 });
-test("active instructions do not duplicate push validation or an exercise's server compile", () => {
+test("active instructions do not duplicate push validation, compile, or render passes", () => {
     for (const [label, text] of [["delegation", delegation], ["SEO", seo], ["spec template", specTemplate]]) {
         assert.doesNotMatch(text, /pal_validate[^\n]*(?:→|before)[^\n]*pal_push|validate before every push/i,
             label + " must not require validate immediately before push");
     }
     assert.match(delegation, /exercise starts with a fresh server compile/);
     assert.match(verificationPolicy, /do not call `pal_test` first/);
+    assert.match(designBuild, /Verification breadth comes from[\s\S]*shared\/references\/verification\.md/);
+    assert.match(designBuild, /Render only the viewport\(s\) the active[\s\S]*verification policy calls for/);
+    assert.doesNotMatch(designBuild, /render desktop and mobile|Both screenshots were inspected/i,
+        "design-build must not turn Standard into a two-viewport suite");
 });
 
 test("pal-loop loads verification mechanics at Verify and policy from one place", () => {

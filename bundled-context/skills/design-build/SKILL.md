@@ -7,7 +7,8 @@ description: "Load for visible UI implementation or UI review. Enforces an exist
 
 Use for visible UI implementation or review. Do not load for non-visible backend work.
 Build from the local design system, not a generic aesthetic. First-pass output is a draft;
-structure, states, and visual evidence make it shippable.
+structure, states, and visual evidence make it shippable. Verification breadth comes from
+`../shared/references/verification.md`; this skill defines what to inspect when a render runs.
 
 ## UI task contract
 
@@ -20,20 +21,21 @@ For every visible task:
    action; operational UI makes the next decision or action fast. Read `marketing-library.md`
    only for marketing and `component-library.md` for operational UI; do not blend profiles.
 4. **Close the loop.** Implement default plus applicable loading, empty, error, and success
-   states; run functional checks; render desktop and mobile; inspect pixels and `designAudit`;
-   fix the highest-impact failures; rerender every changed viewport; rerun behavior after visual
-   edits.
+   states. Run functional checks when behavior changed. Render only the viewport(s) the active
+   verification policy calls for; inspect pixels and `designAudit`; fix the highest-impact
+   failures; rerender a viewport only after changing it; rerun behavior after functional edits.
 5. **Keep the best checkpoint.** Compare the final render to the last clean render; do not ship a
    visual regression.
 
 Hard completion gates — a visible task is not done unless:
 
-- The primary journey works end to end with no runtime/render error.
-- Desktop and mobile have no unintended horizontal overflow.
+- A changed primary journey works end to end with no runtime/render error.
+- Every viewport required by the active verification policy has no unintended horizontal overflow.
 - Labels, visible keyboard focus, and usable action targets pass the applicable checks.
 - Applicable empty, error, success, and destructive states are understandable.
 - There is exactly one page-level H1 and one primary action per action group.
-- Both screenshots were inspected and `designAudit.errors == 0`.
+- Every screenshot required by the active verification policy was inspected and
+  `designAudit.errors == 0`.
 
 ## Step 0 — Load the system
 
