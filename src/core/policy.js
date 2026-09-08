@@ -172,9 +172,14 @@ function plan({ verification = DEFAULTS.verification, risk = "low", surface = fa
             : regressionRun ? "Checking related pages because this change reaches beyond the file you edited."
                 : "Regression skipped because this change only affects what you edited.");
 
-    const seoRun = publicWeb && (thorough || (verification === "standard" && surface));
+    // A visible change is not an SEO change: padding, colour, and layout edits do not affect what
+    // a crawler reads, and PalSync has no cheap deterministic way to tell an SEO-relevant markup
+    // edit from a cosmetic one. Automatic auditing therefore belongs to Thorough only; anyone who
+    // needs it sooner asks for `pal_seo_audit` by name.
+    const seoRun = publicWeb && thorough;
     add("seo", seoRun,
-        publicWeb ? (seoRun ? "Auditing the public page's SEO because its markup changed." : "SEO audit skipped for this change.")
+        publicWeb ? (seoRun ? "Auditing the public page's SEO, because Thorough covers it."
+            : "SEO audit is a Thorough-mode check; ask for it by name if this change affects search.")
             : "Not a public web page, so no SEO audit.");
 
     return { verification, risk, steps };

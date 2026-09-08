@@ -119,6 +119,23 @@ test("thorough keeps broad verification without duplicating the exercise compile
     }
 });
 
+test("an SEO audit is a Thorough-only automatic step", () => {
+    const publicVisual = { surface: true, behavior: false, publicWeb: true, risk: "low" };
+    assert.equal(ran(policy.plan(Object.assign({ verification: "fast" }, publicVisual)), "seo"), false,
+        "Fast never audits SEO");
+    const standard = policy.plan(Object.assign({ verification: "standard" }, publicVisual));
+    assert.equal(ran(standard, "seo"), false,
+        "a padding/layout change on a public page is not an SEO change");
+    assert.match(standard.steps.find(s => s.id === "seo").why, /ask for it by name/);
+    // Blast radius does not make a presentation edit SEO-relevant either.
+    assert.equal(ran(policy.plan({ verification: "standard", risk: "high", surface: true, behavior: true, publicWeb: true }), "seo"),
+        false);
+    assert.equal(ran(policy.plan(Object.assign({ verification: "thorough" }, publicVisual)), "seo"), true,
+        "Thorough still audits an applicable public page");
+    assert.equal(ran(policy.plan({ verification: "thorough", surface: true, publicWeb: false }), "seo"), false,
+        "a non-public pal is never audited");
+});
+
 test("the rendered plan explains the review setting without jargon", () => {
     const change = policy.classifyChange({ paths: ["styles/styles.css"] });
     const plan = policy.plan({ verification: "standard", risk: change.level, surface: change.surface });

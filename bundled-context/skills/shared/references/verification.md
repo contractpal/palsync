@@ -45,7 +45,9 @@ resulting plan for the current local diff, and `pal_impact` answers dependency q
 | **High** | shared fragment/workflow with 3+ consumers, auth, transactions, destructive actions, dataset schema, tunnels/webservices, 8+ files at once | `pal_impact` first, then targeted tests plus the affected regression coverage (`pal_regression` when `baseline/baseline.json` exists). |
 
 Do NOT automatically run, in Standard: broad workflow smoke tests, `pal_exercise` for a
-presentation-only edit, full regression, desktop+mobile screenshot suites, or `pal-review`.
+presentation-only edit, full regression, desktop+mobile screenshot suites, `pal_seo_audit`, or
+`pal-review`. A public page is not a reason to audit SEO — a padding, colour, or layout edit does
+not change what a crawler reads. Run `pal_seo_audit` when it is asked for by name.
 
 ## Thorough
 
