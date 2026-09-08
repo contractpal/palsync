@@ -104,7 +104,7 @@ function classifyChange({ paths = [], dependents = null, manifest = null, datase
         raise("high", "a transaction or webservice/tunnel workflow changed");
     }
     if (datasetChange) raise("high", "a dataset definition changed");
-    if (paths.length > 8) raise("high", paths.length + " files changed at once");
+    if (paths.length >= 8) raise("high", paths.length + " files changed at once");
 
     if (!reasons.length) reasons.push("presentation-only change with no known dependents");
     return { level, reasons, surface, behavior };
@@ -119,6 +119,7 @@ const STEP_TITLES = {
     push: "push",
     compile: "workflow compile check",
     render: "render check",
+    "render-mobile": "mobile render check",
     behavior: "behavior check",
     regression: "regression check",
     seo: "SEO audit"
@@ -131,7 +132,7 @@ function plan({ verification = DEFAULTS.verification, risk = "low", surface = fa
     const fast = verification === "fast";
     const thorough = verification === "thorough";
 
-    add("static", true, "Static checks run on every change — they are instant and catch the known breakers.");
+    add("static", true, "Local diagnostics catch problems while editing; no separate validate call is needed before push.");
     add("push", true, "Runtime checks only see pushed code, so the change is pushed first.");
 
     add("compile", behavior && !fast,
@@ -144,6 +145,11 @@ function plan({ verification = DEFAULTS.verification, risk = "low", surface = fa
         surface
             ? (fast ? "Render check skipped in Fast mode." : "Rendering the affected page to confirm the change looks right.")
             : "Nothing visible changed, so no render check is needed.");
+
+    add("render-mobile", surface && thorough,
+        surface
+            ? (thorough ? "Also rendering at mobile width, because Thorough checks both." : "One render is enough for this change; the mobile pass is a Thorough-mode check.")
+            : "Nothing visible changed, so no mobile render is needed.");
 
     const behaviorRun = behavior && !fast && (thorough || risk !== "low");
     add("behavior", behaviorRun,
