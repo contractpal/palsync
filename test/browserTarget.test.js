@@ -10,6 +10,7 @@ const {
     describeTargetMismatch, openAuthenticatedScreen, attemptWithFreshTest,
     authDiagnostics, formatAuthDiagnostics
 } = require("../src/core/browserTarget");
+const { contextOptions } = require("../src/core/browser");
 
 // ---- fakes -----------------------------------------------------------------------------------
 
@@ -383,6 +384,22 @@ describe("attemptWithFreshTest", () => {
         assert.strictEqual(res.authDiagnostics.cpAuth, true);
         assert.match(res.reason, /auth diagnostics/);
         assert.strictEqual(JSON.stringify(res).indexOf("SECRET"), -1);
+    });
+});
+
+describe("viewport context options", () => {
+    // The design system gates larger touch targets on @media (pointer: coarse); a narrow desktop
+    // context reports pointer:fine, so mobile review would audit the desktop rules.
+    test("mobile asks for real touch semantics, desktop stays a plain mouse context", () => {
+        const mobile = contextOptions("mobile");
+        assert.deepStrictEqual(mobile.viewport, { width: 390, height: 844 });
+        assert.strictEqual(mobile.hasTouch, true);
+        assert.strictEqual(mobile.isMobile, true);
+
+        const desktop = contextOptions("desktop");
+        assert.deepStrictEqual(desktop, { viewport: { width: 1280, height: 800 } });
+        assert.deepStrictEqual(contextOptions(undefined), desktop);
+        assert.deepStrictEqual(contextOptions("phone"), desktop);
     });
 });
 

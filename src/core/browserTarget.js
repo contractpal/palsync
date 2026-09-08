@@ -238,7 +238,8 @@ function browserPrimitives(deps = {}) {
         waitForRenderablePage: deps.waitForRenderablePage || s.waitForRenderablePage,
         isLoginRedirect: deps.isLoginRedirect || s.isLoginRedirect,
         sanitizeUrl: deps.sanitizeUrl || s.sanitizeUrl,
-        VIEWPORTS: s.VIEWPORTS
+        VIEWPORTS: s.VIEWPORTS,
+        contextOptions: s.contextOptions
     };
 }
 
@@ -285,7 +286,7 @@ async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, o
     let bctx = null, pg = null;
     let potentialMutationStarted = false;
     try {
-        bctx = await browser.newContext({ viewport: vp });
+        bctx = await browser.newContext(prim.contextOptions(viewport));
         // Opt-in context-level bounds. pal_exercise drives many sequential operations and caps each
         // one; pal_screenshot deliberately keeps Playwright's own defaults so a slow console render
         // still produces evidence. These are context METHODS, not newContext options.

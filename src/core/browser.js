@@ -10,6 +10,22 @@ const VIEWPORTS = {
     mobile: { width: 390, height: 844 }
 };
 
+// A 390px-wide desktop context is NOT a mobile context: PalSync's design system gates its larger
+// touch targets on `@media (pointer: coarse)`, and a narrow mouse context still reports
+// pointer:fine / hover:hover, so mobile review silently audited the desktop rules.
+// LIVE-VERIFIED 2026-09-08 (Playwright Chromium): viewport-only -> {coarse:false, fine:true,
+// hover:true}; hasTouch:true -> {coarse:true, fine:false, hover:false, touch:true}. isMobile:true
+// additionally honors the page's meta viewport; the CloudPiston console shell emits
+// <meta name="viewport" content="width=device-width, initial-scale=1">, so the layout width stays
+// 390 (verified against the live console) instead of falling back to 980.
+function contextOptions(viewportName) {
+    const name = VIEWPORTS[viewportName] ? viewportName : "desktop";
+    const viewport = VIEWPORTS[name];
+    return name === "mobile"
+        ? { viewport, hasTouch: true, isMobile: true }
+        : { viewport };
+}
+
 // A pal that compiles + validates can still THROW at runtime — a workflow exception (bad SQL, null
 // deref, missing column) renders CloudPiston's error block into the page instead of the UI. pal_test
 // only proves the workflow COMPILES; nothing proved it RENDERS until now. detectRenderError scans the
@@ -156,7 +172,7 @@ process.once("exit", () => {
 // for anyone who needs to zoom in). Zero new dependencies — no sharp, no canvas package.
 
 module.exports = {
-    VIEWPORTS, sanitizeUrl, isLoginRedirect, sanitizeResourceUrl,
+    VIEWPORTS, contextOptions, sanitizeUrl, isLoginRedirect, sanitizeResourceUrl,
     waitForStyles, waitForRenderablePage,
     loadChromium, getBrowser, releaseBrowser
 };
