@@ -33,11 +33,14 @@ function normalize(value, allowed) {
     return allowed.includes(v) ? v : null;
 }
 
-// An unreadable, older, or partially-filled config falls back to the defaults per key.
-function resolve(read = config.get) {
+// Hierarchy: per-invocation env override -> saved user preference -> PalSync default. An
+// unreadable, older, or partially-filled config falls back to the default per key.
+function resolve(read = config.get, env = process.env) {
     return {
-        verification: normalize(read("verification"), VERIFICATION_LEVELS) || DEFAULTS.verification,
-        review: normalize(read("review"), REVIEW_MODES) || DEFAULTS.review
+        verification: normalize(env.PALSYNC_VERIFICATION, VERIFICATION_LEVELS) ||
+            normalize(read("verification"), VERIFICATION_LEVELS) || DEFAULTS.verification,
+        review: normalize(env.PALSYNC_REVIEW, REVIEW_MODES) ||
+            normalize(read("review"), REVIEW_MODES) || DEFAULTS.review
     };
 }
 

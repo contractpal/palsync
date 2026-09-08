@@ -6,12 +6,14 @@ const fs = require("fs");
 const path = require("path");
 const { parseTasks, STATUSES, BLOCKED_STATUSES, terminalReasonState } = require("./taskState");
 const reviewCheck = require("./reviewCheck");
+const policy = require("./policy");
 
 function result(state, allow, completionPassed, message, extra = {}) {
     return Object.assign({ state, code: state, allow, completionPassed, message }, extra);
 }
 
-function checkWorkspace(workspaceDir) {
+function checkWorkspace(workspaceDir, { review } = {}) {
+    const reviewMode = policy.normalize(review, policy.REVIEW_MODES) || policy.resolve().review;
     const file = path.join(workspaceDir, "EXECUTION.md");
     let text;
     try { text = fs.readFileSync(file, "utf8"); }
@@ -54,21 +56,32 @@ function checkWorkspace(workspaceDir) {
             return result("BLOCKED_HANDOFF", true, false, "Terminal blocked/human handoff recorded with reasons.");
         }
     }
-    const review = reviewCheck.checkWorkspace(workspaceDir);
-    if (!review.ok || review.verdict !== "PASS") {
+    // Review is a user preference, not a lifecycle law. Only `auto` makes an independent review
+    // part of completion; under `off`/`ask` the work is complete when the work is done, and a stale
+    // REVIEW.md from an earlier build is not even read (it used to trap unrelated sessions).
+    if (reviewMode !== "auto") {
+        return result("COMPLETE", true, true,
+            "Implementation complete. Final review: not run because your preference is " +
+            policy.REVIEW_LABEL[reviewMode] + "." +
+            (reviewMode === "ask" ? " Offer to run pal-review; the user decides." : ""),
+            { reviewMode });
+    }
+    const reviewState = reviewCheck.checkWorkspace(workspaceDir);
+    if (!reviewState.ok || reviewState.verdict !== "PASS") {
         // Scope-aware on purpose. The bare imperative this replaced ("Run pal-review, then ... again")
         // was read as an order by a session that had been asked to do something else entirely, and it
         // started an unrequested review of a stale build. A gate must say what is unmet and what
         // satisfies it; it must not conscript whatever session happens to end its turn in the workspace.
         return result("REVIEW_FAILED", false, false,
-            "All tasks are done, but independent review is not passing: a fresh pal-review recording " +
+            "All tasks are done, and your review preference is Automatic: a fresh pal-review recording " +
             "REVIEW.md result: PASS is required before this build can be called complete. " +
             "If finishing this build IS your current task, run pal-review, then `palsync completion check` " +
             "again. If it is not — you were asked to do something else, or you need an owner decision — " +
             "report this blocker and stop. Do not start a review on your own initiative.",
-            { review, reviewOutput: reviewCheck.formatReviewCheck(review) });
+            { reviewMode, review: reviewState, reviewOutput: reviewCheck.formatReviewCheck(reviewState) });
     }
-    return result("COMPLETE", true, true, "All tasks are done and independent review PASS is current.", { review });
+    return result("COMPLETE", true, true, "All tasks are done and independent review PASS is current.",
+        { reviewMode, review: reviewState });
 }
 
 function formatCompletion(value) {
@@ -77,6 +90,9 @@ function formatCompletion(value) {
         : value.state === "WORK_IN_PROGRESS" || value.state === "NOT_APPLICABLE" ? "WORK IN PROGRESS"
         : "FAIL";
     const lines = ["palsync completion check — " + heading, "state: " + value.state, value.message];
+    if (value.state === "COMPLETE" && value.reviewMode === "ask") {
+        lines.push("Ask the user: run a final review, or finish?");
+    }
     if (value.reviewOutput) lines.push(value.reviewOutput);
     return lines.join("\n");
 }

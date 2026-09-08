@@ -61,7 +61,7 @@ test("completion state machine preserves non-applicable and work-in-progress rep
     fs.rmSync(empty, { recursive: true, force: true });
 });
 
-test("all-done completion requires a current explicit PASS review", () => {
+test("review=auto: all-done completion requires a current explicit PASS review", () => {
     const ws = workspace();
     // A PASS review also needs durable clean desktop+mobile render evidence; without these rows
     // the gate would (correctly) stay REVIEW_FAILED even after the PASS verdict lands.
@@ -71,17 +71,17 @@ test("all-done completion requires a current explicit PASS review", () => {
             route: "/", viewportName, renderClean: true
         }), true);
     }
-    assert.equal(completionGate.checkWorkspace(ws).state, "REVIEW_FAILED");
+    assert.equal(completionGate.checkWorkspace(ws, { review: "auto" }).state, "REVIEW_FAILED");
     writeReview(ws, "CHANGES-NEEDED");
-    assert.equal(completionGate.checkWorkspace(ws).state, "REVIEW_FAILED");
+    assert.equal(completionGate.checkWorkspace(ws, { review: "auto" }).state, "REVIEW_FAILED");
     writeReview(ws, "PASS");
-    const complete = completionGate.checkWorkspace(ws);
+    const complete = completionGate.checkWorkspace(ws, { review: "auto" });
     assert.equal(complete.state, "COMPLETE");
     assert.equal(complete.allow, true);
     assert.equal(complete.completionPassed, true);
     const future = new Date(Date.now() + 2000);
     fs.utimesSync(path.join(ws, "EXECUTION.md"), future, future);
-    assert.equal(completionGate.checkWorkspace(ws).state, "REVIEW_FAILED");
+    assert.equal(completionGate.checkWorkspace(ws, { review: "auto" }).state, "REVIEW_FAILED");
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
@@ -120,11 +120,13 @@ test("Claude Stop output uses block decision JSON, while hook exceptions fail op
     const ws = workspace();
     const oldLog = console.log, oldError = console.error; const logged = [];
     console.log = value => logged.push(value); console.error = () => {};
+    process.env.PALSYNC_REVIEW = "auto";
     try {
         assert.equal(await runHookCommand(["completion", "--mode", "claude"], JSON.stringify({ cwd: ws })), 0);
-        assert.deepEqual(JSON.parse(logged.pop()), { decision: "block", reason: completionGate.checkWorkspace(ws).message });
+        assert.deepEqual(JSON.parse(logged.pop()), { decision: "block", reason: completionGate.checkWorkspace(ws, { review: "auto" }).message });
         assert.equal(await runHookCommand(["completion", "--mode", "claude"], "{bad"), 0);
     } finally {
+        delete process.env.PALSYNC_REVIEW;
         console.log = oldLog; console.error = oldError; fs.rmSync(ws, { recursive: true, force: true });
     }
 });
@@ -138,7 +140,8 @@ test("Claude Stop output uses block decision JSON, while hook exceptions fail op
 // unattended, lock-taking work and punished exactly the behavior the ethos asks for.
 test("the completion gate blocks once per stop chain, then yields without going silent", async () => {
     const ws = workspace();
-    const message = completionGate.checkWorkspace(ws).message;
+    process.env.PALSYNC_REVIEW = "auto";
+    const message = completionGate.checkWorkspace(ws, { review: "auto" }).message;
     const oldLog = console.log, oldError = console.error; const logged = [];
     console.log = value => logged.push(value); console.error = () => {};
     try {
@@ -153,6 +156,7 @@ test("the completion gate blocks once per stop chain, then yields without going 
         assert.match(yielded.systemMessage, /UNMET/);
         assert.ok(yielded.systemMessage.includes(message));
     } finally {
+        delete process.env.PALSYNC_REVIEW;
         console.log = oldLog; console.error = oldError; fs.rmSync(ws, { recursive: true, force: true });
     }
 });
@@ -165,15 +169,65 @@ test("a passing gate stays silent whether or not the hook is already continuing"
 
 test("the review-failed message states scope so it cannot conscript an unrelated session", () => {
     const ws = workspace();
-    const gate = completionGate.checkWorkspace(ws);
+    const gate = completionGate.checkWorkspace(ws, { review: "auto" });
     assert.equal(gate.state, "REVIEW_FAILED");
     assert.equal(gate.allow, false);
     // What is unmet, and what satisfies it.
-    assert.match(gate.message, /independent review is not passing/);
+    assert.match(gate.message, /your review preference is Automatic/);
     assert.match(gate.message, /REVIEW\.md result: PASS/);
     // The anti-conscription clause: a session doing something else must report and stop, not start a
     // review on its own initiative. This is the sentence whose absence caused the incident.
     assert.match(gate.message, /If it is not/);
     assert.match(gate.message, /Do not start a review on your own initiative/);
     fs.rmSync(ws, { recursive: true, force: true });
+});
+
+// Review is a preference, not a lifecycle law: off/ask complete without a review, and a leftover
+// REVIEW.md from an earlier build cannot trap an unrelated session.
+test("review=off and review=ask complete without any review", () => {
+    for (const review of ["off", "ask"]) {
+        const ws = workspace();
+        const gate = completionGate.checkWorkspace(ws, { review });
+        assert.equal(gate.state, "COMPLETE");
+        assert.equal(gate.allow, true);
+        assert.equal(gate.completionPassed, true);
+        assert.match(gate.message, /Implementation complete/);
+        assert.match(gate.message, review === "ask" ? /Ask me/ : /Off/);
+        assert.equal(claudeStopOutput(gate), null, "a satisfied gate never blocks Stop");
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("stale review state cannot trap completion when review is not automatic", () => {
+    for (const review of ["off", "ask"]) {
+        const ws = workspace();
+        writeReview(ws, "CHANGES-NEEDED");
+        const future = new Date(Date.now() + 2000);
+        fs.utimesSync(path.join(ws, "EXECUTION.md"), future, future);
+        assert.equal(completionGate.checkWorkspace(ws, { review }).state, "COMPLETE");
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("review never becomes a requirement between tasks", () => {
+    for (const review of ["off", "ask", "auto"]) {
+        const ws = workspace("in_progress");
+        const gate = completionGate.checkWorkspace(ws, { review });
+        assert.equal(gate.state, "WORK_IN_PROGRESS");
+        assert.equal(gate.allow, true);
+        assert.doesNotMatch(gate.message, /review/i, "an unfinished build is never asked for a review");
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("an explicit review mode overrides the saved preference", () => {
+    const ws = workspace();
+    process.env.PALSYNC_REVIEW = "auto";
+    try {
+        assert.equal(completionGate.checkWorkspace(ws).state, "REVIEW_FAILED", "env override applies");
+        assert.equal(completionGate.checkWorkspace(ws, { review: "off" }).state, "COMPLETE", "explicit argument wins");
+    } finally {
+        delete process.env.PALSYNC_REVIEW;
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
 });
