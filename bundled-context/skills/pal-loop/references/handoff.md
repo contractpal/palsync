@@ -1,79 +1,59 @@
-# Handoff — completion-path detail
+# Completion handoff
 
-Procedural how-to for the build-completion handoff (pal-review dispatch,
-completion check, and brownfield regression). Read this reference at build
-completion, before dispatching pal-review.
+Read at the end of the work, not between tasks.
 
-## Review-cadence pause — counter mechanics
+## 1. Summarize
 
-- `end`: no pauses — run to completion.
-- `each-task`: after each done task, report it (what shipped + step-5
-  evidence) and wait for the human's go-ahead — don't self-approve.
-- `every-N`: track a counter on the checkpoint line
-  (`since last review: 2/3`); at N, pause like `each-task` (report every
-  task since the last pause), reset. Below N, continue.
+State, in plain language: what changed, what was checked, and what was deliberately not
+checked and why (the shape is in `../../shared/references/verification.md`).
 
-This is independent of the push `checkpoint` gate (per-push) and the
-pal-review handoff (always runs at completion).
+## 2. Regression — only when it earns something
 
-## Brownfield regression re-check (only if `baseline/` exists)
+Run `pal_regression` only if `baseline/baseline.json` exists AND the change was high risk
+(shared fragment/workflow, auth, transactions, dataset schema, broad fan-out) or verification
+is `thorough`. A change confined to what you edited does not get a regression sweep; say so
+instead of running one.
 
-Runs at each review-cadence pause and always at the build-completion
-handoff — NOT per-task (step 5 already catches immediate breakage).
+`pal_regression` does the whole mechanical check: freshness gate (stale → `{stale}`; recapture
+per `../../shared/references/regression-baseline.md`), validate/`pal_test`/page-`h1s` vs
+`baseline.json`, `eyeball_only` viewports → `needs_human`, inherited (`known_issues`) vs caused
+split. `caused` empty → pass; `inherited`/`needs_human` never block.
 
-- **Run `pal_regression`** and act on its structured result. It does the
-  whole mechanical check: freshness gate (stale → returns `{stale}`; set
-  `needs-human`, recapture the baseline), validate/`pal_test`/page-`h1s`
-  vs `baseline.json`, `eyeball_only` viewports → `needs_human`, inherited
-  (`known_issues`) vs caused split. `caused` empty → pass.
-  `inherited`/`needs_human` never block.
+A `caused` failure → **bisect for the culprit** (the break may have ridden through several
+commits): start at the last commit where this check passed, walk per-task commits forward
+re-running the SAME failing check against each commit's file state (`git show <sha>:<path>` —
+read-only), and the first failing commit names the culprit task. Reopen and `block` that task,
+citing the baseline comparison and the commit.
 
-- **A `caused` failure → bisect for the culprit** (the break may have
-  ridden through several committed tasks):
-  1. Start at the last commit where this check passed.
-  2. Walk per-task commits forward, re-running the SAME failing check
-     against each commit's file state (`git show <sha>:<path>` — read-only
-     inspection, never a rewrite).
-  3. First failing commit → that commit's task is the culprit.
-  4. Reopen and `block` THAT task, citing the baseline comparison and the
-     culprit commit.
+## 3. Close out
 
-## Build complete → hand off to pal-review — dispatch procedure
+1. Cost recording — IF harness is claude-code THEN skip `palsync cost record` (the agent cannot
+   read its own spend); IF pi THEN run `palsync cost record --model <model> --phase <build|review>`
+   using the user-supplied footer figures.
+2. Run `palsync session-summary [--mode <full|lite>] [--next "<text>"]` to append the canonical
+   session summary. If no single ready task is unambiguous, provide `--next`.
+3. Run `palsync completion check`. It reports which review path applies.
 
-1. `baseline/` exists → run the regression re-check above,
-   unconditionally.
-2. Cost recording — IF harness is claude-code THEN skip `palsync cost
-   record` (agent cannot read its own spend); IF pi THEN run
-   `palsync cost record --model <model> --phase <build|review>` using the
-   user-supplied footer figures.
-3. Run `palsync session-summary [--mode <full|lite>] [--next "<text>"]` to append the final canonical session summary now, before review — counts and session number are derived from the parsed task table and the checkpoint is appended through the validation gate in one atomic write. If no single ready task is unambiguous, provide `--next` (e.g. `review blockers / clear human gates`). A proactive mid-build handoff also runs `palsync session-summary` normally but does not invoke review.
-4. Run `palsync review brief`, then **dispatch pal-review in a fresh
-   session/subagent** with its EVIDENCE LEDGER output, SPEC.md,
-   EXECUTION.md, DESIGN_SYSTEM.md/COMPONENTS.md, `baseline/` (if any), and
-   the pal's identity so it can `pal_fetch`/`pal_screenshot`/`pal_test`
-   the real artifacts.
-5. **Reviewer says PASS** → run `palsync completion check` yourself in the
-   workspace. Missing or stale `REVIEW.md`, missing source-bound behavior
-   evidence when §5/action/happy-path rows declare behavior, or any
-   `result: FAIL` means the build is not complete. Claude blocks Stop, Pi
-   queues a corrective follow-up, and other harnesses call this same CLI
-   gate manually.
-6. **CHANGES-NEEDED** → append each `## Fix tasks` item as a new
-   EXECUTION.md task (next id, `spec ref` from the finding, `depends` per
-   stated order, `todo`, tier `standard` unless it needs new structure);
-   resume the task cycle on exactly those tasks.
-7. **Re-review** when the fix tasks are `done`; repeat until PASS. Every
-   review pass, including a re-review after fixes, overwrites `REVIEW.md`
-   with that pass's new verdict, its own complete `palsync review check`
-   output, and fresh evidence. Chat-only verdicts are invalid. A
-   `needs-human` verdict (console eyeball gate) routes like any other
-   `needs-human` task, not a failure.
+## 4. Final review — per the `review` setting
 
-The build-complete handoff is invalid unless REVIEW.md contains the pasted
-`palsync review check` output, including its descriptive exercise summary
-for the current pushed source and final result. After reviewer dispatch,
-the builder performs no source, `.palsync.json`, EXECUTION, or
-evidence-producing action unless the verdict is CHANGES-NEEDED. Then
-update state, fix, push, and start a fresh review cycle. The reviewer runs
-all evidence-producing tools before its final `REVIEW.md` write. "the
-exercises pass now" never permits skipping independent re-review.
+- **off** — finish. Do not ask.
+- **ask** (default) — say the implementation is complete and offer the review. The user decides.
+  Completion is not blocked by declining it.
+- **auto** — dispatch **one** `pal-review` in a fresh session/subagent, at the end, with
+  `palsync review brief` output, SPEC.md, EXECUTION.md, DESIGN_SYSTEM.md/COMPONENTS.md,
+  `baseline/` (if any), and the pal's identity so it can `pal_fetch`/`pal_screenshot`/`pal_test`
+  the real artifacts. Report the verdict.
+
+When a review does run:
+
+- **PASS** → run `palsync completion check` yourself in the workspace.
+- **CHANGES-NEEDED** → append each `## Fix tasks` item as a new EXECUTION.md task (next id,
+  `spec ref` from the finding, `depends` per stated order, `todo`, tier `standard` unless it
+  needs new structure) and resume the cycle on exactly those tasks. Re-review when they are
+  `done`; every pass overwrites `REVIEW.md` with that pass's verdict, its own complete
+  `palsync review check` output, and fresh evidence. Chat-only verdicts are invalid.
+- **needs-human** (console eyeball gate) → routes like any other `needs-human` task.
+
+After reviewer dispatch, the builder performs no source, `.palsync.json`, EXECUTION, or
+evidence-producing action unless the verdict is CHANGES-NEEDED. "The exercises pass now" never
+permits skipping an independent re-review that policy asked for.

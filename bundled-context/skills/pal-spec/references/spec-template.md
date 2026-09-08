@@ -13,9 +13,8 @@ itself carries no inline comments, so nothing here leaks into your output.
 4. `mode:` `full` or `lite`.
 5. `pal:` name + type `(web | console | web+console)` @ cloud url. `web+console` = the pal mixes
    public and logged-in pages; §3 tags each page's type.
-6. `push policy:` `free` or `checkpoint`. `review cadence:` `each-task | every-<N> | end` — default
-   `end` (pal-loop pauses for human review only at build completion; each-task/every-N add earlier
-   mid-build pauses).
+6. `push policy:` `free` or `checkpoint`. Verification depth and final review are user settings
+   (`palsync settings`), not spec fields — see `../../shared/references/verification.md`.
 
 **§1 Product & audience** — what this is, who it serves, the user's state/context, the one
 primary action, and the primary journey in one sentence.
@@ -90,7 +89,6 @@ spec version: 1
 mode: full | lite
 pal: <pal name> (<web | console | web+console>) @ <cloud url>
 push policy: free | checkpoint
-review cadence: each-task | every-<N> | end
 design system: DESIGN_SYSTEM.md @ <path>
 created: <date>   approved: <date or pending>
 

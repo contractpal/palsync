@@ -334,7 +334,7 @@ test("on-demand exercise guidance covers the delete-absent rule in both MCP and 
     const cliDoc = ci.syncDetails(null, { cli: true });
     for (const doc of [mcpDoc, cliDoc]) {
         assert.match(doc, /after a delete put the deleted name in `absent`/);
-        assert.match(doc, /After a fresh reviewer overwrites `REVIEW\.md`, run `palsync completion check`/);
+        assert.match(doc, /`palsync completion check` reports whether the work is complete/);
     }
 });
 

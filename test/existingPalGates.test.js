@@ -19,22 +19,20 @@ const frontend = fs.readFileSync(path.join(SKILLS, "palbuilder-frontend", "SKILL
 const exerciseAuthoring = fs.readFileSync(path.join(SKILLS, "shared", "references", "exercise-authoring.md"), "utf8");
 const palSpec = fs.readFileSync(path.join(SKILLS, "pal-spec", "SKILL.md"), "utf8");
 const routing = fs.readFileSync(path.join(__dirname, "..", "bundled-context", "CLAUDE.md"), "utf8");
-const verifyLadder = fs.readFileSync(path.join(SKILLS, "pal-loop", "references", "verify-ladder.md"), "utf8");
+const verifyLadder = fs.readFileSync(path.join(SKILLS, "pal-loop", "references", "verify-mechanics.md"), "utf8");
 const handoff = fs.readFileSync(path.join(SKILLS, "pal-loop", "references", "handoff.md"), "utf8");
 
-test("pal-fix skips spec ceremony, not verification gates", () => {
-    assert.match(palFix, /not gate-light/, "pal-fix must explicitly keep the proof ladder");
-    for (const tool of [
-        "pal_validate",
-        "pal_push",
-        "pal_test",
-        "pal_screenshot",
-        "pal_exercise",
-        "pal_regression"
-    ]) {
-        assert.match(palFix, new RegExp(tool), "pal-fix must name " + tool);
+test("pal-fix proves the fix proportionally instead of running the whole ladder", () => {
+    assert.match(palFix, /Verification is proportional, not optional/, "pal-fix defers to the policy");
+    assert.match(palFix, /shared\/references\/verification\.md/, "pal-fix points at the one policy");
+    for (const tool of ["pal_push", "pal_test", "pal_screenshot", "pal_exercise", "pal_regression"]) {
+        assert.match(palFix, new RegExp(tool), "pal-fix must still name " + tool);
     }
-    assert.match(palFix, /step-1 reproduction must now pass/, "fix proof must use the repro tool");
+    assert.match(palFix, /re-run the step-1 reproduction/, "fix proof must use the repro tool");
+    assert.match(palFix, /Do not add unrelated screenshots, exercises, or server tests/,
+        "an ordinary fix must not drag in unrelated proof");
+    assert.match(palFix, /only when the fix reaches beyond itself/i,
+        "regression must be conditional, not automatic");
 });
 
 test("pal-init is gone from the bundled lifecycle", () => {
@@ -47,7 +45,7 @@ test("pal-init is gone from the bundled lifecycle", () => {
 });
 
 test("CRUD gates route scoped record exercises and fresh re-review", () => {
-    assert.match(palLoop, /references\/verify-ladder\.md/, "pal-loop must load its verification owner");
+    assert.match(palLoop, /references\/verify-mechanics\.md/, "pal-loop must load its verification owner");
     assert.match(verifyLadder, /exercise-authoring\.md/, "verification must route exercise mechanics to their owner");
     for (const text of [exerciseAuthoring, palReview]) {
         assert.match(text, /\{\{runId\}\}/, "write verification must use unique run data");
@@ -58,8 +56,8 @@ test("CRUD gates route scoped record exercises and fresh re-review", () => {
         assert.match(skill, /mutually exclusive|only actions valid|only the action valid/i,
             "visual build/review must reject conflicting state transitions");
     }
-    assert.match(palLoop, /fresh-context `pal-review` is mandatory/, "completion requires independent review");
-    assert.match(handoff, /start a fresh review cycle/i,
+    assert.match(palLoop, /no review pause between tasks/i, "review never runs between tasks");
+    assert.match(handoff, /independent re-review that policy asked for/i,
         "review fixes must return to a fresh independent reviewer");
 });
 
@@ -86,7 +84,7 @@ test("platform dialect guidance covers the equipment-checkout failure modes", ()
         assert.match(skill, /platform.*chrome/is);
         assert.match(skill, /outside `#cp-root`/);
     }
-    assert.match(palLoop, /references\/verify-ladder\.md/, "pal-loop must load screenshot verification on demand");
+    assert.match(palLoop, /references\/verify-mechanics\.md/, "pal-loop must load screenshot verification on demand");
     assert.match(verifyLadder, /console-chrome-exception\.md/);
 
     assert.match(frontend, /Apache Commons JEXL/);
@@ -101,8 +99,7 @@ test("pal-loop retains structural-safety and countable-handoff invariants", () =
     assert.match(palLoop, /free `pal_ast` `mode:"search"`/i);
     assert.match(palLoop, /three or more spec-ref-named files[\s\S]*dry run[\s\S]*checkpointed[\s\S]*one `pal_push`/i);
     assert.match(palLoop, /palsync task list --ready[\s\S]*spliced SPEC sections[\s\S]*§11 constraints/i);
-    assert.match(palLoop, /three non-cheap completed tasks[\s\S]*frontier task[\s\S]*both verification retries/i);
-    assert.match(palLoop, /session tasks:\s*<n>\/3[\s\S]*cheap tasks do not increment/i);
+    assert.match(palLoop, /End the session when the user asks[\s\S]*only terminally blocked tasks remain/i);
     assert.match(palLoop, /Do not auto-continue[\s\S]*Claude Stop hook or Pi queue/i);
 });
 test("pal-loop loads execution mechanics at Execute", () => {
@@ -113,26 +110,33 @@ test("pal-loop loads execution mechanics at Execute", () => {
     assert.match(palLoop, /### 4\. Execute[\s\S]*references\/execute\.md/);
     assert.doesNotMatch(palLoop, /Foundation task \(T1\): use bash `cp`/);
 });
-test("pal-loop triggers the owned completion protocol", () => {
-    for (const pattern of [/dispatch pal-review in a fresh/, /palsync completion check/, /CHANGES-NEEDED/, /Re-review/, /pal_regression/]) {
+test("pal-loop completion follows the review setting, and only at the end", () => {
+    for (const pattern of [/dispatch \*\*one\*\* `pal-review`/, /palsync completion check/, /CHANGES-NEEDED/, /Re-review/, /pal_regression/]) {
         assert.match(handoff, pattern);
     }
-    assert.match(palLoop, /### 8\. Complete \/ handoff[\s\S]*fresh-context `pal-review` is mandatory/);
-    assert.match(palLoop, /current review[\s\S]*palsync completion check/);
+    assert.match(handoff, /only if `baseline\/baseline\.json` exists AND the change was high risk/,
+        "regression at completion must be conditional");
+    assert.match(palLoop, /### 8\. Complete[\s\S]*follow the `review` setting/);
+    assert.match(palLoop, /\*\*off\*\* → finish[\s\S]*\*\*ask\*\* → offer[\s\S]*\*\*auto\*\* → dispatch/);
 });
-test("pal-loop loads verification mechanics at Verify", () => {
-    for (const pattern of [/Push diagnosis/, /WEB page verification/, /UI by task type/, /Console render/, /Exercise authoring/, /Warning waiver mechanics/]) {
+test("pal-loop loads verification mechanics at Verify and policy from one place", () => {
+    for (const pattern of [/Push \/ validate/, /WEB page checks/, /Screenshots/, /Exercises/, /Warnings/]) {
         assert.match(verifyLadder, pattern);
     }
-    assert.match(palLoop, /### 5\. Verify[\s\S]*references\/verify-ladder\.md/);
+    assert.match(verifyLadder, /to check is decided in/, "mechanics must not restate the policy");
+    assert.match(palLoop, /### 5\. Verify[\s\S]*references\/verify-mechanics\.md/);
+    assert.match(palLoop, /### 5\. Verify[\s\S]*shared\/references\/verification\.md/);
     assert.match(palLoop, /every[\s\S]*success-condition clause[\s\S]*current tool evidence/i);
     assert.match(palLoop, /Runtime tools verify the pushed version/);
 });
-test("pal-loop loads startup mechanics at Start", () => {
+test("session start is minimal: no unconditional doctor, smoke test, or render baseline", () => {
     const session = fs.readFileSync(path.join(SKILLS, "pal-loop", "references", "session-start.md"), "utf8");
-    for (const pattern of [/Reviewer-dispatch preflight/, /Environment doctor/, /Git init/, /Just-in-time skill loading/, /Smoke-test before picking work/]) {
+    for (const pattern of [/status-transition procedure/i, /Environment doctor/, /Git checkpoint/, /Just-in-time skill loading/]) {
         assert.match(session, pattern);
     }
+    assert.match(session, /not as a session ritual/, "doctor is conditional");
+    assert.doesNotMatch(session, /Smoke-test before picking work/, "the smoke test is gone");
     assert.match(palLoop, /### 1\. Start[\s\S]*references\/session-start\.md/);
-    assert.match(palLoop, /approved and reality-checked[\s\S]*workspace is viable/);
+    assert.match(palLoop, /Do \*\*not\*\* run broad health checks just because a session started/);
+    assert.match(palLoop, /Do not run\s*\n?`pal_test` or capture render baselines before a task needs them/);
 });

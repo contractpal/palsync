@@ -10,7 +10,7 @@ things that use them. Name which tasks are parallel-safe (no shared files) and w
 (task → task, and why). List the risks — e.g. pal_preview never renders console for the agent, so
 pair every console VISUAL task with its human-eyeball fallback. If workflow JS is present, the plan
 must verify the workflow compiles via pal_test after push (TestConsole.do returns fresh validation,
-not a human builder gate). Note natural checkpoints; pal-loop also pauses per SPEC.md `review cadence`.
+not a human builder gate). Note natural checkpoints.
 
 **Tasks** — one row per task. `spec ref` = which SPEC.md section(s) this task implements (e.g. §5,
 §8a); every task names at least one, so pal-review and a resuming session can trace a task back to
@@ -57,7 +57,7 @@ Parallel-safe: <tasks with no shared files>.  Sequential: <task → task, why>.
 Risks: <e.g. pal_preview never renders console for the agent — pair every console VISUAL task with
   its human-eyeball fallback in case pal_screenshot can't capture (no Chromium / failed auth replay)>.
 [if workflow JS present] verify the workflow compiles via pal_test after push.
-Checkpoints: <natural human review points — pal-loop also pauses per SPEC.md `review cadence`>.
+Checkpoints: <natural human review points>.
 
 ## Tasks
 | id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |

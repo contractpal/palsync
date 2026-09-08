@@ -101,8 +101,8 @@ test("pal_exercise guidance uses precise row scope and teaches the full CRUD flo
         "edit verification must require the new value and reject the old value");
     mustMatch(exercise, /After a DELETE[\s\S]{0,180}absent/i,
         "delete verification must assert the deleted value is absent");
-    const verify = read("bundled-context/skills/pal-loop/references/verify-ladder.md");
-    mustMatch(loop, /references\/verify-ladder\.md/i,
+    const verify = read("bundled-context/skills/pal-loop/references/verify-mechanics.md");
+    mustMatch(loop, /references\/verify-mechanics\.md/i,
         "pal-loop must load verification mechanics at the Verify transition");
     mustMatch(verify, /exercise-authoring\.md/i,
         "verification mechanics must route agents to exercise authoring");
@@ -191,9 +191,9 @@ test("platform chrome and screenshot auth failures are classified as tool eviden
         mustMatch(text, /platform(?:-| )chrome|platform-injected/i,
             label + " must distinguish platform chrome from pal-owned DOM");
     }
-    mustMatch(loop, /references\/verify-ladder\.md/i,
+    mustMatch(loop, /references\/verify-mechanics\.md/i,
         "pal-loop must load the screenshot verification owner");
-    mustMatch(read("bundled-context/skills/pal-loop/references/verify-ladder.md"), /console-chrome-exception\.md/i,
+    mustMatch(read("bundled-context/skills/pal-loop/references/verify-mechanics.md"), /console-chrome-exception\.md/i,
         "verification owner must route platform-chrome handling to its owner");
     mustMatch(renderRule, /(?:login|auth)[^\n]*(?:redirect|expired|wrong page)|(?:redirect|wrong page)[^\n]*(?:login|auth)/i,
         "render verification must classify login/auth redirects as failed evidence");

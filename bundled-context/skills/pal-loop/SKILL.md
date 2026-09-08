@@ -1,6 +1,6 @@
 ---
 name: pal-loop
-description: "Execute or resume approved SPEC.md + EXECUTION.md tasks faithfully; verify, checkpoint, commit, and hand off for independent review."
+description: "Execute or resume approved SPEC.md + EXECUTION.md tasks faithfully: inspect, edit, cheap feedback, push, verify in proportion to the change."
 ---
 
 # pal-loop — execution state machine
@@ -16,27 +16,39 @@ Durable task and build state lives in **EXECUTION.md**, not only in model contex
 summarize them. Do not substitute generic programming or web knowledge for a
 required PalBuilder skill.
 
-## State machine
+**How much to verify, and whether a final review runs, is decided in exactly one place:**
+[`../shared/references/verification.md`](../shared/references/verification.md). Read it once
+per session. Nothing in this skill overrides it.
 
-Repeat this short cycle until handoff or a terminal blocker.
+## The cycle
+
+```
+understand → inspect only what is needed → edit → cheap feedback → push
+           → proportional verification → next task
+```
 
 ### 1. Start
 
-In Pi, first run `palsync usage start --phase build`; do this before reading any reference,
-running doctor/status/pull/smoke checks, or using build tools. The extension captures the
-structured baseline automatically. Then read [references/session-start.md](references/session-start.md)
-before the first task. Ensure the spec is approved and reality-checked, the workspace is viable,
-git is initialized, reviewer dispatch is available, and the required smoke checks pass.
-Use its CLI transition procedure, session-start reads, doctor, server-status/pull,
-and just-in-time loading mechanics. On resume, trust EXECUTION.md over model memory.
+In Pi, run `palsync usage start --phase build` first. Then, and only this:
+
+- Read EXECUTION.md (`palsync task list --ready`) — on resume it outranks model memory.
+- `pal_status`; server newer than your last pull → `pal_pull` before editing.
+- Not a git repo → `git init && git add -A && git commit -m "loop start"`.
+- State the policy line once: `PalSync: <verification> checks · Final review: <review>`.
+
+Do **not** run broad health checks just because a session started. Run `palsync doctor` when
+setting up for the first time, when the environment or dependencies changed, when configuration
+looks broken, when a failure points at the environment, or when the user asks. Do not run
+`pal_test` or capture render baselines before a task needs them.
+[references/session-start.md](references/session-start.md) holds the status-transition and git
+mechanics; open it when you need them.
 
 ### 2. Pick
 
 Run `palsync task list --ready`. The returned ticket, its spliced SPEC sections, and
 §11 constraints are the complete task requirement. Surface assumptions; no eligible
-task means enter **Complete / handoff** below. A frontier-tier task needing new
-structure requires an available advisor; otherwise mark it `needs-frontier` and move
-only to an independent ready task.
+task means enter **Complete** below. A frontier-tier task needing new structure requires
+an available advisor; otherwise mark it `needs-frontier` and move to an independent ready task.
 
 Before farming a task to a subagent, read
 [references/delegation.md](references/delegation.md). Delegation is optional; the
@@ -46,7 +58,7 @@ orchestrator owns verification and state transitions.
 
 Mark the selected task `in_progress` through the task CLI, immediately.
 
-Load exactly the SPEC §9 skills needed for this task, just in time. In particular:
+Load exactly the SPEC §9 skills needed for this task, just in time:
 
 - frontend task → `palbuilder-frontend` and `design-build`
 - workflow task → `palbuilder-workflow`
@@ -61,10 +73,9 @@ real typed manifest wrapper; never guess or flatten the `{ "string", "<Type>": {
 shape. SPEC §8a datasets are CREATE definitions: follow `palbuilder-data` plus the
 manifest/schema guidance and sync them after creation. SPEC §8b datasets are CONSUMED
 dependencies: never create or alter them. Before the first UI markup or CSS, load
-`design-build` and checkpoint its six-line design brief; its
-signature idea must make the Pal non-generic. At T-final, apply its existing “no
-zeroes” rubric rule. No vision means no rubric score: follow `vision-routing.md` or
-record a `HUMAN GATE`.
+`design-build` and checkpoint its six-line design brief; its signature idea must make the
+Pal non-generic. At T-final, apply its existing "no zeroes" rubric rule. No vision means no
+rubric score: follow `vision-routing.md` or record a `HUMAN GATE`.
 
 ### 4. Execute
 
@@ -76,16 +87,20 @@ before editing an existing page or fragment other files reference (silent for ne
 files). Run free `pal_ast` `mode:"search"` whenever a touched class, attribute, or
 function may have other consumers. `pal_ast` `apply:true` is only for an identical
 mechanical change across three or more spec-ref-named files, after a dry run whose
-diff is checkpointed and followed by one `pal_push`; never use it for copy or design.
+diff is checkpointed and followed by one `pal_push`.
 
 ### 5. Verify
 
-Read [references/verify-ladder.md](references/verify-ladder.md) now. Batch the
-final task edits, then push before every runtime/render check: runtime tools inspect
-the pushed version. Use the applicable push/test/fetch-or-preview/SEO/screenshot/
-exercise/dataset and warning procedures from that reference. Verify every
-success-condition clause with current tool evidence; an attempted check, compile,
-screenshot path, or chat assertion is not a PASS.
+Batch the task's edits, then push — runtime tools only see the pushed version. Pick the
+checks from [`../shared/references/verification.md`](../shared/references/verification.md):
+its risk table decides which of compile / render / behavior / regression apply here, and
+`palsync verify` prints that plan for your current diff. Say in one plain sentence why an
+expensive check is running, before running it.
+
+Read [references/verify-mechanics.md](references/verify-mechanics.md) for HOW to run and read
+a check (screenshot branch recovery, console targeting, exercise failures, dataset sync,
+warning waivers). Every success-condition clause needs current tool evidence; an attempted
+check, a compile, or a chat assertion is not a PASS.
 
 ### 6. Resolve
 
@@ -106,36 +121,30 @@ server drift requires it); git alone does not restore the server.
 defect and blocks; in `lite`, verify the required floor and happy-path criterion for
 each primary action without manufacturing full-mode rigor.
 
-Apply the review cadence in [references/handoff.md](references/handoff.md), including
-its brownfield regression check when `baseline/` exists. Then select the next ready,
-independent task. A task that caused a brownfield regression must be reopened and
-blocked according to that reference.
+Select the next ready, independent task. There is **no review pause between tasks** and no
+per-task regression sweep: step 5 already proved what changed.
 
-End the current build session after three non-cheap completed tasks, any completed
-frontier task, or a task consuming both verification retries. Record the `session tasks:
-<n>/3` checkpoint counter; cheap tasks do not increment it. Finish the current task,
-leave none `in_progress`, commit, and run `palsync session-summary` using the reference
-mechanics. A fresh delegated next task may satisfy this handoff. Do not auto-continue
-via the Claude Stop hook or Pi queue. Also stop when the user asks, only terminally
-blocked tasks remain, or completion has passed. Report what
-shipped, each blocker and required decision, frontier work, human gates, and next work.
-Never end a turn with unchecked tasks unless every remaining task is terminally blocked;
-name every blocker explicitly. For a formal QA/eval report, use the `qa-report` skill
-and `bundled-context/skills/qa-report/references/report-template.md`.
+End the session when the user asks, when only terminally blocked tasks remain, when context
+has degraded, or when the work is complete. Finish the current task, leave none
+`in_progress`, commit, and run `palsync session-summary`.
+Do not auto-continue via the Claude Stop hook or Pi queue. Report what shipped, each blocker and required decision, frontier work,
+human gates, and next work. Never end a turn with unchecked tasks unless every remaining task
+is terminally blocked; name every blocker explicitly. For a formal QA/eval report, use the
+`qa-report` skill.
 
-### 8. Complete / handoff
+### 8. Complete
 
-When no eligible task remains, read [references/handoff.md](references/handoff.md) in
-full. Independent fresh-context `pal-review` is mandatory; all tasks `done` is not
-build completion. Follow its regression, session-summary, review dispatch,
-CHANGES-NEEDED, and re-review procedures. Final completion requires a current review
-PASS **and** `palsync completion check`. A reviewer-dispatch failure is a `HUMAN GATE`,
-not a valid build PASS.
+When no eligible task remains, read [references/handoff.md](references/handoff.md).
+Summarize what changed, what was checked, and what was deliberately not checked and why.
+Then follow the `review` setting: **off** → finish; **ask** → offer a final review and let
+the user decide; **auto** → dispatch one fresh-context `pal-review` and report its verdict.
+`palsync completion check` states which of those applies.
 
 ## Hard invariants
 
 - Never silently edit SPEC.md. For an amendment path, use
-  `../pal-spec/references/amendment-path.md`: write an amendment proposal; propose → human approve → re-gate → continue. The loop never silently self-amends.
+  `../pal-spec/references/amendment-path.md`: write an amendment proposal;
+  propose → human approve → re-gate → continue. The loop never silently self-amends.
 - Never violate §11 NEVER constraints.
 - Never create or alter a §8b consumed dataset.
 - Never invent missing copy, facts, or assets.
@@ -146,7 +155,4 @@ not a valid build PASS.
 - Destructive operations obey confirmation gates.
 - Task-state changes are written durably.
 - Completed tasks get a checkpoint and git commit.
-- Independent `pal-review` is required before build completion.
-- Build completion also requires `pal_test` VALIDATED (0 notes) for every workflow
-  touched by this build.
 - Never deploy; deployment is human-only.

@@ -133,13 +133,13 @@ test("pal-loop starts Pi usage before any session-start reads", () => {
     const usageStart = loop.indexOf("palsync usage start --phase build");
     const sessionStartRead = loop.indexOf("references/session-start.md");
     assert.ok(usageStart >= 0 && usageStart < sessionStartRead, "usage boundary must precede session-start work");
-    assert.match(loop, /before reading any reference[\s\S]*doctor\/status\/pull\/smoke checks/);
+    assert.match(loop, /In Pi, run `palsync usage start --phase build` first/);
 });
 
 test("pal-loop end-of-run guidance points to the qa-report skill", () => {
     const loop = read(PAL_LOOP);
     assert.match(loop, /qa-report/, "pal-loop must reference qa-report for report writing");
-    assert.match(loop, /report-template\.md/, "pal-loop must reference the report template");
+    assert.match(read(SKILL), /report-template\.md/, "qa-report owns the report template");
 });
 
 test("eval run protocol points to the qa-report skill for reporting", () => {

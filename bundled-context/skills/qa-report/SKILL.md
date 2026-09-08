@@ -35,7 +35,7 @@ nothing to say, write "none" and explain why.
 
 1. **Header metadata block** — report path, workspace, pal ID, run date + wall clock, harness,
    PalSync version/commit when available, build model (exact ID + effort), review/QA model if
-   different, run mode (spec mode / run mode / review cadence).
+   different, run mode (spec mode / run mode / verification + review settings).
 2. **Executive verdict** — one bolded verdict line (`PASS` / `CHANGES NEEDED` / `BROKEN`) +
    ≤2 paragraphs. State explicitly whether findings were caught by the process or by a human.
 3. **Findings** — ordered by severity (High / Medium / Low). Each finding requires: symptom,
