@@ -81,9 +81,11 @@ function workflowTypes(manifest, paths) {
 
 // paths        — workspace-relative files this change touches
 // dependents   — how many other files reference the touched markup (pal_impact); null = unknown
-// manifest     — parsed pal.json, when available (workflow types)
-// datasetChange — true when a dataset definition/schema changed
-function classifyChange({ paths = [], dependents = null, manifest = null, datasetChange = false } = {}) {
+// manifest       — parsed pal.json, when available (workflow types)
+// datasetChange  — true when a dataset definition/schema changed
+// manifestChange — true when pal.json itself changed without a new file explaining it
+function classifyChange({ paths = [], dependents = null, manifest = null, datasetChange = false,
+    manifestChange = false } = {}) {
     const folders = paths.map(folderOf);
     const surface = folders.some(f => ["pages", "fragments", "styles", "images"].includes(f));
     const behavior = folders.some(f => ["workflows", "scripts", "wizards"].includes(f));
@@ -94,7 +96,7 @@ function classifyChange({ paths = [], dependents = null, manifest = null, datase
     const raise = (next, why) => { level = next; reasons.push(why); };
 
     if (behavior) raise("medium", "workflow or script behavior changed");
-    if (dependents !== null && dependents >= 1 && level === "low") {
+    if (dependents !== null && dependents >= 1 && dependents < 3 && level === "low") {
         raise("medium", "this file is used by " + dependents + " other file" + (dependents === 1 ? "" : "s"));
     }
     if (dependents !== null && dependents >= 3) {
@@ -103,7 +105,11 @@ function classifyChange({ paths = [], dependents = null, manifest = null, datase
     if (types.some(t => HIGH_RISK_WORKFLOW_TYPES.includes(t))) {
         raise("high", "a transaction or webservice/tunnel workflow changed");
     }
+    if (paths.some(p => /(?:^|[\/_.-])(auth|login|session|permission|security)(?:[\/_.-]|$)/i.test(p))) {
+        raise("high", "authentication or access-control code changed");
+    }
     if (datasetChange) raise("high", "a dataset definition changed");
+    if (manifestChange) raise("high", "pal.json structure changed");
     if (paths.length >= 8) raise("high", paths.length + " files changed at once");
 
     if (!reasons.length) reasons.push("presentation-only change with no known dependents");

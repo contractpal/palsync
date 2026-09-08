@@ -215,8 +215,8 @@ async function pickEvalSpec(specs) {
     return clack.isCancel(v) ? null : v;
 }
 
-// The launcher/GUI control for the two preferences. Plain language only: no tool names, no
-// "levels". Cancelling keeps the current value.
+// The launcher's terminal picker for the two preferences. Plain language only: no tool names,
+// no "levels". Cancelling keeps the current value.
 async function pickSettings(current, clackLib) {
     const policy = require("../core/policy");
     const clack = clackLib || await loadClack();

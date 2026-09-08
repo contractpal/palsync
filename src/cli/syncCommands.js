@@ -231,12 +231,24 @@ async function runSessionSummary(argv) {
 // workspace, no login. Bare + a real terminal opens the same picker the launcher uses.
 async function runSettings(argv) {
     const policy = require("../core/policy");
-    const args = argv.filter(a => a.charAt(0) !== "-");
+    const usage = "Usage: palsync settings [verification fast|standard|thorough] [review off|ask|auto]";
+    if (argv.length === 1 && (argv[0] === "--help" || argv[0] === "-h")) {
+        console.log(usage);
+        return 0;
+    }
+    if (argv.some(a => a.charAt(0) === "-")) {
+        console.error(usage);
+        return 1;
+    }
+    const args = argv.slice();
     if (args.length % 2 !== 0) {
-        console.error("Usage: palsync settings [verification fast|standard|thorough] [review off|ask|auto]");
+        console.error(usage);
         return 1;
     }
     try {
+        // Validate the whole request before writing either preference, so one bad pair cannot leave
+        // a surprising half-update behind.
+        for (let i = 0; i < args.length; i += 2) policy.set(args[i], args[i + 1], () => {});
         for (let i = 0; i < args.length; i += 2) policy.set(args[i], args[i + 1]);
     } catch (e) { console.error(e.message); return 1; }
     if (!args.length && process.stdin.isTTY && process.stdout.isTTY) {
@@ -285,7 +297,7 @@ async function runTaskCommand(cmd, argv) {
             const specFile = path.join(path.resolve(dir), "SPEC.md");
             let specText;
             try { specText = fs.readFileSync(specFile, "utf8"); }
-            catch (e) { specText = null; }
+            catch { specText = null; }
             const rendered = ts.renderReadyTicket(text, specText);
             if (!rendered.ok) {
                 if (rendered.noReady) { console.log(rendered.error); return 1; }
@@ -377,7 +389,7 @@ async function run(cmd, argv, opts) {
     let flags;
     if (cmd === "ctx") {
         try { flags = parseFlags(argv); }
-        catch (e) { console.error("Usage: palsync ctx inspect|diff [--dir <workspace>]"); return 1; }
+        catch { console.error("Usage: palsync ctx inspect|diff [--dir <workspace>]"); return 1; }
     } else {
         flags = parseFlags(argv);
     }
@@ -389,7 +401,7 @@ async function run(cmd, argv, opts) {
         if (flags._positional === "capture") {
             let snapshot;
             try { snapshot = JSON.parse(flags.snapshot || ""); }
-            catch (e) { console.error("usage capture failed: --snapshot must be JSON"); return 1; }
+            catch { console.error("usage capture failed: --snapshot must be JSON"); return 1; }
             const result = usage.captureRunUsage(dir, { phase: flags.phase, boundary: flags.boundary,
                 snapshot, model: flags.model, provider: flags.provider });
             if (!result.ok) { console.error("usage capture failed: " + result.error); return 1; }

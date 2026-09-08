@@ -16,7 +16,8 @@
 **Review usage window:** `<.palsync/run-usage.json review delta or not available>`
 **Build model:** `<exact model id>` (effort `<reasoning effort>`)
 **QA/report model:** `<exact model id>` if different from build model
-**Run mode:** `<spec mode>` / `<run mode>` / review cadence `<cadence>`
+**Run mode:** `<spec mode>` / `<run mode>`
+**Policy:** verification `<fast | standard | thorough>` / final review `<off | ask | auto>`
 
 ## Executive verdict
 

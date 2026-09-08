@@ -122,6 +122,8 @@ palsync seo-audit       # on-page SEO audit of a web pal
 palsync sync-datasets   # provision dataset tables from pal.json (safe by default)
 palsync regression      # capture/compare a regression baseline
 palsync spec-lint       # lint SPEC.md
+palsync settings        # set verification and final-review preferences
+palsync verify          # explain the offline verification plan for local changes
 palsync task            # spec-to-ship task operations (`--reason` required for blocked states)
 palsync checkpoint      # spec-to-ship checkpointing
 palsync completion check # offline all-done review / reasoned-handoff gate
@@ -134,10 +136,23 @@ palsync setup           # non-interactive workspace creation
 palsync upgrade         # self-update from the latest commit
 ```
 
-All take `--dir <workspace>` (default: current directory). Semantics are identical to the MCP tools
-— same drift guards, same preserve-on-pull. Pi users do not register an MCP server manually: its
-native extension privately spawns `palsync-mcp` with the `pi-minimal` profile and activates tools
-lazily.
+All workspace commands take `--dir <workspace>` (default: current directory). Semantics are
+identical to the MCP tools — same drift guards, same preserve-on-pull. Pi users do not register an
+MCP server manually: its native extension privately spawns `palsync-mcp` with the `pi-minimal`
+profile and activates tools lazily.
+
+### Verification and final review settings
+
+Run `palsync --settings` for the terminal picker, or set values directly with `palsync settings`.
+PalSync has no separate desktop GUI; the launcher is its user interface.
+
+- **Verification:** Fast — basic checks; Standard (default) — check what changed without testing
+  everything; Thorough — run the full set of relevant checks.
+- **Final review:** Off — finish when done; Ask me (default) — offer a final review when done;
+  Automatic — always run one final review.
+
+`palsync verify` explains what will run for the current local changes without logging in, opening a
+browser, or calling a model.
 
 ### `palsync cost` — context observability
 

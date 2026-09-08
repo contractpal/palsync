@@ -15,6 +15,13 @@ function readManifest(dir) {
     catch (e) { return null; }
 }
 
+function isPublicWeb(manifest, paths) {
+    const entries = manifest && manifest.pages && manifest.pages.entry;
+    if (!Array.isArray(entries)) return false;
+    const names = new Set(paths.filter(p => p.startsWith("pages/")).map(p => p.slice("pages/".length)));
+    return entries.some(entry => entry && names.has(entry.string) && entry.Page && entry.Page.palType === "palTypeWeb");
+}
+
 // Highest dependent count across the touched markup files. Unknown (null) when nothing touched is
 // markup — the caller must not read "0 dependents" out of "we did not look".
 function markupDependents(dir, record, paths) {
@@ -36,8 +43,10 @@ function markupDependents(dir, record, paths) {
 async function describe(dir) {
     let record = null;
     try { record = await palsyncfile.read(dir); } catch (e) { /* not a set-up workspace */ }
-    const diff = record ? diffWorkspace(record, dir) : { changed: [], added: [], deleted: [], manifestChanged: false };
-    const paths = [...(diff.changed || []), ...(diff.added || [])].sort();
+    const diff = record ? diffWorkspace(record, dir) : {
+        changed: [], added: [], deleted: [], manifestChanged: false, manifestOnly: false
+    };
+    const paths = [...(diff.changed || []), ...(diff.added || []), ...(diff.deleted || [])].sort();
     const current = policy.resolve();
 
     if (!paths.length && !diff.manifestChanged) {
@@ -49,11 +58,10 @@ async function describe(dir) {
         paths,
         dependents: markupDependents(dir, record, paths),
         manifest,
-        datasetChange: paths.some(p => p.startsWith("datasets/")) ||
-            (diff.manifestChanged && paths.some(p => p.startsWith("datasets/")))
+        datasetChange: paths.some(p => p.startsWith("datasets/")),
+        manifestChange: !!diff.manifestOnly
     });
-    const publicWeb = paths.some(p => /^pages\//.test(p)) && !!manifest &&
-        JSON.stringify(manifest.pages || {}).includes("palTypeWeb");
+    const publicWeb = isPublicWeb(manifest, paths);
     const plan = policy.plan({
         verification: current.verification,
         risk: change.level,
@@ -66,7 +74,7 @@ async function describe(dir) {
     return [
         policy.formatPlan({ risk: change.level, reasons: change.reasons, plan }, current),
         "",
-        "Changed: " + paths.join(", ")
+        "Changed: " + paths.concat(diff.manifestChanged ? ["pal.json"] : []).join(", ")
     ].join("\n");
 }
 
