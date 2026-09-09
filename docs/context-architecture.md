@@ -25,7 +25,7 @@ basis that could not be reproduced.
 | All | `creating-files` | `src/launcher/contextInject.js#syncDetails` | 3,327 | 832 | on-demand |
 | Claude/Codex/OpenCode | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,539 | 885 | on-demand |
 | Pi | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,567 | 892 | on-demand |
-| All | `skill-body:design-build` | `bundled-context/skills/design-build/SKILL.md` | 4,743 | 1,186 | on-demand |
+| All | `skill-body:design-build` | `bundled-context/skills/design-build/SKILL.md` | 4,862 | 1,216 | on-demand |
 | All | `skill-body:design-system-init` | `bundled-context/skills/design-system-init/SKILL.md` | 18,126 | 4,532 | on-demand |
 | All | `skill-body:pal-fix` | `bundled-context/skills/pal-fix/SKILL.md` | 4,167 | 1,042 | on-demand |
 | All | `skill-body:pal-loop` | `bundled-context/skills/pal-loop/SKILL.md` | 8,303 | 2,076 | on-demand |

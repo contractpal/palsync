@@ -22,8 +22,9 @@ or unsupported Palbuilder implementation.
 
 ## Light Targeted UX Lookup
 
-For a **new or substantially changed UI surface**, make exactly one lightweight external UX
-lookup before implementation. Derive the query from the actual interface, for example `best UX
+For a **new or substantially changed UI surface** not already clearly defined by the local design
+authority, make exactly one lightweight external UX lookup before implementation. Derive the query
+from the actual interface, for example `best UX
 practices for customer data-entry forms`, `best UX practices for search and filter interfaces`,
 `best UX practices for operational dashboards`, or `best UX practices for application settings
 pages`; never use a generic query such as `good UI design`.

@@ -18,13 +18,7 @@ action, information order, density, and one deliberate visual idea. Classify the
 marketing, CRUD/admin, dashboard/data, or form flow. Marketing communicates audience, outcome,
 proof, and next action; operational UI makes the next decision or action fast. Do not blend them.
 
-2. **Research only a new or substantially changed surface.** Before its first markup or CSS, read
-`../design-system-init/references/research-brief.md` only at **Light Targeted UX Lookup** and follow it:
-perform exactly one targeted UX research/search pass derived from this interface, then checkpoint
-only 3–5 practical findings. Skip it for a routine visual/UI edit. Do not research again for the
-same surface unless its job or interface type materially changes.
-
-3. **Load the local authority and recipes.** Read `DESIGN_SYSTEM.md`, `COMPONENTS.md`, and
+2. **Load the local authority and recipes.** Read `DESIGN_SYSTEM.md`, `COMPONENTS.md`, and
 `design/refs/` when present; they are the project design authority. If no system exists for
 non-trivial work, recommend `design-system-init`; if work proceeds, record minimal assumptions.
 Read `../shared/references/css-conventions.md`, then
@@ -33,6 +27,13 @@ Read `../shared/references/css-conventions.md`, then
 use the local inventory before creating a variant. For PalBuilder markup, fragments, JEXL, or
 unfamiliar `c:` attributes, also load `../palbuilder-frontend/SKILL.md` and
 `../palbuilder-frontend/references/c-tags.md`.
+
+3. **Research if still needed.** For a new or substantially changed surface whose interaction is
+not already clearly defined by the local authority, before its first markup or CSS read
+`../design-system-init/references/research-brief.md`: **Light Targeted UX Lookup** plus only the
+relevant entry under **Source Routes**. Perform exactly one targeted UX research/search pass derived
+from this interface, then checkpoint only 3–5 practical findings. Skip it for a routine visual/UI
+edit. Do not research again for the same surface unless its job or interface type materially changes.
 
 4. **Structure, then build.** Map primitives, composites, and layout shells to `COMPONENTS.md`;
 reuse rather than fork near-duplicates. For non-trivial work, state the component breakdown before
