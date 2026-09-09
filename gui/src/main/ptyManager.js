@@ -15,6 +15,9 @@ function anyRunning() {
     return sessions.size > 0;
 }
 
+// Throws on a spawn failure (e.g. `command` not actually resolvable on PATH at exec time, even
+// if it was found moments earlier by the picker's own PATH check) — callers must catch this and
+// surface it, rather than leaving a silently-blank terminal with no explanation.
 function start(palId, { command, args = [], cwd, cols = 80, rows = 24 }, onData, onExit) {
     if (sessions.has(palId)) return sessions.get(palId);
     // Windows agent CLIs are typically .cmd shims (claude.cmd) — route through cmd.exe /c so

@@ -495,12 +495,20 @@ ipcMain.handle("console:start", async (event, { palId, agentId, cwd }) => {
         return { error: "Could not register MCP for " + agent.label + ": " + e.message };
     }
 
-    ptyManager.start(
-        palId,
-        { command: agent.command, args: agent.args, cwd },
-        data => { if (mainWindow) mainWindow.webContents.send("console:data:" + palId, data); },
-        exitCode => { if (mainWindow) mainWindow.webContents.send("console:exit:" + palId, exitCode); }
-    );
+    try {
+        ptyManager.start(
+            palId,
+            { command: agent.command, args: agent.args, cwd },
+            data => { if (mainWindow) mainWindow.webContents.send("console:data:" + palId, data); },
+            exitCode => { if (mainWindow) mainWindow.webContents.send("console:exit:" + palId, exitCode); }
+        );
+    } catch (e) {
+        // A spawn failure here (agent.command not actually resolvable at exec time, even if the
+        // picker's own PATH check found it a moment ago) used to throw straight out of this IPC
+        // handler with nothing on the renderer side ever looking at the result — silent blank
+        // terminal, no explanation. Surface it instead.
+        return { error: "Could not launch " + agent.label + ": " + (e && e.message ? e.message : String(e)) };
+    }
     return { ok: true };
 });
 

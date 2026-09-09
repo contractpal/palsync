@@ -17,15 +17,23 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
     const [showDebug, setShowDebug] = useState(false);
     const [debugLog, setDebugLog] = useState([]); // fetched text chunks, oldest first
     const [debugWidthPct, setDebugWidthPct] = useState(25);
+    const [startError, setStartError] = useState(null);
     const splitRowRef = useRef(null);
 
     // `agents` arrives asynchronously (WorkspaceView starts it at [] and fetches in an
     // effect) — pick a default once it's actually populated, rather than freezing a
     // decision at mount time based on the still-empty initial list.
+    //
+    // Always seed agentId to the first agent, even when showing the picker for a choice among
+    // several: the <select> below has no empty option, so with agentId still null it falls back
+    // to visually showing the first option as selected while React's own state stays null —
+    // clicking Open without ever touching the dropdown then does nothing (needsAgentPick just
+    // clears, but the console-start effect below never fires since agentId is falsy). Seeding it
+    // here keeps the visible selection and the actual state in sync from the start.
     useEffect(() => {
         if (agentId || agents.length === 0) return;
-        if (agents.length === 1) setAgentId(agents[0].id);
-        else setNeedsAgentPick(true);
+        setAgentId(agents[0].id);
+        if (agents.length > 1) setNeedsAgentPick(true);
     }, [agents, agentId]);
 
     useEffect(() => {
@@ -86,17 +94,36 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
     }, []);
 
     useEffect(() => {
-        if (active && !startedRef.current && agentId) {
+        // Wait for the picker to actually be dismissed (Open clicked) before starting — agentId
+        // gets seeded to a default the moment `agents` populates (see above), which would
+        // otherwise auto-start with that default here immediately, silently ignoring a still-
+        // pending multi-agent choice the user hasn't confirmed yet.
+        if (active && !startedRef.current && agentId && !needsAgentPick) {
             startedRef.current = true;
-            window.palsyncGui.startConsole(pal.cloudPalId + ":" + pal.path, agentId, pal.path);
+            // Previously fire-and-forget: a failure here (bad MCP registration, or the agent
+            // command not actually launching even though it was found on PATH) had NOTHING
+            // looking at the result — silent blank terminal, no explanation. Surface it, and let
+            // the user retry with a different agent (clearing startedRef so the effect can fire
+            // again if agentId changes).
+            window.palsyncGui.startConsole(pal.cloudPalId + ":" + pal.path, agentId, pal.path)
+                .then(res => {
+                    if (res && res.error) {
+                        setStartError(res.error);
+                        startedRef.current = false;
+                    }
+                })
+                .catch(err => {
+                    setStartError((err && err.message) || String(err));
+                    startedRef.current = false;
+                });
             if (agentId !== pal.agentId && onAgentChosen) onAgentChosen(agentId);
         }
-    }, [active, agentId]);
+    }, [active, agentId, needsAgentPick]);
 
     // The terminal's host div stays mounted regardless of loading/picker state, so the
     // mount-time effect above (which only runs once) always finds a real ref to attach to —
     // overlaying the picker/placeholder instead of conditionally un-mounting the div.
-    const overlayVisible = needsAgentPick || agents.length === 0;
+    const overlayVisible = needsAgentPick || agents.length === 0 || !!startError;
 
     // Drag-resize the debug panel (starts at 25% width, per David's ask). move/up are scoped to
     // this one drag gesture, not the component's render — so re-renders mid-drag (setState below
@@ -138,6 +165,15 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
                     {!needsAgentPick && agents.length === 0 && (
                         <div className="term-placeholder">
                             No agent CLI found on this machine — install Claude Code or OpenCode and add it to PATH.
+                        </div>
+                    )}
+                    {!needsAgentPick && startError && (
+                        <div className="agent-picker">
+                            <p>Couldn't start {(agents.find(a => a.id === agentId) || {}).label || agentId}:</p>
+                            <p className="dep-hint" style={{ maxWidth: 420 }}>{startError}</p>
+                            <button className="btn btn-primary" onClick={() => { setStartError(null); setNeedsAgentPick(true); }}>
+                                Try a different agent
+                            </button>
                         </div>
                     )}
                     <div className="term-host" ref={hostRef} style={overlayVisible ? { display: "none" } : { flex: 1, minHeight: 0 } } />
