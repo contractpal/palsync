@@ -51,6 +51,17 @@ async function ensureElectronRunAsNode(filePath, configFile) {
 // onto the command itself and left for the shell Claude Code already runs it through to
 // interpret ("set VAR=1 && cmd" on Windows, "VAR=1 cmd" elsewhere). Self-healing: re-run on
 // every console launch so a config written before this fix existed gets corrected too.
+//
+// This does NOT correct the absolute app/script paths baked into an existing hook command
+// (e.g. after macOS AppTranslocation gives a relaunch a new temp path) — only whether the
+// env-var prefix is present. A prefix-and-replace-in-place attempt was tried and reverted:
+// claudeHooks.js's own ownership detection (isOwnedCommand/parseGeneratedCommand) requires the
+// command's executable basename to be a plain "node" binary, which is never true for a hook
+// written from inside Electron's main process (the executable is the Electron/app binary
+// itself) — so calling its configure(install:true) here doesn't recognize the existing GUI-
+// written entry as owned and appends a second, duplicate hook instead of replacing it, growing
+// unbounded on every relaunch. Fixing this properly needs `claudeHooks.js`'s recognition taught
+// about the Electron-wrapped form, not worked around from here. Tracked as a known gap.
 async function ensureElectronRunAsNodeForHooks(workspaceDir) {
     const filePath = path.join(workspaceDir, ".claude", "settings.json");
     let settings;
@@ -92,17 +103,23 @@ async function ensureChipSessionId(filePath, configFile, chipSessionId) {
     await fs.writeFile(filePath, JSON.stringify(json, null, 2), "utf8");
 }
 
-// Idempotent on the registration itself, but self-healing on the Electron-as-Node patch and the
-// Chip session id — an already-registered config from before either fix existed still gets
-// corrected. chipSessionId is this pal tab's persistent id (see index.js) — every request the
-// agent's MCP child process makes for this pal then carries it as a Chip-Session-ID header.
+// Re-registers (self-heals command/args) every time rather than only once, then re-applies the
+// Electron-as-Node patch and the Chip session id on top — register()'s own merge replaces the
+// palsync entry wholesale, dropping both. This also self-heals macOS AppTranslocation path
+// drift: a quarantined, unmoved .app gets a *different* randomized temp path from Gatekeeper on
+// every launch, and register()'s command/args are built from this run's process.execPath/
+// __dirname — so a pal's MCP tools no longer silently break after quitting and relaunching
+// (previously: register() only ran once, the first time, so this pal's `command`/args stayed
+// pinned to whatever launch first wrote the file — permanently ENOENT the moment that temp
+// directory was gone). chipSessionId is this pal tab's persistent id (see index.js) — every
+// request the agent's MCP child process makes for this pal then carries it as a Chip-Session-ID
+// header.
 async function ensureMcpRegistered(agentId, workspaceDir, chipSessionId) {
     const reg = REGISTRARS[agentId];
     if (!reg) throw new Error("No MCP registration known for agent '" + agentId + "'.");
     const filePath = path.join(workspaceDir, reg.configFile);
     const alreadyRegistered = await exists(filePath);
-    let result = { filePath };
-    if (!alreadyRegistered) result = await reg.register(workspaceDir, { chipSessionId });
+    const result = await reg.register(workspaceDir, { chipSessionId });
     await ensureElectronRunAsNode(filePath, reg.configFile);
     await ensureChipSessionId(filePath, reg.configFile, chipSessionId);
     await ensureElectronRunAsNodeForHooks(workspaceDir);

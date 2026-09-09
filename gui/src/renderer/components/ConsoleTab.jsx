@@ -30,8 +30,16 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
     // clicking Open without ever touching the dropdown then does nothing (needsAgentPick just
     // clears, but the console-start effect below never fires since agentId is falsy). Seeding it
     // here keeps the visible selection and the actual state in sync from the start.
+    //
+    // Also re-seeds when the initial agentId (from a previously-saved pal.agentId) refers to an
+    // agent that's no longer in the detected/installed list - e.g. it was uninstalled, or the
+    // save predates it ever being confirmed on PATH. Trusting stale saved state here silently
+    // tried to spawn a nonexistent command: node-pty doesn't throw for that on macOS, it just
+    // exits async with code 1 and no output, so the console-start effect below "succeeded" into
+    // a permanently blank terminal with no error surfaced anywhere.
     useEffect(() => {
-        if (agentId || agents.length === 0) return;
+        if (agents.length === 0) return;
+        if (agentId && agents.some(a => a.id === agentId)) return;
         setAgentId(agents[0].id);
         if (agents.length > 1) setNeedsAgentPick(true);
     }, [agents, agentId]);
@@ -68,6 +76,15 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
         });
 
         const offData = window.palsyncGui.onConsoleData(pal.cloudPalId + ":" + pal.path, chunk => term.write(chunk));
+        // Without this, a process that exits right after spawning (bad MCP config, the agent
+        // CLI erroring out before printing anything the pty flushes, etc.) left a permanently
+        // blank terminal with zero signal - no thrown error for console:start's try/catch to
+        // catch (the spawn itself succeeded), no renderer exception, nothing. Surface it inline
+        // so "blank and silent" always becomes "here's what happened", and let a retry re-arm.
+        const offExit = window.palsyncGui.onConsoleExit(pal.cloudPalId + ":" + pal.path, code => {
+            term.write("\r\n\x1b[90m[agent process exited" + (code ? " with code " + code : "") + "]\x1b[0m\r\n");
+            startedRef.current = false;
+        });
         term.onData(data => window.palsyncGui.writeToConsole(pal.cloudPalId + ":" + pal.path, data));
 
         // fit.fit() must run only once (a) the container has its final flex-computed size and
@@ -88,6 +105,7 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
 
         return () => {
             offData();
+            offExit();
             if (ro) ro.disconnect();
             term.dispose();
         };

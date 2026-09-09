@@ -12,7 +12,7 @@
     "build:win:dir": "npm run build:renderer && electron-builder --win --dir",
     "build:mac": "npm run build:renderer && electron-builder --mac",
     "build:mac:dir": "npm run build:renderer && electron-builder --mac --dir",
-    "postinstall": "patch-package && electron-rebuild -f -w node-pty"
+    "postinstall": "patch-package && node scripts/fix-electron-install.js && electron-rebuild -f -w node-pty"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
@@ -68,6 +68,7 @@
     "electron@32.3.3": true,
     "esbuild@0.21.5": true,
     "node-pty@1.1.0": true,
-    "file:../..": false
+    "file:../..": false,
+    "fsevents": true
   }
 }
