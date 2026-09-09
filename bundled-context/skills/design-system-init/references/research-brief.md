@@ -20,6 +20,29 @@ When guidance conflicts, use this order:
 An attractive reference never justifies an inaccessible control, broken workflow, invented content,
 or unsupported Palbuilder implementation.
 
+## Light Targeted UX Lookup
+
+For a **new or substantially changed UI surface** not already clearly defined by the local design
+authority, make exactly one lightweight external UX lookup before implementation. Derive the query
+from the actual interface, for example `best UX
+practices for customer data-entry forms`, `best UX practices for search and filter interfaces`,
+`best UX practices for operational dashboards`, or `best UX practices for application settings
+pages`; never use a generic query such as `good UI design`.
+
+Use the most relevant authoritative route in **Source Routes** below (or a similarly authoritative
+source when the interface warrants it). If search is unavailable, open one relevant source route
+directly; if external sources are inaccessible, say so and do not invent findings. Read only enough
+to extract **3–5 implementation-relevant findings** about the decisions at hand—such as simplicity,
+hierarchy, grouping, spacing, input sizing, cognitive load, primary actions, or progressive
+disclosure. Checkpoint the findings as short build decisions, not links, article text, or a retained
+research report. One lookup means one pass: do not broaden it into a research session or repeat it
+for the same surface unless the user job or interface type materially changes.
+
+Skip the lookup for routine UI edits: a color, typography, or small spacing fix; an adjustment to
+an established component; a straightforward field in an established pattern; an explicit reference
+reproduction; or an interaction already clearly defined by the local design system. The local
+`DESIGN_SYSTEM.md`, `COMPONENTS.md`, and supplied references still govern the final design.
+
 ## What The Evidence Changes
 
 ### Encode decisions; do not prompt for taste
