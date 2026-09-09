@@ -476,7 +476,9 @@ ipcMain.handle("pal:runTunnel", async (event, { palPath, action, workflow, paylo
 // ---- IPC: pal server-side debug window ----
 
 ipcMain.handle("pal:fetchDebug", async (event, palPath) => {
-    try { return { result: await debugWorkflow.fetchDebug(palPath, await ensurePalSessionId(palPath)) }; }
+    // No chipSessionId here on purpose — see debugWorkflow.js's header comment: this is the
+    // human opening the Debug panel, not the agent, and the two need to stay distinguishable.
+    try { return { result: await debugWorkflow.fetchDebug(palPath) }; }
     catch (e) { return { error: e && e.message ? e.message : String(e) }; }
 });
 

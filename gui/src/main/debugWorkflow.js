@@ -7,8 +7,14 @@ const { retrieveServerDebug } = require("palsync/src/core/debug");
 const { sessionForFolder } = require("./palSession");
 const { resolvePal } = require("./resolveCached");
 
-async function fetchDebug(workspaceDir, chipSessionId) {
-    const { session, record } = await sessionForFolder(workspaceDir, chipSessionId);
+// Deliberately NEVER passes a chipSessionId here (per David, 2026-09-10): opening this panel
+// means a logged-in human is looking at the debug log directly, not the agent — the
+// Chip-Session-ID header is reserved for the agent's own debug consumption (which still gets it,
+// via the MCP session's PALSYNC_CHIP_SESSION_ID env var — see src/mcp/context.js — untouched by
+// this file) so the server can tell the two apart and let the agent consume its own log
+// independently of whatever the human happens to be looking at in the GUI.
+async function fetchDebug(workspaceDir) {
+    const { session, record } = await sessionForFolder(workspaceDir);
     // Reuses the cached resolve (see resolveCached.js) so a debug fetch — especially on
     // Auto-Refresh, every 5-15s — doesn't walk the whole account (GetProfileList/GetGroupList/
     // GetPalList) every single time just to find this one pal's current transient id.
