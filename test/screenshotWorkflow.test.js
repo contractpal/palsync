@@ -103,23 +103,28 @@ describe("runTest workflow selection", () => {
         // save originals
         lockStub = lockMod.acquireByGuid;
         apiStub = apiMod.CloudPistonAPIManager;
+        // The same fake GetPal.do response both a direct getPal() call AND
+        // acquireByGuid's own team-lock-check getPal() would return — runTest now reuses
+        // acquireByGuid's getPalResp (see test.js) instead of making its own second call, so the
+        // stubbed lock result below carries it directly rather than via a separate getPal stub.
+        const fakeGetPalResp = {
+            pal: {
+                workflows: {
+                    entry: [
+                        { string: "console.html", Workflow: { workflowType: 7 } },
+                        { string: "other.console", Workflow: { workflowType: 7 } },
+                        { string: "main.web", Workflow: { workflowType: 9 } },
+                        { string: "tx", Workflow: { workflowType: 2 } }
+                    ]
+                }
+            }
+        };
         // inject fakes
-        lockMod.acquireByGuid = async () => ({ acquired: true, resolved: { id: "pal-1" } });
+        lockMod.acquireByGuid = async () => ({ acquired: true, resolved: { id: "pal-1" }, getPalResp: fakeGetPalResp });
         apiMod.CloudPistonAPIManager = {
             getPal: async () => {
                 getPalCalls += 1;
-                return {
-                    pal: {
-                        workflows: {
-                            entry: [
-                                { string: "console.html", Workflow: { workflowType: 7 } },
-                                { string: "other.console", Workflow: { workflowType: 7 } },
-                                { string: "main.web", Workflow: { workflowType: 9 } },
-                                { string: "tx", Workflow: { workflowType: 2 } }
-                            ]
-                        }
-                    }
-                };
+                return fakeGetPalResp;
             },
             testWorkflow: async (session, palId, endpoint) => {
                 testWorkflowCalls.push(endpoint);

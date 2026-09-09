@@ -15,7 +15,7 @@ const fs = require("fs/promises");
 const path = require("path");
 const { CloudPistonAPIManager } = require("../../lib/apiManager");
 const { Pal } = require("../../lib/pal");
-const { resolveServerPalByGuid } = require("./resolve");
+const { resolveServerPalByGuid, timestampText } = require("./resolve");
 // Named baselineStore (not `baseline`) on purpose: pull()'s options already destructure a
 // `baseline` (the fileHashes map for the sync decision), which would shadow this inside the fn.
 const baselineStore = require("./baseline");
@@ -228,8 +228,11 @@ async function saveLocal(pal, priorRaw) {
 //     .claude/ / .mcp.json all survive a pull cleanly).
 // environment carries only the url — never credentials, so nothing secret reaches pal.json.
 //   baseline = the record.fileHashes map from the last pull/push (or null).
-async function pull(session, guid, targetDir, { baseline = null } = {}) {
-    const resolved = await resolveServerPalByGuid(session, guid);
+//   resolved (optional) = a previously-resolved pal (see core/resolve.js) to skip the full
+//     account-walk resolve — callers with a long-lived session (MCP's ctx.lifecycle.lockState)
+//     should pass their cached one through.
+async function pull(session, guid, targetDir, { baseline = null, resolved: pre = null } = {}) {
+    const resolved = pre || await resolveServerPalByGuid(session, guid);
     if (!resolved) {
         throw new Error("GUID " + guid + " not found on " + session.environment.url);
     }
@@ -290,7 +293,14 @@ async function pull(session, guid, targetDir, { baseline = null } = {}) {
     // as "added" (no baseline) and any errors in them correctly count as new.
     baselineStore.snapshot(targetDir, serverPaths);
 
-    return { resolved, serverPal, pal, written, removed, preserved, serverPaths };
+    // The marker actually PULLED comes from serverPal (this call's own fresh GetPal.do, always
+    // fetched regardless of whether `resolved` was cached) — not `resolved.lastModifiedDate`,
+    // which goes stale the moment `resolved` is a session-long-cached identity reused across
+    // pulls rather than freshly re-derived each time.
+    const freshMarker = timestampText(serverPal && serverPal.lastModifiedDate);
+    const freshResolved = freshMarker ? Object.assign({}, resolved, { lastModifiedDate: freshMarker }) : resolved;
+
+    return { resolved: freshResolved, serverPal, pal, written, removed, preserved, serverPaths };
 }
 
 module.exports = { pull, expandPalFiles, clearContent, saveLocal, manifestPaths, listTrackedFiles, pruneEmptySubdirs, planSync, mergePreservedEntries, ALL_FOLDERS, CREATABLE_FOLDERS };

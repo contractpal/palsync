@@ -45,7 +45,15 @@ class LockLifecycle {
     }
 
     async acquire({ force = false } = {}) {
-        this.lockState = await lock.acquireByGuid(this.session, this.guid, { force });
+        // Reuse the identity from our own last acquire/release — no GetGroupList/GetPalList call
+        // at all, let alone the full GetProfileList->GetGroupList->GetPalList account walk.
+        // David: those are only actually needed when OPENING a pal or CREATING one — once this
+        // lifecycle has resolved it once, that's the whole session's pal, resolved for good.
+        // This matters because onActivity() below re-acquires on every idle-then-reacquire, so
+        // "resolve fresh every time" meant paying for it repeatedly during a single long agent
+        // session working on a single pal.
+        const resolved = (this.lockState && this.lockState.resolved) || null;
+        this.lockState = await lock.acquireByGuid(this.session, this.guid, { force, resolved });
         if (this.lockState.acquired) {
             this.userReleased = false;
             this.touch();
@@ -109,7 +117,9 @@ class LockLifecycle {
         // Same predicate as releaseByGuid (lockInfo presence, not lockGranted) so we never
         // skip a server unlock in an odd header state; releaseByGuid itself is idempotent.
         if (!this.session.lockInfo) return { released: false, reason: "no lock held" };
-        const result = await lock.releaseByGuid(this.session, this.guid);
+        // Same cache reuse as acquire() above — no re-resolve, just the identity we already have.
+        const resolved = (this.lockState && this.lockState.resolved) || null;
+        const result = await lock.releaseByGuid(this.session, this.guid, { resolved });
         this.log("lock released (" + (reason || "explicit") + "): " + JSON.stringify(result));
         if (typeof this.onRelease === "function") this.onRelease(reason, result);
         return result;

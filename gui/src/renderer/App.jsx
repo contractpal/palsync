@@ -4,6 +4,7 @@ import WorkspaceView from "./components/WorkspaceView.jsx";
 import DependencyCheckModal from "./components/DependencyCheckModal.jsx";
 import AboutModal from "./components/AboutModal.jsx";
 import SettingsModal from "./components/SettingsModal.jsx";
+import BrowsersSettingsModal from "./components/BrowsersSettingsModal.jsx";
 
 export default function App() {
     const [workspace, setWorkspace] = useState(null);
@@ -12,6 +13,7 @@ export default function App() {
     const [showDepsCheck, setShowDepsCheck] = useState(false);
     const [showAbout, setShowAbout] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const [showBrowsers, setShowBrowsers] = useState(false);
 
     useEffect(() => {
         return window.palsyncGui.onOpenDependencyCheck(() => setShowDepsCheck(true));
@@ -23,6 +25,10 @@ export default function App() {
 
     useEffect(() => {
         return window.palsyncGui.onOpenSettings(() => setShowSettings(true));
+    }, []);
+
+    useEffect(() => {
+        return window.palsyncGui.onOpenBrowsers(() => setShowBrowsers(true));
     }, []);
 
     function onWorkspaceOpened(result) {
@@ -86,6 +92,7 @@ export default function App() {
             {showDepsCheck && <DependencyCheckModal onClose={() => setShowDepsCheck(false)} />}
             {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
             {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+            {showBrowsers && <BrowsersSettingsModal onClose={() => setShowBrowsers(false)} />}
         </div>
     );
 }

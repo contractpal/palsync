@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import TestRibbon from "./TestRibbon.jsx";
+import DebugPanel from "./DebugPanel.jsx";
 
 // One real terminal per pal tab, lazily connected to its agent CLI on first mount (i.e. first
 // time this tab becomes active) — not eagerly for every tab in the workspace.
@@ -12,6 +14,10 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
     const startedRef = useRef(false);
     const [agentId, setAgentId] = useState(pal.agentId || null);
     const [needsAgentPick, setNeedsAgentPick] = useState(false);
+    const [showDebug, setShowDebug] = useState(false);
+    const [debugLog, setDebugLog] = useState([]); // fetched text chunks, oldest first
+    const [debugWidthPct, setDebugWidthPct] = useState(25);
+    const splitRowRef = useRef(null);
 
     // `agents` arrives asynchronously (WorkspaceView starts it at [] and fetches in an
     // effect) — pick a default once it's actually populated, rather than freezing a
@@ -92,23 +98,65 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
     // overlaying the picker/placeholder instead of conditionally un-mounting the div.
     const overlayVisible = needsAgentPick || agents.length === 0;
 
+    // Drag-resize the debug panel (starts at 25% width, per David's ask). move/up are scoped to
+    // this one drag gesture, not the component's render — so re-renders mid-drag (setState below
+    // triggers one) never lose track of which listeners to remove.
+    function startDebugResize(e) {
+        e.preventDefault();
+        const move = (ev) => {
+            if (!splitRowRef.current) return;
+            const rect = splitRowRef.current.getBoundingClientRect();
+            const pct = ((rect.right - ev.clientX) / rect.width) * 100;
+            setDebugWidthPct(Math.min(60, Math.max(15, pct)));
+        };
+        const up = () => {
+            document.removeEventListener("mousemove", move);
+            document.removeEventListener("mouseup", up);
+        };
+        document.addEventListener("mousemove", move);
+        document.addEventListener("mouseup", up);
+    }
+
     return (
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-            {needsAgentPick && (
-                <div className="agent-picker">
-                    <p>Choose which agent to open <b>{pal.name}</b> with:</p>
-                    <select value={agentId || ""} onChange={e => setAgentId(e.target.value)}>
-                        {agents.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
-                    </select>
-                    <button className="btn btn-primary" onClick={() => setNeedsAgentPick(false)}>Open</button>
+            <TestRibbon
+                pal={pal}
+                debugVisible={showDebug}
+                onToggleDebug={() => setShowDebug(v => !v)}
+            />
+            <div ref={splitRowRef} style={{ display: "flex", flexDirection: "row", flex: 1, minHeight: 0 }}>
+                <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minWidth: 0, minHeight: 0 }}>
+                    {needsAgentPick && (
+                        <div className="agent-picker">
+                            <p>Choose which agent to open <b>{pal.name}</b> with:</p>
+                            <select value={agentId || ""} onChange={e => setAgentId(e.target.value)}>
+                                {agents.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+                            </select>
+                            <button className="btn btn-primary" onClick={() => setNeedsAgentPick(false)}>Open</button>
+                        </div>
+                    )}
+                    {!needsAgentPick && agents.length === 0 && (
+                        <div className="term-placeholder">
+                            No agent CLI found on this machine — install Claude Code or OpenCode and add it to PATH.
+                        </div>
+                    )}
+                    <div className="term-host" ref={hostRef} style={overlayVisible ? { display: "none" } : { flex: 1, minHeight: 0 } } />
                 </div>
-            )}
-            {!needsAgentPick && agents.length === 0 && (
-                <div className="term-placeholder">
-                    No agent CLI found on this machine — install Claude Code or OpenCode and add it to PATH.
-                </div>
-            )}
-            <div className="term-host" ref={hostRef} style={overlayVisible ? { display: "none" } : { flex: 1, minHeight: 0 } } />
+                {showDebug && (
+                    <>
+                        <div className="vsplit-divider" onMouseDown={startDebugResize} title="Drag to resize" />
+                        <div style={{ flex: "0 0 " + debugWidthPct + "%", minWidth: 0, minHeight: 0 }}>
+                            <DebugPanel
+                                pal={pal}
+                                log={debugLog}
+                                onFetched={text => setDebugLog(prev => [...prev, text])}
+                                onClear={() => setDebugLog([])}
+                                onHide={() => setShowDebug(false)}
+                            />
+                        </div>
+                    </>
+                )}
+            </div>
         </div>
     );
 }

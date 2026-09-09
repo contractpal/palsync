@@ -24,11 +24,17 @@ const fs = require("fs");
 const path = require("path");
 
 // Mint fresh tunnel credentials for the pal. The transient pal id must be re-resolved from the
-// guid each mint (ids rotate per enumeration — see core/resolve).
-async function mintTunnelCredentials(session, palGuid) {
-    const resolved = await resolveServerPalByGuid(session, palGuid);
-    if (!resolved) return { minted: false, reason: "pal not found on the server by guid " + palGuid };
-    const res = await CloudPistonAPIManager.createTunnel(session, resolved.id);
+// guid each mint (ids rotate per enumeration — see core/resolve) UNLESS the caller already has
+// a current one (resolvedId — e.g. from a cached resolve/refreshResolvedPal, one cheap call
+// instead of the full account walk here) to skip resolving it again.
+async function mintTunnelCredentials(session, palGuid, resolvedId) {
+    let id = resolvedId;
+    if (!id) {
+        const resolved = await resolveServerPalByGuid(session, palGuid);
+        if (!resolved) return { minted: false, reason: "pal not found on the server by guid " + palGuid };
+        id = resolved.id;
+    }
+    const res = await CloudPistonAPIManager.createTunnel(session, id);
     if (!res || !res.tunnelUrl || !res.tunnelUsername || !res.tunnelPassword) {
         return { minted: false, reason: "CreateTunnel.do did not return tunnel credentials" +
             (res && res.success === false ? " (the server reported failure)" : "") };
@@ -63,7 +69,11 @@ function matchTunnelWorkflow(name, tunnels) {
 }
 
 // One raw call to the tunnel endpoint. Returns { status, text }; throws only on network failure.
-async function callTunnelOnce(creds, { action, workflow, payload }, fetchImpl) {
+// This hits cptservice/run.do directly (NOT /cpbuilder/), so it bypasses apiManager.js's
+// fetchAPI entirely — chipSessionId is threaded through separately here for the same
+// Chip-Session-ID header fetchAPI adds, so a Tunnel run for this agent+pal window is
+// identifiable the same way any other request for it is.
+async function callTunnelOnce(creds, { action, workflow, payload, chipSessionId }, fetchImpl) {
     const headers = {
         "Content-Type": "application/json",
         "Authorization": "Basic " + Buffer.from(creds.username + ":" + creds.password).toString("base64")
@@ -71,6 +81,7 @@ async function callTunnelOnce(creds, { action, workflow, payload }, fetchImpl) {
     // action is OPTIONAL — omit the header entirely and the workflow's getAction() returns null.
     if (action) headers.tunnelAction = action;
     if (workflow) headers.tunnelWorkflow = workflow;
+    if (chipSessionId) headers["Chip-Session-ID"] = chipSessionId;
     const body = payload == null ? "{}" : (typeof payload === "string" ? payload : JSON.stringify(payload));
     const resp = await fetchImpl(creds.url, { method: "POST", headers, body });
     return { status: resp.status, text: await resp.text() };
@@ -81,23 +92,27 @@ async function callTunnelOnce(creds, { action, workflow, payload }, fetchImpl) {
 // so the caller can cache them for the next call.
 //   -> { ran, refused?, reason?, status, action, workflow, response (parsed JSON|null),
 //        raw (body text), emptyBody, refreshedCredentials, creds }
-async function runTunnelAction(session, palGuid, { action, workflow, payload, creds, fetchImpl = fetch } = {}) {
+// resolvedId: a previously-resolved transient pal id (see core/resolve.js) to skip
+// mintTunnelCredentials' own resolve walk — optional, callers that run this repeatedly against
+// the same pal (e.g. Chip's Tunnel panel) should cache and pass this back in.
+async function runTunnelAction(session, palGuid, { action, workflow, payload, creds, fetchImpl = fetch, resolvedId } = {}) {
     let refreshed = false;
     if (!creds) {
-        const mint = await mintTunnelCredentials(session, palGuid);
+        const mint = await mintTunnelCredentials(session, palGuid, resolvedId);
         if (!mint.minted) return { ran: false, refused: "mint-failed", reason: mint.reason };
         creds = mint;
         refreshed = true;
     }
 
-    let res = await callTunnelOnce(creds, { action, workflow, payload }, fetchImpl);
+    const chipSessionId = session && session.chipSessionId;
+    let res = await callTunnelOnce(creds, { action, workflow, payload, chipSessionId }, fetchImpl);
     if (res.status === 401 && !refreshed) {
         // Cached token expired — mint once and retry.
-        const mint = await mintTunnelCredentials(session, palGuid);
+        const mint = await mintTunnelCredentials(session, palGuid, resolvedId);
         if (!mint.minted) return { ran: false, refused: "mint-failed", reason: mint.reason };
         creds = mint;
         refreshed = true;
-        res = await callTunnelOnce(creds, { action, workflow, payload }, fetchImpl);
+        res = await callTunnelOnce(creds, { action, workflow, payload, chipSessionId }, fetchImpl);
     }
     if (res.status === 401) {
         return { ran: false, refused: "unauthorized", creds,

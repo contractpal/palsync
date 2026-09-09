@@ -45,12 +45,30 @@ function holderLabel(team) {
 // and reports the real owner. force only ever attempts Lock-Force when OVERRIDE_ENABLED is true.
 // opts.resolved skips the account walk when the caller already resolved the guid. The result
 // carries `resolved` and the raw `getPalResp` so callers reuse them instead of re-fetching.
+//
+// Per David (2026-09-10): the intended session model is lock ONCE when a pal is opened, unlock
+// ONCE when it's closed — no other lock/unlock requests during the session. So if this session
+// already holds the Webstart lock (session.lockInfo.lockGranted), step 2 below skips LockPal.do
+// (and its best-effort GetPlatformInfo.do follow-up) entirely and just confirms with the fresh
+// GetPal.do read from step 1 — which still runs every call (it's a read, not a lock action, and
+// callers like push() rely on its freshness for guard logic / drift detection).
 async function acquireByGuid(session, guid, { force = false, resolved: pre = null } = {}) {
-    const resolved = pre || await resolveServerPalByGuid(session, guid);
+    let resolved = pre || await resolveServerPalByGuid(session, guid);
     if (!resolved) throw new Error("GUID " + guid + " not found on " + session.environment.url);
+    const alreadyHeld = !force && !!(session.lockInfo && session.lockInfo.lockGranted === true);
 
     // 1) Team/PalBuilder lock? (read-only) — that blocks LockPal; we can name the real owner.
-    const getPalResp = await CloudPistonAPIManager.getPal(session, resolved.id);
+    let getPalResp = await CloudPistonAPIManager.getPal(session, resolved.id);
+    // Self-healing: a caller-supplied `resolved` (e.g. a transient id persisted in .palsync.json
+    // across sessions — per David, it's not time-stamped, so this is safe to do) can, in rare
+    // cases, go stale. Detect that from THIS call's own response rather than trusting it blindly:
+    // re-resolve for real and retry once before proceeding. A resolve this function did itself
+    // (no `pre`) is never re-validated here — only a caller-supplied one gets this check.
+    if (pre && !(getPalResp && getPalResp.success && getPalResp.pal)) {
+        resolved = await resolveServerPalByGuid(session, guid);
+        if (!resolved) throw new Error("GUID " + guid + " not found on " + session.environment.url);
+        getPalResp = await CloudPistonAPIManager.getPal(session, resolved.id);
+    }
     const team = teamLockFrom(getPalResp);
     if (team) {
         const mine = sameUser(team.ownerEmail, session.username);
@@ -67,7 +85,11 @@ async function acquireByGuid(session, guid, { force = false, resolved: pre = nul
         // force && OVERRIDE_ENABLED → fall through to Lock-Force (post-verification only)
     }
 
-    // 2) Webstart lock. lockGranted (now parsed correctly) is the authoritative proceed signal.
+    // 2) Webstart lock. Already holding it for this session → done, no re-grant request.
+    if (alreadyHeld) {
+        return { acquired: true, reclaimed: false, resolved, getPalResp };
+    }
+    // lockGranted (now parsed correctly) is the authoritative proceed signal.
     await CloudPistonAPIManager.lockPal(session, resolved.id, force);
     const granted = !!(session.lockInfo && session.lockInfo.lockGranted === true);
     if (granted) {
@@ -80,9 +102,11 @@ async function acquireByGuid(session, guid, { force = false, resolved: pre = nul
 }
 
 // Release the lock we hold. Idempotent; never unlocks a lock we don't hold.
-async function releaseByGuid(session, guid) {
+// opts.resolved (optional): skips the account walk when the caller already has a current
+// resolve (e.g. lockLife.js reusing/refreshing the one from its last acquire).
+async function releaseByGuid(session, guid, { resolved: pre = null } = {}) {
     if (!session.lockInfo) return { released: false, reason: "no lock held" };
-    const resolved = await resolveServerPalByGuid(session, guid);
+    const resolved = pre || await resolveServerPalByGuid(session, guid);
     if (!resolved) throw new Error("GUID " + guid + " not found on " + session.environment.url);
     const resp = await CloudPistonAPIManager.unlockPal(session, resolved.id);
     session.lockInfo = undefined;

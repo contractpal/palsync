@@ -66,6 +66,28 @@ contextBridge.exposeInMainWorld("palsyncGui", {
         }
     },
 
+    browsers: {
+        list: () => ipcRenderer.invoke("browsers:list"),
+        add: (browser) => ipcRenderer.invoke("browsers:add", browser),
+        update: (id, fields) => ipcRenderer.invoke("browsers:update", { id, fields }),
+        remove: (id) => ipcRenderer.invoke("browsers:remove", id),
+        setDefault: (id) => ipcRenderer.invoke("browsers:setDefault", id),
+        chooseExecutable: () => ipcRenderer.invoke("browsers:chooseExecutable")
+    },
+    onOpenBrowsers: (callback) => {
+        const listener = () => callback();
+        ipcRenderer.on("browsers:open", listener);
+        return () => ipcRenderer.removeListener("browsers:open", listener);
+    },
+
+    listWorkflowFiles: (palPath, kind) => ipcRenderer.invoke("pal:listWorkflowFiles", { palPath, kind }),
+    testWorkflow: (palPath, kind, browserId, mode, workflowName) => ipcRenderer.invoke("pal:testWorkflow", { palPath, kind, browserId, mode, workflowName }),
+
+    listTunnelWorkflows: (palPath) => ipcRenderer.invoke("pal:listTunnelWorkflows", palPath),
+    runTunnel: (palPath, action, workflow, payload) => ipcRenderer.invoke("pal:runTunnel", { palPath, action, workflow, payload }),
+
+    fetchDebug: (palPath) => ipcRenderer.invoke("pal:fetchDebug", palPath),
+
     startConsole: (palId, agentId, cwd) => ipcRenderer.invoke("console:start", { palId, agentId, cwd }),
     writeToConsole: (palId, data) => ipcRenderer.send("console:write", { palId, data }),
     resizeConsole: (palId, cols, rows) => ipcRenderer.send("console:resize", { palId, cols, rows }),

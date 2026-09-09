@@ -9,13 +9,18 @@ const { writeIfChanged } = require("../core/atomicWrite");
 
 const MCP_BIN = path.resolve(__dirname, "..", "..", "bin", "palsync-mcp.js");
 
-function buildMcpConfig(workspaceDir, { nodePath = process.execPath } = {}) {
+function buildMcpConfig(workspaceDir, { nodePath = process.execPath, chipSessionId } = {}) {
+    const env = { PALSYNC_WORKSPACE: workspaceDir, PALSYNC_TOOL_PROFILE: "claude" };
+    // Chip-only: identifies this agent+pal window to the server via the Chip-Session-ID header
+    // (see lib/apiManager.js). Absent when the plain CLI's own workspace.setup() calls
+    // register() without it — never invented here.
+    if (chipSessionId) env.PALSYNC_CHIP_SESSION_ID = chipSessionId;
     return {
         mcpServers: {
             palsync: {
                 command: nodePath,
                 args: [MCP_BIN],
-                env: { PALSYNC_WORKSPACE: workspaceDir, PALSYNC_TOOL_PROFILE: "claude" }
+                env
             }
         }
     };

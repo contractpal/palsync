@@ -200,6 +200,24 @@ async function main() {
     };
     const server = createServer(getCtx, workspaceDir, { profile: process.env.PALSYNC_TOOL_PROFILE });
 
+    // Lock the pal the moment this session opens — not lazily on whichever tool call happens to
+    // be first. Per David (2026-09-10): "it should have been locked when I opened it." Kicking
+    // this off now (rather than waiting for the first tool call) also means every tool, including
+    // a read-only first call like pal_status, reuses this SAME resolved+locked session from the
+    // start instead of getCtx's acquireLock:false branch building a separate one that never
+    // locks at all (that mismatch was why "get the status of this pal" reported "unlocked" even
+    // though nothing had actually failed to lock — no lock attempt had been made yet).
+    // Registering tools above never touched the network — this is the first real request, fired
+    // here without blocking the server from answering tools/list. A hard failure (bad
+    // credentials, pal not found) is logged loudly; a normal DENIAL (someone else holds it) is
+    // not an exception — it resolves normally with lifecycle.lockState.acquired:false, and
+    // surfaces to the user the moment any tool call reads that state (e.g. pal_status's message,
+    // or a write tool's own "couldn't acquire the lock" refusal) — there's no channel in MCP to
+    // pop an error before any tool has been called.
+    getCtx().catch(err => {
+        logErr("could not open+lock this pal at session start: " + stackOf(err));
+    });
+
     const transport = new StdioServerTransport();
     // EPIPE et al.: if the client end hiccups, a stream 'error' with no listener becomes an
     // uncaughtException. Degrade gracefully — log it, don't crash the session over a write blip.

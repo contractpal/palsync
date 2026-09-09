@@ -9,7 +9,7 @@ const fs = require("fs");
 const path = require("path");
 const { Pal } = require("../../lib/pal");
 const { CloudPistonAPIManager } = require("../../lib/apiManager");
-const { resolveServerPalByGuid, refreshResolvedPal } = require("./resolve");
+const { resolveServerPalByGuid, refreshResolvedPal, timestampText } = require("./resolve");
 const { manifestPaths } = require("./pull");
 const { validateWorkspace, lintContent, hasDesignSystem } = require("./validate");
 const { cachedLint } = require("./lintCache");
@@ -297,7 +297,12 @@ function normalizeValidation(resp) {
 
 // Pushes workspaceDir to the pal identified by record.palGuid. Mutates record.lastModifiedDate
 // on success. Returns a result object (never throws on drift/lock — returns a refusal).
-async function push(session, record, workspaceDir, { force = false, overrideLock = false, skipValidation = false, commitMessage = null } = {}) {
+// resolved (optional): a previously-resolved pal (see core/resolve.js) to skip acquireByGuid's
+// own full-account resolve walk. push() is called on every single pal_push — for a long agent
+// session that's the single biggest source of that walk repeating, since it was never wired to
+// any cache. Callers with a long-lived session (the MCP server's ctx.lifecycle.lockState) should
+// pass their cached resolve through; it never goes stale mid-session (see lockLife.js).
+async function push(session, record, workspaceDir, { force = false, overrideLock = false, skipValidation = false, commitMessage = null, resolved } = {}) {
     // 0) PRE-PUSH LINT (offline): catch the mistakes that silently break in PalBuilder (invalid
     //    workflow JS, bad markup) BEFORE spending a network round-trip. ERRORS block unless
     //    skipValidation is set; WARNINGS never block. The gate holds the agent responsible only
@@ -311,12 +316,22 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
     // 1) ensure the lock is ours. acquireByGuid reads the real holder from teamInfo and reports a
     //    blocked reason (gui-lock-self / gui-lock-other / override-disabled / unknown-holder).
     //    overrideLock only attempts Lock-Force, which is itself gated by OVERRIDE_ENABLED in lock.js.
-    const lk = await lock.acquireByGuid(session, record.palGuid, { force: !!overrideLock });
+    //    This ALWAYS re-checks the team lock + re-grants the Webstart lock (GetPal.do + LockPal.do)
+    //    even if we already hold it — that's deliberate (someone else may have taken over since
+    //    the last push), NOT something `resolved` skips. Only the pal-by-guid resolve walk is
+    //    skipped when a cached one is passed in.
+    const lk = await lock.acquireByGuid(session, record.palGuid, { force: !!overrideLock, resolved });
     if (!lk.acquired) {
         return { pushed: false, refused: lk.blocked || "no-lock", holder: lk.holder, since: lk.since };
     }
     const id = lk.resolved.id;
-    const liveMarker = lk.resolved.lastModifiedDate;
+    // Prefer the marker off THIS call's own getPalResp (always freshly fetched, every push,
+    // even when `resolved` is a cached identity reused across a whole session — see
+    // resolveCached.js/lockLife.js) over lk.resolved.lastModifiedDate, which goes stale the
+    // moment `resolved` stops being freshly re-derived per push. Falls back to the (possibly
+    // stale) resolved marker only if getPalResp doesn't carry one for some reason.
+    const freshMarker = timestampText(lk.getPalResp && lk.getPalResp.pal && lk.getPalResp.pal.lastModifiedDate);
+    const liveMarker = freshMarker || lk.resolved.lastModifiedDate;
 
     // 2) drift guard: server saved since our last pull?
     if (drift.serverAdvanced(record.lastModifiedDate, liveMarker) && !force) {

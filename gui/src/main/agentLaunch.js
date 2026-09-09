@@ -75,20 +75,40 @@ async function ensureElectronRunAsNodeForHooks(workspaceDir) {
     if (changed) await fs.writeFile(filePath, JSON.stringify(settings, null, 2), "utf8");
 }
 
-// Idempotent on the registration itself, but self-healing on the Electron-as-Node patch — an
-// already-registered config from before this fix existed still gets corrected.
-async function ensureMcpRegistered(agentId, workspaceDir) {
+// Self-healing, same pattern as ensureElectronRunAsNode: a config written before Chip started
+// assigning per-pal session ids (or before this pal had one yet) gets patched in place rather
+// than left stale, and it's re-checked on every console launch so it can never drift.
+async function ensureChipSessionId(filePath, configFile, chipSessionId) {
+    if (!chipSessionId) return;
+    let json;
+    try { json = JSON.parse(await fs.readFile(filePath, "utf8")); }
+    catch (e) { return; }
+    const entry = configFile === "opencode.json" ? (json.mcp && json.mcp.palsync) : (json.mcpServers && json.mcpServers.palsync);
+    if (!entry) return;
+    const envKey = configFile === "opencode.json" ? "environment" : "env";
+    entry[envKey] = entry[envKey] || {};
+    if (entry[envKey].PALSYNC_CHIP_SESSION_ID === chipSessionId) return; // already up to date
+    entry[envKey].PALSYNC_CHIP_SESSION_ID = chipSessionId;
+    await fs.writeFile(filePath, JSON.stringify(json, null, 2), "utf8");
+}
+
+// Idempotent on the registration itself, but self-healing on the Electron-as-Node patch and the
+// Chip session id — an already-registered config from before either fix existed still gets
+// corrected. chipSessionId is this pal tab's persistent id (see index.js) — every request the
+// agent's MCP child process makes for this pal then carries it as a Chip-Session-ID header.
+async function ensureMcpRegistered(agentId, workspaceDir, chipSessionId) {
     const reg = REGISTRARS[agentId];
     if (!reg) throw new Error("No MCP registration known for agent '" + agentId + "'.");
     const filePath = path.join(workspaceDir, reg.configFile);
     const alreadyRegistered = await exists(filePath);
     let result = { filePath };
-    if (!alreadyRegistered) result = await reg.register(workspaceDir);
+    if (!alreadyRegistered) result = await reg.register(workspaceDir, { chipSessionId });
     await ensureElectronRunAsNode(filePath, reg.configFile);
+    await ensureChipSessionId(filePath, reg.configFile, chipSessionId);
     await ensureElectronRunAsNodeForHooks(workspaceDir);
     return Object.assign({ alreadyRegistered }, result);
 }
 
 module.exports = {
-    detectAgents, resolveAgent: resolve, ensureMcpRegistered, ensureElectronRunAsNode, ensureElectronRunAsNodeForHooks
+    detectAgents, resolveAgent: resolve, ensureMcpRegistered, ensureElectronRunAsNode, ensureElectronRunAsNodeForHooks, ensureChipSessionId
 };

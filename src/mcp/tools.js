@@ -254,7 +254,15 @@ const { diffWorkspace, describeDiff } = require("../core/localDrift");
 async function resolvePalForRead(ctx) {
     const cached = ctx.lifecycle && ctx.lifecycle.lockState && ctx.lifecycle.lockState.resolved;
     if (cached && cached.guid === ctx.record.palGuid) return cached;
-    return await resolveServerPalByGuid(ctx.session, ctx.record.palGuid);
+    const resolved = await resolveServerPalByGuid(ctx.session, ctx.record.palGuid);
+    // Prime the SAME slot lock.acquireByGuid reads (via ctx.lifecycle.lockState.resolved) so
+    // whichever tool resolves the pal first — this one, or a lock-acquiring one — saves the
+    // full-account walk for every other tool in the rest of the session, not just repeat calls
+    // to this one helper.
+    if (resolved && ctx.lifecycle) {
+        ctx.lifecycle.lockState = Object.assign({}, ctx.lifecycle.lockState, { resolved });
+    }
+    return resolved;
 }
 
 // Refresh the record's local baseline after a pull/push: localHash (legacy combined hash) +
@@ -835,7 +843,10 @@ const TOOLS = [
         description: "Report whether the server is newer than your last pull, and who holds the lock (read-only).",
         inputShape: diagnosticInputShape,
         async run(ctx, args = {}) {
-            const live = await resolveServerPalByGuid(ctx.session, ctx.record.palGuid);
+            // Reuses the session's already-resolved pal identity instead of a fresh full-account
+            // walk (see resolvePalForRead) — this was previously calling resolveServerPalByGuid
+            // directly, which is exactly what made a single "get status" do hundreds of requests.
+            const live = await resolvePalForRead(ctx);
             const serverNewer = live ? drift.serverAdvanced(ctx.record.lastModifiedDate, live.lastModifiedDate) : false;
             // read-only — no lock attempt; reuse the resolve above instead of a second account walk
             const st = await lock.statusByGuid(ctx.session, ctx.record.palGuid, { resolved: live });
@@ -1690,7 +1701,10 @@ const TOOLS = [
         description: "Refresh .resources/ from the server's GET_CHAIN: every pal in this pal's chain (module dependencies, resource pals, and cloud-wide system pals such as CloudPiston Resource) extracted read-only, one folder per chain pal (pages/fragments/workflows/etc., same shape as a pulled pal). Runs automatically at session start; call this again only if a chain pal (e.g. CloudPiston Resource) may have changed server-side, or the chain itself changed (a module was attached/detached). Never edit files under .resources/ — they are not part of this pal and are wiped and rewritten on every refresh.",
         inputShape: {},
         async run(ctx) {
-            const resolved = await resolveServerPalByGuid(ctx.session, ctx.record.palGuid);
+            // "Runs automatically at session start" made this one of the very first calls of a
+            // session — reusing the cached resolve (see resolvePalForRead) instead of its own
+            // fresh full-account walk matters a lot here.
+            const resolved = await resolvePalForRead(ctx);
             if (!resolved) return { ok: false, message: "Could not resolve this pal on the server." };
             const res = await fetchAndExtract(ctx.session, resolved, ctx.workspaceDir);
             if (!res.ok) return Object.assign(res, { message: "Chain fetch did not complete: " + res.reason });
@@ -1923,7 +1937,8 @@ const TOOLS = [
                         "\npal_push first; or pal_merge to keep BOTH your changes and the server's where they don't collide; or pal_pull with force:true to discard your local changes." +
                         (d.legacy ? "" : " (New local files are preserved either way.)") };
             }
-            const { resolved, written, removed, preserved, serverPaths } = await pull(ctx.session, ctx.record.palGuid, ctx.workspaceDir, { baseline: ctx.record.fileHashes || null });
+            const cachedResolved = ctx.lifecycle && ctx.lifecycle.lockState && ctx.lifecycle.lockState.resolved;
+            const { resolved, written, removed, preserved, serverPaths } = await pull(ctx.session, ctx.record.palGuid, ctx.workspaceDir, { baseline: ctx.record.fileHashes || null, resolved: cachedResolved });
             ctx.record.lastModifiedDate = resolved.lastModifiedDate;
             refreshBaseline(ctx.record, ctx.workspaceDir, serverPaths);
             ctx.record.pulledAt = nowIso();
@@ -1963,7 +1978,11 @@ const TOOLS = [
             const { force = false, confirmOverride, skipValidation = false, commitMessage = null } = args;
             const palName = ctx.record.palName;
             const overrideLock = confirmOverride === overridePhrase(palName);
-            const res = await push(ctx.session, ctx.record, ctx.workspaceDir, { force: !!force, overrideLock, skipValidation: !!skipValidation, commitMessage });
+            // Reuse the pal identity ctx.lifecycle already resolved (at session start, or its
+            // last acquire/release) instead of paying for push()'s own full account-walk resolve
+            // on every single push — see push.js's header comment on `resolved`.
+            const cachedResolved = ctx.lifecycle && ctx.lifecycle.lockState && ctx.lifecycle.lockState.resolved;
+            const res = await push(ctx.session, ctx.record, ctx.workspaceDir, { force: !!force, overrideLock, skipValidation: !!skipValidation, commitMessage, resolved: cachedResolved });
             // Pre-push lint refusal: errors found, push not attempted.
             if (res.refused === "validation") {
                 const source = Object.assign({ ok: false, cacheHits: null, cacheMisses: null }, res.lint);

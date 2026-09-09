@@ -3,6 +3,7 @@
 // workspace tab entry from its .palsync.json record — no re-entering metadata by hand.
 const fs = require("fs/promises");
 const path = require("path");
+const crypto = require("crypto");
 const palsyncfile = require("palsync/src/core/palsyncfile");
 
 async function exists(filePath) {
@@ -35,6 +36,12 @@ function tabFromRecord(folderPath, record) {
         name: record.palName,
         cloudEndpoint: record.cloudUrl,
         agentId: null,
+        // Persistent per-tab identity, unique to this local checkout ("this agent+pal window") —
+        // sent as the Chip-Session-ID header on every server request Chip makes for it (directly,
+        // and via the agent's MCP child process — see agentLaunch.js's ensureMcpRegistered).
+        // David is building server-side support that needs this to tell concurrent Chip sessions
+        // on the same pal apart, 2026-09-10.
+        sessionId: crypto.randomUUID(),
         lastActive: new Date().toISOString()
     };
 }

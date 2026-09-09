@@ -2,6 +2,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 
 const workspaceStore = require("./workspaceStore");
 const palFolder = require("./palFolder");
@@ -12,6 +13,13 @@ const versionCheck = require("./versionCheck");
 const dependencyCheck = require("./dependencyCheck");
 const appState = require("./appState");
 const palsyncSettings = require("./palsyncSettings");
+const browserConfig = require("./browserConfig");
+const browserLaunch = require("./browserLaunch");
+const testWorkflow = require("./testWorkflow");
+const qrCode = require("./qrCode");
+const tunnelWorkflow = require("./tunnelWorkflow");
+const debugWorkflow = require("./debugWorkflow");
+const workflowList = require("./workflowList");
 
 const isDev = !app.isPackaged;
 let mainWindow = null;
@@ -20,6 +28,23 @@ let currentWorkspace = null;
 
 function userDataDir() {
     return app.getPath("userData");
+}
+
+// This pal tab's persistent identity ("this agent+pal window"), sent as the Chip-Session-ID
+// header on every request Chip makes for it — directly (testWorkflow/tunnel/debug/workflowList
+// below) and via the agent's own MCP child process (agentLaunch.ensureMcpRegistered). Lazily
+// assigns + persists one for any pal added before this existed (palFolder.tabFromRecord assigns
+// it up front for anything added from here on). Returns null if the pal isn't in the open
+// workspace at all.
+async function ensurePalSessionId(palPath) {
+    if (!currentWorkspace) return null;
+    const pal = currentWorkspace.pals.find(p => p.path === palPath);
+    if (!pal) return null;
+    if (!pal.sessionId) {
+        pal.sessionId = crypto.randomUUID();
+        await workspaceStore.saveWorkspace(currentWorkspacePath, currentWorkspace);
+    }
+    return pal.sessionId;
 }
 
 ipcMain.handle("app:checkVersion", () => versionCheck.checkForUpdate());
@@ -52,6 +77,10 @@ function buildMenu() {
                 {
                     label: "PalSync Settings…",
                     click: () => { if (mainWindow) mainWindow.webContents.send("settings:open"); }
+                },
+                {
+                    label: "Browsers…",
+                    click: () => { if (mainWindow) mainWindow.webContents.send("browsers:open"); }
                 },
                 { type: "separator" },
                 { role: "quit" }
@@ -348,6 +377,109 @@ ipcMain.handle("agents:list", async () => {
     return agentLaunch.detectAgents();
 });
 
+// ---- IPC: browser registry (global — not per-workspace) ----
+
+ipcMain.handle("browsers:list", () => browserConfig.load(userDataDir()));
+
+ipcMain.handle("browsers:add", async (event, browser) => {
+    try { return { ok: true, registry: await browserConfig.add(userDataDir(), browser) }; }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
+ipcMain.handle("browsers:update", async (event, { id, fields }) => {
+    try { return { ok: true, registry: await browserConfig.update(userDataDir(), id, fields) }; }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
+ipcMain.handle("browsers:remove", async (event, id) => {
+    try { return { ok: true, registry: await browserConfig.remove(userDataDir(), id) }; }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
+ipcMain.handle("browsers:setDefault", async (event, id) => {
+    try { return { ok: true, registry: await browserConfig.setDefault(userDataDir(), id) }; }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
+ipcMain.handle("browsers:chooseExecutable", async () => {
+    const filters = process.platform === "win32"
+        ? [{ name: "Programs", extensions: ["exe"] }]
+        : process.platform === "darwin"
+            ? [{ name: "Applications", extensions: ["app"] }]
+            : [];
+    const defaultPath = process.platform === "win32" ? "C:\\Program Files"
+        : process.platform === "darwin" ? "/Applications" : undefined;
+    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+        title: "Choose browser executable",
+        defaultPath,
+        filters,
+        properties: process.platform === "darwin" ? ["openFile", "openDirectory"] : ["openFile"]
+    });
+    if (canceled || !filePaths.length) return null;
+    return filePaths[0];
+});
+
+// ---- IPC: pal test-workflow ribbon (Web / Console / Transaction) ----
+
+ipcMain.handle("pal:listWorkflowFiles", async (event, { palPath, kind }) => {
+    try { return await workflowList.listWorkflowFiles(palPath, kind, await ensurePalSessionId(palPath)); }
+    catch (e) { return { error: e && e.message ? e.message : String(e), files: [] }; }
+});
+
+ipcMain.handle("pal:testWorkflow", async (event, { palPath, kind, browserId, mode, workflowName }) => {
+    try {
+        const res = await testWorkflow.testWorkflow(palPath, kind, workflowName, await ensurePalSessionId(palPath));
+        let opened = null;
+        let qrDataUrl = null;
+        if (res.ran && res._previewUrl) {
+            if (mode === "qr") {
+                // The raw URL is rendered into an image right here and never leaves the main
+                // process as text — only the PNG data URL crosses into the renderer.
+                qrDataUrl = await qrCode.qrDataUrlFor(res._previewUrl);
+            } else {
+                const registry = await browserConfig.load(userDataDir());
+                const browser = registry.browsers.find(b => b.id === (browserId || registry.defaultId));
+                opened = await browserLaunch.launchInBrowser(res._previewUrl, browser);
+            }
+        }
+        // _previewUrl is credential-bearing — never send it to the renderer (same rule the
+        // CLI/MCP side already follows for it).
+        const safe = Object.assign({}, res);
+        delete safe._previewUrl;
+        delete safe.rawToken;
+        return { result: safe, opened, qrDataUrl };
+    } catch (e) {
+        return { error: e && e.message ? e.message : String(e) };
+    }
+});
+
+// ---- IPC: pal tunnel workflow panel ----
+
+ipcMain.handle("pal:listTunnelWorkflows", async (event, palPath) => {
+    try { return tunnelWorkflow.listWorkflows(palPath); }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
+ipcMain.handle("pal:runTunnel", async (event, { palPath, action, workflow, payload }) => {
+    try {
+        const chipSessionId = await ensurePalSessionId(palPath);
+        const res = await tunnelWorkflow.runTunnel(palPath, { action, workflow, payload, chipSessionId });
+        // creds carry a short-lived password — never let it leave the main process.
+        const safe = Object.assign({}, res);
+        delete safe.creds;
+        return { result: safe };
+    } catch (e) {
+        return { error: e && e.message ? e.message : String(e) };
+    }
+});
+
+// ---- IPC: pal server-side debug window ----
+
+ipcMain.handle("pal:fetchDebug", async (event, palPath) => {
+    try { return { result: await debugWorkflow.fetchDebug(palPath, await ensurePalSessionId(palPath)) }; }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
 // ---- IPC: console (pty) ----
 
 ipcMain.handle("console:start", async (event, { palId, agentId, cwd }) => {
@@ -356,7 +488,7 @@ ipcMain.handle("console:start", async (event, { palId, agentId, cwd }) => {
     if (ptyManager.isRunning(palId)) return { ok: true, alreadyRunning: true };
 
     try {
-        await agentLaunch.ensureMcpRegistered(agentId, cwd);
+        await agentLaunch.ensureMcpRegistered(agentId, cwd, await ensurePalSessionId(cwd));
     } catch (e) {
         return { error: "Could not register MCP for " + agent.label + ": " + e.message };
     }
