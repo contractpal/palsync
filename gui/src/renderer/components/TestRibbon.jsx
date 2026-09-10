@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import QrCodeModal from "./QrCodeModal.jsx";
 import TunnelPanel from "./TunnelPanel.jsx";
 import SystemWorkflowDialog from "./SystemWorkflowDialog.jsx";
+import WebServicesPanel from "./WebServicesPanel.jsx";
 
 // Split-button per area: the main button launches with the default browser immediately, the
 // caret opens a dropdown to launch with a different registered browser instead (David's call,
@@ -36,6 +37,7 @@ export default function TestRibbon({ pal, debugVisible, onToggleDebug }) {
     const [qr, setQr] = useState(null); // { label, dataUrl }
     const [showTunnel, setShowTunnel] = useState(false);
     const [showSystem, setShowSystem] = useState(false);
+    const [showWebServices, setShowWebServices] = useState(false);
     const [syncCheck, setSyncCheck] = useState(null); // { outdated, current, latest } | null
     const [syncConfirming, setSyncConfirming] = useState(false);
     const [syncRunning, setSyncRunning] = useState(false);
@@ -161,6 +163,9 @@ export default function TestRibbon({ pal, debugVisible, onToggleDebug }) {
                 <button className="ribbon-btn standalone" onClick={() => setShowTunnel(true)} title="Test this pal's tunnel workflow">
                     Tunnel…
                 </button>
+                <button className="ribbon-btn standalone" onClick={() => setShowWebServices(true)} title="Test this pal's Console/Transaction Web Services workflow">
+                    Web Services…
+                </button>
                 <button
                     className={"ribbon-btn standalone" + (debugVisible ? " active" : "")}
                     onClick={onToggleDebug}
@@ -182,8 +187,9 @@ export default function TestRibbon({ pal, debugVisible, onToggleDebug }) {
                 <span className={"ribbon-status" + (status.error ? " error" : "")}>{status.text}</span>
             )}
             {qr && <QrCodeModal label={qr.label} dataUrl={qr.dataUrl} onClose={() => setQr(null)} />}
-            {showSystem && <SystemWorkflowDialog pal={pal} browsers={browsers} defaultId={defaultId} onClose={() => setShowSystem(false)} />}
+            {showSystem && <SystemWorkflowDialog pal={pal} onClose={() => setShowSystem(false)} />}
             {showTunnel && <TunnelPanel pal={pal} onClose={() => setShowTunnel(false)} />}
+            {showWebServices && <WebServicesPanel pal={pal} onClose={() => setShowWebServices(false)} />}
 
             {syncConfirming && syncCheck && (
                 <div className="modal-backdrop" onClick={() => setSyncConfirming(false)}>

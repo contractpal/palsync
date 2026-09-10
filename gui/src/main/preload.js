@@ -93,6 +93,12 @@ contextBridge.exposeInMainWorld("palsyncGui", {
     listTunnelWorkflows: (palPath) => ipcRenderer.invoke("pal:listTunnelWorkflows", palPath),
     runTunnel: (palPath, action, workflow, payload) => ipcRenderer.invoke("pal:runTunnel", { palPath, action, workflow, payload }),
 
+    webServicesCheckLogin: (palPath) => ipcRenderer.invoke("pal:webServicesCheckLogin", palPath),
+    webServicesLogin: (environmentUrl, username, password) => ipcRenderer.invoke("pal:webServicesLogin", { environmentUrl, username, password }),
+    webServicesLogout: (environmentUrl, username) => ipcRenderer.invoke("pal:webServicesLogout", { environmentUrl, username }),
+    runWebServicesWorkflow: (palPath, engine, postData) => ipcRenderer.invoke("pal:runWebServicesWorkflow", { palPath, engine, postData }),
+    webServicesEndpoint: (palPath, engine) => ipcRenderer.invoke("pal:webServicesEndpoint", { palPath, engine }),
+
     fetchDebug: (palPath) => ipcRenderer.invoke("pal:fetchDebug", palPath),
 
     checkPalsyncVersion: (palPath) => ipcRenderer.invoke("pal:checkPalsyncVersion", palPath),

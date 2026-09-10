@@ -25,6 +25,7 @@ const tunnelWorkflow = require("./tunnelWorkflow");
 const debugWorkflow = require("./debugWorkflow");
 const workflowList = require("./workflowList");
 const palsyncSync = require("./palsyncSync");
+const webServicesWorkflow = require("./webServicesWorkflow");
 
 const isDev = !app.isPackaged;
 let mainWindow = null;
@@ -557,6 +558,33 @@ ipcMain.handle("pal:runTunnel", async (event, { palPath, action, workflow, paylo
     } catch (e) {
         return { error: e && e.message ? e.message : String(e) };
     }
+});
+
+// ---- IPC: pal Web Services (Console/Transaction REST workflows) ----
+
+ipcMain.handle("pal:webServicesCheckLogin", async (event, palPath) => {
+    try { return await webServicesWorkflow.checkLogin(palPath); }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
+ipcMain.handle("pal:webServicesLogin", async (event, { environmentUrl, username, password }) => {
+    try { return webServicesWorkflow.login(environmentUrl, username, password); }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
+ipcMain.handle("pal:webServicesLogout", async (event, { environmentUrl, username }) => {
+    try { return webServicesWorkflow.logout(environmentUrl, username); }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
+ipcMain.handle("pal:runWebServicesWorkflow", async (event, { palPath, engine, postData }) => {
+    try { return { result: await webServicesWorkflow.runWorkflow(palPath, engine, postData) }; }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
+ipcMain.handle("pal:webServicesEndpoint", async (event, { palPath, engine }) => {
+    try { return await webServicesWorkflow.describeEndpoint(palPath, engine); }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
 });
 
 // ---- IPC: pal server-side debug window ----
