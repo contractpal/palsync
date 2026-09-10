@@ -31,7 +31,7 @@ temp/
 
 # internal: editor config, verification scripts, internal specs — not part of the public tool
 .claude/
-scripts/
+/scripts/
 !bundled-context/starters/*/scripts/
 !bundled-context/starters/*/scripts/**
 SPEC_*

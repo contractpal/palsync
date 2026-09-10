@@ -38,6 +38,7 @@
     "directories": {
       "output": "dist"
     },
+    "afterPack": "scripts/afterPack.js",
     "files": [
       "dist-renderer/**/*",
       "src/main/**/*",
