@@ -31,7 +31,9 @@ async function buildContext(workspaceDir, { idleMs, log = () => {}, acquireLock 
     // it before that first call. core/lock.js's acquireByGuid self-heals (falls back to a real
     // resolve) if this ever turns out to be stale.
     if (record.palId) {
-        lifecycle.lockState = { resolved: { id: record.palId, guid: record.palGuid } };
+        lifecycle.lockState = {
+            resolved: { id: record.palId, guid: record.palGuid, profileId: record.profileId }
+        };
     }
 
     const ctx = {
@@ -56,9 +58,10 @@ async function buildContext(workspaceDir, { idleMs, log = () => {}, acquireLock 
         // Persist whatever id this session actually ended up resolving/using (new — no id was
         // stored yet — or different — the stored one was stale and lock.js's acquireByGuid
         // self-healed it), so the NEXT session skips the walk too, not just this one.
-        const usedId = lifecycle.lockState && lifecycle.lockState.resolved && lifecycle.lockState.resolved.id;
-        if (usedId && usedId !== record.palId) {
-            record.palId = usedId;
+        const resolved = lifecycle.lockState && lifecycle.lockState.resolved;
+        if (resolved && (resolved.id !== record.palId || resolved.profileId !== record.profileId)) {
+            record.palId = resolved.id;
+            if (resolved.profileId) record.profileId = resolved.profileId;
             try { await palsyncfile.write(workspaceDir, record); } catch (e) { /* best-effort */ }
         }
     }

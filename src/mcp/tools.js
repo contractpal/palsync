@@ -253,7 +253,7 @@ const { diffWorkspace, describeDiff } = require("../core/localDrift");
 // it does not invalidate earlier ones for the life of the session.
 async function resolvePalForRead(ctx) {
     const cached = ctx.lifecycle && ctx.lifecycle.lockState && ctx.lifecycle.lockState.resolved;
-    if (cached && cached.guid === ctx.record.palGuid) return cached;
+    if (cached && cached.guid === ctx.record.palGuid && cached.id && cached.profileId) return cached;
     const resolved = await resolveServerPalByGuid(ctx.session, ctx.record.palGuid);
     // Prime the SAME slot lock.acquireByGuid reads (via ctx.lifecycle.lockState.resolved) so
     // whichever tool resolves the pal first — this one, or a lock-acquiring one — saves the
@@ -261,6 +261,10 @@ async function resolvePalForRead(ctx) {
     // to this one helper.
     if (resolved && ctx.lifecycle) {
         ctx.lifecycle.lockState = Object.assign({}, ctx.lifecycle.lockState, { resolved });
+        if (resolved.profileId && ctx.record && ctx.record.profileId !== resolved.profileId) {
+            ctx.record.profileId = resolved.profileId;
+            try { await ctx.persist(); } catch (e) { /* best-effort metadata upgrade */ }
+        }
     }
     return resolved;
 }

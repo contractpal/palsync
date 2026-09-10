@@ -7,9 +7,10 @@
 // palId (added 2026-09-10, per David): the transient 64-hex pal id. Earlier comments here said
 // this was deliberately never persisted because it "rotates per enumeration" — true in the sense
 // that RE-LISTING the pal can hand back a different value, but per David it is NOT time-stamped
-// or expiring, so a previously-seen value remains safe to reuse indefinitely. Persisting it lets
-// every session after the first skip the expensive profile->group->pal account walk entirely
-// (core/lock.js's acquireByGuid self-heals if a persisted value is ever actually rejected).
+// or expiring, so a previously-seen value remains safe to reuse indefinitely. profileId comes
+// from the same resolved server record and is required with palId for QUERY_DATASET. Persisting
+// both lets every session after the first skip the expensive profile->group->pal account walk
+// entirely (core/lock.js's acquireByGuid self-heals if a persisted value is ever rejected).
 const fs = require("fs/promises");
 const path = require("path");
 
@@ -27,6 +28,7 @@ function buildRecord({ cloudUrl, userId, username, pal, workspaceDir, lastModifi
         workspaceDir: workspaceDir || null,
         lastModifiedDate: lastModifiedDate !== undefined ? lastModifiedDate : pal.lastModifiedDate, // drift marker
         palId: pal.id || null,                    // transient id, persisted (see header comment)
+        profileId: pal.profileId || null,         // QUERY_DATASET identity, from the same resolve
         pulledAt: null                            // set when pull writes files (M7)
     };
 }

@@ -77,7 +77,7 @@ function composerFailure(message) {
     return { success: false, messages: { "com.contractpal.Message": { message, type: "service" } } };
 }
 
-function loadToolsWithStub({ queryResult, rawResponse, queryImpl, capture }) {
+function loadToolsWithStub({ queryResult, rawResponse, queryImpl, capture, resolveImpl }) {
     // Stub apiManager.queryDataset
     const origApi = require(apiManagerPath);
     const origQuery = origApi.CloudPistonAPIManager.queryDataset;
@@ -102,6 +102,10 @@ function loadToolsWithStub({ queryResult, rawResponse, queryImpl, capture }) {
         });
     };
     origApi.CloudPistonAPIManager.queryDataset = stub;
+
+    const resolveMod = require("../src/core/resolve");
+    const origResolvePalByGuid = resolveMod.resolveServerPalByGuid;
+    if (resolveImpl) resolveMod.resolveServerPalByGuid = resolveImpl;
 
     // Also stub out usage / workHistory writes to detect persistence
     const usageMod = require(usagePath);
@@ -133,6 +137,7 @@ function loadToolsWithStub({ queryResult, rawResponse, queryImpl, capture }) {
 
     function restore() {
         origApi.CloudPistonAPIManager.queryDataset = origQuery;
+        resolveMod.resolveServerPalByGuid = origResolvePalByGuid;
         usageMod.appendToolEvidence = origAppendEvidence;
         usageMod.recordToolCall = origRecordCall;
         whMod.createWorkHistoryRun = origCreateRun;
@@ -168,6 +173,56 @@ const RESOLVED = { id: "INTERNAL-SESSION-ID", guid: "test-guid-123", profileId: 
 
 // Adapter-level resolver matching what the MCP handlers pass in.
 const resolvePal = async () => RESOLVED;
+
+test("partial persisted identity upgrades once for dataset query and count", async () => {
+    const dir = tmpWorkspaceWithDataset();
+    const ctx = makeCtx(dir);
+    const upgraded = { id: "INTERNAL-SESSION-ID", guid: "test-guid-123", profileId: "REAL-PROFILE-ID" };
+    let resolveCalls = 0;
+    let persistCalls = 0;
+    ctx.record.profileId = undefined;
+    ctx.lifecycle.lockState.resolved = { id: upgraded.id, guid: upgraded.guid };
+    ctx.persist = async () => { persistCalls++; };
+    const loaded = loadToolsWithStub({
+        resolveImpl: async () => { resolveCalls++; return upgraded; }
+    });
+    try {
+        const query = await loaded.queryTool.run(ctx, { dataset: "equipment" });
+        assert.equal(query.ok, true, "partial cached identity must not reach QUERY_DATASET");
+        assert.equal(resolveCalls, 1, "the existing resolver upgrades the partial identity");
+        assert.deepEqual(loaded.getLastResolved(), upgraded);
+        assert.deepEqual(ctx.lifecycle.lockState.resolved, upgraded, "complete identity primes the lifecycle cache");
+        assert.equal(ctx.record.profileId, upgraded.profileId, "legacy metadata is upgraded for the next session");
+        assert.equal(persistCalls, 1);
+
+        const count = await loaded.countTool.run(ctx, { dataset: "equipment" });
+        const secondQuery = await loaded.queryTool.run(ctx, { dataset: "equipment" });
+        assert.equal(count.ok, true, "count shares the upgraded query identity");
+        assert.equal(secondQuery.ok, true, "second query reuses the upgraded identity");
+        assert.equal(resolveCalls, 1, "complete cached identity avoids another account walk");
+    } finally {
+        loaded.restore();
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("complete cached dataset identity does not resolve", async () => {
+    const dir = tmpWorkspaceWithDataset();
+    const ctx = makeCtx(dir);
+    let resolveCalls = 0;
+    const loaded = loadToolsWithStub({
+        resolveImpl: async () => { resolveCalls++; return null; }
+    });
+    try {
+        const query = await loaded.queryTool.run(ctx, { dataset: "equipment" });
+        assert.equal(query.ok, true);
+        assert.equal(resolveCalls, 0);
+        assert.deepEqual(loaded.getLastResolved(), RESOLVED);
+    } finally {
+        loaded.restore();
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
 
 test("query wire shape: hard-coded QUERY_DATASET, dataset mode, paging, mode, conditions, order", async () => {
     const dir = tmpWorkspaceWithDataset();

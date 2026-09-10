@@ -140,7 +140,8 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
         // .palsync.json (drift marker = pulled lastModifiedDate; localHash + per-file baseline)
         record = palsyncfile.buildRecord({
             cloudUrl, userId: session.userId, username: session.username,
-            pal: { guid: sel.pal.guid, name: sel.pal.name, lastModifiedDate: res.resolved.lastModifiedDate, id: res.resolved.id },
+            pal: { guid: sel.pal.guid, name: sel.pal.name, lastModifiedDate: res.resolved.lastModifiedDate,
+                   id: res.resolved.id, profileId: res.resolved.profileId },
             workspaceDir
         });
         record.localHash = hashWorkspace(workspaceDir);
@@ -197,6 +198,7 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
     // Persist the id this session actually just locked with — freshest available, and what
     // every later session in this pal folder will try first (see core/lock.js's self-heal).
     record.palId = lk.resolved.id;
+    if (lk.resolved.profileId) record.profileId = lk.resolved.profileId;
     await palsyncfile.write(workspaceDir, record);
 
     // register the MCP server for the chosen agent.
