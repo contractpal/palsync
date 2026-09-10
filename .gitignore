@@ -74,3 +74,4 @@ outputs/
 gui/dist/
 gui/dist-renderer/
 gui/out/
+gui/build-info.json

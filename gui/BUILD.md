@@ -140,6 +140,45 @@ never touches the build machine). `npm run build:win:dir` still produces the old
 non-installer `dist/win-unpacked/` folder if you just want to quickly run/inspect the packaged
 app without going through the installer.
 
+## Producing a real installer (Mac) — signing, notarizing, and publishing
+
+```
+cd gui
+npx electron-builder --mac --x64 --arm64 --config.directories.output=<path outside this repo>
+```
+
+Route `directories.output` outside the repo, not `npm run build:mac`'s default `gui/dist` —
+`gui/node_modules/palsync` is a real symlink to the repo root (`"palsync": "file:.."`), which
+makes `gui/node_modules/palsync/gui` **be** `gui/` itself. Anything sitting in `gui/dist/` during
+packaging (a previous build's installers, another arch's output mid-build) is reachable through
+that symlink and can get bundled straight into the new `app.asar`, ballooning it from ~140MB to
+1-2GB+. `gui/scripts/afterPack.js` prunes any leak that gets through anyway as a safety net, but
+it can't save an archive that's already past ~2GB (an `@electron/asar` limitation) — the output
+redirect is what actually prevents the bloat. Move the finished `.dmg`/`.zip`/`.blockmap` files
+into `gui/dist/` afterward.
+
+Signing (Developer ID Application cert) and notarization (Apple ID + app-specific password +
+team ID) both happen automatically as long as a valid "Developer ID Application" identity is in
+the build machine's keychain and `APPLE_ID`/`APPLE_APP_SPECIFIC_PASSWORD`/`APPLE_TEAM_ID` are set
+in the environment — electron-builder picks both up with no extra config. Verify before
+publishing: `spctl -a -vv --type execute "<App>.app"` (should say "accepted... Notarized Developer
+ID"), `codesign --verify --deep --strict "<App>.app"`, and `xcrun stapler validate "<App>.app"`
+(confirms the notarization ticket is actually stapled — works offline, no network check needed by
+the end user's Mac).
+
+### Publishing to the download bucket
+
+The four installer files (arm64 `.dmg`/`.zip`, x64 `.dmg`/`.zip`) get uploaded by hand to
+`s3://contractpal-cloudpiston-downloads/` at the bucket root, with the version stripped from the
+filename so each upload replaces the previous release at a fixed URL
+(`https://downloads.cloudpiston.com/ChipPalBuilder.dmg`, etc. — no `.blockmap` files, they're
+electron-updater delta-patch metadata and this app doesn't use an auto-updater). **A Mac release
+is not complete until `mac-versions.txt` is re-uploaded too** — plain text, version on line 1,
+one filename per line below it, also at the bucket root. `versionCheck.js`'s "new version
+available" check for macOS reads this file directly (`getVersionInfo.do`, the existing Windows
+check, isn't Mac-aware yet — a server-side gap outside this repo) and won't pick up a new
+release until it's updated to match.
+
 ## Symptom if this is missing
 
 `npm install` in `gui/` fails during the `postinstall` native rebuild step
