@@ -7,17 +7,18 @@
 // "true" } headers → ComposerResult.serverData = base64 of the accumulated text (timestamped
 // lines, engine-tagged, payloads pretty-printed as ASCII tables). Absent serverData = empty.
 //
-// SEMANTICS THAT SHAPE EVERY CALLER: the buffer is CONSUME-ONCE (reading clears it) and SHARED
-// per pal (one buffer for palsync AND the PalBuilder IDE — whoever reads first wins). So callers
-// attach it to the response of the action that generated it, and never poll it speculatively.
+// SEMANTICS THAT SHAPE EVERY CALLER: the buffer is CONSUME-ONCE per Chip-Session-ID (reading
+// clears only that session's own tier — the human's PalBuilder IDE view and any other Chip
+// session working the same pal keep their own copies, untouched). So callers must call this only
+// when THEY want it — never automatically off the back of some other action, and never polled
+// speculatively (see src/mcp/tools.js's pal_debug, the sole retrieval path for an agent).
 const { CloudPistonAPIManager } = require("../../lib/apiManager");
 const { resolveServerPalByGuid } = require("./resolve");
 
 // RULE: every retrieved debug buffer is ALSO echoed to the process console (stderr — stdout is
-// the MCP protocol channel), no matter who asked for it (pal_debug or an auto-attach). The read
-// consumes the shared buffer, so this echo is what keeps the output from ever becoming invisible:
-// whoever consumed it, the server console retains a copy the developer can read. Guarded write —
-// a dead stderr must never break the retrieve.
+// the MCP protocol channel) whenever pal_debug is called. The read consumes THIS session's own
+// tier, so this echo is what keeps the output from ever becoming invisible on the palsync side
+// too. Guarded write — a dead stderr must never break the retrieve.
 function echoToConsole(text) {
     try {
         process.stderr.write("[palsync-mcp] --- server debug (c.debug) ---\n" +

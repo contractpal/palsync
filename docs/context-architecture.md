@@ -13,14 +13,14 @@ basis that could not be reproduced.
 
 | Runtime | Section | Source | Bytes | Est. tokens | Loading |
 |---|---|---|---:|---:|---|
-| All | `tool-definitions` | `src/mcp/tools.js` | 28,825 | 7,207 | release-stable |
+| All | `tool-definitions` | `src/mcp/tools.js` | 28,986 | 7,247 | release-stable |
 | All | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 3,274 | 819 | release-stable |
 | All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 2,260 | 565 | release-stable |
 | Claude | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,100 | 275 | workspace-stable |
 | Codex/OpenCode | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,100 | 275 | workspace-stable |
 | Pi | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,085 | 272 | workspace-stable |
-| Claude | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,613 | 2,154 | on-demand |
-| Codex/OpenCode | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,846 | 2,212 | on-demand |
+| Claude | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,703 | 2,176 | on-demand |
+| Codex/OpenCode | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,936 | 2,234 | on-demand |
 | Pi | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 6,901 | 1,726 | on-demand |
 | All | `creating-files` | `src/launcher/contextInject.js#syncDetails` | 3,327 | 832 | on-demand |
 | Claude/Codex/OpenCode | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,539 | 885 | on-demand |

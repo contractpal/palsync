@@ -416,7 +416,7 @@
   {
     "name": "pal_debug",
     "title": "Read server debug output",
-    "description": "Read and clear server c.debug output. The buffer is consume-once and shared with PalBuilder; reading clears it for everyone. Runtime tools attach debug automatically, so call this after a human preview/manual run or when an attached debug block was absent.",
+    "description": "Read and clear server c.debug output. The buffer is consume-once per your own Chip session — reading it clears only your copy, never the human's PalBuilder view or another Chip session's — and nothing attaches it for you automatically, so call this yourself whenever you actually want it (e.g. after a delayed system workflow finishes, or after watching a user navigate the site), not reflexively after every run.",
     "inputSchema": {
       "type": "object",
       "properties": {},

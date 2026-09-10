@@ -1,8 +1,9 @@
 "use strict";
 // Backing logic for the per-pal Debug window — wraps palsync's already-verified-live
-// src/core/debug.js. The server-side buffer is CONSUME-ONCE and SHARED with the PalBuilder IDE's
-// own debug view (whoever reads first clears it for everyone), so this must only ever be called
-// on an explicit user action (button click), never polled speculatively.
+// src/core/debug.js. The server-side buffer is CONSUME-ONCE per Chip-Session-ID tier (this call
+// passes none, so it reads/clears the human's own PalBuilder-IDE-equivalent tier, untouched by
+// any Chip session), so this must only ever be called on an explicit user action (button click),
+// never polled speculatively.
 const { retrieveServerDebug } = require("palsync/src/core/debug");
 const { sessionForFolder } = require("./palSession");
 const { resolvePal } = require("./resolveCached");

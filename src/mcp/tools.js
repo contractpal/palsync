@@ -670,37 +670,13 @@ function cappedFailureDebug(text) {
     return { text: shown.join("\n"), note: "; omitted " + omitted + " non-diagnostic line(s)" };
 }
 
-// Auto-attach the server-side c.debug buffer to a tool result whose call actually EXECUTED a
-// workflow (tunnel call, server-rendered fetch/preview, screenshot) — the agent gets its debugs
-// with the response it is diagnosing instead of asking the user to copy/paste from PalBuilder.
-// Best-effort by design: never throws, and an empty buffer adds nothing. The retrieve CONSUMES
-// the shared buffer (see core/debug), which is exactly what we want here: the debugs belong to
-// the run this result describes. ctx.debugPalId caches the transient id across calls.
+// NOTE (2026-09-10, David): this used to auto-retrieve (and thus CONSUME) this session's own
+// c.debug tier on every successful call to pal_tunnel_test/pal_preview/pal_fetch/pal_screenshot.
+// David wants the agent to choose when to spend that consume-once buffer — e.g. a delayed system
+// workflow, or watching the user navigate the site — not have it silently drained by whatever
+// tool happened to run first. That decision now belongs solely to the explicit pal_debug tool, so
+// this is a passthrough kept only so the many call sites below don't all need touching.
 async function withServerDebug(ctx, out) {
-    try {
-        const dbg = await retrieveServerDebug(ctx.session, ctx.record.palGuid, { palId: ctx.debugPalId });
-        if (dbg.palId) ctx.debugPalId = dbg.palId;
-        if (!dbg.retrieved || dbg.empty) return out;
-        const diagnosticLines = debugHasDiagnosticLines(dbg.text);
-        const failure = debugFailed(out) || diagnosticLines;
-        let shown;
-        let note = "";
-        if (failure) {
-            const capped = cappedFailureDebug(dbg.text);
-            shown = capped.text;
-            note = capped.note;
-        } else {
-            const lines = dbg.text.split(/\r?\n/);
-            shown = lines.slice(-10).join("\n");
-            note = lines.length > 10 ? "; last 10 of " + lines.length + " lines" : "";
-        }
-        const fullDebugFile = shown === dbg.text ? null : saveServerDebug(ctx.workspaceDir, dbg.text);
-        out.serverDebug = shown;
-        if (fullDebugFile) out.serverDebugFile = fullDebugFile;
-        out.message = (out.message || "") +
-            "\n\n--- server debug (c.debug output" + note + ") ---\n" + shown +
-            (fullDebugFile ? "\nFull debug saved to: " + fullDebugFile : "");
-    } catch (e) { /* the primary result matters more than the debug garnish */ }
     return out;
 }
 
@@ -1050,7 +1026,7 @@ const TOOLS = [
     },
     {
         name: "pal_debug",
-        description: "Read and clear server c.debug output. The buffer is consume-once and shared with PalBuilder; reading clears it for everyone. Runtime tools attach debug automatically, so call this after a human preview/manual run or when an attached debug block was absent.",
+        description: "Read and clear server c.debug output. The buffer is consume-once per your own Chip session — reading it clears only your copy, never the human's PalBuilder view or another Chip session's — and nothing attaches it for you automatically, so call this yourself whenever you actually want it (e.g. after a delayed system workflow finishes, or after watching a user navigate the site), not reflexively after every run.",
         inputShape: {},
         async run(ctx) {
             const dbg = await retrieveServerDebug(ctx.session, ctx.record.palGuid, { palId: ctx.debugPalId });
@@ -1058,12 +1034,12 @@ const TOOLS = [
             if (dbg.palId) ctx.debugPalId = dbg.palId;
             if (!dbg.retrieved) return Object.assign(dbg, { message: "Could not retrieve server debug: " + dbg.reason });
             if (dbg.empty) {
-                return Object.assign(dbg, { message: "Server debug buffer is EMPTY. It is consume-once — a prior palsync tool result may already carry it (look for a \"server debug\" block), or the workflow hasn't executed since the last read, or it doesn't call c.debug()." });
+                return Object.assign(dbg, { message: "Server debug buffer is EMPTY (your own Chip-session tier). Either the workflow hasn't executed since your last pal_debug call, or it doesn't call c.debug()." });
             }
             const truncated = dbg.text.length > DEBUG_INLINE_CAP;
             const shown = truncated ? dbg.text.slice(-DEBUG_INLINE_CAP) : dbg.text;
             return Object.assign(dbg, {
-                message: "Server debug output (buffer now cleared for all viewers" + (truncated ? "; LAST " + DEBUG_INLINE_CAP + " of " + dbg.text.length + " chars" : "") + "):\n" + shown
+                message: "Server debug output (buffer now cleared for your Chip session only" + (truncated ? "; LAST " + DEBUG_INLINE_CAP + " of " + dbg.text.length + " chars" : "") + "):\n" + shown
             });
         }
     },
