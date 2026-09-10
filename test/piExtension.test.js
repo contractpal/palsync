@@ -18,6 +18,9 @@ test("published package contains every static relative require from src", () => 
     const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-npm-cache-"));
     const packed = spawnSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], {
         cwd: path.join(__dirname, ".."), encoding: "utf8",
+        // npm is npm.cmd on Windows - spawnSync can't resolve that without a shell (confirmed:
+        // ENOENT there without this), unlike POSIX where the plain "npm" binary resolves directly.
+        shell: true,
         env: Object.assign({}, process.env, { npm_config_cache: cacheDir })
     });
     try {

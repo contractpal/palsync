@@ -478,6 +478,12 @@ test("impact snapshot records a non-regular input", (t) => {
         const made = childProcess.spawnSync("mkfifo", [fifo]);
         if (made.error && made.error.code === "ENOENT") return t.skip("mkfifo unavailable");
         assert.strictEqual(made.status, 0, made.stderr && made.stderr.toString());
+        // On Windows, Git for Windows' MSYS2-built mkfifo is on PATH and reports success (status
+        // 0, no stderr) but never actually materializes a file NTFS/Win32 can see - confirmed
+        // directly (fs.existsSync is false right after a "successful" mkfifo run there). There's
+        // no real non-regular-file equivalent to test against on Windows, so skip when the
+        // command silently no-op'd rather than asserting against a file that was never created.
+        if (!fs.existsSync(fifo)) return t.skip("mkfifo reported success but created nothing (Windows/MSYS2 FIFO incompatibility)");
         const snapshot = buildImpactSnapshot(dir);
         assert.deepStrictEqual(snapshot.skippedInputs, [
             { rel: "fragments/pipe.html", reason: "notRegular" },

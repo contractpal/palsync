@@ -19,7 +19,14 @@ function run(homeDir, args = []) {
         cwd: homeDir,
         encoding: "utf8",
         env: Object.assign({}, process.env, {
+            // src/platform/config.js resolves ~/.palsync/config.json via os.homedir(), which reads
+            // HOME on POSIX but USERPROFILE on Windows (confirmed directly - HOME is ignored there
+            // entirely). Setting only HOME left this test writing to the REAL home dir on Windows
+            // instead of the isolated tmp one, found 2026-09-10 after it silently overwrote real
+            // ~/.palsync/config.json preferences during a test run. Set both - each OS ignores the
+            // one it doesn't use, so this is harmless cross-platform.
             HOME: homeDir,
+            USERPROFILE: homeDir,
             PALSYNC_VERIFICATION: "",
             PALSYNC_REVIEW: ""
         })

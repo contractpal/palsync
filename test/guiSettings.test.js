@@ -27,7 +27,11 @@ function runInGui(box, body) {
         cwd: box.dir,
         encoding: "utf8",
         env: Object.assign({}, process.env, {
+            // os.homedir() reads HOME on POSIX but USERPROFILE on Windows (HOME is ignored there
+            // entirely) - set both so this sandbox is actually isolated on either OS, not the real
+            // ~/.palsync/config.json. See test/settingsCli.test.js's run() for the same fix.
             HOME: box.dir,
+            USERPROFILE: box.dir,
             NODE_PATH: box.modules,
             PALSYNC_VERIFICATION: "",
             PALSYNC_REVIEW: ""
@@ -41,7 +45,7 @@ function cli(box, args) {
     return spawnSync(process.execPath, [path.join(ROOT, "bin", "palsync.js"), "settings", ...args], {
         cwd: box.dir,
         encoding: "utf8",
-        env: Object.assign({}, process.env, { HOME: box.dir, PALSYNC_VERIFICATION: "", PALSYNC_REVIEW: "" })
+        env: Object.assign({}, process.env, { HOME: box.dir, USERPROFILE: box.dir, PALSYNC_VERIFICATION: "", PALSYNC_REVIEW: "" })
     });
 }
 

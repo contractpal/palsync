@@ -178,9 +178,21 @@ async function openInstanceSessionFromTest(t) {
         break;
     }
     if (!finalUrl) return { opened: false, reason: "Too many redirects activating the test session." };
+    // base is the DIRECTORY containing finalUrl's landing page, not its first path segment.
+    // Bug (found live, 2026-09-10): finalUrl often lands directly at the domain root
+    // (e.g. https://webpals.cloudpiston.com/index.html, confirmed against the page's own real
+    // <base href>) with no token subdirectory at all - the old code took the first path segment
+    // unconditionally, so it grabbed "index.html" itself and treated it as a directory, building
+    // fetchPath targets like ".../index.html/palbuilder.html". A pal's own workflow switch (e.g.
+    // "case palbuilder.html:") only matches the bare filename, so the mismatched path fell
+    // through to the default case every time - fetchPath silently rendered the wrong page.
+    // Fix: drop only the trailing filename (standard dirname), which is correct whether the
+    // landing page sits at the root (dir "") or inside a real token subdirectory (dir "abc").
     const u = new URL(finalUrl);
-    const seg = u.pathname.split("/").filter(Boolean)[0] || "";
-    const base = u.origin + "/" + (seg ? seg + "/" : "");
+    const segments = u.pathname.split("/");
+    segments.pop(); // drop the trailing filename (or trailing "" for a directory-style URL)
+    const dir = segments.filter(Boolean).join("/");
+    const base = u.origin + "/" + (dir ? dir + "/" : "");
     return {
         opened: true, base,
         async fetchPath(path) {

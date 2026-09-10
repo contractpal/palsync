@@ -16,7 +16,11 @@ function generatedFiles(root) {
         for (const ent of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
             const abs = path.join(dir, ent.name);
             if (ent.isDirectory()) walk(abs);
-            else out.push(path.relative(root, abs));
+            // path.relative() always uses the native separator (backslash on Windows) - every
+            // other path in this codebase is forward-slash-only, and this test's own assertions
+            // hardcode forward-slash paths, so normalize here (same fix as src/core/palAst.js's
+            // relOf()).
+            else out.push(path.relative(root, abs).split(path.sep).join("/"));
         }
     }
     walk(root);

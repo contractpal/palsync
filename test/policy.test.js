@@ -24,7 +24,13 @@ test("defaults are standard + ask, and older or broken configs fall back per key
 test("settings persist to ~/.palsync/config.json and survive a reload", () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-home-"));
     const realHome = process.env.HOME;
+    const realUserProfile = process.env.USERPROFILE;
     process.env.HOME = home;
+    // os.homedir() reads HOME on POSIX but USERPROFILE on Windows (HOME is ignored there
+    // entirely) - setting only HOME left this test writing to the REAL ~/.palsync/config.json
+    // on Windows instead of this tmp dir, found 2026-09-10 after it silently overwrote real
+    // preferences. Set both - each OS ignores the one it doesn't use.
+    process.env.USERPROFILE = home;
     delete require.cache[require.resolve("../src/platform/config")];
     const config = require("../src/platform/config");
     try {
@@ -37,6 +43,7 @@ test("settings persist to ~/.palsync/config.json and survive a reload", () => {
         assert.throws(() => policy.set("speed", "fast", config.set), /Unknown setting/);
     } finally {
         process.env.HOME = realHome;
+        process.env.USERPROFILE = realUserProfile;
         delete require.cache[require.resolve("../src/platform/config")];
         fs.rmSync(home, { recursive: true, force: true });
     }

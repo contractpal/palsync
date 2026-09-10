@@ -193,7 +193,14 @@ test("missing binary refuses with all three recovery messages and names the caus
     assert.equal(r.serverChecked, false);
 });
 
-test("PATH fallback is accepted only when --version names ast-grep (shadow-utils sg refused)", () => {
+test("PATH fallback is accepted only when --version names ast-grep (shadow-utils sg refused)", (t) => {
+    // POSIX-only: the fake "sg" this test writes is a #!/bin/sh script made executable via
+    // chmod +x - Windows has no shebang interpretation or execute bit, so spawning it can never
+    // produce the "ast-grep X.Y.Z" --version output the identity check looks for (confirmed: it
+    // always fails to run there, so the accept-path half of this test can't be exercised). The
+    // scenario itself (shadow-utils' setgid `sg` binary impersonating ast-grep's `sg`) is Linux-
+    // specific too. Skip on win32 rather than report a false failure.
+    if (process.platform === "win32") return t.skip("POSIX shebang/execute-bit only (Windows)");
     const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-fakebin-"));
     const sg = path.join(fakeBin, "sg");
     process.env.PALSYNC_AST_BIN = path.join(os.tmpdir(), "palsync-ast-nonexistent");

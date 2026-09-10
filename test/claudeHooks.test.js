@@ -160,6 +160,11 @@ const BARE = {
 
 test("generated hook commands pin the running Node and the absolute script", () => {
     const absoluteScript = path.resolve(__dirname, "..", "bin", "palsync.js");
+    // COMPLETION_COMMAND etc. are generated for THIS process's real platform (generateCommand's
+    // default `platform = process.platform`), which quotes with double quotes on win32 - shq()
+    // above always uses single quotes, simulating the historical POSIX-only legacy form used
+    // elsewhere in this file. Match production's actual platform-aware quoting here instead.
+    const quote = process.platform === "win32" ? (s) => '"' + s + '"' : shq;
     for (const [adapter, command, hook] of [
         ["completion", hooks.COMPLETION_COMMAND, hooks.COMPLETION_HOOK],
         ["guard", hooks.GUARD_COMMAND, hooks.GUARD_HOOK],
@@ -167,7 +172,7 @@ test("generated hook commands pin the running Node and the absolute script", () 
     ]) {
         assert.equal(hook.command, command);
         assert.equal(command.startsWith("palsync"), false);
-        assert.equal(command.includes(shq(absoluteScript) + " hook "), true);
+        assert.equal(command.includes(quote(absoluteScript) + " hook "), true);
         assert.equal(command.endsWith(" hook " + adapter + " --mode claude"), true);
     }
     assert.equal(path.isAbsolute(absoluteScript), true);
@@ -360,7 +365,11 @@ test("install after a migration is byte- and mtime-idempotent", async () => {
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("a decoy on PATH cannot intercept the generated guard command", () => {
+test("a decoy on PATH cannot intercept the generated guard command", (t) => {
+    // POSIX-shell-only (shebang script, chmod +x, /bin/sh) - there's no such absolute path on a
+    // plain Windows Node install (confirmed: spawnSync("/bin/sh", ...) -> ENOENT), so skip rather
+    // than report a false failure, same convention as test/snapshot.test.js's mkfifo-unavailable skip.
+    if (spawnSync("/bin/sh", ["-c", "true"]).error) return t.skip("/bin/sh unavailable (Windows)");
     const ws = tmpWorkspace({ ".palsync.json": "{}" });
     const decoyDir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-decoy-"));
     const marker = path.join(decoyDir, "decoy-ran");

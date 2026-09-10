@@ -409,7 +409,11 @@ function parseAstMatches(stdout) {
 function computeChangeSet(workspaceDir, matches) {
     const byFile = new Map();
     for (const m of matches || []) {
-        const rel = String(m.file || "").split("/").join("/");
+        // ast-grep's own JSON output uses the OS-native separator (backslash on Windows) even
+        // though it was invoked with forward-slash relative paths — every other path in this
+        // codebase is forward-slash-only (see relOf() above), so normalize here. (The previous
+        // `.split("/").join("/")` was a no-op — it never actually replaced anything on Windows.)
+        const rel = String(m.file || "").replace(/\\/g, "/");
         if (!byFile.has(rel)) byFile.set(rel, []);
         byFile.get(rel).push(m);
     }
@@ -749,9 +753,8 @@ function run({ workspaceDir }, rawArgs = {}) {
     if (mode === "search" && !wantsApply) {
         const capped = cap(matches, maxResults, "matches");
         result.matches = capped.items.map((m) => ({
-            file: String(m.file || "")
-                .split("/")
-                .join("/"),
+            // Same ast-grep native-separator normalization as computeChangeSet() above.
+            file: String(m.file || "").replace(/\\/g, "/"),
             line: m.range && m.range.start ? m.range.start.line + 1 : null,
             column: m.range && m.range.start ? m.range.start.column + 1 : null,
             text: truncateText(m.text, DEFAULT_MAX_MATCH_BYTES),
