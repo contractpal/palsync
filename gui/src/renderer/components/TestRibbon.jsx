@@ -36,7 +36,7 @@ export default function TestRibbon({ pal, debugVisible, onToggleDebug }) {
     const [qr, setQr] = useState(null); // { label, dataUrl }
     const [showTunnel, setShowTunnel] = useState(false);
     const [showSystem, setShowSystem] = useState(false);
-    const [syncCheck, setSyncCheck] = useState(null); // { outdated, current, latest, upgrade } | null
+    const [syncCheck, setSyncCheck] = useState(null); // { outdated, current, latest } | null
     const [syncConfirming, setSyncConfirming] = useState(false);
     const [syncRunning, setSyncRunning] = useState(false);
     const [syncLog, setSyncLog] = useState([]);
@@ -73,7 +73,7 @@ export default function TestRibbon({ pal, debugVisible, onToggleDebug }) {
         setSyncRunning(true);
         setSyncLog([]);
         setSyncResult(null);
-        const result = await window.palsyncGui.syncPalsync(pal.path, syncCheck);
+        const result = await window.palsyncGui.syncPalsync(pal.path);
         setSyncRunning(false);
         setSyncResult(result);
         if (result.ok) {
@@ -187,19 +187,17 @@ export default function TestRibbon({ pal, debugVisible, onToggleDebug }) {
 
             {syncConfirming && syncCheck && (
                 <div className="modal-backdrop" onClick={() => setSyncConfirming(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <h3>Update this pal's palsync?</h3>
+                    <div className="modal wide" onClick={e => e.stopPropagation()}>
+                        <h3>Resync this pal's palsync?</h3>
                         <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>
                             This folder's palsync ({syncCheck.current}) is behind the version this app
                             ships with ({syncCheck.latest}) — some hooks/skills may expect subcommands
-                            it doesn't have. This will run:
+                            it doesn't have. This re-points this folder's hooks at the palsync bundled
+                            with this app — offline, no download, nothing sent anywhere.
                         </p>
-                        <pre style={{ margin: 0, padding: 8, background: "var(--bg-inset, #0002)", borderRadius: 4, fontSize: 12, overflowX: "auto" }}>
-                            {syncCheck.upgrade.description}
-                        </pre>
                         <div className="modal-actions">
                             <button className="btn" onClick={() => setSyncConfirming(false)}>Cancel</button>
-                            <button className="btn btn-primary" onClick={runSync}>Update</button>
+                            <button className="btn btn-primary" onClick={runSync}>Resync</button>
                         </div>
                     </div>
                 </div>
@@ -207,10 +205,10 @@ export default function TestRibbon({ pal, debugVisible, onToggleDebug }) {
 
             {(syncRunning || syncResult) && (
                 <div className="modal-backdrop" onClick={() => { if (!syncRunning) setSyncResult(null); }}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <h3>{syncRunning ? "Updating palsync…" : (syncResult.ok ? "Updated" : "Update failed")}</h3>
+                    <div className="modal wide" onClick={e => e.stopPropagation()}>
+                        <h3>{syncRunning ? "Resyncing palsync…" : (syncResult.ok ? "Resynced" : "Resync failed")}</h3>
                         {syncLog.length > 0 && (
-                            <pre style={{ margin: 0, padding: 8, background: "var(--bg-inset, #0002)", borderRadius: 4, fontSize: 12, maxHeight: 240, overflow: "auto" }}>
+                            <pre style={{ margin: 0, padding: 8, background: "var(--bg-inset, #0002)", borderRadius: 4, fontSize: 12, maxHeight: 240, overflowY: "auto", overflowX: "hidden", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                                 {syncLog.join("")}
                             </pre>
                         )}

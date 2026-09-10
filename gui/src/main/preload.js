@@ -96,7 +96,7 @@ contextBridge.exposeInMainWorld("palsyncGui", {
     fetchDebug: (palPath) => ipcRenderer.invoke("pal:fetchDebug", palPath),
 
     checkPalsyncVersion: (palPath) => ipcRenderer.invoke("pal:checkPalsyncVersion", palPath),
-    syncPalsync: (palPath, check) => ipcRenderer.invoke("pal:syncPalsync", { palPath, check }),
+    syncPalsync: (palPath) => ipcRenderer.invoke("pal:syncPalsync", { palPath }),
     onSyncOutput: (callback) => {
         const listener = (event, chunk) => callback(chunk);
         ipcRenderer.on("pal:syncOutput", listener);

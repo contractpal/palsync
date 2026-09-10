@@ -287,8 +287,8 @@ ipcMain.handle("pal:checkPalsyncVersion", async (event, palPath) => {
     catch (e) { return null; } // never blocks anything else — see palsyncSync.js
 });
 
-ipcMain.handle("pal:syncPalsync", async (event, { palPath, check }) => {
-    return palsyncSync.runSync(palPath, check, chunk => {
+ipcMain.handle("pal:syncPalsync", async (event, { palPath }) => {
+    return palsyncSync.runSync(palPath, chunk => {
         if (mainWindow) mainWindow.webContents.send("pal:syncOutput", chunk);
     });
 });
