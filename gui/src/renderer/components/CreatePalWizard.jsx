@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import CheckoutChecklist from "./CheckoutChecklist.jsx";
 
 // Multi-panel wizard: cloud -> login (only if no cached credential auto-resolves) -> profile
 // -> groups (1+) -> details -> submit. Shares its step shape with what "open from cloud" will
@@ -30,15 +31,19 @@ export default function CreatePalWizard({ onCreated, onClose }) {
     const [folderConflict, setFolderConflict] = useState(null);
     const [folderNameInput, setFolderNameInput] = useState("");
 
-    const [progressLog, setProgressLog] = useState([]);
+    const [checklistSteps, setChecklistSteps] = useState([]);
+    const [stepStates, setStepStates] = useState({});
 
     useEffect(() => {
         window.palsyncGui.cloud.listClouds().then(setClouds);
+        window.palsyncGui.cloud.createSteps().then(setChecklistSteps);
     }, []);
 
     useEffect(() => {
         if (step !== "creating") return;
-        return window.palsyncGui.cloud.onProgress(line => setProgressLog(prev => [...prev, line]));
+        return window.palsyncGui.cloud.onStep(({ step: s, status }) => {
+            setStepStates(prev => ({ ...prev, [s]: status === "start" ? "running" : status }));
+        });
     }, [step]);
 
     async function pickCloud(url, cloudName) {
@@ -153,7 +158,7 @@ export default function CreatePalWizard({ onCreated, onClose }) {
 
     async function doCreate(folderName) {
         setBusy(true);
-        setProgressLog([]);
+        setStepStates({});
         setStep("creating");
         try {
             const result = await window.palsyncGui.cloud.createAndMaterialize({
@@ -323,10 +328,8 @@ export default function CreatePalWizard({ onCreated, onClose }) {
                 {step === "creating" && (
                     <>
                         <h3>{error ? "Something went wrong" : "Creating your pal…"}</h3>
-                        {progressLog.length > 0 && (
-                            <div className="wizard-progress-log">
-                                {progressLog.map((line, i) => <div key={i}>{line}</div>)}
-                            </div>
+                        {checklistSteps.length > 0 && (
+                            <CheckoutChecklist steps={checklistSteps} stepStates={stepStates} />
                         )}
                         {error && (
                             <div className="modal-actions">

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import CheckoutChecklist from "./CheckoutChecklist.jsx";
 
 // Mirrors CreatePalWizard's cloud -> login -> profile steps, then diverges: a single group
 // (matches the CLI's "open existing" flow, unlike create's multi-select), then a pal list to
@@ -28,15 +29,22 @@ export default function OpenFromCloudWizard({ onOpened, onClose }) {
     const [folderConflict, setFolderConflict] = useState(null);
     const [folderNameInput, setFolderNameInput] = useState("");
 
-    const [progressLog, setProgressLog] = useState([]);
+    const [checklistSteps, setChecklistSteps] = useState([]);
+    const [stepStates, setStepStates] = useState({});
+    const [lockBlocked, setLockBlocked] = useState(null); // { blocked, holder, holderEmail, since } | null
+    const [forceLockChecked, setForceLockChecked] = useState(false);
+    const [lastFolderName, setLastFolderName] = useState(null);
 
     useEffect(() => {
         window.palsyncGui.cloud.listClouds().then(setClouds);
+        window.palsyncGui.cloud.checkoutSteps().then(setChecklistSteps);
     }, []);
 
     useEffect(() => {
         if (step !== "opening") return;
-        return window.palsyncGui.cloud.onProgress(line => setProgressLog(prev => [...prev, line]));
+        return window.palsyncGui.cloud.onStep(({ step: s, status }) => {
+            setStepStates(prev => ({ ...prev, [s]: status === "start" ? "running" : status }));
+        });
     }, [step]);
 
     async function pickCloud(url, cloudName) {
@@ -143,6 +151,7 @@ export default function OpenFromCloudWizard({ onOpened, onClose }) {
                 setStep("folderConflict");
                 return;
             }
+            setLastFolderName(null);
             await doOpen(p, null);
         } catch (e) {
             setError(e && e.message ? e.message : String(e));
@@ -153,16 +162,28 @@ export default function OpenFromCloudWizard({ onOpened, onClose }) {
 
     async function confirmFolderName() {
         setError(null);
+        setLastFolderName(folderNameInput.trim());
         await doOpen(selectedPal, folderNameInput.trim());
     }
 
-    async function doOpen(pal, folderName) {
+    async function retryWithForceLock() {
+        setError(null);
+        await doOpen(selectedPal, lastFolderName, true);
+    }
+
+    async function doOpen(pal, folderName, forceLock) {
         setBusy(true);
-        setProgressLog([]);
+        setStepStates({});
+        setLockBlocked(null);
+        setForceLockChecked(false);
         setStep("opening");
         try {
-            const result = await window.palsyncGui.cloud.openAndMaterialize({ profile, pal, agentKey: "claude", folderName });
-            if (result.error) { setError(result.error); return; }
+            const result = await window.palsyncGui.cloud.openAndMaterialize({ profile, pal, agentKey: "claude", folderName, forceLock: !!forceLock });
+            if (result.error) {
+                setError(result.error);
+                if (result.lockBlocked) setLockBlocked(result.lockBlocked);
+                return;
+            }
             onOpened(result);
         } catch (e) {
             setError(e && e.message ? e.message : String(e));
@@ -307,15 +328,29 @@ export default function OpenFromCloudWizard({ onOpened, onClose }) {
                 {step === "opening" && (
                     <>
                         <h3>{error ? "Something went wrong" : "Pulling the pal down…"}</h3>
-                        {progressLog.length > 0 && (
-                            <div className="wizard-progress-log">
-                                {progressLog.map((line, i) => <div key={i}>{line}</div>)}
-                            </div>
+                        {checklistSteps.length > 0 && (
+                            <CheckoutChecklist steps={checklistSteps} stepStates={stepStates} />
+                        )}
+                        {error && lockBlocked && (
+                            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginTop: 4 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={forceLockChecked}
+                                    onChange={e => setForceLockChecked(e.target.checked)}
+                                />
+                                Force Lock — break {lockBlocked.holder}'s lock (held since {lockBlocked.since}) and
+                                continue anyway. Use this only if you're sure that session is gone for good
+                                (e.g. PalBuilder crashed) — anything unsaved there will be lost.
+                            </label>
                         )}
                         {error && (
                             <div className="modal-actions">
                                 <button className="btn" onClick={onClose}>Cancel</button>
-                                <button className="btn btn-primary" onClick={() => { setError(null); setStep("pals"); }}>Back</button>
+                                {lockBlocked && forceLockChecked ? (
+                                    <button className="btn btn-primary" onClick={retryWithForceLock}>Continue</button>
+                                ) : (
+                                    <button className="btn btn-primary" onClick={() => { setError(null); setStep("pals"); }}>Back</button>
+                                )}
                             </div>
                         )}
                     </>

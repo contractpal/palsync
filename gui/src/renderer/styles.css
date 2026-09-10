@@ -142,6 +142,29 @@ button:focus-visible, .tab:focus-visible, .card:focus-visible{
 }
 .empty-state{color:var(--text-faint);font-size:13px;}
 
+.checkout-checklist{display:flex;flex-direction:column;gap:6px;}
+.checklist-row{
+  display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--text-faint);
+  padding:2px 0;
+}
+.checklist-row.checklist-done,.checklist-row.checklist-running{color:var(--text);}
+.checklist-row.checklist-error{color:var(--danger);}
+.checklist-icon{
+  width:18px;height:18px;flex:0 0 18px;border-radius:50%;
+  border:1.5px solid var(--border-strong);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;line-height:1;
+}
+.checklist-row.checklist-done .checklist-icon{border-color:var(--accent);background:var(--accent);color:var(--accent-fg);}
+.checklist-row.checklist-error .checklist-icon{border-color:var(--danger);color:var(--danger);}
+.checklist-row.checklist-running .checklist-icon{border-color:var(--accent);}
+.checklist-spinner{
+  width:10px;height:10px;border-radius:50%;
+  border:2px solid var(--accent);border-top-color:transparent;
+  animation:checklist-spin .7s linear infinite;
+}
+@keyframes checklist-spin{to{transform:rotate(360deg);}}
+
 .update-banner{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   background:var(--surface-raised);border:1px solid var(--accent);border-radius:8px;
@@ -230,6 +253,8 @@ button:focus-visible, .tab:focus-visible, .card:focus-visible{
 .ribbon-btn:disabled,.ribbon-caret:disabled{cursor:default;opacity:.6;}
 .ribbon-btn.standalone{border-radius:6px;border-right:1px solid var(--border-strong);}
 .ribbon-btn.standalone.active{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);}
+.ribbon-btn.standalone.warn{border-color:var(--danger);color:var(--danger);}
+.ribbon-btn.standalone.warn:hover:not(:disabled){background:var(--danger);color:#fff;}
 .ribbon-sep{width:1px;align-self:stretch;background:var(--border);margin:0 2px;}
 
 .debug-panel{display:flex;flex-direction:column;height:100%;background:var(--term-bg);}

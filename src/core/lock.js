@@ -9,9 +9,15 @@
 const { CloudPistonAPIManager } = require("../../lib/apiManager");
 const { resolveServerPalByGuid } = require("./resolve");
 
-// Force-override (Lock-Force against a team/PalBuilder lock) is NOT yet trusted: whether Lock-Force
-// actually breaks a teamMember lock is unverified, and breaking a live PalBuilder checkout could destroy
-// another user's unsaved work. Stays false until verified on a throwaway PalBuilder-locked pal.
+// Default force-override gate for the CLI/MCP/agent typed-OVERRIDE path: Lock-Force against a
+// team/PalBuilder lock is NOT yet trusted there — whether it actually breaks a teamMember lock is
+// unverified for an *agent-initiated* override, and breaking a live PalBuilder checkout could
+// destroy another user's unsaved work with no human in the loop to judge that risk. Stays false
+// until verified. This is only the DEFAULT for acquireByGuid's `allowOverride` option — the GUI's
+// own human-confirmed "Force Lock" checkbox (src/launcher/workspace.js's setup()) passes
+// allowOverride: true explicitly for that one call, per David (2026-09-10): Lock-Force already
+// exists in PalBuilder Java and a human should be able to use it after being alerted (e.g. a
+// crashed PalBuilder session nobody's around to unlock), just never automatically or agent-driven.
 const OVERRIDE_ENABLED = false;
 
 function sameUser(email, username) {
@@ -52,7 +58,15 @@ function holderLabel(team) {
 // (and its best-effort GetPlatformInfo.do follow-up) entirely and just confirms with the fresh
 // GetPal.do read from step 1 — which still runs every call (it's a read, not a lock action, and
 // callers like push() rely on its freshness for guard logic / drift detection).
-async function acquireByGuid(session, guid, { force = false, resolved: pre = null } = {}) {
+// allowOverride defaults to the module-wide OVERRIDE_ENABLED gate (false — every existing caller,
+// CLI/MCP/launcher, never passes this and is completely unaffected). The GUI's own force-checkout
+// flow (a human explicitly confirming a "Force Lock" checkbox after seeing who holds it — see
+// src/launcher/workspace.js's setup()) passes allowOverride: true to bypass the gate for just that
+// one call, without touching whether the MCP/agent typed-OVERRIDE path (still unverified, per the
+// comment above) can do the same. Scoped narrowly per David (2026-09-10): a human-initiated escape
+// hatch for a stuck lock (e.g. PalBuilder crashed and the person who had it open is unreachable),
+// never automatic, never agent-initiated.
+async function acquireByGuid(session, guid, { force = false, resolved: pre = null, allowOverride = OVERRIDE_ENABLED } = {}) {
     let resolved = pre || await resolveServerPalByGuid(session, guid);
     if (!resolved) throw new Error("GUID " + guid + " not found on " + session.environment.url);
     const alreadyHeld = !force && !!(session.lockInfo && session.lockInfo.lockGranted === true);
@@ -76,13 +90,13 @@ async function acquireByGuid(session, guid, { force = false, resolved: pre = nul
             return { acquired: false, blocked: mine ? "gui-lock-self" : "gui-lock-other",
                      holder: holderLabel(team), holderEmail: team.ownerEmail, since: team.since, resolved };
         }
-        if (!OVERRIDE_ENABLED) {
-            // Override requested (typed-OVERRIDE confirmed upstream) but the force path is not yet
-            // verified/enabled. Refuse rather than silently no-op or risk destroying PalBuilder work.
+        if (!allowOverride) {
+            // Override requested but not allowed for this caller. Refuse rather than silently
+            // no-op or risk destroying PalBuilder work.
             return { acquired: false, blocked: "override-disabled",
                      holder: holderLabel(team), holderEmail: team.ownerEmail, since: team.since, resolved };
         }
-        // force && OVERRIDE_ENABLED → fall through to Lock-Force (post-verification only)
+        // force && allowOverride → fall through to Lock-Force
     }
 
     // 2) Webstart lock. Already holding it for this session → done, no re-grant request.

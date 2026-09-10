@@ -12,6 +12,8 @@
 // NEW local files never trigger the guard — pull-as-sync preserves them (see core/pull).
 const path = require("path");
 const os = require("os");
+const fsSync = require("fs");
+const fsp = require("fs/promises");
 const { pull } = require("../core/pull");
 const { push } = require("../core/push");
 const lock = require("../core/lock");
@@ -32,9 +34,11 @@ function slug(name) {
 
 // branch is read-only display metadata from the pal list (never written back anywhere) — it
 // only affects the local folder name so two branches of the same pal don't collide on disk.
-function defaultWorkspaceDir(palName, branch) {
+// baseDir overrides the default `~/PalBuilder` parent (e.g. the GUI's own configurable default
+// pal folder location) — optional, so the CLI (which never passes it) is unaffected.
+function defaultWorkspaceDir(palName, branch, baseDir) {
     const dirName = branch ? slug(palName) + " (" + slug(branch) + ")" : slug(palName);
-    return path.join(os.homedir(), "PalBuilder", dirName);
+    return path.join(baseDir || path.join(os.homedir(), "PalBuilder"), dirName);
 }
 
 // Resolve un-pushed local changes before the setup pull. Loops the injectable onDrift prompt
@@ -98,11 +102,34 @@ async function resolveLocalDrift({ session, existing, workspaceDir, palName, dif
     }
 }
 
+// The five steps a checklist-style caller (the GUI's checkout wizards) would want to show, in
+// the order setup() actually performs them. Purely descriptive — setup() itself doesn't consume
+// this list, it just calls onStep with one of these ids at each boundary.
+const STEPS = ["pull", "lock", "resources", "inject", "register"];
+
 // Run the full setup. Returns a summary. Throws if the pal is locked by another user.
 //   agent ("claude" default | "codex") picks the injection destinations and MCP registration path.
 //   onDrift (injectable; launcher/index.js provides the interactive UI) decides what to do with
 //   un-pushed local changes. Headless callers that omit it get a refusal throw, never a wipe.
-async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", onDrift, log = () => {} }) {
+//   onStep (injectable; optional) — fires { step, status: "start"|"done", ...detail } at each of
+//   the STEPS boundaries above, purely additive alongside the existing free-text `log` (which
+//   every caller, including the CLI, already consumes as plain strings — onStep never changes
+//   what log() receives or how many times it's called). Built for the GUI's checkout-progress
+//   checklist; CLI/launcher callers simply never pass it, so their output is unaffected.
+//   forceLock (optional, default false) — human-confirmed-only escape hatch for a stuck lock (see
+//   src/core/lock.js's allowOverride). CLI/launcher never pass this; only the GUI does, and only
+//   after a human has explicitly checked "Force Lock" having already seen who holds it.
+async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", onDrift, log = () => {}, onStep = () => {}, forceLock = false }) {
+    // Captured before anything touches disk: if this is a brand-new checkout (this directory
+    // didn't exist yet) and setup fails partway through — most commonly a lock conflict, found
+    // testing the GUI's checkout flow (David, 2026-09-10): canceling out of a locked-pal error
+    // left the freshly-pulled folder sitting on disk, so the next attempt collided with it and
+    // suggested "folder (2)" — the failure should leave no trace at all. A folder that already
+    // existed before this call (re-opening a pal that's already set up) is never touched here,
+    // even on failure, no matter how it fails.
+    const dirExistedBefore = fsSync.existsSync(workspaceDir);
+
+    try {
 
     // Collision guard. The default workspace path is ~/PalBuilder/<slug(palName)>/ — stable per
     // pal name. If a different pal already lives in this dir (.palsync.json present with a
@@ -130,6 +157,7 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
     }
 
     let record, written = { base64: [], json: [] }, removed = [], preserved = [];
+    onStep({ step: "pull", status: "start" });
     if (mode === "pull") {
         log("pulling " + sel.pal.name + " → " + workspaceDir);
         const res = await pull(session, sel.pal.guid, workspaceDir, { baseline: (existing && existing.fileHashes) || null });
@@ -147,31 +175,46 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
         record.localHash = hashWorkspace(workspaceDir);
         record.fileHashes = hashPaths(workspaceDir, res.serverPaths);
         record.pulledAt = new Date().toISOString();
+        onStep({ step: "pull", status: "done", filesPulled: written.base64.length + written.json.length, removed: removed.length });
     } else {
         // skip: the user chose to keep local state. Keep the existing record untouched (its
         // marker still guards the next push; its baseline still names the local changes).
         log("skipping pull — keeping local workspace state as-is");
         record = existing;
+        onStep({ step: "pull", status: "done", skipped: true });
     }
 
-    // auto-lock (own Webstart-lock reclaim is automatic; setup never force-overrides a PalBuilder lock)
+    // auto-lock (own Webstart-lock reclaim is automatic; forceLock is the GUI-only human-confirmed
+    // escape hatch above — CLI/launcher never set it, so they never force-override a PalBuilder lock)
     log("locking pal");
-    const lk = await lock.acquireByGuid(session, sel.pal.guid, { force: false });
+    onStep({ step: "lock", status: "start" });
+    const lk = await lock.acquireByGuid(session, sel.pal.guid, { force: forceLock, allowOverride: forceLock });
     if (!lk.acquired) {
+        onStep({ step: "lock", status: "error" });
+        let message;
         if (lk.blocked === "gui-lock-self") {
-            throw new Error("This pal is locked — you have \"" + sel.pal.name + "\" checked out in PalBuilder (since " + lk.since + "). Unlock and close it in PalBuilder, then re-run palsync.");
+            message = "This pal is locked — you have \"" + sel.pal.name + "\" checked out in PalBuilder (since " + lk.since + "). Unlock and close it in PalBuilder, then re-run palsync.";
+        } else if (lk.blocked === "gui-lock-other") {
+            message = "This pal is locked by " + lk.holder + " (since " + lk.since + ") — cannot start a session. Unlock and close it in PalBuilder.";
+        } else {
+            message = "Could not lock \"" + sel.pal.name + "\" (" + (lk.blocked || "unknown") + "). Unlock and close it in PalBuilder, then re-run palsync.";
         }
-        if (lk.blocked === "gui-lock-other") {
-            throw new Error("This pal is locked by " + lk.holder + " (since " + lk.since + ") — cannot start a session. Unlock and close it in PalBuilder.");
+        const err = new Error(message);
+        // Structured, additive — CLI/launcher callers only ever read err.message (unchanged
+        // above); the GUI reads this to offer its "Force Lock" checkbox without string-parsing.
+        if (lk.blocked === "gui-lock-self" || lk.blocked === "gui-lock-other") {
+            err.lockBlocked = { blocked: lk.blocked, holder: lk.holder, holderEmail: lk.holderEmail, since: lk.since };
         }
-        throw new Error("Could not lock \"" + sel.pal.name + "\" (" + (lk.blocked || "unknown") + "). Unlock and close it in PalBuilder, then re-run palsync.");
+        throw err;
     }
+    onStep({ step: "lock", status: "done" });
 
     // Fetch the pal's chain (module dependencies, resource pals, CloudPiston Resource, etc.) into
     // .resources/ so the agent has the full in-scope code available from the start of the session,
     // not just on request. Best-effort: most pals have a chain, but a pal with none, or a transient
     // failure, must never block session setup.
     log("fetching pal chain (.resources/)");
+    onStep({ step: "resources", status: "start" });
     let resources;
     try {
         resources = await fetchAndExtract(session, lk.resolved, workspaceDir);
@@ -181,6 +224,7 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
         resources = { ok: false, reason: e && e.message ? e.message : String(e) };
         log("  chain fetch failed (non-fatal): " + resources.reason);
     }
+    onStep({ step: "resources", status: "done", ok: !!resources.ok, count: resources.entries ? resources.entries.length : 0 });
 
     // CLAUDE.md is not wiped by pull (sync only touches files inside the 14 manifest folders
     // + pal.json) — inject() reads the user's existing CLAUDE.md and merges its managed block
@@ -188,12 +232,14 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
     log("injecting CLAUDE.md + skills" +
         (agent === "codex" ? " + AGENTS.md/.agents (Codex)" : agent === "pi" ? " + AGENTS.md/.agents (Pi)" :
          agent === "opencode" ? " + AGENTS.md/.agents (OpenCode)" : ""));
+    onStep({ step: "inject", status: "start" });
     const injected = await contextInject.inject(workspaceDir, {
         palName: sel.pal.name, agent, policy: require("../core/policy").resolve()
     });
     if (injected.hookSettings && injected.hookSettings.skipped) {
         log("  Claude hook settings skipped: " + injected.hookSettings.error + ". " + injected.hookSettings.manualRemediation);
     }
+    onStep({ step: "inject", status: "done" });
 
     // Persist the id this session actually just locked with — freshest available, and what
     // every later session in this pal folder will try first (see core/lock.js's self-heal).
@@ -202,6 +248,7 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
     await palsyncfile.write(workspaceDir, record);
 
     // register the MCP server for the chosen agent.
+    onStep({ step: "register", status: "start" });
     let reg = {};
     if (agent === "codex") {
         log("registering palsync MCP server with Codex (codex mcp add)");
@@ -228,6 +275,7 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
         log("registering palsync MCP server (.mcp.json)");
         reg = await register(workspaceDir);
     }
+    onStep({ step: "register", status: "done", ok: reg.error ? false : true });
 
     return {
         workspaceDir,
@@ -245,6 +293,13 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
         mcpRegistration: reg,
         record
     };
+    } catch (e) {
+        if (!dirExistedBefore) {
+            try { await fsp.rm(workspaceDir, { recursive: true, force: true }); }
+            catch (cleanupErr) { /* best-effort — the original error still surfaces either way */ }
+        }
+        throw e;
+    }
 }
 
-module.exports = { setup, defaultWorkspaceDir, slug, resolveLocalDrift };
+module.exports = { setup, defaultWorkspaceDir, slug, resolveLocalDrift, STEPS };

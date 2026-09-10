@@ -56,6 +56,8 @@ contextBridge.exposeInMainWorld("palsyncGui", {
         listProfiles: () => ipcRenderer.invoke("cloud:listProfiles"),
         listGroups: (profileId) => ipcRenderer.invoke("cloud:listGroups", profileId),
         checkFolder: (name) => ipcRenderer.invoke("cloud:checkFolder", name),
+        checkoutSteps: () => ipcRenderer.invoke("cloud:checkoutSteps"),
+        createSteps: () => ipcRenderer.invoke("cloud:createSteps"),
         createAndMaterialize: (opts) => ipcRenderer.invoke("cloud:createAndMaterialize", opts),
         listPals: (profileId, groupId) => ipcRenderer.invoke("cloud:listPals", { profileId, groupId }),
         openAndMaterialize: (opts) => ipcRenderer.invoke("cloud:openAndMaterialize", opts),
@@ -63,6 +65,11 @@ contextBridge.exposeInMainWorld("palsyncGui", {
             const listener = (event, line) => callback(line);
             ipcRenderer.on("cloud:progress", listener);
             return () => ipcRenderer.removeListener("cloud:progress", listener);
+        },
+        onStep: (callback) => {
+            const listener = (event, stepEvent) => callback(stepEvent);
+            ipcRenderer.on("cloud:step", listener);
+            return () => ipcRenderer.removeListener("cloud:step", listener);
         }
     },
 
@@ -87,6 +94,14 @@ contextBridge.exposeInMainWorld("palsyncGui", {
     runTunnel: (palPath, action, workflow, payload) => ipcRenderer.invoke("pal:runTunnel", { palPath, action, workflow, payload }),
 
     fetchDebug: (palPath) => ipcRenderer.invoke("pal:fetchDebug", palPath),
+
+    checkPalsyncVersion: (palPath) => ipcRenderer.invoke("pal:checkPalsyncVersion", palPath),
+    syncPalsync: (palPath, check) => ipcRenderer.invoke("pal:syncPalsync", { palPath, check }),
+    onSyncOutput: (callback) => {
+        const listener = (event, chunk) => callback(chunk);
+        ipcRenderer.on("pal:syncOutput", listener);
+        return () => ipcRenderer.removeListener("pal:syncOutput", listener);
+    },
 
     startConsole: (palId, agentId, cwd) => ipcRenderer.invoke("console:start", { palId, agentId, cwd }),
     writeToConsole: (palId, data) => ipcRenderer.send("console:write", { palId, data }),

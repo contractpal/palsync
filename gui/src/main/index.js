@@ -24,6 +24,7 @@ const qrCode = require("./qrCode");
 const tunnelWorkflow = require("./tunnelWorkflow");
 const debugWorkflow = require("./debugWorkflow");
 const workflowList = require("./workflowList");
+const palsyncSync = require("./palsyncSync");
 
 const isDev = !app.isPackaged;
 let mainWindow = null;
@@ -72,6 +73,20 @@ ipcMain.handle("deps:installChromium", async () => {
     });
 });
 
+// Shared picker for the two File-menu "default location" settings — a plain native directory
+// dialog (no custom renderer UI needed for this), seeded with the current setting if one's
+// already set. Canceling leaves the existing setting untouched.
+async function chooseDefaultDir({ title, current, onPick }) {
+    if (!mainWindow) return;
+    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+        title,
+        defaultPath: current || undefined,
+        properties: ["openDirectory", "createDirectory"]
+    });
+    if (canceled || !filePaths.length) return;
+    await onPick(filePaths[0]);
+}
+
 function buildMenu() {
     const template = [
         ...(process.platform === "darwin" ? [{ label: app.name, role: "appMenu" }] : []),
@@ -85,6 +100,23 @@ function buildMenu() {
                 {
                     label: "Browsers…",
                     click: () => { if (mainWindow) mainWindow.webContents.send("browsers:open"); }
+                },
+                { type: "separator" },
+                {
+                    label: "Default Workspace File Location…",
+                    click: () => chooseDefaultDir({
+                        title: "Choose default location for new workspace files",
+                        current: appState.getDefaultWorkspaceSaveDir(userDataDir()),
+                        onPick: dir => appState.setDefaultWorkspaceSaveDir(userDataDir(), dir)
+                    })
+                },
+                {
+                    label: "Default Pal Folder Location…",
+                    click: () => chooseDefaultDir({
+                        title: "Choose default location for pal project folders",
+                        current: appState.getDefaultPalFolderDir(userDataDir()),
+                        onPick: dir => appState.setDefaultPalFolderDir(userDataDir(), dir)
+                    })
                 },
                 { type: "separator" },
                 { role: "quit" }
@@ -116,6 +148,19 @@ function buildMenu() {
                 {
                     label: "Help Video",
                     click: () => shell.openExternal("https://downloads.cloudpiston.com/chip-1.mp4")
+                },
+                { type: "separator" },
+                {
+                    label: "API Documentation",
+                    // Static docs links, not a live per-cloud Get*APIUrl call (which would need
+                    // its own session/credentials) - Chip is built primarily for the agent, not
+                    // for a human interactively exploring the API, so this is scoped down to
+                    // static links rather than the full Java-IDE-style viewer.
+                    submenu: [
+                        { label: "Transaction API", click: () => shell.openExternal("https://secure.cloudpiston.com/cpal/cp-api/transaction/index.html") },
+                        { label: "Web API", click: () => shell.openExternal("https://secure.cloudpiston.com/cpal/cp-api/web/index.html") },
+                        { label: "Console API", click: () => shell.openExternal("https://secure.cloudpiston.com/cpal/cp-api/console/index.html") }
+                    ]
                 },
                 { type: "separator" },
                 {
@@ -168,9 +213,11 @@ ipcMain.handle("workspace:listRecent", async () => {
 });
 
 ipcMain.handle("workspace:new", async (event, name) => {
+    const saveDir = appState.getDefaultWorkspaceSaveDir(userDataDir());
+    const fileName = (name || "workspace") + ".json";
     const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
         title: "Save New Workspace",
-        defaultPath: (name || "workspace") + ".json",
+        defaultPath: saveDir ? path.join(saveDir, fileName) : fileName,
         filters: [{ name: "Palsync Workspace", extensions: ["json"] }]
     });
     if (canceled || !filePath) return null;
@@ -210,9 +257,11 @@ ipcMain.handle("workspace:save", async () => {
 // ---- IPC: add pal (existing folder only, MVP) ----
 
 ipcMain.handle("pal:chooseFolder", async () => {
+    const defaultPath = appState.getDefaultPalFolderDir(userDataDir()) || undefined;
     const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
         title: "Add Pal — Choose its folder",
-        properties: ["openDirectory"]
+        properties: ["openDirectory"],
+        defaultPath
     });
     if (canceled || !filePaths.length) return null;
     return filePaths[0];
@@ -231,6 +280,17 @@ ipcMain.handle("pal:addFromFolder", async (event, folderPath) => {
     currentWorkspace.activeTabIndex = currentWorkspace.pals.length - 1;
     await workspaceStore.saveWorkspace(currentWorkspacePath, currentWorkspace);
     return { tab, workspace: currentWorkspace };
+});
+
+ipcMain.handle("pal:checkPalsyncVersion", async (event, palPath) => {
+    try { return await palsyncSync.checkPalFolderVersion(palPath); }
+    catch (e) { return null; } // never blocks anything else — see palsyncSync.js
+});
+
+ipcMain.handle("pal:syncPalsync", async (event, { palPath, check }) => {
+    return palsyncSync.runSync(palPath, check, chunk => {
+        if (mainWindow) mainWindow.webContents.send("pal:syncOutput", chunk);
+    });
 });
 
 ipcMain.handle("pal:setAgent", async (event, { palPath, agentId }) => {
@@ -269,6 +329,24 @@ function sendProgress(line) {
     if (mainWindow) mainWindow.webContents.send("cloud:progress", line);
 }
 
+function sendStep(stepEvent) {
+    if (mainWindow) mainWindow.webContents.send("cloud:step", stepEvent);
+}
+
+// Ordered, human-labeled version of palsync/src/launcher/workspace.js's STEPS — the checklist
+// the checkout wizards render. Kept here (not in core) since the label wording is GUI-only
+// presentation, not something the CLI/launcher care about.
+const CHECKOUT_STEPS = [
+    { step: "pull", label: "Pull the pal's files" },
+    { step: "lock", label: "Lock the pal" },
+    { step: "resources", label: "Fetch dependent resources" },
+    { step: "inject", label: "Set up agent context" },
+    { step: "register", label: "Register the MCP server" }
+];
+// create-new-pal has one extra step before the shared checkout steps: creating the pal itself
+// on CloudPiston (open-from-cloud skips this — the pal already exists).
+const CREATE_STEPS = [{ step: "create", label: "Create the pal on CloudPiston" }, ...CHECKOUT_STEPS];
+
 function addTabToWorkspace(tab) {
     if (!currentWorkspace) return { error: "No workspace open." };
     const alreadyAdded = currentWorkspace.pals.some(p => p.path === tab.path);
@@ -283,7 +361,7 @@ function addTabToWorkspace(tab) {
 // an open tab in this workspace, or already present on disk (from an earlier checkout) — before
 // silently landing there. `folderName`, if given, overrides the auto-suggested folder name.
 function resolveWorkspaceDir(name, folderName) {
-    const baseDir = cloudWizard.defaultWorkspaceDir(name);
+    const baseDir = cloudWizard.defaultWorkspaceDir(name, appState.getDefaultPalFolderDir(userDataDir()));
     if (folderName && folderName.trim()) {
         return path.join(path.dirname(baseDir), folderName.trim());
     }
@@ -291,7 +369,7 @@ function resolveWorkspaceDir(name, folderName) {
 }
 
 function checkFolderConflict(name) {
-    const baseDir = cloudWizard.defaultWorkspaceDir(name);
+    const baseDir = cloudWizard.defaultWorkspaceDir(name, appState.getDefaultPalFolderDir(userDataDir()));
     const inWorkspace = !!(currentWorkspace && currentWorkspace.pals.some(p => p.path === baseDir));
     const onDisk = fs.existsSync(baseDir);
     if (!inWorkspace && !onDisk) return { conflict: null, baseDir };
@@ -346,13 +424,17 @@ ipcMain.handle("cloud:listGroups", async (event, profileId) => {
 
 ipcMain.handle("cloud:checkFolder", (event, name) => checkFolderConflict(name));
 
+ipcMain.handle("cloud:checkoutSteps", () => CHECKOUT_STEPS);
+ipcMain.handle("cloud:createSteps", () => CREATE_STEPS);
+
 ipcMain.handle("cloud:createAndMaterialize", async (event, { profile, groupIds, name, description, category, agentKey, folderName }) => {
     if (!currentWorkspace) return { error: "No workspace open." };
     try {
-        sendProgress("Creating \"" + name + "\" on CloudPiston…");
+        sendStep({ step: "create", status: "start" });
         const created = await cloudWizard.createPal({ profileId: profile.profileId, groupIds, name, description, category });
+        sendStep({ step: "create", status: "done" });
         const workspaceDir = resolveWorkspaceDir(created.name, folderName);
-        const tab = await cloudWizard.materialize({ profile, palGuid: created.guid, palName: created.name, workspaceDir, agentKey, onLog: sendProgress });
+        const tab = await cloudWizard.materialize({ profile, palGuid: created.guid, palName: created.name, workspaceDir, agentKey, onLog: sendProgress, onStep: sendStep });
         return addTabToWorkspace(tab);
     } catch (e) {
         return { error: e && e.message ? e.message : String(e) };
@@ -364,14 +446,14 @@ ipcMain.handle("cloud:listPals", async (event, { profileId, groupId }) => {
     catch (e) { return { error: e.message }; }
 });
 
-ipcMain.handle("cloud:openAndMaterialize", async (event, { profile, pal, agentKey, folderName }) => {
+ipcMain.handle("cloud:openAndMaterialize", async (event, { profile, pal, agentKey, folderName, forceLock }) => {
     if (!currentWorkspace) return { error: "No workspace open." };
     try {
         const workspaceDir = resolveWorkspaceDir(pal.name, folderName);
-        const tab = await cloudWizard.materialize({ profile, palGuid: pal.guid, palName: pal.name, workspaceDir, agentKey, onLog: sendProgress });
+        const tab = await cloudWizard.materialize({ profile, palGuid: pal.guid, palName: pal.name, workspaceDir, agentKey, onLog: sendProgress, onStep: sendStep, forceLock });
         return addTabToWorkspace(tab);
     } catch (e) {
-        return { error: e && e.message ? e.message : String(e) };
+        return { error: e && e.message ? e.message : String(e), lockBlocked: e && e.lockBlocked || null };
     }
 });
 

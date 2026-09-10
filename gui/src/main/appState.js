@@ -30,4 +30,34 @@ async function markDependencyCheckShown(userDataDir) {
     await write(userDataDir, state);
 }
 
-module.exports = { hasShownDependencyCheck, markDependencyCheckShown };
+// Default save location for new Chip workspace files (the .json file itself) — File menu
+// setting. null/unset means "let the OS save dialog remember wherever it last was" (today's
+// behavior, unchanged unless the user sets this).
+function getDefaultWorkspaceSaveDir(userDataDir) {
+    return readSync(userDataDir).defaultWorkspaceSaveDir || null;
+}
+
+async function setDefaultWorkspaceSaveDir(userDataDir, dir) {
+    const state = readSync(userDataDir);
+    state.defaultWorkspaceSaveDir = dir || null;
+    await write(userDataDir, state);
+}
+
+// Override for where a pal project folder gets pulled to disk (default is `~/PalBuilder`,
+// see src/launcher/workspace.js's defaultWorkspaceDir) — File menu setting, separate from the
+// workspace-file location above.
+function getDefaultPalFolderDir(userDataDir) {
+    return readSync(userDataDir).defaultPalFolderDir || null;
+}
+
+async function setDefaultPalFolderDir(userDataDir, dir) {
+    const state = readSync(userDataDir);
+    state.defaultPalFolderDir = dir || null;
+    await write(userDataDir, state);
+}
+
+module.exports = {
+    hasShownDependencyCheck, markDependencyCheckShown,
+    getDefaultWorkspaceSaveDir, setDefaultWorkspaceSaveDir,
+    getDefaultPalFolderDir, setDefaultPalFolderDir
+};

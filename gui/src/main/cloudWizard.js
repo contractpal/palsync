@@ -153,8 +153,10 @@ async function listPals(profileId, groupId) {
     return (resp.palInfoList && resp.palInfoList.PalInfoEx) || [];
 }
 
-function defaultWorkspaceDir(name) {
-    return workspace.defaultWorkspaceDir(name);
+// baseDir overrides the default `~/PalBuilder` parent — the GUI's own configurable default pal
+// folder location setting (File menu), read by the caller from appState and passed through here.
+function defaultWorkspaceDir(name, baseDir) {
+    return workspace.defaultWorkspaceDir(name, null, baseDir);
 }
 
 // Create/open-from-cloud always pull into a brand-new folder, even for a pal already checked
@@ -171,7 +173,7 @@ function resolveAvailableDir(baseDir) {
 // Pull the newly created pal to disk, lock it, inject context, write .palsync.json, and
 // register MCP for the given agent — all via palsync's own workspace.setup() orchestration —
 // then turn the resulting folder into a workspace tab entry the same way "existing folder" does.
-async function materialize({ profile, palGuid, palName, workspaceDir, agentKey, onLog }) {
+async function materialize({ profile, palGuid, palName, workspaceDir, agentKey, onLog, onStep, forceLock }) {
     const session = requireSession();
     const resolvedAgentKey = agentKey || "claude";
     await workspace.setup({
@@ -180,7 +182,9 @@ async function materialize({ profile, palGuid, palName, workspaceDir, agentKey, 
         sel: { profile, pal: { guid: palGuid, name: palName } },
         workspaceDir,
         agent: resolvedAgentKey,
-        log: onLog || (() => {})
+        log: onLog || (() => {}),
+        onStep: onStep || (() => {}),
+        forceLock: !!forceLock
     });
     const configFile = AGENT_KEY_TO_CONFIG_FILE[resolvedAgentKey];
     if (configFile) await ensureElectronRunAsNode(path.join(workspaceDir, configFile), configFile);
