@@ -1,0 +1,12 @@
+# Force LF line endings for all text files regardless of platform or local git config
+# (core.autocrlf). Without this, a Windows checkout with core.autocrlf=true silently rewrites
+# every text file to CRLF on disk - harmless for editing, but it breaks anything that reads a
+# committed file's raw bytes and compares/hashes it against a value recorded on an LF checkout
+# (test fixtures, frozen snapshots, sha256-pinned "arm" text, etc.). Found 2026-09-10 tracing a
+# wave of test failures that were really all this one cause, not real bugs.
+* text=auto eol=lf
+
+# Known binary types - redundant with text=auto's own detection, but explicit as a safety net.
+*.png binary
+*.ico binary
+*.map binary
