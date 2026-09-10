@@ -6,12 +6,15 @@ const fs = require("fs");
 const path = require("path");
 
 const VERSION_ENDPOINT = "https://www.cloudpiston.com/getVersionInfo.do";
-// getVersionInfo.do isn't Mac-aware yet (it returns the same Windows .exe URL regardless of the
-// `os` param) - that's a server-side gap outside this repo. Mac instead checks this flat text
-// manifest directly: line 1 is the version, every line after is a filename served at
-// https://downloads.cloudpiston.com/<filename>. Re-uploaded by hand alongside the installers on
-// every Mac release (see BUILD.md) - there's no build-time automation for it yet.
+// getVersionInfo.do isn't OS-aware (it returns the same Windows .exe URL regardless of the `os`
+// param) - a server-side gap outside this repo, and not worth depending on either way since it's
+// not something a release from this repo controls. Mac and Windows instead each check their own
+// flat text manifest directly: line 1 is the version, every line after is a filename served at
+// https://downloads.cloudpiston.com/<filename>. Hand-uploaded alongside the installers on every
+// release (see BUILD.md) - there's no build-time automation for the upload itself yet, only for
+// generating the file's contents correctly.
 const MAC_VERSIONS_URL = "https://downloads.cloudpiston.com/mac-versions.txt";
+const WINDOWS_VERSIONS_URL = "https://downloads.cloudpiston.com/windows-versions.txt";
 const DOWNLOADS_BASE = "https://downloads.cloudpiston.com/";
 
 // Build info gets dropped here by the build process (not yet wired up as of this writing —
@@ -53,9 +56,10 @@ function osParam() {
     return process.platform;
 }
 
-// mac-versions.txt -> {version, files}. Blank/whitespace-only lines are dropped so a trailing
-// newline (or one added by hand-editing the file) doesn't become a bogus empty filename.
-function parseMacVersions(text) {
+// <platform>-versions.txt -> {version, files}. Same flat format on both platforms. Blank/
+// whitespace-only lines are dropped so a trailing newline (or one added by hand-editing the
+// file) doesn't become a bogus empty filename.
+function parseVersionsManifest(text) {
     const lines = String(text).split("\n").map(line => line.trim()).filter(Boolean);
     if (lines.length < 2) return null;
     const [version, ...files] = lines;
@@ -63,11 +67,12 @@ function parseMacVersions(text) {
 }
 
 // Picks the file matching THIS BUILD's own architecture (process.arch — not the host CPU: we
-// ship separate arm64/x64 builds, no universal binary, so a user already running the x64 build
-// under Rosetta should keep being offered x64, not silently switched), preferring a .dmg (the
-// normal double-click installer) over the .zip (electron-builder's own format, not meant for a
-// fresh manual download). Falls back to any file of the right kind if the arch match is missing,
-// so a manifest edited by hand into a slightly different shape doesn't just come up empty.
+// ship separate arm64/x64 Mac builds, no universal binary, so a user already running the x64
+// build under Rosetta should keep being offered x64, not silently switched), preferring a .dmg
+// (the normal double-click installer) over the .zip (electron-builder's own format, not meant
+// for a fresh manual download). Falls back to any file of the right kind if the arch match is
+// missing, so a manifest edited by hand into a slightly different shape doesn't just come up
+// empty.
 function pickMacFile(files, arch) {
     const isArm64Name = f => f.toLowerCase().includes("arm64");
     const archMatches = files.filter(f => (arch === "arm64") === isArm64Name(f));
@@ -75,33 +80,49 @@ function pickMacFile(files, arch) {
     return pool.find(f => f.toLowerCase().endsWith(".dmg")) || pool[0] || null;
 }
 
-async function checkForMacUpdate(local) {
+// Windows only ever ships one installer (a single universal x64 NSIS .exe, per BUILD.md - no
+// per-arch split like Mac), so there's nothing to match against - just prefer a .exe if the
+// manifest ever lists more than one file, otherwise take the first line after the version.
+function pickWindowsFile(files) {
+    return files.find(f => f.toLowerCase().endsWith(".exe")) || files[0] || null;
+}
+
+async function checkAgainstManifest(local, url, pickFile) {
     let text;
     try {
-        const resp = await fetch(MAC_VERSIONS_URL);
+        const resp = await fetch(url);
         if (!resp.ok) return null;
         text = await resp.text();
     } catch (e) {
         return null; // offline / unreachable — never block or error the launcher over this
     }
 
-    const parsed = parseMacVersions(text);
+    const parsed = parseVersionsManifest(text);
     if (!parsed) return null;
     if (compareVersions(parsed.version, local.version) <= 0) return null;
 
-    const file = pickMacFile(parsed.files, process.arch);
+    const file = pickFile(parsed.files);
     if (!file) return null;
     return { localVersion: local.version, remoteVersion: parsed.version, buildDate: null, downloadUrl: DOWNLOADS_BASE + file };
+}
+
+function checkForMacUpdate(local) {
+    return checkAgainstManifest(local, MAC_VERSIONS_URL, files => pickMacFile(files, process.arch));
+}
+
+function checkForWindowsUpdate(local) {
+    return checkAgainstManifest(local, WINDOWS_VERSIONS_URL, pickWindowsFile);
 }
 
 async function checkForUpdate() {
     const local = readLocalBuildInfo();
     if (!local || !local.version) return null;
 
-    if (process.platform === "darwin") {
-        return checkForMacUpdate(local);
-    }
+    if (process.platform === "darwin") return checkForMacUpdate(local);
+    if (process.platform === "win32") return checkForWindowsUpdate(local);
 
+    // Any other platform (no build exists for one yet): fall back to the legacy endpoint rather
+    // than just returning null, in case it's ever actually useful there.
     let text;
     try {
         const url = VERSION_ENDPOINT + "?ide=chip&os=" + encodeURIComponent(osParam());
@@ -122,5 +143,5 @@ async function checkForUpdate() {
 
 module.exports = {
     checkForUpdate, compareVersions, parseVersion, buildInfoPath, readLocalBuildInfo,
-    checkForMacUpdate, parseMacVersions, pickMacFile
+    checkForMacUpdate, checkForWindowsUpdate, parseVersionsManifest, pickMacFile, pickWindowsFile
 };

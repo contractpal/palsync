@@ -140,6 +140,34 @@ never touches the build machine). `npm run build:win:dir` still produces the old
 non-installer `dist/win-unpacked/` folder if you just want to quickly run/inspect the packaged
 app without going through the installer.
 
+`build:win` also runs `gui/scripts/bumpVersion.js` first (same auto-bump as Mac — see below) and
+`gui/scripts/afterWinBuild.js` last, which copies the freshly built, still-unsigned installer to
+a fixed staging path (`C:\build\ChipPalBuilder.exe`) and prints an explicit "MANUAL SIGNING
+NEEDED" notice, so it's never left sitting unsigned in `gui/dist` without a clear next step.
+
+### After signing: publishing to the download bucket
+
+Same bucket, same convention as Mac (see below) — sign the staged `.exe`, then upload it and a
+matching `windows-versions.txt` yourself (there's no automated upload step for Windows, since the
+signing machine and wherever you run the upload from aren't assumed to be this build machine):
+
+```
+aws s3 cp C:\build\ChipPalBuilder.exe s3://contractpal-cloudpiston-downloads/ChipPalBuilder.exe
+```
+
+`windows-versions.txt` is the same flat format as Mac's — version on line 1, one filename per
+line after (just `ChipPalBuilder.exe` today; Windows only ever ships one installer, no arch
+split):
+
+```
+0.4.0
+ChipPalBuilder.exe
+```
+
+`versionCheck.js`'s "new version available" check for Windows reads this file directly (not
+`getVersionInfo.do` — same server-side "not actually OS-aware" gap as Mac, outside this repo) and
+won't pick up a new release until it's updated to match.
+
 ## Producing a real installer (Mac) — signing, notarizing, and publishing
 
 ```
@@ -175,9 +203,10 @@ filename so each upload replaces the previous release at a fixed URL
 electron-updater delta-patch metadata and this app doesn't use an auto-updater). **A Mac release
 is not complete until `mac-versions.txt` is re-uploaded too** — plain text, version on line 1,
 one filename per line below it, also at the bucket root. `versionCheck.js`'s "new version
-available" check for macOS reads this file directly (`getVersionInfo.do`, the existing Windows
-check, isn't Mac-aware yet — a server-side gap outside this repo) and won't pick up a new
-release until it's updated to match.
+available" check for macOS reads this file directly (not `getVersionInfo.do` — that endpoint
+isn't OS-aware, a server-side gap outside this repo; Windows now reads its own equivalent
+`windows-versions.txt` the same way, see above) and won't pick up a new release until it's
+updated to match.
 
 ## Symptom if this is missing
 

@@ -8,7 +8,7 @@
     "dev:renderer": "vite",
     "dev": "concurrently -k -n renderer,electron -c cyan,yellow \"npm:dev:renderer\" \"electron .\"",
     "build:renderer": "vite build",
-    "build:win": "node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --win",
+    "build:win": "node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --win && node scripts/afterWinBuild.js",
     "build:win:dir": "node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --win --dir",
     "build:mac": "node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --mac",
     "build:mac:dir": "node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --mac --dir",
