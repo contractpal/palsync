@@ -4,6 +4,10 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 
+// Must run before any module below does PATH-dependent work (agent detection, dependency
+// checks) - see fixPath.js for why a Finder/Dock-launched app needs this at all.
+require("./fixPath").fixPathSync();
+
 const workspaceStore = require("./workspaceStore");
 const palFolder = require("./palFolder");
 const agentLaunch = require("./agentLaunch");
