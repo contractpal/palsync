@@ -12,9 +12,10 @@ const VERSION_ENDPOINT = "https://www.cloudpiston.com/getVersionInfo.do";
 // flat text manifest directly: line 1 is the version, every line after is a filename served at
 // https://downloads.cloudpiston.com/<filename>. Hand-uploaded alongside the installers on every
 // release (see BUILD.md) - there's no build-time automation for the upload itself yet, only for
-// generating the file's contents correctly.
+// generating the file's contents correctly. Linux checks its own linux-versions.txt the same way.
 const MAC_VERSIONS_URL = "https://downloads.cloudpiston.com/mac-versions.txt";
 const WINDOWS_VERSIONS_URL = "https://downloads.cloudpiston.com/windows-versions.txt";
+const LINUX_VERSIONS_URL = "https://downloads.cloudpiston.com/linux-versions.txt";
 const DOWNLOADS_BASE = "https://downloads.cloudpiston.com/";
 
 // Build info gets dropped here by the build process (not yet wired up as of this writing —
@@ -87,6 +88,12 @@ function pickWindowsFile(files) {
     return files.find(f => f.toLowerCase().endsWith(".exe")) || files[0] || null;
 }
 
+// Linux ships a single x64 AppImage (no per-arch split, same as Windows), so prefer that
+// extension if the manifest ever lists more than one file, otherwise take the first line.
+function pickLinuxFile(files) {
+    return files.find(f => f.toLowerCase().endsWith(".appimage")) || files[0] || null;
+}
+
 async function checkAgainstManifest(local, url, pickFile) {
     let text;
     try {
@@ -114,12 +121,17 @@ function checkForWindowsUpdate(local) {
     return checkAgainstManifest(local, WINDOWS_VERSIONS_URL, pickWindowsFile);
 }
 
+function checkForLinuxUpdate(local) {
+    return checkAgainstManifest(local, LINUX_VERSIONS_URL, pickLinuxFile);
+}
+
 async function checkForUpdate() {
     const local = readLocalBuildInfo();
     if (!local || !local.version) return null;
 
     if (process.platform === "darwin") return checkForMacUpdate(local);
     if (process.platform === "win32") return checkForWindowsUpdate(local);
+    if (process.platform === "linux") return checkForLinuxUpdate(local);
 
     // Any other platform (no build exists for one yet): fall back to the legacy endpoint rather
     // than just returning null, in case it's ever actually useful there.
@@ -143,5 +155,6 @@ async function checkForUpdate() {
 
 module.exports = {
     checkForUpdate, compareVersions, parseVersion, buildInfoPath, readLocalBuildInfo,
-    checkForMacUpdate, checkForWindowsUpdate, parseVersionsManifest, pickMacFile, pickWindowsFile
+    checkForMacUpdate, checkForWindowsUpdate, checkForLinuxUpdate, parseVersionsManifest,
+    pickMacFile, pickWindowsFile, pickLinuxFile
 };

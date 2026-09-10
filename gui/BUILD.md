@@ -42,10 +42,16 @@ xcode-select --install
 
 Same underlying reason (compiling `node-pty` for macOS), different toolchain.
 
-### Linux
+### Linux (build VM)
 
-Not yet in scope for this project (Windows-first per MVP), but would need the standard
-`build-essential` (Debian/Ubuntu) or equivalent C/C++ toolchain package when it is.
+The standard `build-essential` (Debian/Ubuntu) or equivalent C/C++ toolchain package, same
+underlying reason (compiling `node-pty` for Linux).
+
+```
+sudo apt install -y build-essential git curl python3
+```
+
+(plus Node itself — see NodeSource's setup script for the current LTS).
 
 ## Additional one-time fixes needed on Windows (beyond Build Tools)
 
@@ -207,6 +213,48 @@ available" check for macOS reads this file directly (not `getVersionInfo.do` —
 isn't OS-aware, a server-side gap outside this repo; Windows now reads its own equivalent
 `windows-versions.txt` the same way, see above) and won't pick up a new release until it's
 updated to match.
+
+## Producing a real installer (Linux)
+
+```
+cd gui
+npm run build:linux
+```
+
+Produces an AppImage — always named `gui/dist/ChipPalBuilder.AppImage` (fixed filename, no
+version number, same convention as Windows — set via `package.json`'s `build.linux.artifactName`).
+`npm run build:linux:dir` produces the old unpacked `dist/linux-unpacked/` folder instead, for
+quickly running/inspecting the packaged app without going through the AppImage step.
+
+Unlike Windows and Mac, **no signing step is needed at all** — AppImage has no code-signing
+convention comparable to Authenticode or Apple's Developer ID, so there's no cert, no thumb
+drive, and no manual pass. `build:linux` runs `gui/scripts/bumpVersion.js` first (same auto-bump
+as Mac/Windows) and `gui/scripts/afterLinuxBuild.js` last, which just confirms the AppImage
+exists and prints the exact upload command — nothing is staged anywhere, since there's no
+signing step to wait on.
+
+### Publishing to the download bucket
+
+Same bucket, same convention as Mac/Windows (see above) — upload the AppImage and a matching
+`linux-versions.txt` yourself (no automated upload step, same reasoning as Windows — the machine
+that builds isn't assumed to be the machine you run the upload from):
+
+```
+aws s3 cp gui/dist/ChipPalBuilder.AppImage s3://contractpal-cloudpiston-downloads/ChipPalBuilder.AppImage
+```
+
+`linux-versions.txt` is the same flat format as Mac/Windows — version on line 1, one filename per
+line after (just `ChipPalBuilder.AppImage` today; Linux only ever ships one installer, no arch
+split, matching Windows):
+
+```
+0.5.0
+ChipPalBuilder.AppImage
+```
+
+`versionCheck.js`'s "new version available" check for Linux reads this file directly (not
+`getVersionInfo.do` — same server-side "not actually OS-aware" gap as Mac/Windows, outside this
+repo) and won't pick up a new release until it's updated to match.
 
 ## Symptom if this is missing
 

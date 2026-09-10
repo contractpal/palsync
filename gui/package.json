@@ -1,6 +1,6 @@
 {
   "name": "palsync-gui",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Electron GUI wrapper for palsync — workspace/tab manager over real agent-CLI consoles.",
   "main": "src/main/index.js",
@@ -12,6 +12,8 @@
     "build:win:dir": "node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --win --dir",
     "build:mac": "node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --mac",
     "build:mac:dir": "node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --mac --dir",
+    "build:linux": "node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --linux && node scripts/afterLinuxBuild.js",
+    "build:linux:dir": "node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --linux --dir",
     "postinstall": "patch-package && node scripts/fix-electron-install.js && electron-rebuild -f -w node-pty"
   },
   "dependencies": {
@@ -62,6 +64,12 @@
       "category": "public.app-category.developer-tools",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
+      "icon": "build/icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "artifactName": "ChipPalBuilder.AppImage",
+      "category": "Development",
       "icon": "build/icon.png"
     }
   },
