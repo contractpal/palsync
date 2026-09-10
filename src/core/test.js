@@ -166,8 +166,16 @@ async function runTest(session, guid, { kind, workflowName, resolved } = {}) {
     const validated = !!(resp && resp.validated);
     const profiles = (resp && resp.profileList && resp.profileList["com.contractpal.pal.ProfileInfo"]) || [];
 
+    // console-system (TestSystem.do) is a backend job workflow with no rendered page at all —
+    // found live (David, 2026-09-10): the ribbon dialog was wrongly offering a browser
+    // picker/QR code for it, both meaningless here. Per David, resp.token for this kind is the
+    // job's own identifier, not a browser-openable/authenticated preview link — surfaced plainly
+    // as jobId instead of going through buildPreviewUrl's cp-auth wrapping (which IS real
+    // credential material for the other kinds and must stay internal-only, see rawToken below).
+    const isJob = chosen.kind === "console-system";
+
     let previewUrl = null;
-    if (validated && resp.token) {
+    if (!isJob && validated && resp.token) {
         const wfName = chosen.kind === "web" ? null
             : (hasWorkflowName ? normalizedRequested : (chosen.files[0] ? normalizeWorkflowName(chosen.files[0]) : "main"));
         const profileId = chosen.kind === "web" ? null : (profiles[0] && profiles[0].profileId);
@@ -181,8 +189,11 @@ async function runTest(session, guid, { kind, workflowName, resolved } = {}) {
         // rawToken = the unmodified resp.token. For WEB it's a directly-fetchable URL on
         // webpals.cloudpiston.com (no auth needed — verified live). _previewUrl carries cp-auth
         // for the console browser-open path and must never be returned to the agent.
-        rawToken: validated ? resp.token : null,
-        _previewUrl: previewUrl
+        rawToken: (!isJob && validated) ? resp.token : null,
+        _previewUrl: previewUrl,
+        // Safe to surface directly (not credential-bearing like _previewUrl/rawToken) — just the
+        // job's own id, only ever set for console-system.
+        jobId: (isJob && validated) ? resp.token : null
     };
 }
 

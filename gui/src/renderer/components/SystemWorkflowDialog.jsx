@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from "react";
-import QrCodeModal from "./QrCodeModal.jsx";
 
 // A pal can have more than one console-system workflow, and runTest() otherwise silently
 // defaults to the first one found — so System gets its own dialog (rather than the plain
 // split-button the other three areas use) to pick which one to run, per David's ask 2026-09-09.
-export default function SystemWorkflowDialog({ pal, browsers, defaultId, onClose }) {
+// console-system (TestSystem.do) is a backend job workflow with no rendered page at all — found
+// live (David, 2026-09-10): there's no browser to open and no page to scan a QR code for, so
+// unlike Web/Console/Transaction this dialog just runs the job and shows its id.
+export default function SystemWorkflowDialog({ pal, onClose }) {
     const [files, setFiles] = useState([]);
     const [workflowName, setWorkflowName] = useState("");
-    const [browserId, setBrowserId] = useState("");
     const [error, setError] = useState(null);
     const [running, setRunning] = useState(false);
     const [status, setStatus] = useState(null);
-    const [qrDataUrl, setQrDataUrl] = useState(null);
 
     useEffect(() => {
         window.palsyncGui.listWorkflowFiles(pal.path, "console-system").then(res => {
@@ -21,25 +21,22 @@ export default function SystemWorkflowDialog({ pal, browsers, defaultId, onClose
         });
     }, [pal.path]);
 
-    async function run(mode) {
+    async function run() {
         setRunning(true);
         setError(null);
         setStatus(null);
         try {
-            const res = await window.palsyncGui.testWorkflow(pal.path, "console-system", browserId || null, mode, workflowName || null);
+            const res = await window.palsyncGui.testWorkflow(pal.path, "console-system", null, "open", workflowName || null);
             if (res.error) {
                 setStatus({ error: true, text: res.error });
             } else if (!res.result.ran) {
                 setStatus({ error: true, text: res.result.blocked || "Couldn't run." });
             } else if (!res.result.validated) {
                 setStatus({ error: true, text: "Did not validate on the server — see the messages/validation results." });
-            } else if (mode === "qr") {
-                if (res.qrDataUrl) setQrDataUrl(res.qrDataUrl);
-                else setStatus({ error: true, text: "Validated, but couldn't generate a QR code." });
-            } else if (res.opened && !res.opened.opened) {
-                setStatus({ error: true, text: "Validated, but couldn't open the browser (" + (res.opened.reason || "unknown error") + ")." });
+            } else if (res.result.jobId) {
+                setStatus({ error: false, text: "Job started — id: " + res.result.jobId });
             } else {
-                setStatus({ error: false, text: "Opened in your browser." });
+                setStatus({ error: true, text: "Validated, but no job id came back." });
             }
         } finally {
             setRunning(false);
@@ -61,33 +58,16 @@ export default function SystemWorkflowDialog({ pal, browsers, defaultId, onClose
                                 {files.map(f => <option key={f} value={f}>{f}</option>)}
                             </select>
                         </div>
-                        <div className="wizard-field">
-                            <label>Browser</label>
-                            <select value={browserId} onChange={e => setBrowserId(e.target.value)}>
-                                <option value="">Default</option>
-                                {browsers.map(b => (
-                                    <option key={b.id} value={b.id}>
-                                        {b.description}{b.id === defaultId ? " (default)" : ""}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
                         {status && <p className={status.error ? "wizard-error" : "dep-hint"}>{status.text}</p>}
                         <div className="modal-actions" style={{ justifyContent: "space-between" }}>
                             <button className="btn" onClick={onClose}>Close</button>
-                            <div style={{ display: "flex", gap: 6 }}>
-                                <button className="btn" onClick={() => run("qr")} disabled={running}>QR code</button>
-                                <button className="btn btn-primary" onClick={() => run("open")} disabled={running}>
-                                    {running ? "Running…" : "Run"}
-                                </button>
-                            </div>
+                            <button className="btn btn-primary" onClick={run} disabled={running}>
+                                {running ? "Running…" : "Run"}
+                            </button>
                         </div>
                     </>
                 )}
             </div>
-            {qrDataUrl && (
-                <QrCodeModal label={"System: " + workflowName} dataUrl={qrDataUrl} onClose={() => setQrDataUrl(null)} />
-            )}
         </div>
     );
 }
