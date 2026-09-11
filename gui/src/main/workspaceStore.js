@@ -45,4 +45,27 @@ async function saveWorkspace(filePath, workspace) {
     return workspace;
 }
 
-module.exports = { listRecent, rememberWorkspace, emptyWorkspace, loadWorkspace, saveWorkspace, registryPath };
+async function renameWorkspace(userDataDir, filePath, newName) {
+    const workspace = await loadWorkspace(filePath);
+    if (!workspace) return null;
+    workspace.name = newName;
+    await saveWorkspace(filePath, workspace);
+    const reg = await readJsonSafe(registryPath(userDataDir), { workspaces: [] });
+    const list = (reg.workspaces || []).map(w => (w.filePath === filePath ? Object.assign({}, w, { name: newName }) : w));
+    await fs.mkdir(userDataDir, { recursive: true });
+    await fs.writeFile(registryPath(userDataDir), JSON.stringify({ workspaces: list }, null, 2), "utf8");
+    return workspace;
+}
+
+// Deletes the workspace file itself (not just its recent-list entry) — the human-facing "Delete
+// Workspace" action from the dashboard card menu, not the same as forgetting/hiding a recent entry.
+async function deleteWorkspace(userDataDir, filePath) {
+    try { await fs.unlink(filePath); } catch (e) { if (e.code !== "ENOENT") throw e; }
+    const reg = await readJsonSafe(registryPath(userDataDir), { workspaces: [] });
+    const list = (reg.workspaces || []).filter(w => w.filePath !== filePath);
+    await fs.mkdir(userDataDir, { recursive: true });
+    await fs.writeFile(registryPath(userDataDir), JSON.stringify({ workspaces: list }, null, 2), "utf8");
+    return list;
+}
+
+module.exports = { listRecent, rememberWorkspace, emptyWorkspace, loadWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, registryPath };

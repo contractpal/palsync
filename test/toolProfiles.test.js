@@ -23,7 +23,7 @@ async function connect(profile) {
 }
 
 test("tool profiles expose exact initial sets", async () => {
-    for (const profile of ["pi-minimal", "pi-standard", "pi-full", "claude", "codex", "opencode"]) {
+    for (const profile of ["pi-minimal", "pi-standard", "pi-full", "claude", "codex", "opencode", "gemini", "cursor", "copilot"]) {
         const { client, workspaceDir } = await connect(profile);
         const actual = (await client.listTools()).tools.map(tool => tool.name).sort();
         const expected = PROFILE_TOOLS[profile].concat(["pi-minimal", "pi-standard"].includes(profile) ? ["pal_tools"] : []).sort();

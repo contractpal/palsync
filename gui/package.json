@@ -1,6 +1,6 @@
 {
   "name": "palsync-gui",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "description": "Electron GUI wrapper for palsync — workspace/tab manager over real agent-CLI consoles.",
   "main": "src/main/index.js",

@@ -28,7 +28,7 @@ function describeBlocked(reason) {
     }
 }
 
-export default function TestRibbon({ pal, debugVisible, onToggleDebug }) {
+export default function TestRibbon({ pal, debugVisible, onToggleDebug, agents, agentId, onSwitchAgent }) {
     const [browsers, setBrowsers] = useState([]);
     const [defaultId, setDefaultId] = useState(null);
     const [busyKind, setBusyKind] = useState(null);
@@ -122,6 +122,19 @@ export default function TestRibbon({ pal, debugVisible, onToggleDebug }) {
     return (
         <div className="ribbon" ref={rootRef}>
             <div className="ribbon-buttons">
+                {agents && agents.length > 1 && (
+                    <>
+                        <select
+                            className="ribbon-agent-select"
+                            value={agentId || ""}
+                            title="Switch which agent this pal is open with"
+                            onChange={e => onSwitchAgent && onSwitchAgent(e.target.value)}
+                        >
+                            {agents.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+                        </select>
+                        <span className="ribbon-sep" />
+                    </>
+                )}
                 {AREAS.map(({ kind, label }) => (
                     <div className={"ribbon-split" + (busyKind === kind ? " busy" : "")} key={kind}>
                         <button

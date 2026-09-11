@@ -42,7 +42,15 @@ class PalsyncClient {
 
   async start(): Promise<void> {
     if (this.child) return;
-    this.child = spawn("palsync-mcp", [], {
+    // Plain CLI installs (a real global `npm install -g palsync`) resolve "palsync-mcp" on PATH
+    // fine. A bundling host that ships its OWN copy of palsync without exposing it globally on
+    // PATH (Chip Pal Builder's Electron app) can't rely on that — it sets PALSYNC_MCP_BIN to the
+    // absolute path of ITS bundled bin/palsync-mcp.js before spawning `pi` itself, which reaches
+    // here via the `...process.env` spread below. When set, spawn that exact script with the
+    // current process's own node binary (this extension already runs inside a real Node process —
+    // Pi itself, never Electron — so there's no ELECTRON_RUN_AS_NODE-style wrinkle here).
+    const mcpBin = process.env.PALSYNC_MCP_BIN;
+    this.child = spawn(mcpBin ? process.execPath : "palsync-mcp", mcpBin ? [mcpBin] : [], {
       cwd: this.workspace,
       env: { ...process.env, PALSYNC_WORKSPACE: this.workspace, PALSYNC_TOOL_PROFILE: "pi-minimal" },
       stdio: ["pipe", "pipe", "pipe"]

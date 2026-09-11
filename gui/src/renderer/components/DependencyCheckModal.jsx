@@ -39,8 +39,9 @@ export default function DependencyCheckModal({ onClose }) {
                         <div key={a.id} className="dep-item">
                             <span className="dep-item-label">
                                 <Badge ok={a.found} />
-                                {a.label}
+                                {a.label}{a.comingSoon && "*"}
                                 {a.recommended && <span className="dep-recommended">recommended</span>}
+                                {a.comingSoon && <span className="dep-coming-soon">Coming Soon</span>}
                             </span>
                             {!a.found && (
                                 <button className="btn" onClick={() => window.palsyncGui.openExternal(a.docsUrl)}>
@@ -49,6 +50,9 @@ export default function DependencyCheckModal({ onClose }) {
                             )}
                         </div>
                     ))}
+                    {status.agents.some(a => a.comingSoon) && (
+                        <p className="dep-hint">* Not yet supported in Chip — wiring in progress.</p>
+                    )}
                 </div>
 
                 <div className="dep-section">

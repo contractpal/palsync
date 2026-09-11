@@ -255,6 +255,21 @@ ipcMain.handle("workspace:save", async () => {
     return { ok: true };
 });
 
+// Dashboard-only (see LauncherView's card menu) — these act on a workspace that is NOT the
+// currently-open one, so there's no running-agent/leave-workspace flow to worry about here.
+ipcMain.handle("workspace:rename", async (event, filePath, newName) => {
+    const name = (newName || "").trim();
+    if (!name) return { error: "Name cannot be empty." };
+    const workspace = await workspaceStore.renameWorkspace(userDataDir(), filePath, name);
+    if (!workspace) return { error: "Could not read workspace file: " + filePath };
+    return { ok: true, recent: await workspaceStore.listRecent(userDataDir()) };
+});
+
+ipcMain.handle("workspace:delete", async (event, filePath) => {
+    const recent = await workspaceStore.deleteWorkspace(userDataDir(), filePath);
+    return { ok: true, recent };
+});
+
 // ---- IPC: add pal (existing folder only, MVP) ----
 
 ipcMain.handle("pal:chooseFolder", async () => {
@@ -603,16 +618,23 @@ ipcMain.handle("console:start", async (event, { palId, agentId, cwd }) => {
     if (!agent) return { error: "Unknown agent: " + agentId };
     if (ptyManager.isRunning(palId)) return { ok: true, alreadyRunning: true };
 
+    const chipSessionId = await ensurePalSessionId(cwd);
     try {
-        await agentLaunch.ensureMcpRegistered(agentId, cwd, await ensurePalSessionId(cwd));
+        await agentLaunch.ensureMcpRegistered(agentId, cwd, chipSessionId);
     } catch (e) {
         return { error: "Could not register MCP for " + agent.label + ": " + e.message };
     }
 
+    // Pi has no per-pal config file to carry PALSYNC_MCP_BIN/PALSYNC_CHIP_SESSION_ID (see
+    // agentLaunch.js's ensureMcpRegistered) — those reach its native extension only via the
+    // spawned `pi` process's own environment, which its `...process.env` spread then forwards
+    // down into the MCP child it spawns.
+    const spawnEnv = agentId === "pi" ? agentLaunch.piSpawnEnv(chipSessionId) : undefined;
+
     try {
         ptyManager.start(
             palId,
-            { command: agent.command, args: agent.args, cwd },
+            { command: agent.command, args: agent.args, cwd, env: spawnEnv },
             data => { if (mainWindow) mainWindow.webContents.send("console:data:" + palId, data); },
             exitCode => { if (mainWindow) mainWindow.webContents.send("console:exit:" + palId, exitCode); }
         );

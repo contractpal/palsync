@@ -8,16 +8,31 @@ const path = require("path");
 const { available, resolve } = require("palsync/src/launcher/agents");
 const { register: registerClaude } = require("palsync/src/mcp/register");
 const { registerOpencode } = require("palsync/src/mcp/registerOpencode");
+const { registerGemini } = require("palsync/src/mcp/registerGemini");
+const { registerCursor } = require("palsync/src/mcp/registerCursor");
+const { registerCopilot } = require("palsync/src/mcp/registerCopilot");
+const registerPi = require("palsync/src/mcp/registerPi");
+const { MCP_BIN } = require("palsync/src/mcp/register");
 
 // MVP: project-scoped registrations only. Codex's registration is a global
 // ~/.codex/config.toml singleton (a pre-existing CLI limitation) — not supported here yet.
+// Copilot shares Claude's own .mcp.json (both read the same project-scoped file/shape).
 const REGISTRARS = {
     "claude-code": { configFile: ".mcp.json", register: registerClaude },
-    "opencode": { configFile: "opencode.json", register: registerOpencode }
+    "opencode": { configFile: "opencode.json", register: registerOpencode },
+    "gemini": { configFile: path.join(".gemini", "settings.json"), register: registerGemini },
+    "cursor": { configFile: path.join(".cursor", "mcp.json"), register: registerCursor },
+    "copilot": { configFile: ".mcp.json", register: registerCopilot }
 };
 
+// Pi doesn't fit the per-pal-configFile model above: its registration is a ONE-TIME GLOBAL
+// native-extension install (~/.pi/agent/extensions/palsync), the same file content regardless of
+// which pal/workspace you're opening — not a project-scoped config file. The extension itself
+// resolves the workspace per-session from ctx.cwd (see pi-extension/index.ts's session_start
+// handler), so there's nothing pal-specific to write here; ensureMcpRegistered below special-
+// cases it instead of forcing it through the REGISTRARS shape.
 function detectAgents() {
-    return available().filter(a => REGISTRARS[a.id]);
+    return available().filter(a => REGISTRARS[a.id] || a.id === "pi");
 }
 
 async function exists(filePath) {
@@ -115,6 +130,16 @@ async function ensureChipSessionId(filePath, configFile, chipSessionId) {
 // request the agent's MCP child process makes for this pal then carries it as a Chip-Session-ID
 // header.
 async function ensureMcpRegistered(agentId, workspaceDir, chipSessionId) {
+    // Pi: no per-pal file to write/self-heal — just make sure the global native extension is
+    // installed (registerPi.install() itself only actually writes when the bundled source differs
+    // from what's already there, so this is cheap to call on every console launch). The Chip-
+    // Session-ID and the absolute palsync-mcp path are threaded separately, via the environment of
+    // the `pi` process itself (see piSpawnEnv below) — pi-extension/index.ts's own `...process.env`
+    // spread carries both down into the MCP child it spawns.
+    if (agentId === "pi") {
+        const result = await registerPi.register({ installExtension: true });
+        return { alreadyRegistered: !result.written, filePath: result.filePath, config: null };
+    }
     const reg = REGISTRARS[agentId];
     if (!reg) throw new Error("No MCP registration known for agent '" + agentId + "'.");
     const filePath = path.join(workspaceDir, reg.configFile);
@@ -126,6 +151,18 @@ async function ensureMcpRegistered(agentId, workspaceDir, chipSessionId) {
     return Object.assign({ alreadyRegistered }, result);
 }
 
+// Env to layer onto the spawned `pi` process itself (see ptyManager.start's `env` option) so its
+// native extension — which spawns palsync-mcp by bare command name, unlike every other agent's
+// config-file-based absolute path — can find Chip's own bundled copy without requiring a separate
+// global `npm install -g palsync` on the user's machine, and so its MCP child still carries the
+// Chip-Session-ID header like every other agent's does.
+function piSpawnEnv(chipSessionId) {
+    const env = { PALSYNC_MCP_BIN: MCP_BIN };
+    if (chipSessionId) env.PALSYNC_CHIP_SESSION_ID = chipSessionId;
+    return env;
+}
+
 module.exports = {
-    detectAgents, resolveAgent: resolve, ensureMcpRegistered, ensureElectronRunAsNode, ensureElectronRunAsNodeForHooks, ensureChipSessionId
+    detectAgents, resolveAgent: resolve, ensureMcpRegistered, piSpawnEnv,
+    ensureElectronRunAsNode, ensureElectronRunAsNodeForHooks, ensureChipSessionId
 };

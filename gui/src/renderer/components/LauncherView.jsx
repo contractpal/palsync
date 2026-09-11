@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import ManageCloudsModal from "./ManageCloudsModal.jsx";
+import ManageWorkspaceModal from "./ManageWorkspaceModal.jsx";
 
 function basename(path) {
     return path.split(/[\\/]/).pop();
@@ -13,6 +14,7 @@ export default function LauncherView({ onOpened }) {
     const [showManageClouds, setShowManageClouds] = useState(false);
     const [updateInfo, setUpdateInfo] = useState(null);
     const [updateDismissed, setUpdateDismissed] = useState(false);
+    const [manageTarget, setManageTarget] = useState(null);
 
     function togglePath(e, filePath) {
         e.stopPropagation();
@@ -75,6 +77,13 @@ export default function LauncherView({ onOpened }) {
             <div className="ws-grid">
                 {recent.map(w => (
                     <button key={w.filePath} className="ws-card" onClick={() => openRecent(w.filePath)}>
+                        <span
+                            className="ws-card-menu"
+                            title="Manage workspace"
+                            onClick={e => { e.stopPropagation(); setManageTarget(w); }}
+                        >
+                            ⋯
+                        </span>
                         <span className="ws-card-name">{w.name}</span>
                         <span
                             className={"ws-card-path" + (expandedPaths.has(w.filePath) ? " expanded" : "")}
@@ -109,6 +118,14 @@ export default function LauncherView({ onOpened }) {
             )}
 
             {showManageClouds && <ManageCloudsModal onClose={() => setShowManageClouds(false)} />}
+
+            {manageTarget && (
+                <ManageWorkspaceModal
+                    workspace={manageTarget}
+                    onClose={() => setManageTarget(null)}
+                    onChanged={updatedRecent => { setRecent(updatedRecent); setManageTarget(null); }}
+                />
+            )}
         </div>
     );
 }

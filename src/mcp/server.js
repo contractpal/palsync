@@ -32,7 +32,10 @@ const PROFILE_TOOLS = {
     // Eager: full static set at boot, no pal_tools — stable prefix for Claude Code.
     claude: TOOLS.map(tool => tool.name),
     codex: TOOLS.map(tool => tool.name),
-    opencode: TOOLS.map(tool => tool.name)
+    opencode: TOOLS.map(tool => tool.name),
+    gemini: TOOLS.map(tool => tool.name),
+    cursor: TOOLS.map(tool => tool.name),
+    copilot: TOOLS.map(tool => tool.name)
 };
 
 function normalizeProfile(value) {

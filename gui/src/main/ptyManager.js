@@ -18,7 +18,7 @@ function anyRunning() {
 // Throws on a spawn failure (e.g. `command` not actually resolvable on PATH at exec time, even
 // if it was found moments earlier by the picker's own PATH check) — callers must catch this and
 // surface it, rather than leaving a silently-blank terminal with no explanation.
-function start(palId, { command, args = [], cwd, cols = 80, rows = 24 }, onData, onExit) {
+function start(palId, { command, args = [], cwd, cols = 80, rows = 24, env }, onData, onExit) {
     if (sessions.has(palId)) return sessions.get(palId);
     // Windows agent CLIs are typically .cmd shims (claude.cmd) — route through cmd.exe /c so
     // ConPTY resolves them the same way a real terminal would.
@@ -27,7 +27,7 @@ function start(palId, { command, args = [], cwd, cols = 80, rows = 24 }, onData,
     const child = pty.spawn(spawnCommand, spawnArgs, {
         name: "xterm-256color",
         cols, rows, cwd,
-        env: process.env,
+        env: env ? Object.assign({}, process.env, env) : process.env,
         useConpty: process.platform === "win32"
     });
     sessions.set(palId, child);

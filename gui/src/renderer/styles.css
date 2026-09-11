@@ -78,12 +78,19 @@ button:focus-visible, .tab:focus-visible, .card:focus-visible{
 
 .ws-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(260px,1fr));gap:12px;}
 .ws-card{
+  position:relative;
   text-align:left;border:1px solid var(--border);background:var(--surface-raised);
   border-radius:9px;padding:16px;cursor:pointer;display:flex;flex-direction:column;gap:10px;
   min-width:0;max-width:100%;overflow:hidden;
 }
 .ws-card:hover{border-color:var(--accent);}
-.ws-card-name{font-weight:600;font-size:14.5px;}
+.ws-card-menu{
+  position:absolute;top:6px;right:6px;color:var(--text-faint);border-radius:5px;
+  width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+  font-size:15px;line-height:1;
+}
+.ws-card-menu:hover{background:var(--border);color:var(--text);}
+.ws-card-name{font-weight:600;font-size:14.5px;padding-right:22px;}
 .ws-card-path{
   font-family:"IBM Plex Mono", ui-monospace, monospace;font-size:11.5px;color:var(--text-faint);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;max-width:100%;cursor:pointer;
@@ -131,6 +138,7 @@ button:focus-visible, .tab:focus-visible, .card:focus-visible{
 .dep-badge.ok{background:var(--success);color:#fff;}
 .dep-badge.missing{background:transparent;border:2px solid var(--border-strong);color:transparent;}
 .dep-recommended{font-size:11px;color:var(--accent);font-weight:600;}
+.dep-coming-soon{font-size:11px;color:var(--text-faint);font-weight:600;font-style:italic;}
 .setting-option{display:flex;flex-direction:column;gap:2px;}
 .setting-option.selected{border-color:var(--accent);}
 .setting-option-label{font-weight:600;}
@@ -251,6 +259,11 @@ button:focus-visible, .tab:focus-visible, .card:focus-visible{
 }
 .ribbon-caret:hover:not(:disabled){border-color:var(--accent);color:var(--accent);}
 .ribbon-btn:disabled,.ribbon-caret:disabled{cursor:default;opacity:.6;}
+.ribbon-agent-select{
+  padding:5px 8px;border:1px solid var(--border-strong);border-radius:6px;
+  background:var(--surface);color:var(--text);font-size:12.5px;cursor:pointer;
+}
+.ribbon-agent-select:hover{border-color:var(--accent);}
 .ribbon-btn.standalone{border-radius:6px;border-right:1px solid var(--border-strong);}
 .ribbon-btn.standalone.active{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);}
 .ribbon-btn.standalone.warn{border-color:var(--danger);color:var(--danger);}

@@ -13,8 +13,11 @@ const AGENTS = [
     { id: "claude-code", key: "claude", label: "Claude Code", command: "claude", args: [], mcp: "claude" },
     { id: "codex", key: "codex", label: "Codex", command: "codex", args: [], mcp: "codex" },
     { id: "pi", key: "pi", label: "Pi", command: "pi", args: [], mcp: "pi" },
-    { id: "opencode", key: "opencode", label: "OpenCode", command: "opencode", args: [], mcp: "opencode" }
-    // future: { id: "cline", ... }, { id: "cursor", ... }
+    { id: "opencode", key: "opencode", label: "OpenCode", command: "opencode", args: [], mcp: "opencode" },
+    { id: "gemini", key: "gemini", label: "Gemini CLI", command: "gemini", args: [], mcp: "gemini" },
+    { id: "cursor", key: "cursor", label: "Cursor", command: "cursor-agent", args: [], mcp: "cursor" },
+    { id: "copilot", key: "copilot", label: "GitHub Copilot CLI", command: "copilot", args: [], mcp: "copilot" }
+    // future: { id: "cline", ... }
 ];
 
 // Agents installed on this machine. If none are detected (unexpected — palsync was launched

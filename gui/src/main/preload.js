@@ -36,6 +36,8 @@ contextBridge.exposeInMainWorld("palsyncGui", {
     newWorkspace: (name) => ipcRenderer.invoke("workspace:new", name),
     openWorkspace: (filePath) => ipcRenderer.invoke("workspace:open", filePath),
     saveWorkspace: () => ipcRenderer.invoke("workspace:save"),
+    renameWorkspace: (filePath, name) => ipcRenderer.invoke("workspace:rename", filePath, name),
+    deleteWorkspace: (filePath) => ipcRenderer.invoke("workspace:delete", filePath),
 
     chooseFolder: () => ipcRenderer.invoke("pal:chooseFolder"),
     addPalFromFolder: (folderPath) => ipcRenderer.invoke("pal:addFromFolder", folderPath),

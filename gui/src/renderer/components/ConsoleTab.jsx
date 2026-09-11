@@ -138,6 +138,22 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
         }
     }, [active, agentId, needsAgentPick]);
 
+    // Persistent switcher (TestRibbon's agent dropdown) — unlike the one-time picker above (which
+    // only interrupts when the saved agentId is missing/invalid), this lets you change agents at
+    // any time once more than one is detected, even when the current choice is already valid.
+    // The running console belongs to the OLD agent's command, so it has to actually be killed
+    // first: ptyManager.start() / the console:start IPC handler both short-circuit with
+    // {alreadyRunning:true} if a session for this palId is already up, so without killing first
+    // the new agent would silently never launch.
+    async function switchAgent(newId) {
+        if (!newId || newId === agentId) return;
+        await window.palsyncGui.killConsole(pal.cloudPalId + ":" + pal.path);
+        startedRef.current = false;
+        setStartError(null);
+        if (termRef.current) termRef.current.clear();
+        setAgentId(newId);
+    }
+
     // The terminal's host div stays mounted regardless of loading/picker state, so the
     // mount-time effect above (which only runs once) always finds a real ref to attach to —
     // overlaying the picker/placeholder instead of conditionally un-mounting the div.
@@ -168,6 +184,9 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
                 pal={pal}
                 debugVisible={showDebug}
                 onToggleDebug={() => setShowDebug(v => !v)}
+                agents={agents}
+                agentId={agentId}
+                onSwitchAgent={switchAgent}
             />
             <div ref={splitRowRef} style={{ display: "flex", flexDirection: "row", flex: 1, minHeight: 0 }}>
                 <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minWidth: 0, minHeight: 0 }}>
