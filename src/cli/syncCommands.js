@@ -37,7 +37,7 @@ const USAGE = [
     "  palsync pull   [--force] [--dir <workspace>]                 Pull/sync from the server",
     "  palsync merge  [--keep-lock] [--dir <workspace>]            3-way merge local + server changes (keeps both where they don't collide)",
     "  palsync status [--dir <workspace>]                           Server drift, local changes, lock holder",
-    "  palsync test   [--workflow console|console-system|web|transaction] [--preview] [--keep-lock] [--dir <ws>]",
+    "  palsync test   [--workflow console|console-system|web|transaction] [--workflow-name <name>] [--preview] [--keep-lock] [--dir <ws>]",
     "  palsync fetch <page> [--expect <str> ...] [--selector <css>] [--max-chars <n>]  Fetch ONE served page (verify a route renders)",
     "                                                               Server-validate a workflow (preview opens only with --preview)",
     "  palsync preview [--workflow console|web|transaction] [--open|--no-open] [--keep-lock] [--dir <ws>]",
@@ -79,7 +79,7 @@ const USAGE = [
     "  --no-open          preview: do not open a browser",
     "  --viewport         screenshot: desktop (default 1280x800) | mobile (~390x844)",
     "  --full-page        screenshot: capture the whole scroll height, not just the viewport",
-    "  --workflow-name    screenshot: workflow name to render (extension stripped consistently)",
+    "  --workflow-name    test/screenshot: workflow name to target (extension stripped consistently)",
     "  --action           screenshot/exercise: console/transaction action, c:a form (name or name?key=value)",
     "  --initial          exercise: JSON first-screen target, e.g. '{\"action\":\"openClientSetup?id=9\",\"expect\":[\"Client Setup\"]}'",
     "  --browser          exercise: force a real browser for a WEB pal instead of fetch",
@@ -655,7 +655,7 @@ async function run(cmd, argv, opts) {
     }
 
     if (cmd === "test") {
-        const res = await toolByName("pal_test").run(ctx, { workflow: flags.workflow, preview: flags.preview });
+        const res = await toolByName("pal_test").run(ctx, { workflow: flags.workflow, workflowName: flags.workflowName, preview: flags.preview });
         console.log(res.message);
         // pal_test acquires the lock; release it unless asked to hold (no live session here).
         if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);

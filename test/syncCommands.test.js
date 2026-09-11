@@ -71,11 +71,15 @@ test("doctor is listed in USAGE and in the bin dispatcher's SUBCOMMANDS", () => 
 });
 
 test("USAGE documents browser-open preview default and no-open escape hatch", () => {
-    assert.match(USAGE, /palsync test[^\n]*console\|console-system\|web\|transaction/);
+    const testLine = USAGE.split("\n").find(text => text.includes("palsync test"));
+    assert.match(testLine, /console\|console-system\|web\|transaction/);
+    assert.match(testLine, /--workflow-name <name>/);
     for (const command of ["preview", "open", "screenshot", "exercise"]) {
         const line = USAGE.split("\n").find(text => text.includes("palsync " + command));
         assert.ok(line, "missing " + command + " help");
         assert.doesNotMatch(line, /console-system/, command + " must remain render-only");
+        if (command === "screenshot") assert.match(line, /--workflow-name <name>/);
+        else assert.doesNotMatch(line, /--workflow-name <name>/, command + " must not advertise workflow names");
     }
     assert.match(USAGE, /--open\|--no-open/);
     assert.match(USAGE, /browser by default/);
@@ -86,6 +90,53 @@ test("USAGE documents browser-open preview default and no-open escape hatch", ()
     assert.doesNotMatch(USAGE, /palsync context inspect/);
     assert.match(USAGE, /palsync cost record --model X --provider Y/);
     assert.match(USAGE, /--tried .*automated workaround/);
+});
+
+test("test forwards workflow targeting flags to pal_test", async () => {
+    const syncPath = require.resolve("../src/cli/syncCommands");
+    const contextPath = require.resolve("../src/mcp/context");
+    const toolsPath = require.resolve("../src/mcp/tools");
+    const calls = [];
+    const oldSync = require.cache[syncPath];
+    const oldContext = require.cache[contextPath];
+    const oldTools = require.cache[toolsPath];
+    require.cache[contextPath] = { id: contextPath, filename: contextPath, loaded: true, exports: {
+        buildContext: async () => ({
+            session: {},
+            record: { palGuid: "GUID-1", palName: "Demo", cloudUrl: "https://cloud.example" },
+            workspaceDir: "/tmp/demo"
+        })
+    } };
+    require.cache[toolsPath] = { id: toolsPath, filename: toolsPath, loaded: true, exports: {
+        TOOLS: [{ name: "pal_test", run: async (_ctx, args) => {
+            calls.push(args);
+            return { ran: true, validated: true, message: "validated" };
+        } }]
+    } };
+    delete require.cache[syncPath];
+    const originalLog = console.log;
+    console.log = () => {};
+    try {
+        const syncCommands = require("../src/cli/syncCommands");
+        assert.equal(await syncCommands.run("test", ["--dir", "/tmp/demo", "--workflow-name", "crawl.js"]), 0);
+        assert.equal(await syncCommands.run("test", ["--dir", "/tmp/demo", "--workflow", "console", "--workflow-name", "crawl.js"]), 0);
+        assert.equal(await syncCommands.run("test", ["--dir", "/tmp/demo", "--workflow", "web"]), 0);
+    } finally {
+        console.log = originalLog;
+        delete require.cache[syncPath];
+        if (oldContext) require.cache[contextPath] = oldContext; else delete require.cache[contextPath];
+        if (oldTools) require.cache[toolsPath] = oldTools; else delete require.cache[toolsPath];
+        if (oldSync) require.cache[syncPath] = oldSync;
+    }
+    assert.deepEqual(calls, [
+        { workflow: undefined, workflowName: "crawl.js", preview: false },
+        { workflow: "console", workflowName: "crawl.js", preview: false },
+        { workflow: "web", workflowName: undefined, preview: false }
+    ]);
+});
+
+test("parseFlags rejects a missing workflow-name value", () => {
+    assert.throws(() => parseFlags(["--workflow-name"]), /--workflow-name requires a value/);
 });
 
 test("task CLI requires blocker reasons and writes status plus checkpoint once", async () => {
