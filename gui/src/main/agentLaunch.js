@@ -62,28 +62,43 @@ async function ensureElectronRunAsNode(filePath, configFile) {
 
 // Claude Code's hook commands hit the same electron.exe-as-node problem as the MCP config
 // (see ensureElectronRunAsNode above), but .claude/settings.json hook entries are a plain
-// command string with no `env` field to carry the fix — so instead the env var is prefixed
-// onto the command itself and left for the shell Claude Code already runs it through to
-// interpret ("set VAR=1 && cmd" on Windows, "VAR=1 cmd" elsewhere). Self-healing: re-run on
-// every console launch so a config written before this fix existed gets corrected too.
+// command string with no `env` field to carry the fix (confirmed against Claude Code's own
+// hook schema — no env field exists on a {type:"command"} entry) — so instead the env var is
+// prefixed onto the command itself. Self-healing: re-run on every console launch so a config
+// written before this fix existed (or before the bash fix below) gets corrected too.
+//
+// BUG FOUND LIVE (David, 2026-09-11): this used to branch on process.platform to guess which
+// shell would interpret the command ("set VAR=1 && cmd" for win32, "VAR=1 cmd" elsewhere) —
+// but Claude Code's hook schema has its own explicit `shell` field ("bash" | "powershell"; no
+// cmd.exe option), and on a real Windows machine with Git Bash installed it actually runs hook
+// commands through bash by default, NOT cmd.exe. Under bash, "set ELECTRON_RUN_AS_NODE=1" does
+// nothing useful (bash's `set` builtin doesn't do NAME=value assignment that way) — so the env
+// var silently never got set, and the Stop hook's "<Chip Pal Builder.exe> ...palsync.js hook
+// completion --mode claude" launched as a REAL SECOND GUI INSTANCE on every single turn
+// completion, killed off ~10s later when the hook's own timeout expired. Reproduced live and
+// confirmed via a captured process tree (parent bash.exe, command line still showing the dead
+// cmd-style prefix). Fixed by pinning BOTH sides explicitly instead of guessing per-platform:
+// always use the bash-compatible prefix, AND set the hook's own `shell: "bash"` field so Claude
+// Code is never left to infer which interpreter to use for OUR patched entries.
 //
 // This does NOT correct the absolute app/script paths baked into an existing hook command
 // (e.g. after macOS AppTranslocation gives a relaunch a new temp path) — only whether the
-// env-var prefix is present. A prefix-and-replace-in-place attempt was tried and reverted:
-// claudeHooks.js's own ownership detection (isOwnedCommand/parseGeneratedCommand) requires the
-// command's executable basename to be a plain "node" binary, which is never true for a hook
-// written from inside Electron's main process (the executable is the Electron/app binary
-// itself) — so calling its configure(install:true) here doesn't recognize the existing GUI-
-// written entry as owned and appends a second, duplicate hook instead of replacing it, growing
-// unbounded on every relaunch. Fixing this properly needs `claudeHooks.js`'s recognition taught
-// about the Electron-wrapped form, not worked around from here. Tracked as a known gap.
+// env-var prefix/shell are present. A prefix-and-replace-in-place attempt was tried and
+// reverted: claudeHooks.js's own ownership detection (isOwnedCommand/parseGeneratedCommand)
+// requires the command's executable basename to be a plain "node" binary, which is never true
+// for a hook written from inside Electron's main process (the executable is the Electron/app
+// binary itself) — so calling its configure(install:true) here doesn't recognize the existing
+// GUI-written entry as owned and appends a second, duplicate hook instead of replacing it,
+// growing unbounded on every relaunch. Fixing this properly needs `claudeHooks.js`'s
+// recognition taught about the Electron-wrapped form, not worked around from here. Tracked as
+// a known gap.
 async function ensureElectronRunAsNodeForHooks(workspaceDir) {
     const filePath = path.join(workspaceDir, ".claude", "settings.json");
     let settings;
     try { settings = JSON.parse(await fs.readFile(filePath, "utf8")); }
     catch (e) { return; }
     if (!settings || typeof settings.hooks !== "object" || !settings.hooks) return;
-    const prefix = process.platform === "win32" ? "set ELECTRON_RUN_AS_NODE=1 && " : "ELECTRON_RUN_AS_NODE=1 ";
+    const PREFIX = "ELECTRON_RUN_AS_NODE=1 ";
     let changed = false;
     for (const groups of Object.values(settings.hooks)) {
         if (!Array.isArray(groups)) continue;
@@ -91,9 +106,14 @@ async function ensureElectronRunAsNodeForHooks(workspaceDir) {
             if (!group || !Array.isArray(group.hooks)) continue;
             for (const hook of group.hooks) {
                 if (!hook || hook.type !== "command" || typeof hook.command !== "string") continue;
-                if (hook.command.indexOf("ELECTRON_RUN_AS_NODE") !== -1) continue; // already patched
                 if (hook.command.toLowerCase().indexOf("palsync.js") === -1) continue; // not our hook
-                hook.command = prefix + hook.command;
+                const alreadyPatched = hook.command.indexOf("ELECTRON_RUN_AS_NODE") !== -1 && hook.shell === "bash";
+                if (alreadyPatched) continue;
+                // Strip a stale cmd-style prefix from a version written before this fix, so
+                // re-running never doubles up ("set ELECTRON_RUN_AS_NODE=1 && set ELECTRON_...").
+                hook.command = hook.command.replace(/^set ELECTRON_RUN_AS_NODE=1 && /, "").replace(/^ELECTRON_RUN_AS_NODE=1 /, "");
+                hook.command = PREFIX + hook.command;
+                hook.shell = "bash";
                 changed = true;
             }
         }

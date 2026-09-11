@@ -4,6 +4,18 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 
+// Single-instance lock — found missing 2026-09-11 after a real bug where a mis-patched Windows
+// Stop hook launched Chip's own .exe as an unintended second GUI instance (see
+// agentLaunch.js's ensureElectronRunAsNodeForHooks for the actual hook fix). That bug is fixed
+// at the source, but there was NO guard here against a second instance ever starting for any
+// reason — a double-click, a stray relaunch, anything. This must run before any other app setup
+// (window creation, ipcMain handlers) so a second launch exits immediately instead of doing any
+// of that work. `app.exit(0)` (not `app.quit()`) because `app.quit()` only schedules an async
+// quit — the rest of this file would keep executing synchronously in the meantime.
+if (!app.requestSingleInstanceLock()) {
+    app.exit(0);
+}
+
 // Must run before any module below does PATH-dependent work (agent detection, dependency
 // checks) - see fixPath.js for why a Finder/Dock-launched app needs this at all.
 require("./fixPath").fixPathSync();
@@ -657,6 +669,15 @@ ipcMain.handle("console:killAll", () => { ptyManager.killAll(); return { ok: tru
 ipcMain.handle("console:anyRunning", () => ptyManager.anyRunning());
 
 // ---- app lifecycle ----
+
+// Fires on the primary instance when a second launch is attempted (and immediately exits itself
+// via the lock check above) — focus the existing window instead of doing nothing, so a stray
+// second launch is at least visibly a no-op rather than silently invisible.
+app.on("second-instance", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+});
 
 app.whenReady().then(() => { buildMenu(); createWindow(); });
 
