@@ -24,10 +24,10 @@ server-side HTTP client keeps URLs, headers, and API keys out of the browser ent
 var sr = c.createServiceRequest();
 sr.setMethod("GET");
 sr.setRequestHeader("User-Agent", "MyPal/1.0 (+https://example.com/bot)");
-sr.setTimeout(4, 6);                        // (connectSeconds, readSeconds)
-var resp   = sr.submit(url, false, true);   // (url, followRedirects, ???)
+sr.setTimeout(4, 6);                        // (connectTimeout, dataTimeout), seconds
+var resp   = sr.submit(url, true, false);   // (url, failOnSSLHandshake, allowRedirect)
 var status = resp.getResponseCode();        // HTTP status int (200, 404, 410, ...)
-var body   = resp.readBody();               // full body as String
+var body   = resp.readBody();               // String, or null (see response reference)
 if (body == null) { body = ""; }            // null-guard always
 ```
 
@@ -40,7 +40,7 @@ sr.setContentType("application/json");
 sr.setRequestHeader("User-Agent", "MyPal/1.0");
 sr.setRequestHeader("Authorization", "Bearer " + tokenFromSettings);
 sr.setRequestBody(bodyString);              // setRequestBody only ships for POST/PUT
-var resp = sr.submit(url, false, true);
+var resp = sr.submit(url, true, false);
 ```
 
 ### Method reference
@@ -51,15 +51,35 @@ var resp = sr.submit(url, false, true);
 | `sr.setContentType("application/json")` | Content-Type header shorthand |
 | `sr.setRequestHeader(name, value)` | Arbitrary request header |
 | `sr.setRequestBody(str)` | Body for POST/PUT (ignored on GET) |
-| `sr.setTimeout(connectSecs, readSecs)` | Both timeouts required |
-| `sr.submit(url, followRedirects, ???)` | Send the request; returns response |
-| `resp.getResponseCode()` | HTTP status code (int) |
-| `resp.readBody()` | Response body (String) — null-guard |
+| `sr.setIgnoreStatusCodes(true)` | Only when you must inspect a non-2xx response body; otherwise keep normal status handling |
+| `sr.setTimeout(connectTimeout, dataTimeout)` | Seconds; connect ≤ 30, data ≤ 300 |
+| `sr.submit(url, failOnSSLHandshake, allowRedirect)` | Send the request; returns response |
+
+`submit`'s booleans are positional: use `true` for `failOnSSLHandshake` to retain HTTPS
+certificate validation, and `false` for `allowRedirect` unless the known integration requires
+redirects. Thus the normal secure call is `sr.submit(url, true, false)`.
+
+### ServiceResponse reference
+
+| Call | Purpose |
+|---|---|
+| `resp.getResponseCode()` / `resp.getResponseMessage()` | HTTP status code and message |
+| `resp.getResponseLength()` | Response-body size in bytes; check it when `readBody()` returns null |
+| `resp.getResponseHeader(name)` / `resp.getResponseHeaders()` | One header value / all headers as `Data` |
+| `resp.getUrl()` / `resp.getResponseTime()` | Resolved connection URL / elapsed milliseconds |
+| `resp.isSuccess()` / `resp.isError()` | Whether the request submitted successfully / failed to submit |
+| `resp.readBody()` / `resp.readJSON()` | Body as String / XML body converted to JSON String |
+| `resp.setEncoding("utf-8" \| "iso-8859-1" \| "utf-16" \| "windows-1252")` | Encoding used to read the response |
+
+`readBody()` (and `readJSON()`) returns `null` when there is no body **or** when the body exceeds
+the activation key's maximum upload allowance. Null-guard it and use `getResponseLength()` to
+distinguish a large response from an empty one.
 
 ### Timeout discipline
 
-`setTimeout` is not optional in practice — an unbounded fetch can freeze the request. Pick
-values that fit the surrounding context:
+`setTimeout` is not optional in practice — an unbounded fetch can freeze the request. The
+platform limits `connectTimeout` to **30 seconds** and `dataTimeout` to **300 seconds**. Pick
+lower values that fit the surrounding context:
 
 - **In a normal request-cycle workflow:** `sr.setTimeout(4, 6)` is reasonable; the total
   request budget is ~10s.
@@ -252,7 +272,7 @@ var sr = c.createServiceRequest();
 sr.setMethod("POST");
 sr.setContentType("application/json");
 sr.setRequestBody(jb.toString());
-sr.submit(url, false, true);
+sr.submit(url, true, false);
 ```
 
 ### Gotchas
@@ -295,11 +315,14 @@ Use `Buffer` for:
 
 ## Common gotchas
 
-- **Missing null-guard on `readBody()`** — an empty or aborted response returns null.
-  `body.toLowerCase()` on a null crashes. Always `if (body == null) { body = ""; }`.
-- **`sr.submit` third argument is undocumented** in surface code but commonly `true` — the
-  reference pattern uses `sr.submit(url, false, true)`. If you see this in production code,
-  match it; don't guess.
+- **Missing null-guard on `readBody()`** — it returns null for no body *or* for a body larger
+  than the activation key's upload allowance. `body.toLowerCase()` on null crashes; check
+  `getResponseLength()` when the distinction matters, then guard with
+  `if (body == null) { body = ""; }`.
+- **Swapped `submit` booleans** — the signature is
+  `submit(url, failOnSSLHandshake, allowRedirect)`. The normal secure form is
+  `sr.submit(url, true, false)`: validate the certificate and do not follow redirects unless
+  that integration is known to require them.
 - **`setTimeout` values that exceed the workflow budget** — a 30-second read timeout in a
   10-second request cycle produces silent failures. Keep timeouts inside the surrounding
   budget.

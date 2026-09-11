@@ -204,3 +204,24 @@ test("platform chrome and screenshot auth failures are classified as tool eviden
     mustMatch(renderRule, /expect:\[/,
         "render verification must tell the agent to declare the expected visible strings");
 });
+
+test("ServiceRequest guidance preserves the verified secure submit contract", () => {
+    const http = read("bundled-context/skills/palbuilder-data/references/http-client.md");
+    const skill = read("bundled-context/skills/palbuilder-data/SKILL.md");
+
+    mustMatch(http, /submit\(url, failOnSSLHandshake, allowRedirect\)/,
+        "HTTP reference must name the documented positional submit signature");
+    for (const text of [http, skill]) {
+        mustMatch(text, /submit\(url, true, false\)/,
+            "HTTP examples must retain certificate validation and disable redirects by default");
+        assert.doesNotMatch(text, /submit\(url, false, true\)|followRedirects|\?\?\?|third argument is undocumented/i,
+            "HTTP guidance must not revive the insecure undocumented-argument pattern");
+    }
+    for (const pattern of [/setIgnoreStatusCodes\(true\)/, /connect[^\n]*30[\s\S]{0,80}data[^\n]*300/i,
+        /getResponseLength\(\)/, /getResponseHeader/, /getResponseTime\(\)/, /isSuccess\(\)/,
+        /isError\(\)/, /readJSON\(\)/, /utf-8[\s\S]{0,100}iso-8859-1[\s\S]{0,100}utf-16[\s\S]{0,100}windows-1252/]) {
+        mustMatch(http, pattern, "HTTP reference must retain the verified response surface");
+    }
+    mustMatch(http, /maximum upload allowance[\s\S]{0,160}getResponseLength\(\)/,
+        "HTTP reference must explain bounded readBody behavior and its companion check");
+});

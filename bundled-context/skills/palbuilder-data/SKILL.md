@@ -312,8 +312,8 @@ workflow, use `c.createServiceRequest()` — server-side, no browser exposure of
 var sr = c.createServiceRequest();
 sr.setMethod("GET");
 sr.setRequestHeader("User-Agent", "MyPal/1.0");
-sr.setTimeout(4, 6);                              // (connectSecs, readSecs)
-var resp   = sr.submit(url, false, true);
+sr.setTimeout(4, 6);                              // (connectTimeout, dataTimeout)
+var resp   = sr.submit(url, true, false);
 var status = resp.getResponseCode();              // int
 var body   = resp.readBody();                     // String — null-guard it
 ```

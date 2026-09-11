@@ -37,7 +37,7 @@ const USAGE = [
     "  palsync pull   [--force] [--dir <workspace>]                 Pull/sync from the server",
     "  palsync merge  [--keep-lock] [--dir <workspace>]            3-way merge local + server changes (keeps both where they don't collide)",
     "  palsync status [--dir <workspace>]                           Server drift, local changes, lock holder",
-    "  palsync test   [--workflow console|web|transaction] [--preview] [--keep-lock] [--dir <ws>]",
+    "  palsync test   [--workflow console|console-system|web|transaction] [--preview] [--keep-lock] [--dir <ws>]",
     "  palsync fetch <page> [--expect <str> ...] [--selector <css>] [--max-chars <n>]  Fetch ONE served page (verify a route renders)",
     "                                                               Server-validate a workflow (preview opens only with --preview)",
     "  palsync preview [--workflow console|web|transaction] [--open|--no-open] [--keep-lock] [--dir <ws>]",

@@ -71,6 +71,12 @@ test("doctor is listed in USAGE and in the bin dispatcher's SUBCOMMANDS", () => 
 });
 
 test("USAGE documents browser-open preview default and no-open escape hatch", () => {
+    assert.match(USAGE, /palsync test[^\n]*console\|console-system\|web\|transaction/);
+    for (const command of ["preview", "open", "screenshot", "exercise"]) {
+        const line = USAGE.split("\n").find(text => text.includes("palsync " + command));
+        assert.ok(line, "missing " + command + " help");
+        assert.doesNotMatch(line, /console-system/, command + " must remain render-only");
+    }
     assert.match(USAGE, /--open\|--no-open/);
     assert.match(USAGE, /browser by default/);
     assert.match(USAGE, /--no-open/);

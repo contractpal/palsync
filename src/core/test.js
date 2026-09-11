@@ -102,7 +102,7 @@ function buildPreviewUrl(session, token, kind, profileId, workflowName) {
 }
 
 // Resolve + lock + Test. Returns a structured result; NEVER includes the credential URL.
-//   kind: "console" | "web" | "transaction" (optional — auto-detected from the pal's workflows)
+//   kind: "console" | "console-system" | "web" | "transaction" (optional — auto-detected from the pal's workflows)
 //   workflowName: which workflow to run for console/transaction (optional; defaults to the
 //                 first of that kind, sans extension)
 //   resolved: a previously-resolved pal (see core/resolve.js's resolveServerPalByGuid /
@@ -175,11 +175,17 @@ async function runTest(session, guid, { kind, workflowName, resolved } = {}) {
     const isJob = chosen.kind === "console-system";
 
     let previewUrl = null;
+    // Keep preview construction strict for renderable workflows, but never let an enrichment
+    // failure change the server's compile verdict.
     if (!isJob && validated && resp.token) {
         const wfName = chosen.kind === "web" ? null
             : (hasWorkflowName ? normalizedRequested : (chosen.files[0] ? normalizeWorkflowName(chosen.files[0]) : "main"));
         const profileId = chosen.kind === "web" ? null : (profiles[0] && profiles[0].profileId);
-        previewUrl = buildPreviewUrl(session, resp.token, chosen.kind, profileId, wfName);
+        try {
+            previewUrl = buildPreviewUrl(session, resp.token, chosen.kind, profileId, wfName);
+        } catch {
+            previewUrl = null;
+        }
     }
 
     return {

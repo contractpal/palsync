@@ -7,7 +7,7 @@ const {
     seoEnvelopeResults, pushVisibilityFindings, testEnvelopeFindings, datasetSaveFindings,
     testEnvelopeProjection, seoEnvelopeProjection, pushEnvelopeProjection, testActionFields,
     failureLineSummary, addExpectContext, expectBodyBlock, debugHasDiagnosticLines, debugFailed, cappedFailureDebug,
-    screenshotEnvelopeProjection
+    screenshotEnvelopeProjection, testPreviewStatus
 } = require("../src/mcp/tools");
 
 test("sitewide SEO envelope keeps page, fetch, crawler, and passing details", () => {
@@ -49,8 +49,24 @@ test("pal_test envelope keeps server failure, verdict, and preview status", () =
     assert.match(findings[0].message, /Pal is not a Web Pal/);
     assert.match(findings[2].message, /NOT opened/);
     assert.deepStrictEqual(testActionFields({ ran: true, validated: true, kind: "web" }), {
-        ran: true, validated: true, kind: "web", compileOnly: true
+        ran: true, validated: true, kind: "web", jobId: null, compileOnly: true
     });
+});
+
+test("pal_test preview status keeps compile validation separate from preview enrichment", () => {
+    const system = testPreviewStatus({ validated: true, kind: "console-system", _previewUrl: null }, true);
+    assert.match(system, /validated on the server/i);
+    assert.match(system, /not applicable/i);
+    assert.match(system, /backend jobs/i);
+    assert.doesNotMatch(system, /did not validate/i);
+
+    const failedSystem = testPreviewStatus({ validated: false, kind: "console-system", _previewUrl: null }, true);
+    assert.match(failedSystem, /did not validate/i);
+
+    const noPreview = testPreviewStatus({ validated: true, kind: "console", _previewUrl: null }, false);
+    assert.match(noPreview, /validated on the server/i);
+    assert.match(noPreview, /preview is unavailable/i);
+    assert.doesNotMatch(noPreview, /did not validate/i);
 });
 
 test("tool projections keep diagnostics once and preserve actionable fields", () => {

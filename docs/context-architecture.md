@@ -13,7 +13,7 @@ basis that could not be reproduced.
 
 | Runtime | Section | Source | Bytes | Est. tokens | Loading |
 |---|---|---|---:|---:|---|
-| All | `tool-definitions` | `src/mcp/tools.js` | 28,986 | 7,247 | release-stable |
+| All | `tool-definitions` | `src/mcp/tools.js` | 29,003 | 7,251 | release-stable |
 | All | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 3,274 | 819 | release-stable |
 | All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 2,260 | 565 | release-stable |
 | Claude | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,100 | 275 | workspace-stable |
@@ -32,7 +32,7 @@ basis that could not be reproduced.
 | All | `skill-body:pal-review` | `bundled-context/skills/pal-review/SKILL.md` | 16,686 | 4,172 | on-demand |
 | All | `skill-body:pal-spec` | `bundled-context/skills/pal-spec/SKILL.md` | 10,045 | 2,512 | on-demand |
 | All | `skill-body:palbuilder-core` | `bundled-context/skills/palbuilder-core/SKILL.md` | 3,210 | 803 | on-demand |
-| All | `skill-body:palbuilder-data` | `bundled-context/skills/palbuilder-data/SKILL.md` | 15,960 | 3,990 | on-demand |
+| All | `skill-body:palbuilder-data` | `bundled-context/skills/palbuilder-data/SKILL.md` | 15,966 | 3,992 | on-demand |
 | All | `skill-body:palbuilder-email` | `bundled-context/skills/palbuilder-email/SKILL.md` | 5,690 | 1,423 | on-demand |
 | All | `skill-body:palbuilder-frontend` | `bundled-context/skills/palbuilder-frontend/SKILL.md` | 9,339 | 2,335 | on-demand |
 | All | `skill-body:palbuilder-realtime` | `bundled-context/skills/palbuilder-realtime/SKILL.md` | 4,992 | 1,248 | on-demand |

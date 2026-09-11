@@ -89,8 +89,24 @@ function testActionFields(source) {
         ran: !!source.ran,
         validated: !!source.validated,
         kind: source.kind || null,
+        jobId: source.jobId || null,
         compileOnly: true
     };
+}
+
+function testPreviewStatus(res, preview) {
+    if (res.validated && res.kind === "console-system") {
+        return "Workflow validated on the server. Live preview is not applicable: console-system workflows are backend jobs with no rendered page.";
+    }
+    if (res._previewUrl && preview) {
+        return null;
+    }
+    if (res._previewUrl) {
+        return "Live preview available but NOT opened (auto-mode default). For human review, call pal_test with preview:true; for agent-visible verification, use pal_screenshot or pal_exercise.";
+    }
+    return res.validated
+        ? "Workflow validated on the server. Live preview is unavailable."
+        : "No live preview — the workflow did not validate (fix the notes above, push, and test again).";
 }
 
 // pal_regression wrote no durable artifact, so its verdict rested on reading the transcript -- the one
@@ -886,7 +902,7 @@ const TOOLS = [
         name: "pal_test",
         description: "Compile a workflow on the server and return validation notes. This does not render the pal; use pal_screenshot or pal_exercise for agent-visible verification. preview:true opens a credential-bearing URL only for human review; the URL is never returned.",
         inputShape: Object.assign({
-            workflow: z.enum(["console", "web", "transaction"]).optional(),
+            workflow: z.enum(["console", "console-system", "web", "transaction"]).optional(),
             workflowName: z.string().optional(),
             preview: z.boolean().optional()
         }, diagnosticInputShape),
@@ -907,16 +923,12 @@ const TOOLS = [
             }
             // Open the live preview locally if it validated — the URL carries the credential, so
             // it is NEVER put in the tool result. The agent only learns that it opened.
-            let previewMsg;
-            if (res._previewUrl && preview) {
+            let previewMsg = testPreviewStatus(res, preview);
+            if (previewMsg == null) {
                 const opened = await openUrl(res._previewUrl);
                 previewMsg = opened.opened
                     ? "Live preview opened in your browser" + (res.kind === "console" ? " (the console pal renders inside the CloudPiston console shell)." : ".")
                     : "Live preview URL is ready but the browser couldn't be opened automatically (" + opened.reason + ") — it carries your credentials, so it isn't shown here; re-run on a desktop session.";
-            } else if (res._previewUrl) {
-                previewMsg = "Live preview available but NOT opened (auto-mode default). For human review, call pal_test with preview:true; for agent-visible verification, use pal_screenshot or pal_exercise.";
-            } else {
-                previewMsg = "No live preview — the workflow did not validate (fix the notes above, push, and test again).";
             }
             const verdict = res.validated
                 ? "✅ " + res.kind + " workflow VALIDATED on the server. (Compile-only: this does NOT clear " +
@@ -2245,5 +2257,5 @@ module.exports = { TOOLS, overridePhrase, blockedMessage, formatExpect, formatVa
     htmlRegionResult, recordScreenshotEvidence, screenshotEvidenceIdentity, safeTestResult, formatPushValidationRefusal, seoEnvelopeResults,
     pushVisibilityFindings, testEnvelopeFindings, datasetSaveFindings, testEnvelopeProjection,
     seoEnvelopeProjection, pushEnvelopeProjection, testActionFields, failureLineSummary, addExpectContext,
-    expectBodyBlock, debugHasDiagnosticLines, debugFailed, screenshotEnvelopeProjection,
+    expectBodyBlock, debugHasDiagnosticLines, debugFailed, screenshotEnvelopeProjection, testPreviewStatus,
     cappedFailureDebug };

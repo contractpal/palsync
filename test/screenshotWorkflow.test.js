@@ -114,7 +114,8 @@ describe("runTest workflow selection", () => {
                         { string: "console.html", Workflow: { workflowType: 7 } },
                         { string: "other.console", Workflow: { workflowType: 7 } },
                         { string: "main.web", Workflow: { workflowType: 9 } },
-                        { string: "tx", Workflow: { workflowType: 2 } }
+                        { string: "tx", Workflow: { workflowType: 2 } },
+                        { string: "nightly.job", Workflow: { workflowType: 11 } }
                     ]
                 }
             }
@@ -128,7 +129,11 @@ describe("runTest workflow selection", () => {
             },
             testWorkflow: async (session, palId, endpoint) => {
                 testWorkflowCalls.push(endpoint);
-                return { success: true, validated: true, token: "https://example.test/token?x=1", profileList: {}, validationResults: {} };
+                return {
+                    success: true, validated: true,
+                    token: endpoint === "System" ? "opaque-system-job-token" : "https://example.test/token?x=1",
+                    profileList: {}, validationResults: {}
+                };
             }
         };
         // clear test module cache to pick up stubs
@@ -161,7 +166,7 @@ describe("runTest workflow selection", () => {
         const res = await runTest({}, "guid", { kind: "bad-type" });
         assert.equal(res.ran, false);
         assert.equal(res.blocked, "unknown-workflow-type");
-        assert.deepEqual(res.availableKinds.sort(), ["console", "transaction", "web"].sort());
+        assert.deepEqual(res.availableKinds.sort(), ["console", "console-system", "transaction", "web"].sort());
         assert.equal(testWorkflowCalls.length, 0, "must not call Test endpoint for unknown type");
     });
 
@@ -192,6 +197,26 @@ describe("runTest workflow selection", () => {
         const res = await runTest({}, "guid", { workflowName: "tx" });
         assert.equal(res.ran, true);
         assert.equal(res.kind, "transaction");
+    });
+
+    test("console-system validates through System without treating its opaque job token as a URL", async () => {
+        const { runTest } = require("../src/core/test.js");
+        const res = await runTest({}, "guid", { kind: "console-system" });
+        assert.equal(res.ran, true);
+        assert.equal(res.validated, true);
+        assert.equal(res.kind, "console-system");
+        assert.equal(testWorkflowCalls[0], "System");
+        assert.equal(res.rawToken, null);
+        assert.equal(res.jobId, "opaque-system-job-token");
+        assert.equal(res._previewUrl, null);
+    });
+
+    test("workflowName auto-detects console-system", async () => {
+        const { runTest } = require("../src/core/test.js");
+        const res = await runTest({}, "guid", { workflowName: "nightly" });
+        assert.equal(res.ran, true);
+        assert.equal(res.kind, "console-system");
+        assert.equal(testWorkflowCalls[0], "System");
     });
 
     test("buildPreviewUrl uses URLSearchParams and preserves existing token query", async () => {
