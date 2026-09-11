@@ -229,18 +229,28 @@ quickly running/inspecting the packaged app without going through the AppImage s
 Unlike Windows and Mac, **no signing step is needed at all** — AppImage has no code-signing
 convention comparable to Authenticode or Apple's Developer ID, so there's no cert, no thumb
 drive, and no manual pass. `build:linux` runs `gui/scripts/bumpVersion.js` first (same auto-bump
-as Mac/Windows) and `gui/scripts/afterLinuxBuild.js` last, which just confirms the AppImage
-exists and prints the exact upload command — nothing is staged anywhere, since there's no
-signing step to wait on.
+as Mac/Windows), then `gui/scripts/afterLinuxBuild.js` last, which confirms the AppImage exists
+**and writes `gui/dist/linux-versions.txt` itself** (from the just-bumped `package.json` version —
+see below), so the manifest can never drift from what was actually built.
 
-### Publishing to the download bucket
+### Publishing to the download bucket — always part of finishing a Linux build
 
-Same bucket, same convention as Mac/Windows (see above) — upload the AppImage and a matching
-`linux-versions.txt` yourself (no automated upload step, same reasoning as Windows — the machine
-that builds isn't assumed to be the machine you run the upload from):
+David's standing instruction (2026-09-11): a Linux build session isn't done at "AppImage built" —
+**always** finish it by uploading to S3 and shutting down the build VM, every time, not just when
+asked. The build VM (`ubuntu-palsync-build`) is normally reached over SSH from a Windows dev
+machine that already has AWS CLI + the `cloudpiston-downloads` IAM user's credentials configured
+(the VM itself doesn't need AWS credentials at all — copy the two files off it first):
 
 ```
-aws s3 cp gui/dist/ChipPalBuilder.AppImage s3://contractpal-cloudpiston-downloads/ChipPalBuilder.AppImage
+# From the Windows machine, after `npm run build:linux` succeeded on the VM over SSH:
+pscp -P 2222 -pw <vm password> david@localhost:/home/david/palsync/gui/dist/ChipPalBuilder.AppImage .
+pscp -P 2222 -pw <vm password> david@localhost:/home/david/palsync/gui/dist/linux-versions.txt .
+
+aws s3 cp ChipPalBuilder.AppImage s3://contractpal-cloudpiston-downloads/ChipPalBuilder.AppImage
+aws s3 cp linux-versions.txt s3://contractpal-cloudpiston-downloads/linux-versions.txt
+
+# Then shut the VM down (it's only ever started on demand for a build):
+VBoxManage controlvm ubuntu-palsync-build acpipowerbutton
 ```
 
 `linux-versions.txt` is the same flat format as Mac/Windows — version on line 1, one filename per
@@ -248,7 +258,7 @@ line after (just `ChipPalBuilder.AppImage` today; Linux only ever ships one inst
 split, matching Windows):
 
 ```
-0.5.0
+0.8.0
 ChipPalBuilder.AppImage
 ```
 

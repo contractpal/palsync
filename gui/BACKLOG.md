@@ -162,6 +162,9 @@ _None open right now._
 
 ## Fixed
 
+- **Linux build/publish process was build-only — fixed 2026-09-11 (David: always finish the publish + shut down the VM, don't stop at "built")**
+  Built Windows + Linux this session; David pointed out the Linux side should always auto-generate and publish `linux-versions.txt` + the AppImage to S3, then shut down `ubuntu-palsync-build` — not leave that as a separate manual ask. `gui/scripts/afterLinuxBuild.js` now writes `dist/linux-versions.txt` itself (version + filename, sourced from the just-bumped `package.json`, so it can never drift from what was actually built) instead of just printing the upload command. `gui/BUILD.md`'s Linux section rewritten to document the full standing procedure: build on the VM → copy both files off to the machine with AWS credentials (the VM itself has none) → `aws s3 cp` both → `VBoxManage controlvm ubuntu-palsync-build acpipowerbutton`. Executed the full flow for this session's build (v0.8.0): uploaded both files, confirmed via `aws s3 cp`'s own success output, shut the VM down (confirmed via `VBoxManage list runningvms` returning empty). Note: `https://downloads.cloudpiston.com/linux-versions.txt` still showed the old `0.7.0` immediately after upload — likely a CDN/cache layer in front of the bucket; the S3 upload itself succeeded, this wasn't chased further since it's not this repo's infrastructure.
+
 _Kept here for ~2 days as a quick reference only — git commit messages are the real history, so entries older than that get removed rather than accumulating._
 
 - **Agent no longer forced to consume the server debug buffer on every pal_fetch/pal_screenshot/pal_preview/pal_tunnel_test call — confirmed live by David 2026-09-10**
