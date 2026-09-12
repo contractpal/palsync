@@ -33,6 +33,15 @@ function start(palId, { command, args = [], cwd, cols = 80, rows = 24, env }, on
     sessions.set(palId, child);
     child.onData(data => onData(data));
     child.onExit(({ exitCode }) => {
+        // A killed session's real OS-level exit can arrive asynchronously, after a switchAgent()
+        // (kill old, immediately start new) has already replaced this palId's map entry with a
+        // newer, live session. Without this guard, that late exit unconditionally deleted
+        // whatever now sits at `palId` — silently orphaning the NEW session from the map (its
+        // output still reached the renderer, since that's wired directly to this child's own
+        // onData, but every subsequent write() looked up a now-missing map entry and dropped
+        // every keystroke on the floor). Only tear down/report exit for the session that is
+        // still actually the current one.
+        if (sessions.get(palId) !== child) return;
         sessions.delete(palId);
         onExit(exitCode);
     });
