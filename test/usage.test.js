@@ -17,7 +17,7 @@ test("recordToolCall batches calls and flushes usage v2", () => {
     usage.recordToolCall(ws, "pal_validate", 11, 3);
 
     assert.equal(fs.existsSync(`${ws}/${usage.USAGE_FILE}`), false);
-    usage.formatCost(ws, []);
+    usage.readUsageTally(ws);
 
     const tally = JSON.parse(fs.readFileSync(`${ws}/${usage.USAGE_FILE}`, "utf8"));
     assert.equal(tally.version, 2);
@@ -50,7 +50,7 @@ test("usage v2 records condensation, cache denominator, duration, and max respon
         resultCacheMisses: 0,
         durationMs: 7.5
     });
-    usage.formatCost(ws, []);
+    usage.readUsageTally(ws);
     const tally = JSON.parse(fs.readFileSync(`${ws}/${usage.USAGE_FILE}`, "utf8"));
     assert.equal(tally.totalRawBytes, 150);
     assert.equal(tally.totalReturnedBytes, 60);
@@ -58,7 +58,6 @@ test("usage v2 records condensation, cache denominator, duration, and max respon
     assert.equal(tally.resultCacheMisses, 1);
     assert.equal(tally.totalDurationMs, 20);
     assert.equal(tally.tools.pal_validate.maxReturnedBytes, 40);
-    assert.match(usage.formatCost(ws, []), /80\.0% hit rate/);
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
@@ -80,7 +79,7 @@ test("v1 usage migrates and launcher context events survive a new server pid", (
         contextGenerations: [{ agent: "codex", changed: true, firstDivergentSection: "sync-section" }]
     }));
     usage.recordToolCall(ws, "pal_status", 1, 1);
-    usage.formatCost(ws, []);
+    usage.readUsageTally(ws);
     const tally = JSON.parse(fs.readFileSync(path.join(ws, usage.USAGE_FILE), "utf8"));
     assert.equal(tally.pid, process.pid);
     assert.equal(tally.contextGenerations.length, 1);
@@ -92,7 +91,7 @@ test("recordToolCall counts successful evidence separately from failed calls", (
     const ws = tmpWorkspace();
     usage.recordToolCall(ws, "pal_exercise", 10, 3, { successful: false });
     usage.recordToolCall(ws, "pal_exercise", 10, 3, { successful: true });
-    usage.formatCost(ws, []);
+    usage.readUsageTally(ws);
     const tally = JSON.parse(fs.readFileSync(`${ws}/${usage.USAGE_FILE}`, "utf8"));
     assert.equal(tally.tools.pal_exercise.calls, 2);
     assert.equal(tally.tools.pal_exercise.successfulCalls, 1);
@@ -181,74 +180,6 @@ test("injectedContext flags overSoftThreshold once the block exceeds it", () => 
     const out = usage.injectedContext(ws, []);
     assert.equal(out.overSoftThreshold, true);
     assert.ok(out.total > usage.SOFT_THRESHOLD_BYTES);
-    fs.rmSync(ws, { recursive: true, force: true });
-});
-
-test("formatCost prints the threshold flag line matching overSoftThreshold", () => {
-    const under = tmpWorkspace({ "CLAUDE.palsync.md": "small doc" });
-    const report = usage.formatCost(under, []);
-    assert.match(report, /within soft threshold/);
-    assert.match(report, /Model-token spend \(harness-reported via \.palsync\/session-cost\.json\):/);
-    assert.match(report, /not available — sidecar absent or empty/);
-
-    const over = tmpWorkspace({ "CLAUDE.palsync.md": "x".repeat(usage.SOFT_THRESHOLD_BYTES + 1) });
-    assert.match(usage.formatCost(over, []), /ABOVE SOFT THRESHOLD/);
-    fs.rmSync(under, { recursive: true, force: true });
-    fs.rmSync(over, { recursive: true, force: true });
-});
-
-test("formatCost joins a session-cost sidecar with exact model/token/cost fields", () => {
-    const ws = tmpWorkspace({ "CLAUDE.palsync.md": "small doc" });
-    fs.mkdirSync(path.join(ws, ".palsync"), { recursive: true });
-    fs.writeFileSync(
-        path.join(ws, usage.SESSION_COST_FILE),
-        JSON.stringify({
-            entries: [
-                { model: "claude-sonnet-4", provider: "anthropic", tokensIn: 1000, tokensCached: 100, tokensOut: 400, cost: 0.0123, currency: "USD" }
-            ]
-        })
-    );
-    const report = usage.formatCost(ws, []);
-    assert.match(report, /claude-sonnet-4 \(anthropic\)/);
-    assert.match(report, /in:\s+1,000\s+provider-reported cached:\s+100\s+out:\s+400\s+cost:\s+\$0\.0123 USD/);
-    assert.match(report, /total\s+in:\s+1,000/);
-    assert.doesNotMatch(report, /not available — sidecar absent/);
-    fs.rmSync(ws, { recursive: true, force: true });
-});
-
-test("formatCost prints build/review phase splits when phase markers exist", () => {
-    const ws = tmpWorkspace({ "CLAUDE.palsync.md": "small doc" });
-    fs.mkdirSync(path.join(ws, ".palsync"), { recursive: true });
-    fs.writeFileSync(
-        path.join(ws, usage.SESSION_COST_FILE),
-        JSON.stringify({
-            entries: [
-                { model: "builder", provider: "anthropic", phase: "build", tokensIn: 1000, tokensCached: 50, tokensOut: 300, cost: 0.0100 },
-                { model: "reviewer", provider: "anthropic", phase: "review", tokensIn: 500, tokensCached: 25, tokensOut: 100, cost: 0.0040 }
-            ]
-        })
-    );
-    const report = usage.formatCost(ws, []);
-    assert.match(report, /build\s+in:\s+1,000\s+provider-reported cached:\s+50\s+out:\s+300\s+cost:\s+\$0\.0100 USD/);
-    assert.match(report, /review\s+in:\s+500\s+provider-reported cached:\s+25\s+out:\s+100\s+cost:\s+\$0\.0040 USD/);
-    assert.match(report, /total\s+in:\s+1,500\s+provider-reported cached:\s+75\s+out:\s+400\s+cost:\s+\$0\.0140 USD/);
-    fs.rmSync(ws, { recursive: true, force: true });
-});
-
-test("formatCost is explicit when session cost fields are missing, without estimating", () => {
-    const ws = tmpWorkspace({ "CLAUDE.palsync.md": "small doc" });
-    fs.mkdirSync(path.join(ws, ".palsync"), { recursive: true });
-    fs.writeFileSync(
-        path.join(ws, usage.SESSION_COST_FILE),
-        JSON.stringify({
-            entries: [
-                { model: "claude-sonnet-4", provider: "anthropic", tokensIn: 800, tokensCached: 0, tokensOut: 200 }
-            ]
-        })
-    );
-    const report = usage.formatCost(ws, []);
-    assert.match(report, /cost: not provided/);
-    assert.doesNotMatch(report, /cost: \$/);
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
@@ -361,19 +292,19 @@ test("run-bounded Pi usage appends immutable build windows and sums them for QA"
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("formatCost merges Pi telemetry without treating estimates as billing", () => {
+test("a crashed session's open window is replaced, never spanned across two sessions", () => {
     const ws = tmpWorkspace();
-    const file = path.join(ws, usage.PI_USAGE_FILE);
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, [
-        JSON.stringify({ schema: "palsync/pi-usage/1", tool: "pal_validate", bytes: 100, tokenEstimate: 25, provider: null, model: null, cost: null }),
-        "{malformed Pi row",
-        JSON.stringify({ schema: "palsync/pi-usage/1", tool: "pal_test", bytes: 20, tokenEstimate: 5, provider: "anthropic", model: "m", cost: null })
-    ].join("\n") + "\n");
-    assert.equal(usage.readPiUsage(ws).length, 2);
-    const output = usage.formatCost(ws, []);
-    assert.match(output, /Pi extension tool telemetry/);
-    assert.match(output, /2 tool result\(s\).*120 B returned.*≈30 estimated tokens/s);
-    assert.match(output, /cost: not provided.*never estimates billing/);
+    const crashed = { input: 900, cacheRead: 500, output: 100, cacheWrite: 50, cost: 1 };
+    assert.equal(usage.captureRunUsage(ws, { phase: "build", boundary: "start", snapshot: crashed }).ok, true);
+    // A new Pi session restarts its counters, so a lower baseline proves the open window is stale.
+    const fresh = { input: 0, cacheRead: 0, output: 0, cacheWrite: 0, cost: 0 };
+    const restarted = usage.captureRunUsage(ws, { phase: "build", boundary: "start", snapshot: fresh });
+    assert.equal(restarted.ok, true);
+    assert.equal(restarted.unchanged, undefined, "a stale baseline must be replaced, not preserved");
+    usage.captureRunUsage(ws, { phase: "build", boundary: "end",
+        snapshot: { input: 120, cacheRead: 40, output: 20, cacheWrite: 5, cost: 0.2 } });
+    const windows = usage.readRunUsage(ws).phases.build.windows;
+    assert.equal(windows.length, 1);
+    assert.deepEqual(windows[0].delta, { input: 120, cacheRead: 40, output: 20, cacheWrite: 5, cost: 0.2 });
     fs.rmSync(ws, { recursive: true, force: true });
 });

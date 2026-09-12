@@ -120,7 +120,7 @@ function writeRunNotes(run, lines) {
 }
 
 // Harness accounting hook for model-token spend. Writes a per-workspace sidecar that
-// `palsync cost` consumes (when present); palsync never estimates when it is absent.
+// `pal_stats` consumes (when present); palsync never estimates when it is absent.
 // Required entry fields: model, provider, tokensIn, tokensCached, tokensOut.
 // Optional: cost (numeric), currency (default "USD"), phase ("build" | "review").
 function recordSessionCost(workspaceDir, entry) {

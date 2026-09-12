@@ -116,9 +116,9 @@ test("report missing a required section is rejected by the structural check", ()
 test("QA report contract requires bounded usage and copied screenshot assets", () => {
     const skill = read(SKILL);
     const template = read(TEMPLATE);
-    assert.match(skill, /\.palsync\/run-usage\.json/);
+    assert.match(skill, /pal_stats/);
     assert.match(skill, /windows/);
-    assert.match(skill, /bounded PalSync build window/i);
+    assert.match(skill, /bounded PalSync window/i);
     assert.match(skill, /current Pi footer|\/info.*cumulative/i);
     assert.match(skill, /not available/i);
     assert.match(skill, /reports\/assets\/YYYY-MM-DD_<spec>_<harness>_<model>/);
@@ -128,12 +128,17 @@ test("QA report contract requires bounded usage and copied screenshot assets", (
     assert.match(template, /Build phase[\s\S]*Review phase[\s\S]*Total measured PalSync run/);
 });
 
-test("pal-loop starts Pi usage before any session-start reads", () => {
+// Telemetry collection is deterministic and internal: a normal pal-loop makes NO agent-visible
+// bookkeeping call, and a completed loop reads stats exactly once, through pal_stats.
+test("pal-loop needs no telemetry bookkeeping call and exactly one stats read", () => {
     const loop = read(PAL_LOOP);
-    const usageStart = loop.indexOf("palsync usage start --phase build");
-    const sessionStartRead = loop.indexOf("references/session-start.md");
-    assert.ok(usageStart >= 0 && usageStart < sessionStartRead, "usage boundary must precede session-start work");
-    assert.match(loop, /In Pi, run `palsync usage start --phase build` first/);
+    const handoff = read(path.join(path.dirname(PAL_LOOP), "references", "handoff.md"));
+    for (const command of ["palsync usage start", "palsync usage end", "palsync cost record", "palsync ctx"]) {
+        assert.ok(!loop.includes(command), "pal-loop must not ask for " + command);
+        assert.ok(!handoff.includes(command), "handoff must not ask for " + command);
+    }
+    assert.equal(handoff.match(/pal_stats/g).length, 1, "exactly one agent-visible stats call");
+    assert.match(handoff, /only telemetry read/);
 });
 
 test("pal-loop end-of-run guidance points to the qa-report skill", () => {

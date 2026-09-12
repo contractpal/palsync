@@ -72,7 +72,8 @@ test("Pi activation is eager-small and additive with a mocked ExtensionAPI", () 
         setActiveTools: names => { state.active = names; }
     };
     const eager = ["pal_tools", ...eagerToolNames(metadata)];
-    assert.ok(eager.length <= 4);
+    assert.ok(eager.length <= 5);
+    assert.ok(eager.includes("pal_stats"), "pal-loop's deterministic completion read must not need pal_tools");
     pi.setActiveTools(activateAdditively(pi.getActiveTools(), eager));
     pi.setActiveTools(activateAdditively(pi.getActiveTools(), routeTools("browser", metadata)));
     for (const name of eager) assert.ok(state.active.includes(name));
@@ -114,12 +115,16 @@ test("Pi usage snapshots match Pi's cumulative counters and boundaries stay narr
         { type: "message", message: { role: "user", usage: { input: 999, cacheRead: 999, output: 999, cacheWrite: 999, cost: { total: 9 } } } }
     ];
     assert.deepEqual(piUsageSnapshot(entries), { input: 15, cacheRead: 5, output: 3, cacheWrite: 1, cost: 0.06 });
-    assert.deepEqual(piUsageBoundary({ toolName: "bash", input: { command: "palsync usage start --phase build" } }), { boundary: "start", phase: "build" });
     assert.deepEqual(piUsageBoundary({ toolName: "bash", input: { command: "palsync session-summary --mode lite" } }), { boundary: "end", phase: "build" });
-    assert.equal(piUsageBoundary({ toolName: "bash", input: { command: "echo palsync usage start --phase build" } }), null);
+    // Measurement starts with the Pi session, so no agent-visible bookkeeping command exists.
+    assert.equal(piUsageBoundary({ toolName: "bash", input: { command: "palsync usage start --phase build" } }), null);
+    assert.equal(piUsageBoundary({ toolName: "bash", input: { command: "echo palsync session-summary" } }), null);
     const source = fs.readFileSync(path.join(__dirname, "..", "pi-extension", "index.ts"), "utf8");
     assert.match(source, /piUsageSnapshot\(ctx\.sessionManager\.getEntries\(\)\)/);
     assert.match(source, /palsync", \["usage", "capture"/);
+    assert.match(source, /captureBoundary\(ctx, "build", "start"\)/, "the session start IS the baseline");
+    assert.match(source, /"palsync\/runtime": liveUsage/, "live counters reach pal_stats through request _meta");
+    assert.doesNotMatch(source, /arguments: \{[^}]*runtime/, "runtime must never be a model-visible argument");
 });
 
 test("Pi completion handling is settled, workspace-scoped, and loop-resistant", () => {

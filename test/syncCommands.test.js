@@ -86,7 +86,8 @@ test("USAGE documents browser-open preview default and no-open escape hatch", ()
     assert.match(USAGE, /--no-open/);
     assert.match(USAGE, /palsync open/);
     assert.doesNotMatch(USAGE, /palsync scaffold/);
-    assert.match(USAGE, /palsync ctx inspect\|diff/);
+    assert.match(USAGE, /palsync stats  \[--dir <workspace>\]/);
+    assert.doesNotMatch(USAGE, /palsync ctx |palsync usage start|palsync cost   \[/);
     assert.doesNotMatch(USAGE, /palsync context inspect/);
     assert.match(USAGE, /palsync cost record --model X --provider Y/);
     assert.match(USAGE, /--tried .*automated workaround/);
@@ -210,17 +211,20 @@ test("ctx inspect and diff run fully offline", async () => {
     console.log = (...args) => output.push(args.join(" "));
     try {
         const syncCommands = require("../src/cli/syncCommands");
+        assert.equal(await syncCommands.run("stats", ["--dir", ws]), 0);
+        // Deprecated aliases must print the SAME report, not a second implementation.
         assert.equal(await syncCommands.run("ctx", ["inspect", "--dir", ws]), 0);
-        assert.equal(await syncCommands.run("ctx", ["diff", "--dir", ws]), 0);
+        assert.equal(await syncCommands.run("cost", ["--dir", ws]), 0);
     } finally {
         console.log = originalLog;
         fs.rmSync(ws, { recursive: true, force: true });
     }
-    assert.match(output.join("\n"), /Locally stable prefix/);
-    assert.match(output.join("\n"), /First divergent section: sync-section/);
+    assert.equal(new Set(output).size, 1, "stats, ctx and cost render one identical report");
+    assert.match(output.join("\n"), /stable prefix/);
+    assert.match(output.join("\n"), /first divergent: sync-section/);
 });
 
-test("#15: ctx inspect with a stray path prints ctx's own usage, not the validate-led USAGE", async () => {
+test("#15: a stray ctx path prints the stats one-liner, not the validate-led USAGE", async () => {
     const originalLog = console.log, originalError = console.error;
     const output = [];
     console.log = (...args) => output.push(args.join(" "));
@@ -234,10 +238,10 @@ test("#15: ctx inspect with a stray path prints ctx's own usage, not the validat
         console.error = originalError;
     }
     // The generic USAGE block starts with `palsync validate` — the deterministic bug: a path typed
-    // after `ctx inspect` must NEVER surface that. Each run prints ctx's own one-line usage instead.
+    // after `ctx inspect` must NEVER surface that. Each run prints the one-line stats usage instead.
     assert.equal(output.length, 2, output.join("\n"));
     for (const line of output) {
-        assert.match(line, /Usage: palsync ctx inspect\|diff \[--dir <workspace>\]/);
+        assert.match(line, /Usage: palsync stats \[--dir <workspace>\]/);
         assert.doesNotMatch(line, /palsync validate \[--dir <workspace>\]/);
     }
 });

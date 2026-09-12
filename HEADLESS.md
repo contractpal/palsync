@@ -154,8 +154,7 @@ palsync task T3 done --dir ~/pals/isr        # set exactly one task's status
 palsync task T4 blocked --reason "provider unavailable" --dir ~/pals/isr
 palsync checkpoint "T3 done: preview OK" --dir ~/pals/isr
 palsync completion check --dir ~/pals/isr    # all-done review / reasoned-handoff gate
-palsync ctx inspect --dir ~/pals/isr          # inspect stable generated-context sections
-palsync ctx diff --dir ~/pals/isr             # compare the last two context generations
+palsync stats --dir ~/pals/isr               # one session report: model usage, tool footprint, context
 ```
 
 These exit non-zero on failure/refusal, so an orchestrator can branch on the exit code.

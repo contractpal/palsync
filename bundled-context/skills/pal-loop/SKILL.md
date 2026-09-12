@@ -29,7 +29,7 @@ understand → inspect only what is needed → edit → cheap feedback → push
 
 ### 1. Start
 
-In Pi, run `palsync usage start --phase build` first. Then, and only this:
+Only this:
 
 - Read EXECUTION.md (`palsync task list --ready`) — on resume it outranks model memory.
 - `pal_status`; server newer than your last pull → `pal_pull` before editing.

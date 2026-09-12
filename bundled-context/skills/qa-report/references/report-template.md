@@ -119,11 +119,11 @@ Do not use the current Pi footer or `/info` totals, which are cumulative session
 Do not calculate a cache hit rate unless Pi provides an applicable run-bounded rate. Do not
 estimate missing values.
 
-### `palsync cost` output
+### `pal_stats` output
 
 ```
-<paste `palsync cost` output verbatim; it is PalSync mechanics telemetry, not a replacement for
-the bounded Pi usage window above>
+<paste the pal_stats report verbatim; its PALSYNC TOOLS and CONTEXT blocks are PalSync mechanics
+telemetry, not a replacement for the bounded Pi usage window above>
 ```
 
 ## Recommendations for palsync

@@ -32,7 +32,7 @@ class PalsyncClient {
 
   constructor(private workspace: string) {}
 
-  private request(method: string, params: Record<string, unknown> = {}): Promise<any> {
+  private request(method: string, params: Record<string, unknown>): Promise<any> {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
@@ -84,9 +84,13 @@ class PalsyncClient {
     this.child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
   }
 
-  async call(name: string, args: Record<string, unknown>): Promise<any> {
+  // `meta` rides in MCP request _meta, NOT in arguments: live session counters reach pal_stats
+  // without becoming a model-visible (and model-inventable) tool parameter.
+  async call(name: string, args: Record<string, unknown>, meta?: Record<string, unknown>): Promise<any> {
     await this.start();
-    return this.request("tools/call", { name, arguments: args });
+    const params: Record<string, unknown> = { name, arguments: args };
+    if (meta) params._meta = meta;
+    return this.request("tools/call", params);
   }
 
   close(): void { this.child?.kill(); }
@@ -96,6 +100,9 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
   let client: PalsyncClient | null = null;
   let lastCompletionFingerprint: string | null = null;
   const registered = new Set<string>();
+  // Captured deterministically in the tool_call hook (which runs before the tool executes and DOES
+  // receive ctx), so pal_stats reports current Pi usage without the model running a bookkeeping call.
+  let liveUsage: Record<string, unknown> | null = null;
 
   const registerMcpTool = (tool: any) => {
     if (registered.has(tool.name)) return;
@@ -109,11 +116,24 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
       promptGuidelines: promptGuidelines.length ? promptGuidelines : undefined,
       parameters: tool.inputSchema as any,
       async execute(_id, params) {
-        const result = await client!.call(tool.name, params as Record<string, unknown>);
+        const result = await client!.call(tool.name, params as Record<string, unknown>,
+          tool.name === "pal_stats" && liveUsage ? { "palsync/runtime": liveUsage } : undefined);
         if (result.isError) throw new Error((result.content || []).map((item: any) => item.text || "").join("\n"));
         return { content: result.content || [], details: { tool: tool.name } };
       }
     });
+  };
+
+  // The Pi session IS the measurement boundary: the baseline is taken when the session starts and
+  // closed when it ends, so no agent-visible `palsync usage start` call exists. Fire-and-forget and
+  // fully fail-open: this is evidence, and it must never delay or break a session transition.
+  const captureBoundary = (ctx: any, phase: string, boundary: string) => {
+    let snapshot;
+    try { snapshot = piUsageSnapshot(ctx.sessionManager.getEntries()); }
+    catch (error) { return; } // no session counters => record nothing rather than a fabricated zero
+    pi.exec("palsync", ["usage", "capture", "--phase", phase, "--boundary", boundary,
+      "--snapshot", JSON.stringify(snapshot), "--model", ctx.model?.id ?? "", "--provider", ctx.model?.provider ?? "",
+      "--dir", ctx.cwd], { timeout: 5000 }).catch(() => {});
   };
 
   const activate = (names: string[]) => {
@@ -126,6 +146,7 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
 
   pi.on("session_start", (_event, ctx) => {
     if (!isPalsyncWorkspace(ctx.cwd)) return;
+    captureBoundary(ctx, "build", "start");
     if (hasPiMcpCollision(pi.getActiveTools())) {
       ctx.ui.notify("PalSync native extension disabled: pi-mcp is already serving palsync. Configure that server with lifecycle:\"lazy\" or disable one integration.", "warning");
       return;
@@ -183,7 +204,10 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
     }
   });
 
-  pi.on("session_shutdown", () => client?.close());
+  pi.on("session_shutdown", (_event, ctx) => {
+    if (ctx && isPalsyncWorkspace(ctx.cwd)) captureBoundary(ctx, "build", "end");
+    client?.close();
+  });
 
   // Both hooks below run the SAME cores Claude Code's settings hooks run, through the CLI adapter, so
   // the two harnesses cannot drift in behaviour. `--event` carries the event because pi.exec has no
@@ -198,6 +222,12 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
 
   // PreToolUse guard (finding #13): refuse edits to the workspace's own push-gate record.
   pi.on("tool_call", async (event, ctx) => {
+    if (event.toolName === "pal_stats" && isPalsyncWorkspace(ctx.cwd)) {
+      try {
+        liveUsage = { snapshot: piUsageSnapshot(ctx.sessionManager.getEntries()), agent: "pi",
+          model: ctx.model.id, provider: ctx.model.provider };
+      } catch (error) { liveUsage = null; }
+    }
     const boundary = isPalsyncWorkspace(ctx.cwd) && piUsageBoundary(event);
     if (boundary) {
       try {

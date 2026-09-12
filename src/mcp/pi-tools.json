@@ -719,6 +719,33 @@
     ]
   },
   {
+    "name": "pal_stats",
+    "title": "Report PalSync session stats",
+    "description": "Report this session's PalSync stats in one read: model usage when the harness exposes it, PalSync tool calls / bytes returned / durations, injected-context size and locally stable prefix, and verification-evidence counts. Offline, read-only, idempotent — the only stats surface.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    },
+    "groups": [
+      "project"
+    ],
+    "keywords": [
+      "stats",
+      "usage",
+      "cost",
+      "tokens",
+      "context",
+      "telemetry",
+      "efficiency"
+    ]
+  },
+  {
     "name": "pal_impact",
     "title": "Inspect local structural impact",
     "description": "Inspect exact LOCAL structural impact before editing a page/fragment: direct dependencies, dependents, and registration state from pal.json + markup references. Deterministic and offline; never checks the live server or runtime-selected relationships. For contract sections use pal_context.",

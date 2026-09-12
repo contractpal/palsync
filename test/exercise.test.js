@@ -1411,7 +1411,7 @@ test("one passing MCP pal_exercise records one evidence row without usage succes
         await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
         await client.callTool({ name: "pal_exercise", arguments: { steps: [{ expect: ["saved"] }] } });
         assert.equal(usage.readToolEvidence(ws).length, 1);
-        usage.formatCost(ws, []);
+        usage.readUsageTally(ws);
         const ledger = JSON.parse(fs.readFileSync(path.join(ws, usage.USAGE_FILE), "utf8"));
         assert.equal(ledger.tools.pal_exercise.calls, 1);
         assert.equal(ledger.tools.pal_exercise.successfulCalls, undefined);

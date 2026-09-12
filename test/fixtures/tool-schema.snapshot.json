@@ -1000,6 +1000,21 @@
     }
   },
   {
+    "name": "pal_stats",
+    "title": "Report PalSync session stats",
+    "description": "Report this session's PalSync stats in one read: model usage when the harness exposes it, PalSync tool calls / bytes returned / durations, injected-context size and locally stable prefix, and verification-evidence counts. Offline, read-only, idempotent — the only stats surface.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
     "name": "pal_status",
     "title": "Report pal status",
     "description": "Report whether the server is newer than your last pull, and who holds the lock (read-only).",

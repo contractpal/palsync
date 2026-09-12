@@ -28,6 +28,7 @@ const {
 } = require("../core/impactContext");
 const { cachedLint } = require("../core/lintCache");
 const { appendToolEvidence } = require("../core/usage");
+const { buildSessionStats, formatSessionStats } = require("../core/sessionStats");
 const { executeDatasetQuery } = require("../core/datasetQuery");
 const palsyncfile = require("../core/palsyncfile");
 const { onDemandSyncSections } = require("../launcher/contextInject");
@@ -1671,6 +1672,19 @@ const TOOLS = [
         }
     },
     {
+        name: "pal_stats",
+        description: "Report this session's PalSync stats in one read: model usage when the harness exposes it, PalSync tool calls / bytes returned / durations, injected-context size and locally stable prefix, and verification-evidence counts. Offline, read-only, idempotent — the only stats surface.",
+        needsCtx: false,
+        inputShape: {},
+        async run(ctx) {
+            // ctx.requestMeta carries live harness counters the caller already has (Pi passes its
+            // session usage through MCP request _meta), so no bookkeeping call has to precede this.
+            const runtime = ctx.requestMeta && ctx.requestMeta["palsync/runtime"];
+            const stats = buildSessionStats(ctx.workspaceDir, { tools: TOOLS, runtime });
+            return { ran: true, stats, message: formatSessionStats(stats) };
+        }
+    },
+    {
         name: "pal_impact",
         description: "Inspect exact LOCAL structural impact before editing a page/fragment: direct dependencies, dependents, and registration state from pal.json + markup references. Deterministic and offline; never checks the live server or runtime-selected relationships. For contract sections use pal_context.",
         needsCtx: false,
@@ -2210,6 +2224,7 @@ const TOOLS = [
 // metadata only; the tool implementations remain the authority for safety and idempotency.
 const TOOL_HINTS = {
     pal_context: ["Load PalSync context", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_stats: ["Report PalSync session stats", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_impact: ["Inspect local structural impact", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_resources: ["Refresh chain resources", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
     pal_ast: ["Search and rewrite code structure", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],

@@ -21,7 +21,7 @@ Read these before writing:
 
 - `SPEC.md` and `EXECUTION.md` for the run.
 - `REVIEW.md` if pal-review ran.
-- Tool transcripts and the output of `palsync cost`.
+- Tool transcripts and one `pal_stats` read (`palsync stats` outside an MCP harness).
 - Any prior report on the same spec in `/Users/apple/Documents/palsync/reports/` or `/Users/apple/Documents/palsync/archives/`.
 
 ## Filename convention
@@ -66,16 +66,13 @@ nothing to say, write "none" and explain why.
      began or leaving browser-JS detail unloaded for markup-only work.
    - Whether the pal-loop state machine was followed cleanly: Start → Pick → Prepare → Execute →
      Verify → Resolve → Continue/Handoff.
-7. **Cost & usage** — Read `.palsync/run-usage.json` when present. Each phase contains immutable
-   `windows`; report each useful completed build window and sum only their exact `input`,
-   `cacheRead`, `output`, `cacheWrite`, and `cost` deltas for the Build phase. Keep review windows
-   separate, then sum completed build and review windows for Total measured PalSync run. Label the
-   source as `pi/sessionManager.getEntries`. This is a bounded PalSync build window, not the entire
-   Pi conversation. Never replace it with the current Pi footer or `/info` totals: those are
-   cumulative across the Pi session/branch history and later turns contaminate them. If no completed
-   bounded window exists, say `not available`. Do not estimate usage or cache hit rate. Keep the
-   existing `palsync cost` output as separate PalSync mechanics telemetry; do not record footer
-   figures manually.
+7. **Cost & usage** — Take every number from ONE `pal_stats` read; do not open telemetry files or
+   run other reporting commands. Report its MODEL USAGE block with the `source` and quality label
+   it prints, and its `build`/`review` phase rows when present — those are bounded PalSync windows,
+   not the whole Pi conversation. Never replace them with the current Pi footer or `/info` totals:
+   those are cumulative across the session and branch history. Report the PALSYNC TOOLS and CONTEXT blocks as
+   separate PalSync mechanics telemetry. Whatever `pal_stats` marks unavailable is `not available`:
+   do not estimate usage, billing, or cache hit rate, and do not record footer figures manually.
 8. **Recommendations for palsync** — numbered, prioritized (P0 / P1 / P2), each naming the
    file or tool it targets.
 9. **Fix tasks** — checkbox list in pal-loop task format (file, change, success condition) so
@@ -95,7 +92,7 @@ nothing to say, write "none" and explain why.
 - **Check for prior reports.** Before writing findings, search `/Users/apple/Documents/palsync/reports/` and `/Users/apple/Documents/palsync/archives/`
   for a prior report on the same spec. Cross-reference converging findings and note
   diverging ones.
-- **No invented numbers.** Use only actual transcript, tool, file, `palsync cost`, or harness
+- **No invented numbers.** Use only actual transcript, tool, file, `pal_stats`, or harness
   sidecar evidence. If a number is unavailable, say "not available" and never estimate.
 - **Keep efficiency distinct from correctness.** Tool friction, routing/context observations,
   and validation/rework describe efficiency or process only; pal-review remains the correctness

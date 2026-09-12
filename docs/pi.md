@@ -30,7 +30,9 @@ The native extension appends local JSONL to `.palsync/pi-usage.jsonl`:
 {"schema":"palsync/pi-usage/1","tool":"pal_validate","bytes":123,"tokenEstimate":31,"provider":null,"model":null,"cost":null,"currency":null,"isError":false}
 ```
 
-Text tokens use the same bytes/4 estimator as `palsync cost`; image estimates use pixel dimensions. Provider/model are recorded only when Pi reports them. Cost and currency remain `null` because tool-result events do not report billing. `palsync cost` summarizes this sidecar separately and never turns estimates into spend.
+Text tokens use the same bytes/4 estimator as `pal_stats`; image estimates use pixel dimensions. Provider/model are recorded only when Pi reports them. Cost and currency remain `null` because tool-result events do not report billing. `pal_stats` treats this sidecar as a FALLBACK for the same tool results `.palsync.usage.json` already meters — the two are never summed — and never turns estimates into spend.
+
+Model-level session usage needs no agent-visible bookkeeping call. The extension takes the baseline from Pi's own `session_start`, closes the build window at `palsync session-summary` (or at `session_shutdown`), and hands `pal_stats` the current `ctx.sessionManager.getEntries()` counters through MCP request `_meta` — transport metadata, not a tool parameter the model could invent values for.
 
 Pi 0.80.10 exposes compaction events but its `session_before_compact` result cannot contribute context or instructions. PalSync therefore installs no custom summarizer or compaction mutation; details refs remain available in tool trailers. Revisit when Pi provides an additive compaction-content API.
 

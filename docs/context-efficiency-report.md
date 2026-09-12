@@ -5,8 +5,8 @@
 - Deterministic, code-unit-sorted generation with content comparison, atomic replacement, symlink
   following, mode preservation, and stable mtimes across instructions, skills, OpenCode commands,
   `.mcp.json`, and `opencode.json`.
-- Versioned context manifests, previous-generation diffs, `palsync context inspect|diff`, and a
-  locally stable-prefix summary in `palsync cost`.
+- Versioned context manifests, previous-generation diffs, and a locally stable-prefix summary in
+  `pal_stats` / `palsync stats`.
 - A committed snapshot of all 20 advertised MCP wire schemas plus additive
   server instructions. Safety wording remains in tool descriptions because Pi drops instructions.
 - Rule-grouped validation/server/SEO output with all unique rules, fixes, and locations preserved;

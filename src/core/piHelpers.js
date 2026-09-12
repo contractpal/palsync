@@ -25,7 +25,9 @@ function activationGuidance(names) {
     return out;
 }
 
-const CORE_TOOLS = ["pal_validate", "pal_spec_lint", "pal_context"];
+// pal_stats is eager because pal-loop's completion requires it: a lazily routed stats tool would
+// cost every session a pal_tools round trip to reach a call the loop already knows it will make.
+const CORE_TOOLS = ["pal_validate", "pal_spec_lint", "pal_context", "pal_stats"];
 
 function tokens(value) {
     return String(value || "").toLowerCase().match(/[a-z0-9_]+/g) || [];
@@ -143,13 +145,12 @@ function piUsageSnapshot(entries) {
     return snapshot;
 }
 
-// Boundaries are deliberately narrow: pal-loop explicitly requests a start, while its required
-// session-summary is the automatic build handoff. No arbitrary Bash command is interpreted.
+// The only interpreted command. The session baseline is taken from Pi's own session_start, so no
+// agent-visible start call exists; pal-loop's required session-summary closes the build window at
+// the handoff instead of at process shutdown. No other Bash command is interpreted.
 function piUsageBoundary(event) {
     if (!event || String(event.toolName || "").toLowerCase() !== "bash") return null;
     const command = String(event.input && event.input.command || "");
-    const usage = command.match(/(?:^|[;&]\s*)palsync\s+usage\s+(start|end)\b[\s\S]*?--phase(?:\s+|=)(build|review)\b/);
-    if (usage) return { boundary: usage[1], phase: usage[2] };
     if (/(?:^|[;&]\s*)palsync\s+session-summary\b/.test(command)) return { boundary: "end", phase: "build" };
     return null;
 }

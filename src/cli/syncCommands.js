@@ -49,10 +49,8 @@ const USAGE = [
     "  palsync seo-audit [--keep-lock] [--dir <ws>]             On-page SEO audit of a WEB pal's rendered page",
     "  palsync exercise --steps '<json>' | --steps-file <path> [--workflow console|web|transaction] [--viewport desktop|mobile] [--keep-lock] [--dir <ws>]",
     "                                                               Exercise workflow actions end-to-end; assert expect/absent strings in the rendered result",
-    "  palsync cost   [--dir <workspace>]                           palsync's own context contribution: tool calls + bytes returned + injected-block size (offline)",
+    "  palsync stats  [--dir <workspace>]                           One session report: model usage (when the harness reports it), PalSync tool calls/bytes, injected context, evidence (offline)",
     "  palsync cost record --model X --provider Y --in N --cached N --out N [--cost N] [--currency USD] [--phase build|review] [--dir <ws>]",
-    "  palsync usage start|end --phase build|review [--dir <ws>]     Request a Pi run-usage boundary (Pi extension captures it)",
-    "  palsync ctx inspect|diff [--dir <workspace>]                 Inspect locally stable context or compare the last changed generation (offline)",
     "  palsync review check|brief [--dir <workspace>]              Check REVIEW.md evidence or print the pre-review evidence ledger (offline)",
     "  palsync completion check [--dir <workspace>]                Enforce all-done independent review or allow a reasoned handoff (offline)",
     "  palsync regression [--keep-lock] [--dir <ws>]                Brownfield regression vs baseline/baseline.json (freshness -> validate/test/H1; caused vs inherited)",
@@ -389,31 +387,29 @@ async function run(cmd, argv, opts) {
     let flags;
     if (cmd === "ctx") {
         try { flags = parseFlags(argv); }
-        catch { console.error("Usage: palsync ctx inspect|diff [--dir <workspace>]"); return 1; }
+        catch { console.error("Usage: palsync stats [--dir <workspace>] (ctx is a deprecated alias)"); return 1; }
     } else {
         flags = parseFlags(argv);
     }
     if (flags.help) { console.log(USAGE); return 0; }
     const dir = path.resolve(flags.dir || process.cwd());
 
+    // `usage capture` is an INTERNAL writer the Pi extension drives from its own lifecycle. It is
+    // deliberately not a reporting surface and needs no agent-visible start/end bookkeeping call.
     if (cmd === "usage") {
         const usage = require("../core/usage");
-        if (flags._positional === "capture") {
-            let snapshot;
-            try { snapshot = JSON.parse(flags.snapshot || ""); }
-            catch { console.error("usage capture failed: --snapshot must be JSON"); return 1; }
-            const result = usage.captureRunUsage(dir, { phase: flags.phase, boundary: flags.boundary,
-                snapshot, model: flags.model, provider: flags.provider });
-            if (!result.ok) { console.error("usage capture failed: " + result.error); return 1; }
-            console.log(result.unchanged ? "Pi usage boundary already recorded." : "Pi usage boundary recorded.");
-            return 0;
+        if (flags._positional !== "capture") {
+            console.error("Usage: palsync usage capture --phase build|review --boundary start|end --snapshot <json> [--dir <ws>]");
+            return 1;
         }
-        if ((flags._positional === "start" || flags._positional === "end") && (flags.phase === "build" || flags.phase === "review")) {
-            console.log("Pi usage boundary requested; the Pi extension records it when active. Otherwise usage is not available.");
-            return 0;
-        }
-        console.error("Usage: palsync usage start|end --phase build|review [--dir <workspace>]");
-        return 1;
+        let snapshot;
+        try { snapshot = JSON.parse(flags.snapshot || ""); }
+        catch { console.error("usage capture failed: --snapshot must be JSON"); return 1; }
+        const result = usage.captureRunUsage(dir, { phase: flags.phase, boundary: flags.boundary,
+            snapshot, model: flags.model, provider: flags.provider });
+        if (!result.ok) { console.error("usage capture failed: " + result.error); return 1; }
+        console.log(result.unchanged ? "Pi usage boundary already recorded." : "Pi usage boundary recorded.");
+        return 0;
     }
 
     if (cmd === "completion") {
@@ -459,33 +455,20 @@ async function run(cmd, argv, opts) {
         return 0;
     }
 
-    // cost is OFFLINE: reads the per-session usage tally (.palsync.usage.json, written live by the
-    // MCP server) and measures the injected context block from the workspace files. No login/lock.
-    if (cmd === "cost") {
-        const usage = require("../core/usage");
-        if (flags._positional === "record") {
-            const result = usage.recordSessionCost(dir, flags);
+    // stats is OFFLINE and the ONLY reporting surface: one aggregation core (sessionStats.js),
+    // shared with the pal_stats MCP tool. `cost` and `ctx` are thin deprecated aliases for it and
+    // hold no stats implementation of their own. `cost record` stays: it is a WRITER, not a report.
+    if (cmd === "stats" || cmd === "cost" || cmd === "ctx") {
+        if (cmd === "cost" && flags._positional === "record") {
+            const result = require("../core/usage").recordSessionCost(dir, flags);
             if (!result.ok) { console.error("cost record failed: " + result.error); return 1; }
             console.log("Recorded session cost for " + result.entry.model + " (" + result.entry.provider + ").");
             return 0;
         }
-        console.log(usage.formatCost(dir, TOOLS));
+        const stats = require("../core/sessionStats");
+        if (cmd !== "stats") console.error("palsync " + cmd + " is deprecated; use palsync stats.");
+        console.log(stats.formatSessionStats(stats.buildSessionStats(dir, { tools: TOOLS })));
         return 0;
-    }
-
-    if (cmd === "ctx") {
-        const manifest = require("../core/contextManifest");
-        if (flags._positional === "inspect") {
-            console.log(manifest.formatInspect(manifest.readManifest(dir)));
-            return manifest.readManifest(dir) ? 0 : 1;
-        }
-        if (flags._positional === "diff") {
-            const current = manifest.readManifest(dir);
-            console.log(manifest.formatDiff(manifest.readManifest(dir, true), current));
-            return current ? 0 : 1;
-        }
-        console.error("Usage: palsync ctx inspect|diff [--dir <workspace>]");
-        return 1;
     }
 
     // spec-lint is OFFLINE: reads a SPEC.md (+ optional sibling baseline/), no login/lock.

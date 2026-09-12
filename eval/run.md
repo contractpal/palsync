@@ -178,9 +178,10 @@ Fill these from the finished transcript. Record them in `eval/RESULTS.md`.
   rate table and no gate reads it.
 - **Cursor / others** — record if surfaced; leave blank if the harness does not expose it. Blank is honest; a guess is not.
 
-For a harness with no transcript, record spend by hand:
-`palsync cost record --model <id> --provider <p> --in N --cached N --out N [--cost N] --phase build|review`.
-Skip this only when the harness exposes no figures.
+Read the run's measured figures with a single `pal_stats` call (`palsync stats` outside an MCP
+harness). Only for a harness that exposes figures PalSync cannot see, record them once with
+`palsync cost record --model <id> --provider <p> --in N --cached N --out N [--cost N] --phase build|review`
+so the next `pal_stats` read includes them.
 
 **(c) Wall-clock time** — start of run to agent's final message.
 

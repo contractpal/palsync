@@ -153,30 +153,6 @@ function eagerSummary(manifest) {
     };
 }
 
-function formatInspect(manifest) {
-    if (!manifest) return "Context manifest unavailable — relaunch palsync to generate it.";
-    const summary = eagerSummary(manifest);
-    const largest = manifest.sections.slice().sort((a, b) => b.bytes - a.bytes).slice(0, 5);
-    const lines = [
-        "palsync context manifest — " + manifest.agent,
-        "Locally stable prefix: " + summary.stablePrefixBytes + " B / " + summary.totalBytes + " B eager (" + summary.stablePercent.toFixed(1) + "%)",
-        "Estimated reusable prefix only; provider cache status unavailable.",
-        "Dynamic tail: " + summary.dynamicTailBytes + " B",
-        "Largest sections:"
-    ];
-    for (const item of largest) lines.push("  " + item.name + ": " + item.bytes + " B (" + item.class + ")");
-    return lines.join("\n");
-}
-
-function formatDiff(previous, current) {
-    if (!current) return "Context manifest unavailable — relaunch palsync to generate it.";
-    const diff = diffManifests(previous, current);
-    if (!previous) return "No previous changed context generation is available.";
-    if (!diff.changed) return "No context sections changed.";
-    return "First divergent section: " + diff.firstDivergentSection + "\nReason: " + diff.reason;
-}
-
 module.exports = {
-    MANIFEST, PREVIOUS, buildManifest, emitManifest, readManifest, diffManifests,
-    eagerSummary, formatInspect, formatDiff
+    MANIFEST, PREVIOUS, buildManifest, emitManifest, readManifest, diffManifests, eagerSummary
 };

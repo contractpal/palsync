@@ -86,10 +86,10 @@ test("claude profile is the eager full set: identical to codex, no pal_tools", a
     await close(codex.client, codex.workspaceDir);
 });
 
-test("pi-minimal lists exactly 4 sorted tools with pal_tools in sorted position", async () => {
+test("pi-minimal lists exactly 5 sorted tools with pal_tools in sorted position", async () => {
     const { client, workspaceDir } = await connect("pi-minimal");
     const names = namesOf(await client.listTools());
-    assert.deepStrictEqual(names, ["pal_context", "pal_spec_lint", "pal_tools", "pal_validate"]);
+    assert.deepStrictEqual(names, ["pal_context", "pal_spec_lint", "pal_stats", "pal_tools", "pal_validate"]);
     await close(client, workspaceDir);
 });
 

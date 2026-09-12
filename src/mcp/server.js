@@ -26,8 +26,10 @@ const LAZY_PROFILES = new Set(["pi-minimal", "pi-standard"]);
 // KV-cache invalidations, and every real session activated at least once (the 3-tool core
 // cannot push/test/preview). Pi keeps lazy activation (see docs/decisions/lazy-tool-activation.md).
 const PROFILE_TOOLS = {
-    "pi-minimal": ["pal_validate", "pal_spec_lint", "pal_context"],
-    "pi-standard": ["pal_validate", "pal_spec_lint", "pal_context", "pal_status", "pal_test", "pal_push", "pal_pull"],
+    // pal_stats is eager in every profile: pal-loop requires it at completion, so routing it
+    // through pal_tools would add a guaranteed activation round trip for a deterministic call.
+    "pi-minimal": ["pal_validate", "pal_spec_lint", "pal_context", "pal_stats"],
+    "pi-standard": ["pal_validate", "pal_spec_lint", "pal_context", "pal_stats", "pal_status", "pal_test", "pal_push", "pal_pull"],
     "pi-full": TOOLS.map(tool => tool.name),
     // Eager: full static set at boot, no pal_tools — stable prefix for Claude Code.
     claude: TOOLS.map(tool => tool.name),
@@ -95,7 +97,7 @@ function createServer(getCtx, workspaceDir, options = {}) {
         const handle = server.registerTool(
             t.name,
             { description: t.description, inputSchema: t.inputShape, annotations: t.annotations, title: t.title },
-            async (args) => {
+            async (args, extra) => {
                 const started = process.hrtime.bigint();
                 const cacheBefore = lintCache.readStats(workspaceDir);
                 // Belt-and-suspenders: the MCP SDK already wraps handlers, but we catch here too so
@@ -111,7 +113,10 @@ function createServer(getCtx, workspaceDir, options = {}) {
                     // memoized getCtx: reuse an already-locked ctx if one exists, otherwise build
                     // with acquireLock:false so the tool never acquires the Pal lock.
                     let ctx;
-                    if (t.needsCtx === false) ctx = { workspaceDir };
+                    // requestMeta is transport metadata, never model-authored arguments: a harness
+                    // can hand a tool counters it already holds without spending schema bytes on a
+                    // parameter the model could invent values for.
+                    if (t.needsCtx === false) ctx = { workspaceDir, requestMeta: extra && extra._meta };
                     else if (t.needsLock === false) {
                         ctx = await getCtx({ acquireLock: false });
                     } else {
@@ -128,6 +133,7 @@ function createServer(getCtx, workspaceDir, options = {}) {
                     if (ctx && ctx.workspaceDir) {
                         const stats = usage.contentStats(content);
                         usage.recordToolCall(ctx.workspaceDir, t.name, stats.bytes, stats.tokens, {
+                            errored: !!(res && res.isError),
                             rawBytes: res && res._usage && res._usage.rawBytes != null ? res._usage.rawBytes : stats.bytes,
                             returnedBytes: stats.bytes,
                             resultCacheHits: Math.max(0, lintCache.readStats(workspaceDir).hits - cacheBefore.hits),
@@ -143,6 +149,7 @@ function createServer(getCtx, workspaceDir, options = {}) {
                     const stats = usage.contentStats(content);
                     const cacheAfter = lintCache.readStats(workspaceDir);
                     usage.recordToolCall(workspaceDir, t.name, stats.bytes, stats.tokens, {
+                        errored: true,
                         rawBytes: stats.bytes,
                         returnedBytes: stats.bytes,
                         resultCacheHits: Math.max(0, cacheAfter.hits - cacheBefore.hits),
@@ -242,8 +249,11 @@ async function main() {
         if (shuttingDown) return;
         shuttingDown = true;
         logErr(why + " — releasing lock and shutting down");
-        // T3: session-end context-contribution summary (palsync's own footprint, not model spend).
-        try { logErr("session cost summary —\n" + usage.formatCost(workspaceDir, TOOLS)); } catch (_e) { /* never block shutdown */ }
+        // T3: session-end footprint summary, through the same stats core pal_stats serves.
+        try {
+            const stats = require("../core/sessionStats");
+            logErr("session stats —\n" + stats.formatSessionStats(stats.buildSessionStats(workspaceDir, { tools: TOOLS })));
+        } catch (_e) { /* never block shutdown */ }
         try {
             if (lockedPromise) {
                 const ctx = await lockedPromise.catch(() => null);

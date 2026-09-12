@@ -160,7 +160,7 @@ pal_validate: <quote `ok` and `diagnosticCount` — required; missing fields mak
 - [ ] <task> — addresses <finding> — success condition: <tool + check>
 ```
 
-Cost recording — IF harness is claude-code THEN skip `palsync cost record` (agent cannot read its own spend); IF pi THEN run `palsync cost record --model <model> --phase <build|review>` using the user-supplied footer figures.
+Session stats — call `pal_stats` once if stats are wanted. Collection is automatic; do not run a separate cost, context, or usage command.
 Run every evidence-producing tool before the final REVIEW.md write. Then run `palsync review check`
 from the pal workspace and paste its complete output into REVIEW.md. It reports descriptive,
 source-bound exercise evidence rather than a call count; behavior evidence is required only when

@@ -129,9 +129,7 @@ palsync checkpoint      # spec-to-ship checkpointing
 palsync completion check # offline all-done review / reasoned-handoff gate
 palsync hooks check      # Claude Code hook-settings health (offline)
 palsync hooks repair     # migrate legacy hook entries / install missing ones (offline)
-palsync cost            # palsync's own context footprint (offline; see below)
-palsync ctx inspect     # stable-prefix sizes and largest generated sections
-palsync ctx diff        # first section changed since the previous generation
+palsync stats           # the one session report: model usage, tool footprint, context (offline; see below)
 palsync setup           # non-interactive workspace creation
 palsync upgrade         # self-update from the latest commit
 ```
@@ -156,13 +154,17 @@ writes the same `~/.palsync/config.json`.
 `palsync verify` explains what will run for the current local changes without logging in, opening a
 browser, or calling a model.
 
-### `palsync cost` — context observability
+### `palsync stats` — session observability
 
-palsync can't see provider cache state or model billing, so `palsync cost` reports local facts:
-raw/returned response bytes, condensation ratio, largest response, duration, lint-cache hit rate,
-and the generated context manifest. `palsync ctx inspect|diff` explains the locally stable
-prefix and its first changed section. Provider-reported cached tokens from a harness sidecar stay
-separate from local estimates. Set `PALSYNC_NO_CACHE=1` to bypass the content-addressed per-file
+`palsync stats` (and the `pal_stats` MCP tool) is the single stats surface; both render the same
+aggregation core, and collection underneath them is automatic — nothing has to be recorded by hand.
+One report covers model usage, PalSync's tool footprint (raw/returned bytes, condensation ratio,
+largest response, duration, cache hit rates), the generated context manifest with its locally stable
+prefix and first changed section, and verification-evidence counts. Every metric is labeled exact,
+measured, estimated, or unavailable: palsync can't see provider cache state or model billing, so it
+reports model spend only when a harness hands it real figures and never estimates one. When two
+sources describe the same metric, the most direct one wins and the others are named, never summed.
+(`palsync cost` and `palsync ctx` are deprecated aliases that print this same report.) Set `PALSYNC_NO_CACHE=1` to bypass the content-addressed per-file
 lint cache; push-gate decisions, server state, drift, locks, and runtime results are never cached.
 
 ### `palsync hooks check|repair` — Claude Code hook recovery

@@ -1,5 +1,5 @@
 "use strict";
-// T3 — palsync's OWN context-contribution meter (an honest proxy, NOT model token spend).
+// T3 — palsync's OWN context-contribution COLLECTORS (an honest proxy, NOT model token spend).
 //
 // palsync cannot see the model's billing. What it CAN measure honestly is its own footprint:
 //   1. how many tool calls it served this session, and how many bytes those results returned to
@@ -8,12 +8,10 @@
 //      DESCRIPTIONS (frontmatter, the only part that's always loaded) + the tool definitions.
 //
 // "this session" = the current MCP server process. The tally is keyed by the server PID, so a new
-// server (a new session) starts a fresh count without anyone having to reset it. `palsync cost`
-// reads whatever the last/current session wrote.
+// server (a new session) starts a fresh count without anyone having to reset it.
 //
-// When a harness writes `.palsync/session-cost.json` (model id, provider, tokens, cost, phase),
-// `palsync cost` joins that harness-reported spend into the report; when the sidecar is absent,
-// the report says so explicitly and makes no estimate.
+// This module WRITES and READS; it does not report. Every reader-facing aggregation and format
+// lives in sessionStats.js, the single core behind `pal_stats` and `palsync stats`.
 const fs = require("fs");
 const path = require("path");
 const { contentStats: sharedContentStats } = require("./piHelpers");
@@ -69,6 +67,7 @@ function emptyTally(contextGenerations = []) {
         totalRawBytes: 0,
         totalReturnedBytes: 0,
         totalDurationMs: 0,
+        totalErrors: 0,
         resultCacheHits: 0,
         resultCacheMisses: 0,
         tools: {},
@@ -82,6 +81,7 @@ function normalizeV2(value) {
     out.totalRawBytes = value.totalRawBytes != null ? value.totalRawBytes : (value.totalBytes || 0);
     out.totalReturnedBytes = value.totalReturnedBytes != null ? value.totalReturnedBytes : (value.totalBytes || 0);
     out.totalDurationMs = value.totalDurationMs || 0;
+    out.totalErrors = value.totalErrors || 0;
     out.resultCacheHits = value.resultCacheHits || 0;
     out.resultCacheMisses = value.resultCacheMisses || 0;
     out.tools = {};
@@ -90,6 +90,7 @@ function normalizeV2(value) {
             rawBytes: old.rawBytes != null ? old.rawBytes : (old.bytes || 0),
             returnedBytes: old.returnedBytes != null ? old.returnedBytes : (old.bytes || 0),
             durationMs: old.durationMs || 0,
+            errors: old.errors || 0,
             resultCacheHits: old.resultCacheHits || 0,
             resultCacheMisses: old.resultCacheMisses || 0,
             maxReturnedBytes: old.maxReturnedBytes || 0
@@ -150,8 +151,11 @@ function contentStats(content) {
 
 // Accumulate one tool call into the per-session tally. Best-effort: instrumentation must NEVER
 // break a tool call, so every failure is swallowed. pid mismatch (or missing file) => new session.
+// `successful` means the call produced durable completion EVIDENCE (pal_exercise/pal_push only);
+// `errored` is the call's own outcome. They are different questions and are counted separately.
 function recordToolCall(workspaceDir, toolName, bytes, tokens, {
     successful = false,
+    errored = false,
     rawBytes = bytes,
     returnedBytes = bytes,
     resultCacheHits = 0,
@@ -161,7 +165,7 @@ function recordToolCall(workspaceDir, toolName, bytes, tokens, {
     try {
         const u = tallyFor(workspaceDir);
         const t = u.tools[toolName] || {
-            calls: 0, bytes: 0, tokens: 0, rawBytes: 0, returnedBytes: 0,
+            calls: 0, bytes: 0, tokens: 0, rawBytes: 0, returnedBytes: 0, errors: 0,
             resultCacheHits: 0, resultCacheMisses: 0, durationMs: 0, maxReturnedBytes: 0
         };
         t.calls += 1;
@@ -174,6 +178,7 @@ function recordToolCall(workspaceDir, toolName, bytes, tokens, {
         t.durationMs = (t.durationMs || 0) + durationMs;
         t.maxReturnedBytes = Math.max(t.maxReturnedBytes || 0, returnedBytes || 0);
         if (successful) t.successfulCalls = (t.successfulCalls || 0) + 1;
+        if (errored) { t.errors = (t.errors || 0) + 1; u.totalErrors = (u.totalErrors || 0) + 1; }
         u.tools[toolName] = t;
         u.totalCalls += 1;
         u.totalBytes += bytes || 0;
@@ -241,21 +246,11 @@ function injectedContext(workspaceDir, tools) {
     return out;
 }
 
-function fmtBytes(n) {
-    if (n < 1024) return n + " B";
-    return (n / 1024).toFixed(1) + " KB";
-}
-
-function fmtNum(n) {
-    n = Number(n);
-    return Number.isFinite(n) ? n.toLocaleString() : "—";
-}
-
-function fmtMoney(n, currency) {
-    if (n == null || n === "") return "not provided"; // never estimate an absent cost as $0
-    n = Number(n);
-    if (!Number.isFinite(n)) return "not provided";
-    return "$" + n.toFixed(4) + " " + (currency || "USD");
+// The session tally as the stats core should see it: the live in-process counters when this
+// process is the metering MCP server, otherwise whatever the last session flushed to disk.
+function readUsageTally(workspaceDir) {
+    flush(workspaceDir);
+    return tallies.get(workspaceDir) || readJson(usagePath(workspaceDir));
 }
 
 // Read the optional harness-reported model spend sidecar.
@@ -366,6 +361,10 @@ function normalizeRunUsageSnapshot(snapshot) {
     return normalized;
 }
 
+function sumSessionCounters(snapshot) {
+    return ["input", "cacheRead", "output", "cacheWrite"].reduce((total, field) => total + (Number(snapshot[field]) || 0), 0);
+}
+
 function runUsageDelta(start, end) {
     const delta = {};
     for (const field of ["input", "cacheRead", "output", "cacheWrite", "cost"]) {
@@ -410,7 +409,11 @@ function captureRunUsage(workspaceDir, { phase, boundary, snapshot, model, provi
         const phaseRecord = existing.phases[phase] || { windows: [] };
         const windows = phaseRecord.windows;
         const open = windows.find(window => window && window.start && !window.end);
-        if (boundary === "start" && open) {
+        // Session counters only ever grow WITHIN a session, so a new baseline below the open one
+        // proves that window belongs to a session that ended without closing it (a crash or kill).
+        // Replacing it is the only honest option: keeping it would span two sessions' counters.
+        const staleOpen = open && sumSessionCounters(normalized) < sumSessionCounters(open.start);
+        if (boundary === "start" && open && !staleOpen) {
             return { ok: true, unchanged: true, record: open, path: runUsagePath(workspaceDir) };
         }
         if (boundary === "end" && !open) {
@@ -420,7 +423,8 @@ function captureRunUsage(workspaceDir, { phase, boundary, snapshot, model, provi
         const record = boundary === "start"
             ? { source: "pi/sessionManager.getEntries", model: model || null, provider: provider || null, start: normalized }
             : { ...open, end: normalized, delta: runUsageDelta(open.start, normalized) };
-        if (boundary === "start") windows.push(record);
+        if (boundary === "start" && staleOpen) windows[windows.indexOf(open)] = record;
+        else if (boundary === "start") windows.push(record);
         else windows[windows.indexOf(open)] = record;
         existing.phases[phase] = { windows };
         const dest = runUsagePath(workspaceDir);
@@ -457,32 +461,6 @@ function phaseTotals(entries) {
         addEntry((phases[bucket] = phases[bucket] || makeAcc()), e);
     }
     return { total, phases, hasNamedPhase };
-}
-
-function formatSessionCost(workspaceDir) {
-    const sc = readSessionCost(workspaceDir);
-    const L = [];
-    L.push("Model-token spend (harness-reported via " + SESSION_COST_FILE + "):");
-    if (!sc) {
-        L.push("  not available — sidecar absent or empty; palsync does not estimate model spend.");
-        return L;
-    }
-    const { total, phases, hasNamedPhase } = phaseTotals(sc.entries);
-    const currency = (sc.entries[0] && sc.entries[0].currency) || "USD";
-    const costRow = (label, acc) => "  " + label.padEnd(8) + " in: " + fmtNum(acc.tokensIn).padStart(8) + "   provider-reported cached: " + fmtNum(acc.tokensCached).padStart(8) + "   out: " + fmtNum(acc.tokensOut).padStart(8) + "   cost: " + (acc.hasCost ? fmtMoney(acc.cost, currency) : "not provided");
-    if (hasNamedPhase) {
-        // Print every bucket present ("other" catches untagged entries) so rows sum to the total.
-        for (const phase of ["build", "review", "other"]) {
-            if (phases[phase]) L.push(costRow(phase, phases[phase]));
-        }
-    } else {
-        for (const e of sc.entries) {
-            L.push("  " + e.model + " (" + e.provider + ")");
-            L.push("    in: " + fmtNum(e.tokensIn) + "   provider-reported cached: " + fmtNum(e.tokensCached) + "   out: " + fmtNum(e.tokensOut) + "   cost: " + fmtMoney(e.cost, e.currency || currency));
-        }
-    }
-    L.push(costRow("total", total));
-    return L;
 }
 
 function readJsonLines(file, schema) {
@@ -533,102 +511,8 @@ function readPiUsage(workspaceDir) {
     return readJsonLines(path.join(workspaceDir, PI_USAGE_FILE), "palsync/pi-usage/1");
 }
 
-function formatPiUsage(workspaceDir) {
-    const entries = readPiUsage(workspaceDir);
-    const L = ["Pi extension tool telemetry (" + PI_USAGE_FILE + "):" ];
-    if (!entries.length) return L.concat("  no Pi telemetry recorded.");
-    const bytes = entries.reduce((sum, entry) => sum + (Number(entry.bytes) || 0), 0);
-    const tokens = entries.reduce((sum, entry) => sum + (Number(entry.tokenEstimate) || 0), 0);
-    const providers = [...new Set(entries.map(entry => entry.provider).filter(Boolean))];
-    const models = [...new Set(entries.map(entry => entry.model).filter(Boolean))];
-    L.push("  " + entries.length + " tool result(s), " + fmtBytes(bytes) + " returned, ≈" + fmtNum(tokens) + " estimated tokens");
-    L.push("  provider: " + (providers.length ? providers.join(", ") : "not reported") + "   model: " + (models.length ? models.join(", ") : "not reported"));
-    L.push("  cost: not provided — PalSync never estimates billing from tool-result telemetry.");
-    return L;
-}
-
-// Render the cost report. Always labels the numbers as palsync's OWN context contribution.
-function formatCost(workspaceDir, tools) {
-    flush(workspaceDir);
-    const u = tallies.get(workspaceDir) || normalizeV2(readJson(usagePath(workspaceDir)));
-    const manifestApi = require("./contextManifest");
-    const manifest = manifestApi.readManifest(workspaceDir);
-    const inj = manifest ? null : injectedContext(workspaceDir, tools);
-    const L = [];
-    L.push("palsync context contribution — " + workspaceDir);
-    L.push("(palsync's OWN footprint: tool results + injected block. NOT model token spend — palsync can't see that.)");
-    L.push("");
-
-    L.push("Tool calls this session:");
-    if (!u || !u.totalCalls) {
-        L.push("  (none recorded — no MCP tool has run in this workspace yet, or the session just started)");
-    } else {
-        L.push("  session started: " + u.startedAt + (u.updatedAt ? "   last call: " + u.updatedAt : ""));
-        const names = Object.keys(u.tools).sort((a, b) => u.tools[b].returnedBytes - u.tools[a].returnedBytes);
-        const fmtTok = (t) => (t.tokens != null ? ("  ≈" + String(t.tokens).padStart(6) + " tok") : "");
-        for (const n of names) {
-            const t = u.tools[n];
-            const saved = t.rawBytes ? Math.max(0, (1 - (t.returnedBytes / t.rawBytes)) * 100) : 0;
-            L.push("  " + n.padEnd(20) + " " + String(t.calls).padStart(4) + " call(s)   " +
-                fmtBytes(t.rawBytes).padStart(9) + " raw result → " + fmtBytes(t.returnedBytes).padStart(9) +
-                " returned (" + saved.toFixed(1) + "% condensed)" + fmtTok(t));
-        }
-        const totalSaved = u.totalRawBytes ? Math.max(0, (1 - (u.totalReturnedBytes / u.totalRawBytes)) * 100) : 0;
-        L.push("  " + "TOTAL".padEnd(20) + " " + String(u.totalCalls).padStart(4) + " call(s)   " +
-            fmtBytes(u.totalRawBytes).padStart(9) + " raw result → " + fmtBytes(u.totalReturnedBytes).padStart(9) +
-            " returned (" + totalSaved.toFixed(1) + "% condensed)" + fmtTok({ tokens: u.totalTokens }));
-        const resultTotal = u.resultCacheHits + u.resultCacheMisses;
-        L.push("  result cache: " + u.resultCacheHits + " hit(s), " + u.resultCacheMisses + " miss(es)" +
-            (resultTotal ? " — " + ((u.resultCacheHits / resultTotal) * 100).toFixed(1) + "% hit rate" : ""));
-        const largest = names.slice().sort((a, b) => u.tools[b].maxReturnedBytes - u.tools[a].maxReturnedBytes).slice(0, 3);
-        if (largest.length) L.push("  largest responses: " + largest.map(name => name + " " + fmtBytes(u.tools[name].maxReturnedBytes)).join(" · "));
-        L.push("  total tool duration: " + Math.round(u.totalDurationMs) + " ms");
-        L.push("  (tok = estimated model tokens: text ≈ bytes/4, images by pixel area — bytes alone overstate image cost)");
-    }
-    L.push("");
-
-    const lintStats = require("./lintCache").readStats(workspaceDir);
-    const cacheTotal = lintStats.hits + lintStats.misses;
-    L.push("Local lint result cache:");
-    L.push("  " + lintStats.hits + " hit(s), " + lintStats.misses + " miss(es)" +
-        (cacheTotal ? " — " + ((lintStats.hits / cacheTotal) * 100).toFixed(1) + "% hit rate" : "") +
-        (lintStats.bypasses ? "; " + lintStats.bypasses + " bypass(es)" : ""));
-    L.push("");
-
-    L.push(...formatSessionCost(workspaceDir));
-    L.push("");
-    L.push(...formatPiUsage(workspaceDir));
-    L.push("");
-
-    if (manifest) {
-        const summary = manifestApi.eagerSummary(manifest);
-        L.push("Injected context manifest (eager sections):");
-        L.push("  " + "MODELED eager sections".padEnd(22) + "  " + fmtBytes(summary.totalBytes).padStart(9) + "   (≈" + Math.ceil(summary.totalBytes / 4) + " tokens; wrapper bytes excluded)");
-        L.push("  locally stable prefix  " + fmtBytes(summary.stablePrefixBytes).padStart(9) + "   (" + summary.stablePercent.toFixed(1) + "% estimated reusable prefix)");
-        L.push("  dynamic tail           " + fmtBytes(summary.dynamicTailBytes).padStart(9));
-        L.push("  provider cache status unavailable; local stability is not a provider cache hit.");
-        L.push(summary.totalBytes > SOFT_THRESHOLD_BYTES
-            ? "  ABOVE SOFT THRESHOLD (" + fmtBytes(SOFT_THRESHOLD_BYTES) + ")"
-            : "  within soft threshold (" + fmtBytes(SOFT_THRESHOLD_BYTES) + ")");
-    } else {
-        L.push("Injected context block (legacy measurement; relaunch palsync to generate a manifest):");
-        L.push("  CLAUDE.palsync.md       " + fmtBytes(inj.palsyncDoc).padStart(9));
-        L.push("  skill descriptions      " + fmtBytes(inj.skills.total).padStart(9) + "   (" + Object.keys(inj.skills.perSkill).length + " skills; BODIES load on demand, not counted)");
-        L.push("  tool definitions        " + fmtBytes(inj.toolDefs).padStart(9) + "   (" + (Array.isArray(tools) ? tools.length : 0) + " tools)");
-        L.push("  " + "TOTAL injected".padEnd(22) + "  " + fmtBytes(inj.total).padStart(9) + "   (≈" + Math.ceil(inj.total / 4) + " tokens)");
-        L.push(inj.overSoftThreshold
-            ? "  ABOVE SOFT THRESHOLD (" + fmtBytes(SOFT_THRESHOLD_BYTES) + ") — consider trimming a skill description or a tool description."
-            : "  within soft threshold (" + fmtBytes(SOFT_THRESHOLD_BYTES) + ")");
-    }
-    if (u && u.contextGenerations && u.contextGenerations.length) {
-        L.push("Context generation events: " + u.contextGenerations.length + " changed generation(s); latest first divergent section: " +
-            (u.contextGenerations[u.contextGenerations.length - 1].firstDivergentSection || "initial generation"));
-    }
-    return L.join("\n");
-}
-
 module.exports = { recordToolCall, recordContextGeneration, contentBytes, contentStats, injectedContext,
-    formatCost, skillDescription, readSessionCost, recordSessionCost, readPiUsage, formatPiUsage,
+    readUsageTally, skillDescription, readSessionCost, recordSessionCost, readPiUsage,
     readRunUsage, captureRunUsage, normalizeRunUsageSnapshot, runUsageDelta, runUsagePhaseTotal,
     appendToolEvidence, readToolEvidence, filterToolEvidence,
     phaseTotals, normalizeV2, USAGE_FILE, SESSION_COST_FILE, RUN_USAGE_FILE, PI_USAGE_FILE, TOOL_EVIDENCE_FILE,
