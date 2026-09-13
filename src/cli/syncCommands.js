@@ -132,14 +132,14 @@ function parseFlags(argv) {
         else if (a.startsWith("--steps=")) flags.steps = a.slice("--steps=".length);
         else if (a === "--steps-file") { flags.stepsFile = argv[++i]; if (!flags.stepsFile) throw new Error("--steps-file requires a path"); }
         else if (a.startsWith("--steps-file=")) flags.stepsFile = a.slice("--steps-file=".length);
-        else if (["--model", "--provider", "--in", "--cached", "--out", "--cost", "--currency", "--phase", "--boundary", "--snapshot"].includes(a)) {
-            const key = { "--model": "model", "--provider": "provider", "--in": "tokensIn", "--cached": "tokensCached", "--out": "tokensOut", "--cost": "cost", "--currency": "currency", "--phase": "phase", "--boundary": "boundary", "--snapshot": "snapshot" }[a];
+        else if (["--model", "--provider", "--in", "--cached", "--out", "--cost", "--currency", "--phase", "--boundary", "--snapshot", "--session"].includes(a)) {
+            const key = { "--model": "model", "--provider": "provider", "--in": "tokensIn", "--cached": "tokensCached", "--out": "tokensOut", "--cost": "cost", "--currency": "currency", "--phase": "phase", "--boundary": "boundary", "--snapshot": "snapshot", "--session": "sessionId" }[a];
             flags[key] = argv[++i];
             if (flags[key] === undefined) throw new Error(a + " requires a value");
         }
-        else if (["--model=", "--provider=", "--in=", "--cached=", "--out=", "--cost=", "--currency=", "--phase=", "--boundary=", "--snapshot="].some(prefix => a.startsWith(prefix))) {
+        else if (["--model=", "--provider=", "--in=", "--cached=", "--out=", "--cost=", "--currency=", "--phase=", "--boundary=", "--snapshot=", "--session="].some(prefix => a.startsWith(prefix))) {
             const prefix = a.slice(0, a.indexOf("=") + 1);
-            const key = { "--model=": "model", "--provider=": "provider", "--in=": "tokensIn", "--cached=": "tokensCached", "--out=": "tokensOut", "--cost=": "cost", "--currency=": "currency", "--phase=": "phase", "--boundary=": "boundary", "--snapshot=": "snapshot" }[prefix];
+            const key = { "--model=": "model", "--provider=": "provider", "--in=": "tokensIn", "--cached=": "tokensCached", "--out=": "tokensOut", "--cost=": "cost", "--currency=": "currency", "--phase=": "phase", "--boundary=": "boundary", "--snapshot=": "snapshot", "--session=": "sessionId" }[prefix];
             flags[key] = a.slice(prefix.length);
         }
         else if (a === "--dir") { flags.dir = argv[++i]; if (!flags.dir) throw new Error("--dir requires a value"); }
@@ -406,7 +406,7 @@ async function run(cmd, argv, opts) {
         try { snapshot = JSON.parse(flags.snapshot || ""); }
         catch { console.error("usage capture failed: --snapshot must be JSON"); return 1; }
         const result = usage.captureRunUsage(dir, { phase: flags.phase, boundary: flags.boundary,
-            snapshot, model: flags.model, provider: flags.provider });
+            snapshot, model: flags.model, provider: flags.provider, sessionId: flags.sessionId });
         if (!result.ok) { console.error("usage capture failed: " + result.error); return 1; }
         console.log(result.unchanged ? "Pi usage boundary already recorded." : "Pi usage boundary recorded.");
         return 0;

@@ -48,6 +48,11 @@ const { serializeEnvelope } = require("./envelope");
 const fs = require("fs");
 const pathMod = require("path");
 
+function evidenceSessionId(ctx) {
+    const value = ctx && ctx.requestMeta && ctx.requestMeta["palsync/sessionId"];
+    return typeof value === "string" && /^[0-9a-f-]{36}$/i.test(value) ? value : undefined;
+}
+
 const diagnosticInputShape = {
     detail: z.enum(["summary", "normal", "full"]).optional(),
     maxDiagnostics: z.number().int().positive().optional(),
@@ -1292,7 +1297,8 @@ const TOOLS = [
                 palGuid: ctx.record.palGuid,
                 marker: ctx.record.lastModifiedDate,
                 sourceDigest: ctx.record.localHash || undefined,
-                route: String(route || "/").slice(0, 220)
+                route: String(route || "/").slice(0, 220),
+                sessionId: evidenceSessionId(ctx)
             });
             const persistWarning = "\n\n⚠ Render evidence persistence failed — " +
                 "palsync review check will not count this pal_screenshot call.";
@@ -1604,7 +1610,8 @@ const TOOLS = [
                     runId: res.runId,
                     kind: res.kind,
                     mode: res.mode,
-                    summary
+                    summary,
+                    sessionId: evidenceSessionId(ctx)
                 });
                 if (!out.evidenceRecorded) out.message +=
                     "\n\n⚠ Behavior passed, but exercise evidence persistence failed. " +
@@ -2046,7 +2053,8 @@ const TOOLS = [
                 out.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, {
                     tool: "pal_push",
                     palGuid: ctx.record.palGuid,
-                    marker: ctx.record.lastModifiedDate
+                    marker: ctx.record.lastModifiedDate,
+                    sessionId: evidenceSessionId(ctx)
                 });
                 if (!out.evidenceRecorded) out.message +=
                     "\n\n⚠ Push succeeded, but eval evidence persistence failed. " +

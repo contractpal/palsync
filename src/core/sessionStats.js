@@ -50,21 +50,30 @@ function windowIdentity(runUsage) {
     return { model: null, provider: null };
 }
 
-function phaseUsage(runUsage, phase) {
-    const completed = phaseWindow(runUsage, phase).filter(window => window && window.end && window.delta);
+function phaseUsage(runUsage, phase, sessionId) {
+    const completed = phaseWindow(runUsage, phase).filter(window => window && window.end && window.delta &&
+        (sessionId ? window.sessionId === sessionId : false));
     if (!completed.length) return null;
-    const total = usage.runUsagePhaseTotal(runUsage, phase);
-    return {
-        input: total.input, cacheRead: total.cacheRead, cacheWrite: total.cacheWrite,
-        output: total.output, cost: total.cost, windows: completed.length
-    };
+    const total = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, cost: 0 };
+    for (const window of completed) for (const field of Object.keys(total)) total[field] += Number(window.delta[field]) || 0;
+    return Object.assign(total, { windows: completed.length, scope: "current session" });
+}
+
+function latestSessionId(runUsage) {
+    const rows = [];
+    for (const phase of ["build", "review"]) for (const window of phaseWindow(runUsage, phase)) {
+        if (window && window.sessionId && window.startedAt) rows.push(window);
+    }
+    rows.sort((a, b) => String(b.endedAt || b.startedAt).localeCompare(String(a.endedAt || a.startedAt)));
+    return rows[0] && rows[0].sessionId;
 }
 
 // Which telemetry files actually hold model usage, so the report can name the sources it did
 // NOT use instead of silently discarding them (or, worse, adding them to the chosen source).
-function modelCorroboration(runUsage, sessionCost, chosen) {
+function modelCorroboration(runUsage, sessionCost, chosen, sessionId) {
     const others = [];
-    if (runUsage && chosen !== "pi/run-usage" && (phaseUsage(runUsage, "build") || phaseUsage(runUsage, "review"))) {
+    if (runUsage && chosen !== "pi/run-usage" &&
+        (phaseUsage(runUsage, "build", sessionId) || phaseUsage(runUsage, "review", sessionId))) {
         others.push("pi/run-usage");
     }
     if (sessionCost && chosen !== "harness/session-cost") others.push("harness/session-cost");
@@ -74,8 +83,9 @@ function modelCorroboration(runUsage, sessionCost, chosen) {
 function resolveModelUsage(workspaceDir, runtime) {
     const runUsage = usage.readRunUsage(workspaceDir);
     const sessionCost = usage.readSessionCost(workspaceDir);
-    const build = phaseUsage(runUsage, "build");
-    const review = phaseUsage(runUsage, "review");
+    const sessionId = runtime && runtime.sessionId || latestSessionId(runUsage);
+    const build = phaseUsage(runUsage, "build", sessionId);
+    const review = phaseUsage(runUsage, "review", sessionId);
 
     const live = usage.normalizeRunUsageSnapshot(runtime && runtime.snapshot);
     if (live) {
@@ -87,7 +97,7 @@ function resolveModelUsage(workspaceDir, runtime) {
             cost: live.cost, currency: "USD",
             scope: "whole Pi session (cumulative, not a bounded phase)",
             phases: { build: build || null, review: review || null },
-            corroboration: modelCorroboration(runUsage, sessionCost, "pi/sessionManager.getEntries (live)")
+            corroboration: modelCorroboration(runUsage, sessionCost, "pi/sessionManager.getEntries (live)", sessionId)
         };
     }
 
@@ -105,7 +115,7 @@ function resolveModelUsage(workspaceDir, runtime) {
             output: totals.output, total: sumSnapshot(totals), cost: totals.cost, currency: "USD",
             scope: "completed PalSync phase windows only",
             phases: { build: build || null, review: review || null },
-            corroboration: modelCorroboration(runUsage, sessionCost, "pi/run-usage")
+            corroboration: modelCorroboration(runUsage, sessionCost, "pi/run-usage", sessionId)
         };
     }
 
@@ -156,9 +166,9 @@ function reductionPercent(rawBytes, returnedBytes) {
     return Math.max(0, (1 - (returnedBytes / rawBytes)) * 100);
 }
 
-function resolveToolUsage(workspaceDir) {
+function resolveToolUsage(workspaceDir, sessionId) {
     const tally = usage.normalizeV2(usage.readUsageTally(workspaceDir));
-    if (tally && tally.totalCalls) {
+    if (tally && (!sessionId || tally.sessionId === sessionId || tally.pid === process.pid)) {
         const rows = Object.entries(tally.tools).map(([name, tool]) => toolRow(name, tool))
             .sort((a, b) => b.returnedBytes - a.returnedBytes);
         const cache = lintCache.readStats(workspaceDir);
@@ -176,7 +186,7 @@ function resolveToolUsage(workspaceDir) {
             estimatedTokens: tally.totalTokens || 0,
             durationMs: Math.round(tally.totalDurationMs || 0),
             resultCache: { hits: tally.resultCacheHits || 0, misses: tally.resultCacheMisses || 0 },
-            lintCache: { hits: cache.hits, misses: cache.misses, bypasses: cache.bypasses || 0 },
+            lintCache: { scope: "workspace-cumulative", hits: cache.hits, misses: cache.misses, bypasses: cache.bypasses || 0 },
             perTool: rows.slice(0, MAX_TOOL_ROWS),
             perToolTruncated: Math.max(0, rows.length - MAX_TOOL_ROWS)
         };
@@ -191,6 +201,7 @@ function resolveToolUsage(workspaceDir) {
         const errors = piEntries.filter(entry => entry.isError === true).length;
         return {
             available: true, quality: "measured", source: ".palsync/pi-usage.jsonl (fallback)",
+            scope: "workspace-cumulative",
             qualityByField: { bytes: "measured", estimatedTokens: "estimated" },
             startedAt: null, updatedAt: null,
             calls: piEntries.length,
@@ -268,9 +279,9 @@ function resolveContext(workspaceDir, tools) {
 }
 
 // Bounded counts only. Evidence bodies stay in the ledger; this is a session statistic.
-function resolveEvidence(workspaceDir) {
-    const entries = usage.readToolEvidence(workspaceDir);
-    if (!entries.length) return unavailable("no verification evidence recorded this session");
+function resolveEvidence(workspaceDir, sessionId) {
+    const entries = usage.readToolEvidence(workspaceDir).filter(entry => sessionId && entry.sessionId === sessionId);
+    if (!entries.length) return unavailable(sessionId ? "no verification evidence recorded this session" : "no session identity; durable evidence is historical/unbounded");
     const byTool = {};
     for (const entry of entries) byTool[entry.tool] = (byTool[entry.tool] || 0) + 1;
     return {
@@ -290,7 +301,8 @@ function sessionState(model) {
 function buildSessionStats(workspaceDir, { tools, runtime } = {}) {
     const dir = path.resolve(workspaceDir);
     const model = resolveModelUsage(dir, runtime);
-    const toolStats = resolveToolUsage(dir);
+    const sessionId = runtime && runtime.sessionId || latestSessionId(usage.readRunUsage(dir));
+    const toolStats = resolveToolUsage(dir, sessionId);
     const context = resolveContext(dir, tools);
     return {
         schema: SCHEMA,
@@ -302,12 +314,13 @@ function buildSessionStats(workspaceDir, { tools, runtime } = {}) {
             provider: model.provider || (runtime && runtime.provider) || null,
             startedAt: toolStats.startedAt || null,
             updatedAt: toolStats.updatedAt || null,
+            id: sessionId || null,
             state: sessionState(model)
         },
         model,
         tools: toolStats,
         context,
-        evidence: resolveEvidence(dir)
+        evidence: resolveEvidence(dir, sessionId)
     };
 }
 
@@ -371,7 +384,7 @@ function toolLines(tools) {
             (cache.bypasses ? ", " + cache.bypasses + " bypass(es)" : "");
     };
     if (tools.resultCache) lines.push(cacheRow("result cache", tools.resultCache));
-    if (tools.lintCache) lines.push(cacheRow("lint cache", tools.lintCache));
+    if (tools.lintCache) lines.push(cacheRow("lint cache (workspace cumulative)", tools.lintCache));
     for (const row of tools.perTool) {
         lines.push("  " + row.tool.padEnd(18) + String(row.calls).padStart(4) + " call(s)  " +
             fmtBytes(row.rawBytes).padStart(9) + " → " + fmtBytes(row.returnedBytes).padStart(9) +

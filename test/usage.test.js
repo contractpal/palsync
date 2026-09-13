@@ -10,6 +10,15 @@ const { spawn } = require("node:child_process");
 const usage = require("../src/core/usage");
 const { tmpWorkspace } = require("./helpers");
 
+test("initializeUsageTally starts a fresh in-memory session without flushing old calls", () => {
+    const ws = tmpWorkspace();
+    fs.writeFileSync(path.join(ws, usage.USAGE_FILE), JSON.stringify({ version: 2, pid: -1, totalCalls: 9, tools: {} }));
+    const tally = usage.initializeUsageTally(ws);
+    assert.equal(tally.totalCalls, 0);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(ws, usage.USAGE_FILE), "utf8")).totalCalls, 9, "history is preserved");
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
 test("recordToolCall batches calls and flushes usage v2", () => {
     const ws = tmpWorkspace();
     usage.recordToolCall(ws, "pal_status", 7, 2);

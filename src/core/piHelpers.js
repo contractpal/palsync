@@ -45,6 +45,21 @@ function routeItems(query, metadata) {
 
 function routeTools(query, metadata) { return routeItems(query, metadata); }
 
+// Prompt routing is intentionally narrow: ordinary prose must not turn the deferred set eager.
+function promptToolNames(prompt, metadata) {
+    const text = String(prompt || "");
+    const explicit = text.match(/\bpal_[a-z0-9_]+\b/gi) || [];
+    if (/\b(?:take|capture) (?:a )?screenshot\b/i.test(text)) explicit.push("pal_screenshot");
+    if (/\b(?:run|perform|exercise) (?:the )?(?:pal )?exercise\b/i.test(text)) explicit.push("pal_exercise");
+    return [...new Set(explicit)].filter(name => (metadata || []).some(tool => tool.name === name));
+}
+
+function isPalReviewPrompt(prompt, skills, workspaceDir) {
+    const expected = path.resolve(workspaceDir || ".", ".agents/skills/pal-review/SKILL.md");
+    const loaded = (skills || []).some(skill => path.resolve(skill.location || skill.filePath || skill.path || "") === expected);
+    return loaded && String(prompt || "").includes('<skill name="pal-review" location="' + expected + '">');
+}
+
 function eagerToolNames(metadata) {
     const available = new Set(metadata.map(tool => tool.name));
     return CORE_TOOLS.filter(name => available.has(name));
@@ -152,6 +167,7 @@ function piUsageBoundary(event) {
     if (!event || String(event.toolName || "").toLowerCase() !== "bash") return null;
     const command = String(event.input && event.input.command || "");
     if (/(?:^|[;&]\s*)palsync\s+session-summary\b/.test(command)) return { boundary: "end", phase: "build" };
+    if (/(?:^|[;&]\s*)palsync\s+review\s+check\b/.test(command)) return { boundary: "end", phase: "review" };
     return null;
 }
 
@@ -204,4 +220,4 @@ function completionFollowUp(gate, fingerprint, previousFingerprint) {
 module.exports = { CORE_TOOLS, routeItems, routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision,
     imageTokens, contentStats, piUsageEntry, appendPiUsage, isPalsyncWorkspace, piUsageSnapshot, piUsageBoundary,
     completionFingerprint, completionFollowUp, piWriteEvent, piAppendContent, PI_WRITE_TOOLS,
-    promptGuidelinesFor, activationGuidance };
+    promptGuidelinesFor, activationGuidance, promptToolNames, isPalReviewPrompt };

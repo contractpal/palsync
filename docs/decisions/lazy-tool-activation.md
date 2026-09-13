@@ -19,5 +19,8 @@ the whole cached prefix on every activation: a net loss.
 
 Pi keeps lazy activation. Pi applies purely additive active-set changes at the tool-result
 position, preserving the stable prefix for cache-aware models — so eager there would add
-~10K tokens of schemas to every prefix for no hit-rate gain. Codex CLI and OpenCode keep the
+~10K tokens of schemas to every prefix for no hit-rate gain. Before the first agent response,
+the native extension may add only explicitly named `pal_*` tools, narrow screenshot/exercise
+requests, or the fixed requirements of an exactly-expanded bundled `pal-review` skill. Generic
+prose does not activate groups; `pal_tools` remains the fallback. Codex CLI and OpenCode keep the
 complete static set as before.

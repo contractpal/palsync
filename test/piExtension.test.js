@@ -9,7 +9,7 @@ const { spawnSync } = require("node:child_process");
 const metadata = require("../src/mcp/pi-tools.json");
 const { routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision, piUsageEntry, appendPiUsage,
     isPalsyncWorkspace, piUsageSnapshot, piUsageBoundary, completionFingerprint, completionFollowUp,
-    piWriteEvent, piAppendContent, promptGuidelinesFor, activationGuidance } = require("../src/core/piHelpers");
+    piWriteEvent, piAppendContent, promptGuidelinesFor, activationGuidance, promptToolNames, isPalReviewPrompt } = require("../src/core/piHelpers");
 const { TOOLS } = require("../src/mcp/tools");
 const { serializeToolDefinitions } = require("../src/mcp/toolSchema");
 const registerPi = require("../src/mcp/registerPi");
@@ -118,13 +118,28 @@ test("Pi usage snapshots match Pi's cumulative counters and boundaries stay narr
     assert.deepEqual(piUsageBoundary({ toolName: "bash", input: { command: "palsync session-summary --mode lite" } }), { boundary: "end", phase: "build" });
     // Measurement starts with the Pi session, so no agent-visible bookkeeping command exists.
     assert.equal(piUsageBoundary({ toolName: "bash", input: { command: "palsync usage start --phase build" } }), null);
+    assert.deepEqual(piUsageBoundary({ toolName: "bash", input: { command: "palsync review check" } }), { boundary: "end", phase: "review" });
     assert.equal(piUsageBoundary({ toolName: "bash", input: { command: "echo palsync session-summary" } }), null);
     const source = fs.readFileSync(path.join(__dirname, "..", "pi-extension", "index.ts"), "utf8");
     assert.match(source, /piUsageSnapshot\(ctx\.sessionManager\.getEntries\(\)\)/);
     assert.match(source, /palsync", \["usage", "capture"/);
-    assert.match(source, /captureBoundary\(ctx, "build", "start"\)/, "the session start IS the baseline");
-    assert.match(source, /"palsync\/runtime": liveUsage/, "live counters reach pal_stats through request _meta");
+    assert.match(source, /pi\.on\("before_agent_start"/, "the first agent turn establishes its phase");
+    assert.match(source, /if \(activePhase && activePhase !== phase\) await captureBoundary\(ctx, activePhase, "end"\)/,
+        "a review turn closes an open build window instead of overlapping it");
+    assert.match(source, /pi\.on\("session_shutdown", async/, "shutdown awaits the open phase before teardown");
+    assert.doesNotMatch(source, /session_start[\s\S]{0,500}captureBoundary\(ctx, "build", "start"\)/);
+    assert.match(source, /meta\["palsync\/runtime"\] = liveUsage/, "live counters reach pal_stats through request _meta");
     assert.doesNotMatch(source, /arguments: \{[^}]*runtime/, "runtime must never be a model-visible argument");
+});
+
+test("Pi prompt preactivation is narrow and review detection requires the expanded bundled skill", () => {
+    assert.deepEqual(promptToolNames("take a screenshot", metadata), ["pal_screenshot"]);
+    assert.deepEqual(promptToolNames("please pal_exercise", metadata), ["pal_exercise"]);
+    assert.deepEqual(promptToolNames("review browser test the design", metadata), []);
+    const ws = path.join(os.tmpdir(), "pal-review-workspace");
+    const skill = path.join(ws, ".agents/skills/pal-review/SKILL.md");
+    assert.equal(isPalReviewPrompt('<skill name="pal-review" location="' + skill + '">', [{ location: skill }], ws), true);
+    assert.equal(isPalReviewPrompt("review this", [{ location: skill }], ws), false);
 });
 
 test("Pi completion handling is settled, workspace-scoped, and loop-resistant", () => {

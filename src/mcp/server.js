@@ -63,6 +63,8 @@ function logErr(msg) { try { process.stderr.write("[palsync-mcp] " + msg + "\n")
 function stackOf(err) { return err && err.stack ? err.stack : String(err); }
 
 function createServer(getCtx, workspaceDir, options = {}) {
+    // In-memory only: a first stats call is a real zero for this MCP process, never prior PID data.
+    usage.initializeUsageTally(workspaceDir);
     const profile = normalizeProfile(options.profile || process.env.PALSYNC_TOOL_PROFILE);
     // Keep the same rule in affected tool descriptions: Pi's MCP adapter lists tools but does not
     // surface initialize-result instructions to the model, so server instructions are additive.
@@ -121,6 +123,12 @@ function createServer(getCtx, workspaceDir, options = {}) {
                         ctx = await getCtx({ acquireLock: false });
                     } else {
                         ctx = await getCtx();
+                    }
+                    // Metadata is request-local; never mutate the memoized authenticated context.
+                    if (extra && extra._meta) {
+                        const sessionId = extra._meta["palsync/sessionId"] || (extra._meta["palsync/runtime"] && extra._meta["palsync/runtime"].sessionId);
+                        if (sessionId) usage.bindUsageTallySession(workspaceDir, sessionId);
+                        ctx = Object.assign(Object.create(ctx), { requestMeta: extra._meta });
                     }
                     const res = await t.run(ctx, args || {});
                     if (ctx && ctx.lifecycle && t.needsLock !== false) ctx.lifecycle.onActivity(); // reset idle timer; re-lock after an idle release (skip for lockless tools)

@@ -1,10 +1,12 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import metadata from "./tools.json";
 import helpers from "./helpers.js";
 
 const { routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision, appendPiUsage,
-  isPalsyncWorkspace, piUsageSnapshot, piUsageBoundary, completionFingerprint, completionFollowUp, piWriteEvent, piAppendContent } = helpers;
+  isPalsyncWorkspace, piUsageSnapshot, piUsageBoundary, completionFingerprint, completionFollowUp, piWriteEvent, piAppendContent,
+  promptToolNames, isPalReviewPrompt } = helpers;
 
 // Keep routing guidance in the entrypoint that consumes it. During setup or /reload, Pi can briefly
 // observe an older cached helpers.js; the entrypoint must never require a newly-added helper export.
@@ -103,6 +105,8 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
   // Captured deterministically in the tool_call hook (which runs before the tool executes and DOES
   // receive ctx), so pal_stats reports current Pi usage without the model running a bookkeeping call.
   let liveUsage: Record<string, unknown> | null = null;
+  let sessionId: string | null = null;
+  let activePhase: string | null = null;
 
   const registerMcpTool = (tool: any) => {
     if (registered.has(tool.name)) return;
@@ -116,24 +120,28 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
       promptGuidelines: promptGuidelines.length ? promptGuidelines : undefined,
       parameters: tool.inputSchema as any,
       async execute(_id, params) {
-        const result = await client!.call(tool.name, params as Record<string, unknown>,
-          tool.name === "pal_stats" && liveUsage ? { "palsync/runtime": liveUsage } : undefined);
+        const meta: Record<string, unknown> = sessionId ? { "palsync/sessionId": sessionId } : {};
+        if (tool.name === "pal_stats" && liveUsage) meta["palsync/runtime"] = liveUsage;
+        const result = await client!.call(tool.name, params as Record<string, unknown>, Object.keys(meta).length ? meta : undefined);
         if (result.isError) throw new Error((result.content || []).map((item: any) => item.text || "").join("\n"));
         return { content: result.content || [], details: { tool: tool.name } };
       }
     });
   };
 
-  // The Pi session IS the measurement boundary: the baseline is taken when the session starts and
-  // closed when it ends, so no agent-visible `palsync usage start` call exists. Fire-and-forget and
-  // fully fail-open: this is evidence, and it must never delay or break a session transition.
-  const captureBoundary = (ctx: any, phase: string, boundary: string) => {
+  // The first agent turn establishes the phase, so no agent-visible `palsync usage start` call
+  // exists. Bounded (2s) and fully fail-open: this is evidence, and it must never break a session.
+  const captureBoundary = async (ctx: any, phase: string, boundary: string) => {
     let snapshot;
     try { snapshot = piUsageSnapshot(ctx.sessionManager.getEntries()); }
-    catch (error) { return; } // no session counters => record nothing rather than a fabricated zero
-    pi.exec("palsync", ["usage", "capture", "--phase", phase, "--boundary", boundary,
-      "--snapshot", JSON.stringify(snapshot), "--model", ctx.model?.id ?? "", "--provider", ctx.model?.provider ?? "",
-      "--dir", ctx.cwd], { timeout: 5000 }).catch(() => {});
+    catch (error) { return; }
+    if (!sessionId) sessionId = randomUUID();
+    try {
+      await pi.exec("palsync", ["usage", "capture", "--phase", phase, "--boundary", boundary,
+        "--snapshot", JSON.stringify(snapshot), "--model", ctx.model?.id ?? "", "--provider", ctx.model?.provider ?? "",
+        "--session", sessionId, "--dir", ctx.cwd], { timeout: 2000 });
+      activePhase = boundary === "start" ? phase : null;
+    } catch (error) { /* evidence-only and fail-open */ }
   };
 
   const activate = (names: string[]) => {
@@ -146,8 +154,10 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
 
   pi.on("session_start", (_event, ctx) => {
     if (!isPalsyncWorkspace(ctx.cwd)) return;
-    captureBoundary(ctx, "build", "start");
+    sessionId = randomUUID();
+    activePhase = null;
     if (hasPiMcpCollision(pi.getActiveTools())) {
+      sessionId = null;
       ctx.ui.notify("PalSync native extension disabled: pi-mcp is already serving palsync. Configure that server with lifecycle:\"lazy\" or disable one integration.", "warning");
       return;
     }
@@ -180,6 +190,19 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
     pi.setActiveTools(activateAdditively(pi.getActiveTools(), ["pal_tools"]));
   });
 
+  pi.on("before_agent_start", async (event: any, ctx) => {
+    if (!client || !isPalsyncWorkspace(ctx.cwd)) return;
+    const review = isPalReviewPrompt(event.prompt, event.systemPromptOptions?.skills, ctx.cwd);
+    const phase = review ? "review" : "build";
+    // Phases never overlap: a review turn inside an open build window closes build at the same
+    // snapshot first, so review usage is never reported as build.
+    if (activePhase && activePhase !== phase) await captureBoundary(ctx, activePhase, "end");
+    if (!activePhase) await captureBoundary(ctx, phase, "start");
+    const additions = promptToolNames(event.prompt, metadata as any[]);
+    if (review) additions.push("pal_validate", "pal_test", "pal_fetch", "pal_screenshot", "pal_exercise", "pal_debug", "pal_regression");
+    if (additions.length) activate(additions);
+  });
+
   pi.on("agent_settled", async (_event, ctx) => {
     if (!isPalsyncWorkspace(ctx.cwd)) return;
     try {
@@ -204,9 +227,9 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
     }
   });
 
-  pi.on("session_shutdown", (_event, ctx) => {
-    if (ctx && isPalsyncWorkspace(ctx.cwd)) captureBoundary(ctx, "build", "end");
-    client?.close();
+  pi.on("session_shutdown", async (_event, ctx) => {
+    try { if (ctx && activePhase && isPalsyncWorkspace(ctx.cwd)) await captureBoundary(ctx, activePhase, "end"); }
+    finally { client?.close(); activePhase = null; sessionId = null; }
   });
 
   // Both hooks below run the SAME cores Claude Code's settings hooks run, through the CLI adapter, so
@@ -225,16 +248,13 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
     if (event.toolName === "pal_stats" && isPalsyncWorkspace(ctx.cwd)) {
       try {
         liveUsage = { snapshot: piUsageSnapshot(ctx.sessionManager.getEntries()), agent: "pi",
-          model: ctx.model.id, provider: ctx.model.provider };
+          model: ctx.model.id, provider: ctx.model.provider, sessionId };
       } catch (error) { liveUsage = null; }
     }
-    const boundary = isPalsyncWorkspace(ctx.cwd) && piUsageBoundary(event);
-    if (boundary) {
+    const boundary = client && isPalsyncWorkspace(ctx.cwd) && piUsageBoundary(event);
+    if (boundary && boundary.phase === activePhase) {
       try {
-        const snapshot = piUsageSnapshot(ctx.sessionManager.getEntries());
-        await pi.exec("palsync", ["usage", "capture", "--phase", boundary.phase, "--boundary", boundary.boundary,
-          "--snapshot", JSON.stringify(snapshot), "--model", ctx.model.id, "--provider", ctx.model.provider,
-          "--dir", ctx.cwd], { timeout: 5000 });
+        await captureBoundary(ctx, boundary.phase, boundary.boundary);
       } catch (error) {
         // Telemetry is evidence-only: a failed sidecar capture must never block a build handoff.
         ctx.ui.notify("PalSync usage capture skipped (fail open): " + (error instanceof Error ? error.message : String(error)), "warning");

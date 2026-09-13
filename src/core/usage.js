@@ -102,9 +102,20 @@ function normalizeV2(value) {
 function tallyFor(workspaceDir) {
     if (tallies.has(workspaceDir)) return tallies.get(workspaceDir);
     const old = normalizeV2(readJson(usagePath(workspaceDir)));
-    let u = old && old.pid === process.pid ? old : emptyTally(old ? old.contextGenerations : []);
+    const u = old && old.pid === process.pid ? old : emptyTally(old ? old.contextGenerations : []);
     tallies.set(workspaceDir, u);
     return u;
+}
+
+// Initialize in memory when an MCP server starts. This deliberately does not flush: listing tools
+// must stay side-effect-free, while a first pal_stats read must still see this process's zero tally.
+function initializeUsageTally(workspaceDir) { return tallyFor(workspaceDir); }
+
+function bindUsageTallySession(workspaceDir, sessionId) {
+    if (typeof sessionId !== "string" || !/^[0-9a-f-]{36}$/i.test(sessionId)) return null;
+    const tally = tallyFor(workspaceDir);
+    if (!tally.sessionId) tally.sessionId = sessionId;
+    return tally.sessionId === sessionId ? tally : null;
 }
 
 function flush(workspaceDir) {
@@ -398,7 +409,7 @@ function runUsagePhaseTotal(runUsage, phase) {
 
 // Persist immutable completed windows. A repeated start leaves an open baseline untouched; a
 // repeated end leaves the last completed window untouched. Later sessions append a new window.
-function captureRunUsage(workspaceDir, { phase, boundary, snapshot, model, provider } = {}) {
+function captureRunUsage(workspaceDir, { phase, boundary, snapshot, model, provider, sessionId } = {}) {
     if (phase !== "build" && phase !== "review") return { ok: false, error: "phase must be build or review" };
     if (boundary !== "start" && boundary !== "end") return { ok: false, error: "boundary must be start or end" };
     const normalized = normalizeRunUsageSnapshot(snapshot);
@@ -408,7 +419,8 @@ function captureRunUsage(workspaceDir, { phase, boundary, snapshot, model, provi
         const existing = readRunUsage(workspaceDir) || { schema: "palsync/run-usage/1", phases: {} };
         const phaseRecord = existing.phases[phase] || { windows: [] };
         const windows = phaseRecord.windows;
-        const open = windows.find(window => window && window.start && !window.end);
+        const tagged = typeof sessionId === "string" && /^[0-9a-f-]{36}$/i.test(sessionId);
+        const open = windows.find(window => window && window.start && !window.end && (!tagged || window.sessionId === sessionId));
         // Session counters only ever grow WITHIN a session, so a new baseline below the open one
         // proves that window belongs to a session that ended without closing it (a crash or kill).
         // Replacing it is the only honest option: keeping it would span two sessions' counters.
@@ -421,8 +433,9 @@ function captureRunUsage(workspaceDir, { phase, boundary, snapshot, model, provi
             return { ok: false, error: "cannot end a phase without a recorded start" };
         }
         const record = boundary === "start"
-            ? { source: "pi/sessionManager.getEntries", model: model || null, provider: provider || null, start: normalized }
-            : { ...open, end: normalized, delta: runUsageDelta(open.start, normalized) };
+            ? Object.assign({ source: "pi/sessionManager.getEntries", model: model || null, provider: provider || null,
+                start: normalized, startedAt: new Date().toISOString() }, tagged ? { sessionId } : {})
+            : { ...open, end: normalized, endedAt: new Date().toISOString(), delta: runUsageDelta(open.start, normalized) };
         if (boundary === "start" && staleOpen) windows[windows.indexOf(open)] = record;
         else if (boundary === "start") windows.push(record);
         else windows[windows.indexOf(open)] = record;
@@ -514,6 +527,7 @@ function readPiUsage(workspaceDir) {
 module.exports = { recordToolCall, recordContextGeneration, contentBytes, contentStats, injectedContext,
     readUsageTally, skillDescription, readSessionCost, recordSessionCost, readPiUsage,
     readRunUsage, captureRunUsage, normalizeRunUsageSnapshot, runUsageDelta, runUsagePhaseTotal,
+    initializeUsageTally, bindUsageTallySession,
     appendToolEvidence, readToolEvidence, filterToolEvidence,
     phaseTotals, normalizeV2, USAGE_FILE, SESSION_COST_FILE, RUN_USAGE_FILE, PI_USAGE_FILE, TOOL_EVIDENCE_FILE,
     SOFT_THRESHOLD_BYTES };

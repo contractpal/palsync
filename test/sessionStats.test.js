@@ -131,8 +131,8 @@ test("live Pi usage wins and is never summed with the sidecars that overlap it",
     assert.equal(model.input, 400, "live counters are used as-is, not added to run-usage or session-cost");
     assert.equal(model.cost, 1.5);
     assert.equal(model.total, 400 + 50 + 60 + 7);
-    assert.deepEqual(model.corroboration, ["pi/run-usage", "harness/session-cost"]);
-    assert.equal(model.phases.build.input, 100, "bounded phase windows stay reported separately");
+    assert.deepEqual(model.corroboration, ["harness/session-cost"], "untagged historical windows are not current-session corroboration");
+    assert.equal(model.phases.build, null, "untagged historical windows are not reported as this session");
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
@@ -145,10 +145,10 @@ test("run-usage outranks session-cost when no live counters exist", () => {
         snapshot: { input: 100, cacheRead: 10, output: 20, cacheWrite: 5, cost: 0.25 } });
 
     const model = stats.buildSessionStats(ws, { tools: TOOLS }).model;
-    assert.equal(model.source, "pi/run-usage");
-    assert.equal(model.input, 100);
-    assert.equal(model.cost, 0.25);
-    assert.deepEqual(model.corroboration, ["harness/session-cost"]);
+    assert.equal(model.source, "harness/session-cost", "untagged historical windows are never current-session totals");
+    assert.equal(model.input, 1000);
+    assert.equal(model.cost, 9);
+    assert.deepEqual(model.corroboration, []);
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
@@ -222,10 +222,30 @@ test("evidence is reported as bounded counts, never as evidence bodies", () => {
     usage.appendToolEvidence(ws, { tool: "pal_push", palGuid: "g", marker: "m", body: "x".repeat(5000) });
     usage.appendToolEvidence(ws, { tool: "pal_exercise", palGuid: "g", marker: "m" });
     const report = stats.buildSessionStats(ws, { tools: TOOLS });
-    assert.deepEqual(report.evidence.byTool, { pal_push: 1, pal_exercise: 1 });
+    assert.equal(report.evidence.available, false, "untagged durable rows are historical/unbounded, not this session");
     const text = stats.formatSessionStats(report);
     assert.doesNotMatch(text, /xxxx/);
     assert.ok(Buffer.byteLength(text, "utf8") < 4096, "the stats result stays compact");
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("stats select only the current tagged session and preserve historical windows/evidence", () => {
+    const ws = tmpWorkspace();
+    const first = "11111111-1111-4111-8111-111111111111";
+    const second = "22222222-2222-4222-8222-222222222222";
+    for (const [id, end] of [[first, 10], [second, 30]]) {
+        usage.captureRunUsage(ws, { phase: "build", boundary: "start", sessionId: id,
+            snapshot: { input: 0, cacheRead: 0, output: 0, cacheWrite: 0, cost: 0 } });
+        usage.captureRunUsage(ws, { phase: "build", boundary: "end", sessionId: id,
+            snapshot: { input: end, cacheRead: 0, output: 0, cacheWrite: 0, cost: 0 } });
+    }
+    usage.appendToolEvidence(ws, { tool: "pal_push", palGuid: "g", marker: "m", sessionId: first });
+    usage.appendToolEvidence(ws, { tool: "pal_exercise", palGuid: "g", marker: "m", sessionId: second });
+    const report = stats.buildSessionStats(ws, { tools: TOOLS, runtime: { sessionId: second } });
+    assert.equal(report.model.phases.build.input, 30);
+    assert.deepEqual(report.evidence.byTool, { pal_exercise: 1 });
+    assert.equal(usage.readRunUsage(ws).phases.build.windows.length, 2, "history remains on disk");
+    assert.equal(usage.readToolEvidence(ws).length, 2, "ledger remains on disk");
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
