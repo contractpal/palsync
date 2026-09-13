@@ -138,6 +138,36 @@ test("QA report contract requires bounded usage and copied screenshot assets", (
     assert.match(template, /Build phase[\s\S]*Review phase[\s\S]*Total measured PalSync run/);
 });
 
+// The template must not reintroduce direct telemetry-file reads that the skill forbids.
+test("report template routes every cost & usage number through one pal_stats read", () => {
+    const template = read(TEMPLATE);
+    const cost = template.slice(template.indexOf("## Cost & usage"), template.indexOf("## Recommendations"));
+    assert.match(cost, /ONE `pal_stats` read/, "cost section must mandate a single pal_stats read");
+    assert.match(cost, /`palsync stats`/, "cost section must name the non-MCP equivalent");
+    assert.match(cost, /Never substitute the current Pi footer or `\/info` totals/,
+        "cost section must forbid Pi footer / info substitution");
+    assert.match(cost, /not available/, "unavailable values must stay unavailable");
+    assert.match(cost, /whole-session Pi total/, "must keep the live whole-session distinction");
+    assert.match(cost, /bounded PalSync phase windows/, "must keep the bounded build/review distinction");
+    assert.match(cost, /PALSYNC TOOLS/, "must keep PalSync tool telemetry distinct");
+    assert.match(cost, /CONTEXT/, "must keep context telemetry distinct");
+
+    const telemetryFiles = [
+        ".palsync/run-usage.json",
+        ".palsync/session-cost.json",
+        ".palsync/pi-usage.jsonl",
+        ".palsync.usage.json",
+    ];
+    for (const file of telemetryFiles) {
+        const pattern = new RegExp(file.replace(/[.\/]/g, "\\$&"), "g");
+        for (const match of template.matchAll(pattern)) {
+            const before = template.slice(Math.max(0, match.index - 140), match.index);
+            assert.match(before, /[Dd]o not open/,
+                file + " may only appear inside the prohibition sentence");
+        }
+    }
+});
+
 // Telemetry collection is deterministic and internal: a normal pal-loop makes NO agent-visible
 // bookkeeping call, and a completed loop reads stats exactly once, through pal_stats.
 test("pal-loop needs no telemetry bookkeeping call and exactly one stats read", () => {

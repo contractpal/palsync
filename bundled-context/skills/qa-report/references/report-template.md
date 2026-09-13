@@ -12,8 +12,8 @@
 **Run date:** `YYYY-MM-DD` → wall clock `HH:MM:SS – HH:MM:SS`
 **Harness:** `<harness name>`
 **PalSync revision:** `<commit/version or not available>`
-**Build usage window:** `<.palsync/run-usage.json build delta or not available>`
-**Review usage window:** `<.palsync/run-usage.json review delta or not available>`
+**Build usage window:** `<pal_stats build phase row or not available>`
+**Review usage window:** `<pal_stats review phase row or not available>`
 **Build model:** `<exact model id>` (effort `<reasoning effort>`)
 **QA/report model:** `<exact model id>` if different from build model
 **Run mode:** `<spec mode>` / `<run mode>`
@@ -103,28 +103,43 @@ an invented image link.
 
 ## Cost & usage
 
-### Run-bounded Pi usage
+Take every number in this section from ONE `pal_stats` read (`palsync stats` outside an MCP
+harness), taken after the bounded build/review phase closed — otherwise label the numbers
+live/in-progress. Do not open `.palsync/run-usage.json`, `.palsync/session-cost.json`,
+`.palsync/pi-usage.jsonl`, `.palsync.usage.json`, or any other telemetry file, and do not run
+other reporting commands. Never substitute the current Pi footer or `/info` totals: those are
+cumulative across the session and branch history. Whatever `pal_stats` marks unavailable is
+`not available` — do not estimate usage, cost, or cache hit rate.
 
-Read `.palsync/run-usage.json`; use only completed `phases.<phase>.windows` records (`start`,
-`end`, and `delta`). Each is a bounded PalSync build/review window, not the entire Pi conversation.
-Do not use the current Pi footer or `/info` totals, which are cumulative session/branch history.
+### Model usage — `pal_stats` MODEL USAGE block
 
-| Window | Input | Cache read | Output | Cache write | Cost | Evidence |
+Report the `source` and quality label `pal_stats` prints. The session row is the live
+whole-session Pi total; the `build`/`review` rows are bounded PalSync phase windows, not the
+whole Pi conversation.
+
+**Source/quality label:** `<verbatim pal_stats MODEL USAGE header, e.g. [exact · pi/sessionManager.getEntries (live)] or [unavailable]>`
+
+| Row | Input | Cache read | Output | Cache write | Cost | Scope |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| Build window 1 | `<delta or not available>` | | | | | `pi/sessionManager.getEntries` |
-| Build window 2+ | `<delta or not available>` | | | | | `<one row per additional completed window>` |
-| Build phase total | `<sum completed build windows>` | | | | | `<build windows only>` |
-| Review phase | `<sum completed review windows or not available>` | | | | | `<review windows only>` |
-| Total measured PalSync run | `<build + review completed deltas or not available>` | | | | | `<no open windows>` |
+| Session total (live) | `<value or not available>` | | | | | `<pal_stats scope label — whole session, not run-bounded>` |
+| Build phase | `<pal_stats build row or not available>` | | | | | `<n window(s)>` bounded build |
+| Review phase | `<pal_stats review row or not available>` | | | | | `<n window(s)>` bounded review |
+| Total measured PalSync run | `<build + review phase rows, or not available>` | | | | | bounded build + review only |
 
-Do not calculate a cache hit rate unless Pi provides an applicable run-bounded rate. Do not
-estimate missing values.
+Do not calculate a cache hit rate unless `pal_stats` reports one.
+
+### PalSync mechanics telemetry — `pal_stats` PALSYNC TOOLS and CONTEXT blocks
+
+- **Tools:** `<calls, raw → returned bytes, est. tokens, cache rows, or not available>`
+- **Context:** `<eager bytes, stable prefix / dynamic tail, generations, threshold, or not available>`
+
+These are PalSync mechanics telemetry. They are separate from the model usage above and never
+replace it.
 
 ### `pal_stats` output
 
 ```
-<paste the pal_stats report verbatim; its PALSYNC TOOLS and CONTEXT blocks are PalSync mechanics
-telemetry, not a replacement for the bounded Pi usage window above>
+<paste the single pal_stats report verbatim>
 ```
 
 ## Recommendations for palsync
