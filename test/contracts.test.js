@@ -434,6 +434,27 @@ test("action parameter IS read — no paramDropped finding", () => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("paramDropped follows local helper calls transitively and terminates cycles", () => {
+    const make = (helpers) => tmpWorkspace({
+        "workflows/console.js": [
+            "function run(c) { switch (c.getAction()) { case 'showForm': first(); break; } }",
+            helpers
+        ].join("\n"),
+        "fragments/list.html": "<c:ignore xmlns:c=\"contractpal\"><c:a action=\"showForm?id=${r.id}\">Edit</c:a></c:ignore>"
+    });
+    for (const [helpers, expected] of [
+        ["function first() { var request = getRequest(); request.get('id'); }", 0],
+        ["function first() { second(); } function second() { getRequest().getData().get('id'); }", 0],
+        ["function first() { second(); } function second() { third(); } function third() { request.get('id'); }", 0],
+        ["function first() { second(); } function second() { first(); }", 1]
+    ]) {
+        const dir = make(helpers);
+        const findings = lintContracts(dir).filter(f => f.rule === "paramDropped");
+        assert.equal(findings.length, expected);
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
 test("createAjaxResponse without isAjax() — warns once per workflow file", () => {
     const dir = tmpWorkspace({
         "workflows/console.js": [

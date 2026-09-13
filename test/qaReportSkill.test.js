@@ -73,6 +73,16 @@ test("qa-report skill encodes the required structural rules", () => {
         "must forbid estimating unavailable numbers");
 });
 
+test("QA findings classify defects without inventing PalSync changes", () => {
+    const skill = read(SKILL);
+    const template = read(TEMPLATE);
+    for (const classification of ["Pal defect", "PalSync defect", "Evidence/measurement gap"]) {
+        assert.match(skill, new RegExp(classification));
+        assert.match(template, new RegExp(classification));
+    }
+    assert.match(skill, /Only systemic PalSync defects/);
+});
+
 test("qa-report skill references the report template and all seven sections", () => {
     const skill = read(SKILL);
     assert.match(skill, /report-template\.md/, "must reference the report template");

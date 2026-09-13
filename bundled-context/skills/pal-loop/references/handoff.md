@@ -27,11 +27,11 @@ citing the baseline comparison and the commit.
 
 ## 3. Close out
 
-1. Session stats — call `pal_stats` ONCE if stats are wanted (or `palsync stats` outside an MCP
+1. Run `palsync session-summary [--mode <full|lite>] [--next "<text>"]` to append the canonical
+   session summary and close the build usage window. If no single ready task is unambiguous, provide `--next`.
+2. Session stats — call `pal_stats` ONCE if stats are wanted (or `palsync stats` outside an MCP
    harness). It is the only telemetry read, and collection underneath it is automatic: never run a
    separate cost, context, or usage command, and never record telemetry by hand.
-2. Run `palsync session-summary [--mode <full|lite>] [--next "<text>"]` to append the canonical
-   session summary. If no single ready task is unambiguous, provide `--next`.
 3. Run `palsync completion check`. It reports which review path applies.
 
 ## 4. Final review — per the `review` setting

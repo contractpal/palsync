@@ -37,7 +37,8 @@ Ordered by severity: High, then Medium, then Low.
 - **Symptom:** `<what the user sees>`
 - **Live evidence:** `<verbatim tool output, screenshot path, or file:line>`
 - **Root cause:** `<file:line>` — `<explanation>`
-- **Palsync improvement:** `<what palsync should change>`
+- **Classification:** `<Pal defect | PalSync defect | Evidence/measurement gap>`
+- **PalSync recommendation:** `<required only for a systemic PalSync defect or evidence/measurement gap>`
 
 ### Medium
 

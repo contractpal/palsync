@@ -393,14 +393,21 @@ function extractCaseBlock(src, actionName) {
 const REQUEST_READ_RE = /getRequest\s*\(\)|request\.get\s*\(|\.getData\s*\(\)|data\.get\s*\(/;
 
 function reachableHasRequestRead(caseText, functionBodies) {
-    if (REQUEST_READ_RE.test(caseText)) return true;
     const callRe = /\b([A-Za-z_$][\w$]*)\s*\(/g;
-    let m;
-    const called = new Set();
-    while ((m = callRe.exec(caseText))) called.add(m[1]);
-    for (const name of called) {
-        const body = functionBodies[name];
-        if (body && REQUEST_READ_RE.test(body)) return true;
+    const visited = new Set();
+    const pending = [caseText];
+    while (pending.length) {
+        const text = pending.pop();
+        if (REQUEST_READ_RE.test(text)) return true;
+        callRe.lastIndex = 0;
+        let match;
+        while ((match = callRe.exec(text))) {
+            const name = match[1];
+            if (!visited.has(name) && functionBodies[name]) {
+                visited.add(name);
+                pending.push(functionBodies[name]);
+            }
+        }
     }
     return false;
 }

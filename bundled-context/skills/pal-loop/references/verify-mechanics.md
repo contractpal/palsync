@@ -55,7 +55,7 @@ visible; otherwise the result is `category:"targeting"` with zero steps run and 
 artifacts in a returned `.agent-work-history/` run directory (`steps.json`,
 `browser-events.json`, `aria-snapshot.txt` or `screen-hints.json`, `failure.jpg` when captured,
 `metadata.json`, `notes.md`). Read those artifacts instead of probing selectors by trial and
-error, then re-run. Passing runs write no failure artifacts.
+error, then re-run. Passing runs write no failure artifacts. A passing `pal_exercise` is behavioral evidence, not a screenshot or capture. A visual capture claim requires a successful `pal_screenshot` artifact; take one whenever visual appearance is an acceptance criterion.
 
 ## Datasets
 

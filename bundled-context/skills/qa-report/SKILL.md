@@ -39,8 +39,10 @@ nothing to say, write "none" and explain why.
 2. **Executive verdict** — one bolded verdict line (`PASS` / `CHANGES NEEDED` / `BROKEN`) +
    ≤2 paragraphs. State explicitly whether findings were caught by the process or by a human.
 3. **Findings** — ordered by severity (High / Medium / Low). Each finding requires: symptom,
-   live reproduction evidence (actual tool output, not paraphrase), root cause with
-   `file:line`, and a "palsync improvement" line. No finding without evidence.
+   live reproduction evidence (actual tool output, not paraphrase), root cause with `file:line`,
+   and classification as **Pal defect**, **PalSync defect**, or **Evidence/measurement gap**.
+   Only systemic PalSync defects or evidence/measurement gaps require a PalSync recommendation;
+   a Pal defect produces a Pal fix task. No finding without evidence.
 4. **Visual evidence** — immediately after Findings. When a screenshot materially supports a
    finding, preserve its original tool path, copy the PNG to
    `reports/assets/YYYY-MM-DD_<spec>_<harness>_<model>/`, and embed that copy with a relative
@@ -66,7 +68,7 @@ nothing to say, write "none" and explain why.
      began or leaving browser-JS detail unloaded for markup-only work.
    - Whether the pal-loop state machine was followed cleanly: Start → Pick → Prepare → Execute →
      Verify → Resolve → Continue/Handoff.
-7. **Cost & usage** — Take every number from ONE `pal_stats` read; do not open telemetry files or
+7. **Cost & usage** — Read `pal_stats` only after the bounded build/review phase has closed (or label it live/in-progress). Take every number from ONE `pal_stats` read; do not open telemetry files or
    run other reporting commands. Report its MODEL USAGE block with the `source` and quality label
    it prints, and its `build`/`review` phase rows when present — those are bounded PalSync windows,
    not the whole Pi conversation. Never replace them with the current Pi footer or `/info` totals:

@@ -7,4 +7,5 @@
 - [ ] No undefined classes: each page/fragment `class=` resolves to runtime CSS or a recorded local style.
 - [ ] Typography uses the recorded system/Fontshare policy; icons are inline SVG from one approved family;
       scripted motion uses only `pb-motion.js` data attributes.
+- [ ] Explicit component measurements/tokens recorded in local design authority (`DESIGN_SYSTEM.md`, `COMPONENTS.md`, etc.) match consumer CSS unless a deliberate exception is documented.
 - [ ] Direction was checked against [anti-slop fingerprints](anti-slop.md).
