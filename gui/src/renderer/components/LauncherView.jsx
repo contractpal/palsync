@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ManageCloudsModal from "./ManageCloudsModal.jsx";
 import ManageWorkspaceModal from "./ManageWorkspaceModal.jsx";
+import WorkspaceStatsModal from "./WorkspaceStatsModal.jsx";
 
 function basename(path) {
     return path.split(/[\\/]/).pop();
@@ -15,6 +16,16 @@ export default function LauncherView({ onOpened }) {
     const [updateInfo, setUpdateInfo] = useState(null);
     const [updateDismissed, setUpdateDismissed] = useState(false);
     const [manageTarget, setManageTarget] = useState(null);
+    const [statsTarget, setStatsTarget] = useState(null);
+    const [cardMenuOpen, setCardMenuOpen] = useState(null); // filePath of the open "⋯" menu, or null
+    const cardMenuRef = useRef(null);
+
+    useEffect(() => {
+        if (!cardMenuOpen) return;
+        const onDown = (e) => { if (cardMenuRef.current && !cardMenuRef.current.contains(e.target)) setCardMenuOpen(null); };
+        document.addEventListener("mousedown", onDown);
+        return () => document.removeEventListener("mousedown", onDown);
+    }, [cardMenuOpen]);
 
     function togglePath(e, filePath) {
         e.stopPropagation();
@@ -78,11 +89,23 @@ export default function LauncherView({ onOpened }) {
                 {recent.map(w => (
                     <button key={w.filePath} className="ws-card" onClick={() => openRecent(w.filePath)}>
                         <span
-                            className="ws-card-menu"
-                            title="Manage workspace"
-                            onClick={e => { e.stopPropagation(); setManageTarget(w); }}
+                            ref={cardMenuOpen === w.filePath ? cardMenuRef : null}
+                            style={{ position: "absolute", top: 6, right: 6 }}
                         >
-                            ⋯
+                            <span
+                                className="ws-card-menu"
+                                style={{ position: "static" }}
+                                title="Workspace options"
+                                onClick={e => { e.stopPropagation(); setCardMenuOpen(v => (v === w.filePath ? null : w.filePath)); }}
+                            >
+                                ⋯
+                            </span>
+                            {cardMenuOpen === w.filePath && (
+                                <div className="ribbon-menu" style={{ right: 0, left: "auto" }} onClick={e => e.stopPropagation()}>
+                                    <button onClick={() => { setCardMenuOpen(null); setStatsTarget(w); }}>Workspace Stats</button>
+                                    <button onClick={() => { setCardMenuOpen(null); setManageTarget(w); }}>Manage…</button>
+                                </div>
+                            )}
                         </span>
                         <span className="ws-card-name">{w.name}</span>
                         <span
@@ -125,6 +148,10 @@ export default function LauncherView({ onOpened }) {
                     onClose={() => setManageTarget(null)}
                     onChanged={updatedRecent => { setRecent(updatedRecent); setManageTarget(null); }}
                 />
+            )}
+
+            {statsTarget && (
+                <WorkspaceStatsModal workspace={statsTarget} onClose={() => setStatsTarget(null)} />
             )}
         </div>
     );

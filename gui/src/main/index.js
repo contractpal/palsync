@@ -35,6 +35,8 @@ const testWorkflow = require("./testWorkflow");
 const qrCode = require("./qrCode");
 const tunnelWorkflow = require("./tunnelWorkflow");
 const debugWorkflow = require("./debugWorkflow");
+const palStatsWorkflow = require("./palStatsWorkflow");
+const imagesPanel = require("./imagesPanel");
 const workflowList = require("./workflowList");
 const palsyncSync = require("./palsyncSync");
 const webServicesWorkflow = require("./webServicesWorkflow");
@@ -66,7 +68,19 @@ async function ensurePalSessionId(palPath) {
 }
 
 ipcMain.handle("app:checkVersion", () => versionCheck.checkForUpdate());
-ipcMain.handle("app:openExternal", (event, url) => shell.openExternal(url));
+// file:// URIs (e.g. an agent-generated image path clicked in the console) go through
+// shell.openPath instead of shell.openExternal — openPath takes a raw filesystem path and
+// opens it with the OS-default app directly, avoiding URL-encoding edge cases (spaces,
+// parens — a real workspace path like "PalBuilder\Fred (2)" has both) that shell.openExternal's
+// URL handling could otherwise mishandle. Non-file URLs (https links from the app menu, etc.)
+// keep going through shell.openExternal as before.
+ipcMain.handle("app:openExternal", (event, url) => {
+    if (url.startsWith("file://")) {
+        const filePath = decodeURIComponent(url.replace(/^file:\/\/\/?/, ""));
+        return shell.openPath(filePath);
+    }
+    return shell.openExternal(url);
+});
 ipcMain.handle("app:getInfo", () => {
     const buildInfo = versionCheck.readLocalBuildInfo();
     return {
@@ -623,9 +637,28 @@ ipcMain.handle("pal:fetchDebug", async (event, palPath) => {
     catch (e) { return { error: e && e.message ? e.message : String(e) }; }
 });
 
+// ---- IPC: pal_stats telemetry (pal-level panel + workspace-level rollup) ----
+
+ipcMain.handle("pal:fetchStats", async (event, palPath) => {
+    try { return { result: palStatsWorkflow.statsForPal(palPath) }; }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
+ipcMain.handle("workspace:fetchStats", async (event, filePath) => {
+    try { return { result: await palStatsWorkflow.statsForWorkspace(filePath) }; }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
+// ---- IPC: Images side-panel (pal's shipped /images vs staged /assets) ----
+
+ipcMain.handle("pal:listImages", async (event, workspaceDir, kind) => {
+    try { return { result: await imagesPanel.listImages(workspaceDir, kind) }; }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
 // ---- IPC: console (pty) ----
 
-ipcMain.handle("console:start", async (event, { palId, agentId, cwd }) => {
+ipcMain.handle("console:start", async (event, { palId, agentId, cwd, cols, rows }) => {
     const agent = agentLaunch.resolveAgent(agentId);
     if (!agent) return { error: "Unknown agent: " + agentId };
     if (ptyManager.isRunning(palId)) return { ok: true, alreadyRunning: true };
@@ -646,7 +679,13 @@ ipcMain.handle("console:start", async (event, { palId, agentId, cwd }) => {
     try {
         ptyManager.start(
             palId,
-            { command: agent.command, args: agent.args, cwd, env: spawnEnv },
+            // cols/rows from the renderer's already-fitted xterm instance (ConsoleTab.jsx waits
+            // for termReady before calling startConsole) — without these, node-pty spawns at its
+            // hardcoded 80x24 default regardless of the real terminal size, and nothing corrects
+            // it until a later resize event happens to fire (the "resizing fixes it" bug: the
+            // agent CLI wraps its interactive input box assuming the stale 80-col width while
+            // xterm renders it into a much wider visible area, producing garbled/duplicated text).
+            { command: agent.command, args: agent.args, cwd, cols, rows, env: spawnEnv },
             data => { if (mainWindow) mainWindow.webContents.send("console:data:" + palId, data); },
             exitCode => { if (mainWindow) mainWindow.webContents.send("console:exit:" + palId, exitCode); }
         );

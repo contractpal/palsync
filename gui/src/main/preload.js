@@ -103,6 +103,13 @@ contextBridge.exposeInMainWorld("palsyncGui", {
 
     fetchDebug: (palPath) => ipcRenderer.invoke("pal:fetchDebug", palPath),
 
+    fetchPalStats: (palPath) => ipcRenderer.invoke("pal:fetchStats", palPath),
+    fetchWorkspaceStats: (filePath) => ipcRenderer.invoke("workspace:fetchStats", filePath),
+
+    // kind: "images" (pal's shipped /images, matching pal.json images.entry filenames) | "assets"
+    // (staged /assets, most-recent-first — see contextInject.js's "Creating new files" section).
+    listImages: (palPath, kind) => ipcRenderer.invoke("pal:listImages", palPath, kind),
+
     checkPalsyncVersion: (palPath) => ipcRenderer.invoke("pal:checkPalsyncVersion", palPath),
     syncPalsync: (palPath) => ipcRenderer.invoke("pal:syncPalsync", { palPath }),
     onSyncOutput: (callback) => {
@@ -111,7 +118,7 @@ contextBridge.exposeInMainWorld("palsyncGui", {
         return () => ipcRenderer.removeListener("pal:syncOutput", listener);
     },
 
-    startConsole: (palId, agentId, cwd) => ipcRenderer.invoke("console:start", { palId, agentId, cwd }),
+    startConsole: (palId, agentId, cwd, cols, rows) => ipcRenderer.invoke("console:start", { palId, agentId, cwd, cols, rows }),
     writeToConsole: (palId, data) => ipcRenderer.send("console:write", { palId, data }),
     resizeConsole: (palId, cols, rows) => ipcRenderer.send("console:resize", { palId, cols, rows }),
     killConsole: (palId) => ipcRenderer.invoke("console:kill", palId),

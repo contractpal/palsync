@@ -28,7 +28,7 @@ function describeBlocked(reason) {
     }
 }
 
-export default function TestRibbon({ pal, debugVisible, onToggleDebug, agents, agentId, onSwitchAgent }) {
+export default function TestRibbon({ pal, debugVisible, onToggleDebug, statsVisible, onToggleStats, imagesVisible, onToggleImages, agents, agentId, onSwitchAgent }) {
     const [browsers, setBrowsers] = useState([]);
     const [defaultId, setDefaultId] = useState(null);
     const [busyKind, setBusyKind] = useState(null);
@@ -185,6 +185,20 @@ export default function TestRibbon({ pal, debugVisible, onToggleDebug, agents, a
                     title={debugVisible ? "Hide the debug panel" : "Show the debug panel"}
                 >
                     Debug
+                </button>
+                <button
+                    className={"ribbon-btn standalone" + (statsVisible ? " active" : "")}
+                    onClick={onToggleStats}
+                    title={statsVisible ? "Hide the stats panel" : "Show pal_stats telemetry for this pal"}
+                >
+                    Stats
+                </button>
+                <button
+                    className={"ribbon-btn standalone" + (imagesVisible ? " active" : "")}
+                    onClick={onToggleImages}
+                    title={imagesVisible ? "Hide the images panel" : "Browse this pal's /images and staged /assets"}
+                >
+                    Images
                 </button>
                 {syncCheck && syncCheck.outdated && (
                     <button
