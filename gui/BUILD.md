@@ -1,7 +1,9 @@
 # Pal Console — Build Requirements
 
 Prerequisites for any machine that will run `npm install` in `gui/` — a developer's laptop,
-the Jenkins Windows build server, or a Mac doing a manual build. These are separate from (and
+the Jenkins Windows build server, the Linux build VM, or the Mac build machine (as of
+2026-09-14, all three release builds are driven from one Windows machine over SSH to the Linux
+VM and the Mac — see "Producing a real installer" below for each). These are separate from (and
 in addition to) whatever the root `palsync` package already requires (Node >= 18).
 
 ## Why this exists
@@ -32,7 +34,7 @@ while (multi-GB download). This is a one-time setup per machine; it is **not** c
 repo or by `npm install` itself. Every Windows machine that will build or run this app —
 including the Jenkins build server — needs it installed independently.
 
-### Mac (manual builds for now)
+### Mac (real machine over SSH — see "Producing a real installer (Mac)" below)
 
 Xcode Command Line Tools:
 
@@ -176,43 +178,108 @@ won't pick up a new release until it's updated to match.
 
 ## Producing a real installer (Mac) — signing, notarizing, and publishing
 
+**As of 2026-09-14, David's standing setup: this is run from the Windows machine over SSH to
+his real Mac** (`ssh davidmartineau@benjamins.local` — Bonjour hostname, resolves fine from
+Windows over `ssh`/`scp`; no VM, no start/stop step like Linux, it's just always-on and
+SSH-trusted already). Mirrors the Linux VM flow below — get the checkout current, build, verify,
+copy artifacts back to Windows, upload, clean up:
+
 ```
-cd gui
-npx electron-builder --mac --x64 --arm64 --config.directories.output=<path outside this repo>
+# From the Windows machine:
+ssh davidmartineau@benjamins.local "cd ~/palsync && git pull"
+ssh davidmartineau@benjamins.local "cd ~/palsync && npm install"          # picks up any new root deps
+ssh davidmartineau@benjamins.local "cd ~/palsync/gui && npm install"      # picks up any new gui deps
+ssh davidmartineau@benjamins.local 'cd ~/palsync/gui && node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && npx electron-builder --mac --x64 --arm64 --config.directories.output="$HOME/chip-mac-build"'
 ```
 
-Route `directories.output` outside the repo, not `npm run build:mac`'s default `gui/dist` —
-`gui/node_modules/palsync` is a real symlink to the repo root (`"palsync": "file:.."`), which
-makes `gui/node_modules/palsync/gui` **be** `gui/` itself. Anything sitting in `gui/dist/` during
-packaging (a previous build's installers, another arch's output mid-build) is reachable through
-that symlink and can get bundled straight into the new `app.asar`, ballooning it from ~140MB to
-1-2GB+. `gui/scripts/afterPack.js` prunes any leak that gets through anyway as a safety net, but
-it can't save an archive that's already past ~2GB (an `@electron/asar` limitation) — the output
-redirect is what actually prevents the bloat. Move the finished `.dmg`/`.zip`/`.blockmap` files
-into `gui/dist/` afterward.
+**Do NOT write `--config.directories.output=~/chip-mac-build`** (a mistake made live
+2026-09-14) — zsh (and bash) only expand a leading `~` at the very start of a word, or right
+after `=` in a real variable assignment (`FOO=~/bar`). `--config.directories.output=~/...` is
+neither (the left side isn't a valid identifier), so the `~` is passed through **literally**.
+electron-builder then creates an actual directory named `~` wherever the command's cwd was
+(`gui/`, in this flow) — `gui/~/chip-mac-build/...` — not under the real home directory, and
+both `ls ~/chip-mac-build` and Finder correctly report nothing there. Nothing is lost, it's just
+in the wrong place (`find ~ -iname '*chip-mac-build*'` or `find / -iname '*ChipPalBuilder-<version>*'`
+finds it) — but avoid the mistake by using `"$HOME/chip-mac-build"` instead, which expands
+reliably in this position.
+
+Route `directories.output` outside `gui/dist` regardless — `gui/node_modules/palsync` is a real
+symlink to the repo root (`"palsync": "file:.."`), which makes `gui/node_modules/palsync/gui`
+**be** `gui/` itself. Anything sitting in `gui/dist/` during packaging (a previous build's
+installers, another arch's output mid-build) is reachable through that symlink and can get
+bundled straight into the new `app.asar`, ballooning it from ~140MB to 1-2GB+. `gui/scripts/afterPack.js`
+prunes any leak that gets through anyway as a safety net, but it can't save an archive that's
+already past ~2GB (an `@electron/asar` limitation) — the output redirect is what actually
+prevents the bloat.
 
 Signing (Developer ID Application cert) and notarization (Apple ID + app-specific password +
-team ID) both happen automatically as long as a valid "Developer ID Application" identity is in
-the build machine's keychain and `APPLE_ID`/`APPLE_APP_SPECIFIC_PASSWORD`/`APPLE_TEAM_ID` are set
-in the environment — electron-builder picks both up with no extra config. Verify before
-publishing: `spctl -a -vv --type execute "<App>.app"` (should say "accepted... Notarized Developer
-ID"), `codesign --verify --deep --strict "<App>.app"`, and `xcrun stapler validate "<App>.app"`
-(confirms the notarization ticket is actually stapled — works offline, no network check needed by
-the end user's Mac).
+team ID) both happen automatically during that build as long as a valid "Developer ID
+Application" identity is in the Mac's keychain and `APPLE_ID`/`APPLE_APP_SPECIFIC_PASSWORD`/
+`APPLE_TEAM_ID` are set in its environment — electron-builder picks both up with no extra config,
+and the build's own log lines show `signing ...` / `notarization successful` for each arch as it
+happens. Verify over the same SSH connection before copying anything back — for each of
+`$HOME/chip-mac-build/mac/Chip Pal Builder.app` (x64) and
+`$HOME/chip-mac-build/mac-arm64/Chip Pal Builder.app` (arm64):
 
-### Publishing to the download bucket
+```
+ssh davidmartineau@benjamins.local 'spctl -a -vv --type execute "$HOME/chip-mac-build/mac/Chip Pal Builder.app"'
+ssh davidmartineau@benjamins.local 'codesign --verify --deep --strict "$HOME/chip-mac-build/mac/Chip Pal Builder.app"'
+ssh davidmartineau@benjamins.local 'xcrun stapler validate "$HOME/chip-mac-build/mac/Chip Pal Builder.app"'
+```
 
-The four installer files (arm64 `.dmg`/`.zip`, x64 `.dmg`/`.zip`) get uploaded by hand to
-`s3://contractpal-cloudpiston-downloads/` at the bucket root, with the version stripped from the
-filename so each upload replaces the previous release at a fixed URL
-(`https://downloads.cloudpiston.com/ChipPalBuilder.dmg`, etc. — no `.blockmap` files, they're
-electron-updater delta-patch metadata and this app doesn't use an auto-updater). **A Mac release
-is not complete until `mac-versions.txt` is re-uploaded too** — plain text, version on line 1,
-one filename per line below it, also at the bucket root. `versionCheck.js`'s "new version
-available" check for macOS reads this file directly (not `getVersionInfo.do` — that endpoint
-isn't OS-aware, a server-side gap outside this repo; Windows now reads its own equivalent
-`windows-versions.txt` the same way, see above) and won't pick up a new release until it's
-updated to match.
+(repeat with `mac-arm64` for the other arch). Expect `accepted` + `source=Notarized Developer ID`,
+a clean `codesign` exit, and `The validate action worked!` — confirms the notarization ticket is
+actually stapled (works offline, no network check needed by the end user's Mac).
+
+### Copying artifacts back and publishing to the download bucket
+
+The Mac has no AWS CLI configured — copy the four installer files back to the Windows machine
+via `scp` (not PuTTY's `pscp`: it hit an interactive host-key confirmation that `-batch` mode
+can't get past from this pairing, even with `-hostkey` — plain OpenSSH `scp`/`ssh` work fine
+once the host key is trusted once via an interactive `ssh` call), renaming to the
+version-stripped convention as you go (`mac-versions.txt`, uploaded from a prior release, is the
+source of truth for exact filenames):
+
+```
+# Use the actual resolved absolute remote path here, not a literal "$HOME" or "~" in the scp
+# remote-path argument — unlike a command run through `ssh` (a real remote shell, where $HOME
+# expands normally), scp's remote-path parsing is a different code path and expanding env vars
+# there is untested/unconfirmed. Get the real path once (`ssh davidmartineau@benjamins.local
+# 'echo $HOME'`) and use it literally, e.g. /Users/davidmartineau/chip-mac-build below.
+BASE='davidmartineau@benjamins.local:/Users/davidmartineau/chip-mac-build'
+scp "$BASE/Chip Pal Builder-<version>.dmg" ChipPalBuilder.dmg
+scp "$BASE/Chip Pal Builder-<version>-mac.zip" ChipPalBuilder-mac.zip
+scp "$BASE/Chip Pal Builder-<version>-arm64.dmg" ChipPalBuilder-arm64.dmg
+scp "$BASE/Chip Pal Builder-<version>-arm64-mac.zip" ChipPalBuilder-arm64-mac.zip
+
+aws s3 cp ChipPalBuilder.dmg s3://contractpal-cloudpiston-downloads/ChipPalBuilder.dmg
+aws s3 cp ChipPalBuilder-mac.zip s3://contractpal-cloudpiston-downloads/ChipPalBuilder-mac.zip
+aws s3 cp ChipPalBuilder-arm64.dmg s3://contractpal-cloudpiston-downloads/ChipPalBuilder-arm64.dmg
+aws s3 cp ChipPalBuilder-arm64-mac.zip s3://contractpal-cloudpiston-downloads/ChipPalBuilder-arm64-mac.zip
+aws s3 cp mac-versions.txt s3://contractpal-cloudpiston-downloads/mac-versions.txt
+
+# Clean up the remote build output — it sits inside gui/ (or wherever cwd was), same
+# app.asar-bloat risk as leftover gui/dist content if a future build's symlink traversal reaches it:
+ssh davidmartineau@benjamins.local 'rm -rf "$HOME/chip-mac-build"'   # or wherever it actually landed, see the ~ gotcha above
+```
+
+No `.blockmap` files get uploaded — they're electron-updater delta-patch metadata and this app
+doesn't use an auto-updater. **A Mac release is not complete until `mac-versions.txt` is
+re-uploaded too** — plain text, version on line 1, one filename per line below it, also at the
+bucket root:
+
+```
+0.9.0
+ChipPalBuilder-arm64.dmg
+ChipPalBuilder-arm64-mac.zip
+ChipPalBuilder.dmg
+ChipPalBuilder-mac.zip
+```
+
+`versionCheck.js`'s "new version available" check for macOS reads this file directly (not
+`getVersionInfo.do` — that endpoint isn't OS-aware, a server-side gap outside this repo; Windows
+and Linux now read their own equivalent `windows-versions.txt`/`linux-versions.txt` the same way)
+and won't pick up a new release until it's updated to match.
 
 ## Producing a real installer (Linux)
 
@@ -239,12 +306,36 @@ David's standing instruction (2026-09-11): a Linux build session isn't done at "
 **always** finish it by uploading to S3 and shutting down the build VM, every time, not just when
 asked. The build VM (`ubuntu-palsync-build`) is normally reached over SSH from a Windows dev
 machine that already has AWS CLI + the `cloudpiston-downloads` IAM user's credentials configured
-(the VM itself doesn't need AWS credentials at all — copy the two files off it first):
+(the VM itself doesn't need AWS credentials at all — copy the two files off it first).
+
+**Cross-cutting note (2026-09-14): this whole flow (start VM, SSH in, `git pull` + `npm install`
+in both the repo root and `gui/` since the VM's own checkout can be stale/have its own
+platform-specific lockfile drift, build, copy back, upload, shut down) is now David's standing
+way of producing all three platform builds from one Windows machine — Mac included, see its own
+section above, same shape minus the VM start/stop.**
+
+`VBoxManage.exe` isn't on PATH in a Git-Bash shell by default — call it via full path or from
+PowerShell: `"C:\Program Files\Oracle\VirtualBox\VBoxManage.exe"`. Start it (if not already
+running — `VBoxManage list runningvms` shows current state) with
+`VBoxManage startvm ubuntu-palsync-build --type headless`, then **wait for it to actually finish
+booting before SSHing in** — `ssh -p 2222 ...` fails with "Connection timed out during banner
+exchange" while the guest is still coming up, which looks identical to a real networking problem
+but usually just means "not ready yet." Observed once (2026-09-14) that the VM hung mid-boot
+entirely and never became reachable no matter how long we waited — power-cycling it
+(`VBoxManage controlvm ubuntu-palsync-build poweroff` then `startvm` again) resolved it; if SSH
+still won't connect after a couple minutes of retrying, that's the more likely explanation than
+continuing to wait.
+
+Prefer plain OpenSSH `scp` over PuTTY's `pscp` for copying files back — `pscp` hit an interactive
+host-key confirmation prompt that `-batch` mode couldn't get past even with an explicit
+`-hostkey` argument, whereas `scp`/`ssh` (already available on this Windows machine) worked
+immediately once the host key was trusted via one interactive `ssh` call
+(`-o StrictHostKeyChecking=accept-new`):
 
 ```
 # From the Windows machine, after `npm run build:linux` succeeded on the VM over SSH:
-pscp -P 2222 -pw <vm password> david@localhost:/home/david/palsync/gui/dist/ChipPalBuilder.AppImage .
-pscp -P 2222 -pw <vm password> david@localhost:/home/david/palsync/gui/dist/linux-versions.txt .
+scp -P 2222 david@localhost:/home/david/palsync/gui/dist/ChipPalBuilder.AppImage .
+scp -P 2222 david@localhost:/home/david/palsync/gui/dist/linux-versions.txt .
 
 aws s3 cp ChipPalBuilder.AppImage s3://contractpal-cloudpiston-downloads/ChipPalBuilder.AppImage
 aws s3 cp linux-versions.txt s3://contractpal-cloudpiston-downloads/linux-versions.txt
