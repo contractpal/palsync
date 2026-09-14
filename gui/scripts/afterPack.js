@@ -119,22 +119,23 @@ exports.default = async function afterPack(context) {
     const asarPath = fs.existsSync(macAsarPath) ? macAsarPath : otherAsarPath;
     if (!fs.existsSync(asarPath)) return; // asar:false build, or nothing to prune
 
-    // The underlying corruption is non-deterministic (a known, unresolved upstream bug — not
-    // something triggered by any input we control), so a few retries before giving up is
-    // reasonable rather than failing the whole build on what's likely a transient APFS hiccup.
-    const MAX_ATTEMPTS = 3;
-    let lastError;
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        try {
-            const prunedAny = await pruneOnce(asarPath);
-            if (attempt > 1) console.log("[afterPack] asar integrity verified on attempt " + attempt);
-            return prunedAny;
-        } catch (e) {
-            lastError = e;
-            console.log("[afterPack] attempt " + attempt + "/" + MAX_ATTEMPTS + " failed: " + e.message);
-        }
+    // Confirmed live 2026-09-14: retrying just this hook (extract/prune/repackage) achieves
+    // nothing when it fails — the corruption is already present in electron-builder's OWN
+    // initial app.asar, before this hook ever runs (three retries here hit the exact same
+    // corrupted file, identically, every time — garbage in, garbage out). Fail immediately with
+    // a clear next step instead of silently repeating a pointless retry: re-run the WHOLE build
+    // command from the top. A fresh electron-builder invocation actually has a chance of avoiding
+    // whatever produced the corrupt source asar (still not root-caused precisely — plausibly a
+    // write-then-immediate-read race between writeBuildInfo.js/bumpVersion.js's fresh writes and
+    // electron-builder's own packaging step reading them moments later, given both known
+    // incidents so far hit a file that had just been (re)written seconds earlier — but not
+    // confirmed).
+    try {
+        return await pruneOnce(asarPath);
+    } catch (e) {
+        e.message += "\n[afterPack] This is NOT something retrying this hook fixes — the corrupt " +
+            "source asar comes from electron-builder's own packaging step, before this hook ever " +
+            "runs. Re-run the WHOLE build command from the top instead.";
+        throw e;
     }
-    // Never silently ship a corrupted asar — fail the build loudly instead (this is exactly what
-    // let a broken Mac release through undetected on 2026-09-14).
-    throw lastError;
 };
