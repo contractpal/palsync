@@ -150,7 +150,7 @@ async function run(argv) {
         console.log("\nWorkspace ready: " + workspaceDir);
         console.log("  pulled " + result.pulledFiles + " code files + " + result.dataFiles + " data/schema files; skills injected.");
         console.log("  Connect your agent's MCP client to the palsync server with env PALSYNC_WORKSPACE=" + workspaceDir);
-        console.log("  (Claude Code/Copilot: .mcp.json written. OpenCode: opencode.json written. Codex: registered via `codex mcp add`. Gemini CLI: .gemini/settings.json written. Cursor: .cursor/mcp.json written. Hermes: see the headless docs.)");
+        console.log("  (Claude Code/Copilot: .mcp.json written. OpenCode: opencode.json written. Codex: .codex/config.toml written, project marked trusted in ~/.codex/config.toml. Gemini CLI: .gemini/settings.json written. Cursor: .cursor/mcp.json written. Hermes: see the headless docs.)");
         console.log("  Auth: set CP_PASS in the agent's environment so the MCP server can authenticate headless.");
     }
     return 0;

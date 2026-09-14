@@ -113,7 +113,12 @@ manually to a project `opencode.json` (or the global `~/.config/opencode/opencod
 (`command: ["palsync-mcp"]` also works if the `palsync-mcp` bin is on PATH; palsync's own
 auto-registration uses the full node + script-path form so it never depends on PATH.)
 
-**Codex** — palsync registers itself when you run `palsync setup --agent codex`, or add it manually:
+**Codex** — palsync registers itself when you run `palsync setup --agent codex`: writes a
+project-scoped `.codex/config.toml` in the workspace and marks that exact path trusted in the
+global `~/.codex/config.toml` (Codex only reads project-local config for a trusted project).
+This is per-workspace, unlike the global-singleton `codex mcp add` below — safe to use on a
+headless box running more than one pal. Add it manually instead if you'd rather not touch the
+global trust list:
 
 ```sh
 codex mcp add palsync --env PALSYNC_WORKSPACE=/home/you/pals/isr --env CP_USER=you@example.com --env CP_PASS=your-password -- palsync-mcp

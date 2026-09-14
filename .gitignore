@@ -75,3 +75,12 @@ gui/dist/
 gui/dist-renderer/
 gui/out/
 gui/build-info.json
+# palsync transient artifacts — managed by palsync; do not edit this block
+/.palsync/cache/
+/.palsync.usage.json
+/.palsync/session-cost.json
+/.palsync/session-cost.lock
+/.palsync/run-usage.json
+/.palsync/pi-usage.jsonl
+/.palsync/tool-evidence.jsonl
+# end palsync transient artifacts

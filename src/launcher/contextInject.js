@@ -209,6 +209,14 @@ function syncDetails(palName, { cli = false, skillsDir = ".claude/skills" } = {}
         "if the user wants a new font, tell them to add it in PalBuilder first. You CAN still edit any",
         "existing font on disk and push that normally.",
         "",
+        "**Generated or downloaded visual assets not yet turned into a real pushed `Image` entry** —",
+        "an agent-generated reference image, a downloaded mockup, anything staged before it's a real",
+        "pal asset — belong in `./assets/` in the project directory (create the folder if missing).",
+        "This keeps them inside the workspace (visible to source control and Chip's console tooling)",
+        "instead of left in a harness's own scratch space outside the project (e.g. Codex's `$imagegen`",
+        "skill always saves to `~/.codex/generated_images/` first, never inside the workspace — copy or",
+        "move the approved result into `./assets/` before treating the work as done).",
+        "",
         "**ASK FIRST:** page/fragment/script needs console or web, then `palTypeConsole` or `palTypeWeb`.",
         "Workflow needs its numeric type: web=9, console=7, library=4, transaction=2, transaction-system=3,",
         "transaction-webservice=5, console-system=11, console-webservice=12, user=14, tunnel=15.",
@@ -321,7 +329,21 @@ function syncSection(palName, { cli = false, policy = policyDefaults, skillsDir 
         "**Before any sync, file-creation, or dataset operation, call `pal_context`.** No arguments",
         "lists sections; load `section:\"sync-workflow\"`, `section:\"creating-files\"`, or",
         "`section:\"datasets\"` (or a `query`) before the matching operation. That on-demand",
-        "contract contains detailed sync, file, and dataset rules."
+        "contract contains detailed sync, file, and dataset rules.",
+        "",
+        "**There is no cross-session memory.** A harness's own \"remember this\" feature (if it has",
+        "one) may not actually persist, or may not be readable next session — do not rely on it.",
+        "When asked to remember/note something for later, write it to `BACKLOG.md` in the project",
+        "root instead (create it if missing) — a local running-notes file, same convention as",
+        "`SPEC.md`/`EXECUTION.md`, never pushed as a pal asset. Read it back at the start of a new",
+        "session covering the same work.",
+        "",
+        "**A generated or downloaded image is not done until it's in the project.** If an image-",
+        "generation tool/skill saves outside this project folder (a harness's own scratch/cache",
+        "location, e.g. Codex's `$imagegen` always saves to `~/.codex/generated_images/` first —",
+        "never inside the workspace), copy or move the approved result into `./assets/` in the",
+        "project root (create it if missing) before treating the work as done — do not leave it",
+        "only in the harness's own cache."
     ].join("\n");
 }
 

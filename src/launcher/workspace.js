@@ -21,7 +21,7 @@ const { fetchAndExtract } = require("../core/resources");
 const contextInject = require("./contextInject");
 const palsyncfile = require("../core/palsyncfile");
 const { register } = require("../mcp/register");
-const { registerCodex } = require("../mcp/registerCodex");
+const { registerCodexProject } = require("../mcp/registerCodexProject");
 const { registerOpencode } = require("../mcp/registerOpencode");
 const registerPi = require("../mcp/registerPi");
 const { registerGemini } = require("../mcp/registerGemini");
@@ -259,18 +259,10 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
     onStep({ step: "register", status: "start" });
     let reg = {};
     if (agent === "codex") {
-        log("registering palsync MCP server with Codex (codex mcp add)");
-        reg = await registerCodex(workspaceDir);
-        if (reg.ok) {
-            log("  registered with Codex" + (reg.refreshed ? " (refreshed)" : ""));
-            // The Codex MCP entry is GLOBAL (~/.codex/config.toml) — one shared `palsync` server
-            // whose PALSYNC_WORKSPACE is whatever was registered last. Make the current target loud.
-            log("  Codex MCP 'palsync' now targets: " + workspaceDir + "  (" + sel.pal.name + ")");
-        } else if (reg.reason === "codex-not-found") {
-            log("  ⚠ Codex CLI not found — register the MCP server manually once Codex is installed:\n      " + reg.command);
-        } else {
-            log("  ⚠ `codex mcp add` failed (" + (reg.stderr || "unknown") + ") — register manually:\n      " + reg.command);
-        }
+        log("registering palsync MCP server with Codex (project-scoped .codex/config.toml)");
+        reg = await registerCodexProject(workspaceDir);
+        log("  registered with Codex — project-scoped, no longer a shared global entry");
+        log("  marked trusted in ~/.codex/config.toml so Codex actually reads " + reg.filePath);
     } else if (agent === "pi") {
         log("installing native PalSync Pi extension (no project file written)");
         reg = await registerPi.register({ installExtension: true });

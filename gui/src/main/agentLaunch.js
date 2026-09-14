@@ -11,18 +11,25 @@ const { registerOpencode } = require("palsync/src/mcp/registerOpencode");
 const { registerGemini } = require("palsync/src/mcp/registerGemini");
 const { registerCursor } = require("palsync/src/mcp/registerCursor");
 const { registerCopilot } = require("palsync/src/mcp/registerCopilot");
+const { registerCodexProject, patchEnv: patchCodexEnv } = require("palsync/src/mcp/registerCodexProject");
 const registerPi = require("palsync/src/mcp/registerPi");
 const { MCP_BIN } = require("palsync/src/mcp/register");
+const contextInject = require("palsync/src/launcher/contextInject");
+const policyModule = require("palsync/src/core/policy");
+const palsyncfile = require("palsync/src/core/palsyncfile");
 
-// MVP: project-scoped registrations only. Codex's registration is a global
-// ~/.codex/config.toml singleton (a pre-existing CLI limitation) — not supported here yet.
-// Copilot shares Claude's own .mcp.json (both read the same project-scoped file/shape).
+// Copilot shares Claude's own .mcp.json (both read the same project-scoped file/shape). Codex is
+// project-scoped too, via registerCodexProject.js — a .codex/config.toml in the workspace plus a
+// trust entry in the global ~/.codex/config.toml (Codex only reads project-local config for a
+// trusted project); see that file's own header for why this replaces the old global-singleton
+// `codex mcp add` registration.
 const REGISTRARS = {
     "claude-code": { configFile: ".mcp.json", register: registerClaude },
     "opencode": { configFile: "opencode.json", register: registerOpencode },
     "gemini": { configFile: path.join(".gemini", "settings.json"), register: registerGemini },
     "cursor": { configFile: path.join(".cursor", "mcp.json"), register: registerCursor },
-    "copilot": { configFile: ".mcp.json", register: registerCopilot }
+    "copilot": { configFile: ".mcp.json", register: registerCopilot },
+    "codex": { configFile: path.join(".codex", "config.toml"), register: registerCodexProject, format: "toml" }
 };
 
 // Pi doesn't fit the per-pal-configFile model above: its registration is a ONE-TIME GLOBAL
@@ -47,7 +54,10 @@ async function exists(filePath) {
 // right fix here, not requiring a separately-installed system Node, which the whole point of
 // this GUI is to avoid depending on). palsync's own env-building is internal to register(), so
 // this patches the written file afterward rather than changing shared src/ code.
-async function ensureElectronRunAsNode(filePath, configFile) {
+async function ensureElectronRunAsNode(filePath, configFile, format) {
+    // Codex's .codex/config.toml is TOML, not JSON — encapsulated behind registerCodexProject.js's
+    // own patchEnv so this file never needs to parse/stringify TOML itself.
+    if (format === "toml") { await patchCodexEnv(filePath, { ELECTRON_RUN_AS_NODE: "1" }); return; }
     let json;
     try { json = JSON.parse(await fs.readFile(filePath, "utf8")); }
     catch (e) { return; }
@@ -124,8 +134,9 @@ async function ensureElectronRunAsNodeForHooks(workspaceDir) {
 // Self-healing, same pattern as ensureElectronRunAsNode: a config written before Chip started
 // assigning per-pal session ids (or before this pal had one yet) gets patched in place rather
 // than left stale, and it's re-checked on every console launch so it can never drift.
-async function ensureChipSessionId(filePath, configFile, chipSessionId) {
+async function ensureChipSessionId(filePath, configFile, chipSessionId, format) {
     if (!chipSessionId) return;
+    if (format === "toml") { await patchCodexEnv(filePath, { PALSYNC_CHIP_SESSION_ID: chipSessionId }); return; }
     let json;
     try { json = JSON.parse(await fs.readFile(filePath, "utf8")); }
     catch (e) { return; }
@@ -149,7 +160,31 @@ async function ensureChipSessionId(filePath, configFile, chipSessionId) {
 // directory was gone). chipSessionId is this pal tab's persistent id (see index.js) — every
 // request the agent's MCP child process makes for this pal then carries it as a Chip-Session-ID
 // header.
+// Keep a pal's contract docs (CLAUDE.md/CLAUDE.palsync.md, or AGENTS.md/.agents for
+// codex/pi/opencode) current for whichever agent it's actually being opened with — mirrors
+// the CLI launcher's own workspace.setup() (src/launcher/workspace.js), which calls this at the
+// same point in its STEPS ("inject" right before "register"). Found missing here entirely
+// 2026-09-14: Chip's GUI only ever registered MCP servers, never injected/refreshed contract
+// docs, so a pal opened through Chip could carry a stale or entirely absent contract for
+// whichever agent it's running (confirmed live: a pal set up for Claude via the CLI, then later
+// opened with Codex through Chip, had no AGENTS.md at all — Codex got zero routing/golden-rules/
+// sync-contract guidance for the whole session). writeIfChanged/mergeManaged inside inject()
+// make this idempotent and cheap, same as MCP registration below, so it's safe to call on every
+// console launch rather than only once. Same known gap as the CLI (documented in
+// workspace.js): Gemini CLI/Cursor/Copilot fall through to the Claude-only CLAUDE.md branch
+// since they don't read CLAUDE.md/AGENTS.md natively — harmless no-op for those three, and
+// they're already being phased out of Chip's own agent list.
+async function ensureContextInjected(agentId, workspaceDir) {
+    let palName;
+    try {
+        const record = await palsyncfile.read(workspaceDir);
+        palName = record && record.palName;
+    } catch (e) { /* best-effort — inject() works fine with palName undefined */ }
+    await contextInject.inject(workspaceDir, { palName, agent: agentId, policy: policyModule.resolve() });
+}
+
 async function ensureMcpRegistered(agentId, workspaceDir, chipSessionId) {
+    await ensureContextInjected(agentId, workspaceDir);
     // Pi: no per-pal file to write/self-heal — just make sure the global native extension is
     // installed (registerPi.install() itself only actually writes when the bundled source differs
     // from what's already there, so this is cheap to call on every console launch). The Chip-
@@ -165,8 +200,8 @@ async function ensureMcpRegistered(agentId, workspaceDir, chipSessionId) {
     const filePath = path.join(workspaceDir, reg.configFile);
     const alreadyRegistered = await exists(filePath);
     const result = await reg.register(workspaceDir, { chipSessionId });
-    await ensureElectronRunAsNode(filePath, reg.configFile);
-    await ensureChipSessionId(filePath, reg.configFile, chipSessionId);
+    await ensureElectronRunAsNode(filePath, reg.configFile, reg.format);
+    await ensureChipSessionId(filePath, reg.configFile, chipSessionId, reg.format);
     await ensureElectronRunAsNodeForHooks(workspaceDir);
     return Object.assign({ alreadyRegistered }, result);
 }
