@@ -21,33 +21,40 @@ const JUNK_SUBPATHS = [
     ["node_modules", "palsync", ".git"],
 ];
 
-// Sum of file sizes under a directory, walked recursively — a cheap, order-independent integrity
-// check: @electron/asar's extractAll/createPackage round-trip has a known, long-standing,
-// non-deterministic bug on macOS/APFS where some files silently extract or repackage as
-// zero-byte/null-byte garbage of the SAME reported size (confirmed live 2026-09-14: a shipped,
-// notarized Mac build's app.asar had a root package.json that was 581 bytes of pure 0x00 —
-// identical size to the real 581-byte package.json, content replaced with zeros — causing Node's
-// own package.json reader to throw and the whole app to exit silently, before any of our code or
-// even Electron's own error handling ever ran; see electron/asar#153 for the same class of bug
-// reported since at least 2018, never permanently fixed upstream). A full byte-for-byte re-diff
-// of every file would be the most bulletproof check but is expensive for an app this size; total
-// byte count is cheap and would have caught this exact incident (the corrupted file's real bytes
-// became zeros, but its length was unchanged only because the corruption target was already-sized
-// space — a genuine content change with a size mismatch is the far more common failure shape this
-// catches; see the also-added spot check below for the "same size, wrong content" shape too).
-function totalBytes(dir) {
-    let total = 0;
+// Recursively find any non-empty file whose content is ENTIRELY 0x00 bytes — the exact, specific
+// signature of a known, long-standing, non-deterministic bug in @electron/asar's extractAll/
+// createPackage round-trip on macOS/APFS (confirmed live 2026-09-14: a shipped, notarized Mac
+// build's app.asar had a root package.json that came out as 581 bytes of pure 0x00 — identical
+// size to the real 581-byte package.json, content replaced with zeros — causing Node's own
+// package.json reader to throw and the whole app to exit silently, before any of our code or even
+// Electron's own error handling ever ran; see electron/asar#153 for the same class of bug reported
+// since at least 2018, never permanently fixed upstream). Checking every file for this exact
+// signature (rather than comparing total extracted byte counts against the pre-repackage source)
+// is both more targeted and more reliable: a total-byte-count comparison across two independent
+// extractions produced a large, spurious mismatch in practice (APFS clone/hardlink-aware
+// extraction can report different logical totals for content-identical files without anything
+// actually being corrupt — confirmed live the same day: a "corrupted" build's actual packed
+// app.asar on disk was a perfectly normal ~150MB, matching every other build, despite one
+// extraction reporting ~720MB of logical content vs ~150MB for the other).
+function findZeroedFile(dir) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) total += totalBytes(full);
-        else if (entry.isFile()) total += fs.statSync(full).size;
+        if (entry.isDirectory()) {
+            const found = findZeroedFile(full);
+            if (found) return found;
+        } else if (entry.isFile()) {
+            const stat = fs.statSync(full);
+            if (stat.size === 0) continue; // a real empty file is not this corruption
+            const buf = fs.readFileSync(full);
+            if (buf.every(b => b === 0)) return full;
+        }
     }
-    return total;
+    return null;
 }
 
 // Spot-check package.json specifically (always present, always expected to be valid, parseable
-// JSON) — catches the exact "same size, zeroed content" corruption shape totalBytes() alone can't,
-// since that shape doesn't change the byte count at all.
+// JSON) — a second, independent check catching any corruption shape findZeroedFile's exact
+// all-zero signature might not (e.g. partial/truncated corruption, not full-zero).
 function verifyPackageJsonReadable(dir) {
     const pkgPath = path.join(dir, "package.json");
     let content;
@@ -75,26 +82,25 @@ async function pruneOnce(asarPath) {
         }
         if (!prunedAny) return false;
 
-        const expectedBytes = totalBytes(tmpDir);
         fs.rmSync(asarPath, { force: true });
         await asar.createPackage(tmpDir, asarPath);
 
         // Verify the round-trip actually worked before trusting this asar — re-extract fresh and
-        // compare, rather than assuming createPackage succeeding without throwing means the
-        // content is correct (the corruption this guards against throws no error at all).
+        // check, rather than assuming createPackage succeeding without throwing means the content
+        // is correct (the corruption this guards against throws no error at all).
         const verifyDir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-asar-verify-"));
         try {
             asar.extractAll(asarPath, verifyDir);
-            const actualBytes = totalBytes(verifyDir);
-            if (actualBytes !== expectedBytes) {
-                throw new Error("[afterPack] integrity check failed: repackaged app.asar has " + actualBytes +
-                    " total bytes, expected " + expectedBytes + " (pruned source) — likely the known " +
-                    "@electron/asar macOS extract/repackage corruption, see electron/asar#153");
+            const zeroed = findZeroedFile(verifyDir);
+            if (zeroed) {
+                throw new Error("[afterPack] integrity check failed: " + path.relative(verifyDir, zeroed) +
+                    " in the repackaged app.asar is entirely 0x00 bytes — the known @electron/asar " +
+                    "macOS extract/repackage corruption, see electron/asar#153");
             }
             if (!verifyPackageJsonReadable(verifyDir)) {
                 throw new Error("[afterPack] integrity check failed: repackaged app.asar's package.json is not " +
-                    "valid JSON — likely the known @electron/asar macOS extract/repackage corruption " +
-                    "(same-size, zeroed content), see electron/asar#153");
+                    "valid JSON — likely the known @electron/asar macOS extract/repackage corruption, " +
+                    "see electron/asar#153");
             }
         } finally {
             fs.rmSync(verifyDir, { recursive: true, force: true });
