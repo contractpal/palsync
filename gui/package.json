@@ -45,7 +45,6 @@
       "dist-renderer/**/*",
       "src/main/**/*",
       "package.json",
-      "build-info.json",
       "!node_modules/palsync/gui/**",
       "!node_modules/palsync/.git/**",
       "!node_modules/palsync/.claude/**",
@@ -65,9 +64,6 @@
       "!node_modules/palsync/test/**",
       "!node_modules/palsync/package-lock.json",
       "!node_modules/palsync/palpush.js"
-    ],
-    "asarUnpack": [
-      "build-info.json"
     ],
     "win": {
       "target": "nsis",

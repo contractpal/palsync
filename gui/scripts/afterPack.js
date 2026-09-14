@@ -21,21 +21,42 @@ const JUNK_SUBPATHS = [
     ["node_modules", "palsync", ".git"],
 ];
 
-// Recursively find any non-empty file whose content is ENTIRELY 0x00 bytes — the exact, specific
-// signature of a known, long-standing, non-deterministic bug in @electron/asar's extractAll/
-// createPackage round-trip on macOS/APFS (confirmed live 2026-09-14: a shipped, notarized Mac
-// build's app.asar had a root package.json that came out as 581 bytes of pure 0x00 — identical
-// size to the real 581-byte package.json, content replaced with zeros — causing Node's own
-// package.json reader to throw and the whole app to exit silently, before any of our code or even
-// Electron's own error handling ever ran; see electron/asar#153 for the same class of bug reported
-// since at least 2018, never permanently fixed upstream). Checking every file for this exact
-// signature (rather than comparing total extracted byte counts against the pre-repackage source)
-// is both more targeted and more reliable: a total-byte-count comparison across two independent
-// extractions produced a large, spurious mismatch in practice (APFS clone/hardlink-aware
-// extraction can report different logical totals for content-identical files without anything
-// actually being corrupt — confirmed live the same day: a "corrupted" build's actual packed
-// app.asar on disk was a perfectly normal ~150MB, matching every other build, despite one
-// extraction reporting ~720MB of logical content vs ~150MB for the other).
+// @electron/asar's own `extractAll` has a real, reproducible bug (confirmed live 2026-09-14,
+// both macOS and Windows): it can write a file's content as entirely 0x00 bytes at the correct
+// size, deterministically — not a timing race (an 8-attempt/2-second poll for the write to
+// "catch up" never once resolved it), not upstream in electron-builder's own first-pass asar
+// (confirmed byte-correct via `asar.extractFile` on the exact file `extractAll` corrupted, read
+// from the very same archive), and not platform-specific (hit a root package.json on Mac, a
+// renderer JS bundle on Windows — different files, same signature). Whatever `extractAll` does
+// internally to batch/stream multiple files at once is where this happens; extracting the same
+// files one at a time via `extractFile` (which every direct test here got right, every time) does
+// not reproduce it. So this hook never calls `extractAll` — it lists the archive's real contents
+// and recreates them on disk itself, file by file.
+function safeExtractAll(archivePath, destDir) {
+    for (const rawPath of asar.listPackage(archivePath)) {
+        const relPath = rawPath.replace(/^[/\\]/, "");
+        if (!relPath) continue; // the archive root itself
+        const destPath = path.join(destDir, relPath);
+        const info = asar.statFile(archivePath, relPath);
+        if ("files" in info) {
+            fs.mkdirSync(destPath, { recursive: true });
+        } else if ("link" in info) {
+            fs.mkdirSync(path.dirname(destPath), { recursive: true });
+            fs.symlinkSync(info.link, destPath);
+        } else {
+            fs.mkdirSync(path.dirname(destPath), { recursive: true });
+            fs.writeFileSync(destPath, asar.extractFile(archivePath, relPath));
+            if (info.executable) {
+                try { fs.chmodSync(destPath, 0o755); } catch (e) { /* best-effort, e.g. Windows */ }
+            }
+        }
+    }
+}
+
+// Recursively find any non-empty file whose content is ENTIRELY 0x00 bytes. Cheap insurance kept
+// after switching to safeExtractAll (which directly fixed the actual corruption — see its own
+// comment for the full incident) rather than something still expected to fire; a second,
+// independent line of defense costs almost nothing to keep.
 function findZeroedFile(dir) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name);
@@ -70,7 +91,7 @@ function verifyPackageJsonReadable(dir) {
 async function pruneOnce(asarPath) {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-asar-prune-"));
     try {
-        asar.extractAll(asarPath, tmpDir);
+        safeExtractAll(asarPath, tmpDir);
         let prunedAny = false;
         for (const subpath of JUNK_SUBPATHS) {
             const junkPath = path.join(tmpDir, ...subpath);
@@ -85,22 +106,30 @@ async function pruneOnce(asarPath) {
         fs.rmSync(asarPath, { force: true });
         await asar.createPackage(tmpDir, asarPath);
 
+        // @electron/asar caches parsed archive headers/offset tables internally, keyed by archive
+        // path (it exposes uncache/uncacheAll specifically to invalidate this) — and this same
+        // process already read from asarPath once, above, before deleting and completely replacing
+        // it. Without dropping that cache, safeExtractAll's read-back below can apply the OLD
+        // file's offset table against the NEW file's bytes, landing reads on the wrong byte ranges
+        // (explains the exact symptom: deterministic, not timing-related — a wait/retry loop and
+        // an explicit fsync were both tried first and neither helped — and absent when a fresh,
+        // separate process reads the identical on-disk file with no stale cache to begin with).
+        asar.uncache(asarPath);
+
         // Verify the round-trip actually worked before trusting this asar — re-extract fresh and
         // check, rather than assuming createPackage succeeding without throwing means the content
-        // is correct (the corruption this guards against throws no error at all).
+        // is correct.
         const verifyDir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-asar-verify-"));
         try {
-            asar.extractAll(asarPath, verifyDir);
+            safeExtractAll(asarPath, verifyDir);
             const zeroed = findZeroedFile(verifyDir);
             if (zeroed) {
                 throw new Error("[afterPack] integrity check failed: " + path.relative(verifyDir, zeroed) +
-                    " in the repackaged app.asar is entirely 0x00 bytes — the known @electron/asar " +
-                    "macOS extract/repackage corruption, see electron/asar#153");
+                    " in the repackaged app.asar is entirely 0x00 bytes");
             }
             if (!verifyPackageJsonReadable(verifyDir)) {
                 throw new Error("[afterPack] integrity check failed: repackaged app.asar's package.json is not " +
-                    "valid JSON — likely the known @electron/asar macOS extract/repackage corruption, " +
-                    "see electron/asar#153");
+                    "valid JSON");
             }
         } finally {
             fs.rmSync(verifyDir, { recursive: true, force: true });
@@ -111,6 +140,28 @@ async function pruneOnce(asarPath) {
     }
 }
 
+// build-info.json is deliberately NOT in package.json's "files" list — it's placed directly here
+// instead, copied straight to the app.asar.unpacked location Electron's fs already checks first
+// for any path that would otherwise resolve inside app.asar (same runtime behavior electron-
+// builder's own `asarUnpack` config would give, without going through it). Two independent
+// problems ruled this out: (1) the file was one of the ones seen corrupting inside app.asar via
+// the extractAll bug documented above, and (2) actually configuring
+// `asarUnpack: ["build-info.json"]` triggered a SEPARATE, unrelated electron-builder bug: its
+// asarUnpack path-matching (AsarPackager.unpackPattern/getRelativePath) walks the
+// node_modules/palsync symlink (a real symlink to the repo root on Mac/Linux) and hard-fails
+// the whole build the moment it encounters ANY repo-root file outside gui/ (e.g.
+// .claude/settings.local.json) — reproduced identically even after excluding that specific path
+// from "files", since this check runs on a different, symlink-following code path that "files"
+// excludes don't reach. Bypassing electron-builder's asarUnpack config entirely and just placing
+// the file ourselves sidesteps both problems at once.
+function copyBuildInfoUnpacked(context, asarPath) {
+    const src = path.join(__dirname, "..", "build-info.json");
+    if (!fs.existsSync(src)) return; // writeBuildInfo.js wasn't run first — nothing to copy
+    const unpackedDir = path.join(path.dirname(asarPath), "app.asar.unpacked");
+    fs.mkdirSync(unpackedDir, { recursive: true });
+    fs.copyFileSync(src, path.join(unpackedDir, "build-info.json"));
+}
+
 exports.default = async function afterPack(context) {
     const appName = context.packager.appInfo.productFilename;
     // Mac: <App>.app/Contents/Resources/app.asar. Windows/Linux: resources/app.asar directly.
@@ -119,23 +170,6 @@ exports.default = async function afterPack(context) {
     const asarPath = fs.existsSync(macAsarPath) ? macAsarPath : otherAsarPath;
     if (!fs.existsSync(asarPath)) return; // asar:false build, or nothing to prune
 
-    // Confirmed live 2026-09-14: retrying just this hook (extract/prune/repackage) achieves
-    // nothing when it fails — the corruption is already present in electron-builder's OWN
-    // initial app.asar, before this hook ever runs (three retries here hit the exact same
-    // corrupted file, identically, every time — garbage in, garbage out). Fail immediately with
-    // a clear next step instead of silently repeating a pointless retry: re-run the WHOLE build
-    // command from the top. A fresh electron-builder invocation actually has a chance of avoiding
-    // whatever produced the corrupt source asar (still not root-caused precisely — plausibly a
-    // write-then-immediate-read race between writeBuildInfo.js/bumpVersion.js's fresh writes and
-    // electron-builder's own packaging step reading them moments later, given both known
-    // incidents so far hit a file that had just been (re)written seconds earlier — but not
-    // confirmed).
-    try {
-        return await pruneOnce(asarPath);
-    } catch (e) {
-        e.message += "\n[afterPack] This is NOT something retrying this hook fixes — the corrupt " +
-            "source asar comes from electron-builder's own packaging step, before this hook ever " +
-            "runs. Re-run the WHOLE build command from the top instead.";
-        throw e;
-    }
+    copyBuildInfoUnpacked(context, asarPath);
+    return await pruneOnce(asarPath);
 };
