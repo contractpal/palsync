@@ -49,6 +49,9 @@
       "!node_modules/palsync/gui/**",
       "!node_modules/palsync/.git/**"
     ],
+    "asarUnpack": [
+      "build-info.json"
+    ],
     "win": {
       "target": "nsis",
       "icon": "build/icon.png"
