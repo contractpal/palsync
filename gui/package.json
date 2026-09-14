@@ -47,7 +47,24 @@
       "package.json",
       "build-info.json",
       "!node_modules/palsync/gui/**",
-      "!node_modules/palsync/.git/**"
+      "!node_modules/palsync/.git/**",
+      "!node_modules/palsync/.claude/**",
+      "!node_modules/palsync/.idea/**",
+      "!node_modules/palsync/.junie/**",
+      "!node_modules/palsync/.gitattributes",
+      "!node_modules/palsync/.gitignore",
+      "!node_modules/palsync/.palsync.usage.json",
+      "!node_modules/palsync/.pi-lens.json",
+      "!node_modules/palsync/ETHOS.md",
+      "!node_modules/palsync/HEADLESS.md",
+      "!node_modules/palsync/LICENSE",
+      "!node_modules/palsync/README.md",
+      "!node_modules/palsync/bench/**",
+      "!node_modules/palsync/docs/**",
+      "!node_modules/palsync/eval/**",
+      "!node_modules/palsync/test/**",
+      "!node_modules/palsync/package-lock.json",
+      "!node_modules/palsync/palpush.js"
     ],
     "asarUnpack": [
       "build-info.json"
