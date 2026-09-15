@@ -8,7 +8,14 @@ jobs:
     # Unsigned for now - same as the current local flow (the code-signing cert lives on a thumb
     # drive that deliberately never touches any build machine). Download the artifact this
     # produces and sign it by hand, same as today, until Azure Trusted Signing is wired up.
-    runs-on: windows-latest
+    #
+    # Pinned to windows-2022, not windows-latest: confirmed live (2026-09-15) that windows-latest
+    # now points at a brand-new image (win25-vs2026) shipping a Visual Studio version this
+    # project's @electron/node-gyp (via electron-rebuild, needed for node-pty's native build)
+    # doesn't recognize yet - "invalid versionYear: undefined" / "could not find a version of
+    # Visual Studio 2017 or newer". windows-2022 matches the VS2022 Build Tools this project's
+    # local Windows build already uses (see BUILD.md).
+    runs-on: windows-2022
     steps:
       - name: Checkout
         uses: actions/checkout@v4
