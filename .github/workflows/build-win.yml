@@ -1,0 +1,40 @@
+name: Build Windows (Chip Pal Builder)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    # Unsigned for now - same as the current local flow (the code-signing cert lives on a thumb
+    # drive that deliberately never touches any build machine). Download the artifact this
+    # produces and sign it by hand, same as today, until Azure Trusted Signing is wired up.
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install root dependencies
+        run: npm install
+        env:
+          # The GUI never needs Chromium eagerly (lazy, on first browser-audit use, by design) -
+          # skip it here since it's unrelated to packaging and would just slow the build down.
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+      - name: Install gui dependencies
+        working-directory: gui
+        run: npm install
+
+      - name: Build (unsigned)
+        working-directory: gui
+        run: npm run build:win:ci
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChipPalBuilder-win-unsigned
+          path: gui/dist/ChipPalBuilder.exe
