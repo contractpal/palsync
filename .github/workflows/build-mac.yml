@@ -59,6 +59,14 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Checks the actual signed/notarized/zipped artifact about to ship - afterPack.js's own
+      # check (see its comments) only proves app.asar was intact BEFORE signing/notarization/
+      # zipping touched it. Confirmed live 2026-09-15: a corrupted app.asar shipped all the way to
+      # a downloaded, installed build before anyone noticed - this fails the job loudly instead.
+      - name: Verify built artifact integrity
+        working-directory: gui
+        run: node scripts/verifyMacZip.js
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
