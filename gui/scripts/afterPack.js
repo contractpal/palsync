@@ -21,6 +21,16 @@ const JUNK_SUBPATHS = [
     ["node_modules", "palsync", ".git"],
 ];
 
+function junkSubpathOf(relPath) {
+    // asar.listPackage's separator follows the host OS (backslash on Windows, forward slash on
+    // macOS/Linux, where this actually matters live) - normalize before comparing.
+    const normalized = relPath.replace(/\\/g, "/");
+    return JUNK_SUBPATHS.find(subpath => {
+        const prefix = subpath.join("/");
+        return normalized === prefix || normalized.startsWith(prefix + "/");
+    });
+}
+
 // @electron/asar's own `extractAll` has a real, reproducible bug (confirmed live 2026-09-14,
 // both macOS and Windows): it can write a file's content as entirely 0x00 bytes at the correct
 // size, deterministically — not a timing race (an 8-attempt/2-second poll for the write to
@@ -32,10 +42,24 @@ const JUNK_SUBPATHS = [
 // files one at a time via `extractFile` (which every direct test here got right, every time) does
 // not reproduce it. So this hook never calls `extractAll` — it lists the archive's real contents
 // and recreates them on disk itself, file by file.
-function safeExtractAll(archivePath, destDir) {
+//
+// `skipJunk` (confirmed live 2026-09-15, GitHub Actions macOS runner): the self-referential
+// node_modules/palsync/gui symlink can point back at THIS SAME BUILD's own not-yet-finished
+// appOutDir (e.g. .../gui/dist/mac-arm64/Electron.app/...), captured mid-write when
+// electron-builder's own asar packager walked it — so the archive's file index can list an entry
+// under a JUNK_SUBPATH whose content is missing/broken, and `asar.statFile` throws "not found in
+// this archive" for it. That entry was always going to get pruned anyway, so skip calling
+// statFile/extractFile on anything under a JUNK_SUBPATH in the first place rather than crashing
+// on it before pruning gets a chance to run.
+function safeExtractAll(archivePath, destDir, { skipJunk = false } = {}) {
+    let skippedAny = false;
     for (const rawPath of asar.listPackage(archivePath)) {
         const relPath = rawPath.replace(/^[/\\]/, "");
         if (!relPath) continue; // the archive root itself
+        if (skipJunk && junkSubpathOf(relPath)) {
+            skippedAny = true;
+            continue;
+        }
         const destPath = path.join(destDir, relPath);
         const info = asar.statFile(archivePath, relPath);
         if ("files" in info) {
@@ -51,6 +75,7 @@ function safeExtractAll(archivePath, destDir) {
             }
         }
     }
+    return skippedAny;
 }
 
 // Recursively find any non-empty file whose content is ENTIRELY 0x00 bytes. Cheap insurance kept
@@ -91,17 +116,9 @@ function verifyPackageJsonReadable(dir) {
 async function pruneOnce(asarPath) {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-asar-prune-"));
     try {
-        safeExtractAll(asarPath, tmpDir);
-        let prunedAny = false;
-        for (const subpath of JUNK_SUBPATHS) {
-            const junkPath = path.join(tmpDir, ...subpath);
-            if (fs.existsSync(junkPath)) {
-                fs.rmSync(junkPath, { recursive: true, force: true });
-                prunedAny = true;
-                console.log("[afterPack] pruned " + subpath.join("/") + " from app.asar (self-referential palsync symlink)");
-            }
-        }
+        const prunedAny = safeExtractAll(asarPath, tmpDir, { skipJunk: true });
         if (!prunedAny) return false;
+        console.log("[afterPack] pruned self-referential palsync symlink content from app.asar");
 
         fs.rmSync(asarPath, { force: true });
         await asar.createPackage(tmpDir, asarPath);
