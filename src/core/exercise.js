@@ -60,6 +60,13 @@ const NAV_TIMEOUT_MS = 10000;   // one page navigation (goto)
 const LOAD_TIMEOUT_MS = 5000;   // load state within a navigation
 const IDLE_TIMEOUT_MS = 3000;   // networkidle within a navigation / screen settle
 const ACTION_TIMEOUT_MS = 5000; // one fill/select/click
+// A click's real effect (an AJAX response re-rendering the fragment) can legitimately take as
+// long as PalBuilder's own default server-side workflow timeout - waiting less than that risks
+// reporting a click as "nothing changed" purely because the tool stopped watching too soon, not
+// because the click didn't land (confirmed live 2026-09-15: a controlled test against the real
+// waitForScreenSettle showed exactly this - a change landing at 4s was reported as unchanged
+// because the old ~3s budget gave up first).
+const SETTLE_TIMEOUT_MS = 10000; // matches PalBuilder's default server-side workflow timeout
 // Style/font settling is screenshot-only evidence — behavior checks assert visible text, which
 // does not depend on it — so exercise navigations skip it.
 const EXERCISE_NAV_OPTS = { gotoTimeout: NAV_TIMEOUT_MS, loadTimeout: LOAD_TIMEOUT_MS, idleTimeout: IDLE_TIMEOUT_MS, skipStyleSettle: true };
@@ -763,7 +770,7 @@ async function screenFingerprint(pg, boundMs) {
 }
 
 async function waitForScreenSettle(pg, before) {
-    try { await pg.waitForLoadState("networkidle", { timeout: 3000 }); } catch (e) { /* AJAX may not drive load state */ }
+    try { await pg.waitForLoadState("networkidle", { timeout: SETTLE_TIMEOUT_MS }); } catch (e) { /* AJAX may not drive load state */ }
     try {
         await pg.waitForFunction((prev) => {
             const body = document.body;
@@ -772,7 +779,7 @@ async function waitForScreenSettle(pg, before) {
             return text !== prev.text ||
                 html.length !== prev.htmlLength ||
                 html.slice(Math.max(0, html.length - 2000)) !== prev.htmlTail;
-        }, before, { timeout: 3000 });
+        }, before, { timeout: SETTLE_TIMEOUT_MS });
     } catch (e) { /* unchanged screens are valid for some actions */ }
     try { await pg.waitForTimeout(250); } catch (e) { /* best effort */ }
 }
@@ -1339,4 +1346,4 @@ function formatExercise(res) {
     return lines.join("\n");
 }
 
-module.exports = { runExercise, exerciseByFetch, exerciseByBrowser, resolveUploadPath, findUploadTarget, validateSteps, validateInitial, webInitialPath, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, makeRunId, readExerciseOrdinal, takeExerciseOrdinal, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, redactSecretFormsForSuccess, makeFinalSnapshot, BROWSER_EVENTS_CAP, EVIDENCE_TIMEOUT_MS, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };
+module.exports = { runExercise, exerciseByFetch, exerciseByBrowser, resolveUploadPath, findUploadTarget, validateSteps, validateInitial, webInitialPath, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, makeRunId, readExerciseOrdinal, takeExerciseOrdinal, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, redactSecretFormsForSuccess, makeFinalSnapshot, BROWSER_EVENTS_CAP, EVIDENCE_TIMEOUT_MS, SETTLE_TIMEOUT_MS, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };
