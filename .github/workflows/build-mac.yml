@@ -1,0 +1,75 @@
+name: Build Mac (Chip Pal Builder)
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Upload the zip + mac-versions.txt to S3 after a successful build"
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    # arm64 only for now (matches the already-validated local M1 build) - macos-latest runners
+    # are Apple Silicon, so this needs no cross-compilation. x64 would need node-pty's native
+    # module cross-built for x64, deliberately out of scope for this first CI pass.
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install root dependencies
+        run: npm install
+        env:
+          # The GUI never needs Chromium eagerly (lazy, on first browser-audit use, by design) -
+          # skip it here since it's unrelated to packaging and would just slow the build down.
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+      - name: Install gui dependencies
+        working-directory: gui
+        run: npm install
+
+      - name: Build, sign, and notarize (arm64 zip only)
+        working-directory: gui
+        run: npm run build:mac:ci
+        env:
+          # electron-builder imports this cert into a fresh, ephemeral keychain and signs with
+          # it automatically - no manual keychain-unlock prompt, unlike the SSH-to-a-real-Mac
+          # flow this replaces (see BUILD.md's "codesign fails over SSH" writeup for why).
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # electron-builder auto-notarizes when these three are set - no extra afterSign hook
+          # needed (confirmed already true for the local Mac build, per BUILD.md).
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChipPalBuilder-mac-arm64
+          path: |
+            gui/dist/*.zip
+            gui/dist/mac-versions.txt
+
+      - name: Configure AWS credentials
+        if: ${{ inputs.publish }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Publish to S3
+        if: ${{ inputs.publish }}
+        working-directory: gui/dist
+        run: |
+          for f in *.zip; do
+            aws s3 cp "$f" "s3://contractpal-cloudpiston-downloads/$f"
+          done
+          aws s3 cp mac-versions.txt s3://contractpal-cloudpiston-downloads/mac-versions.txt

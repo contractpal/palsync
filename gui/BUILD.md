@@ -266,9 +266,9 @@ actually stapled (works offline, no network check needed by the end user's Mac).
 The Mac has no AWS CLI configured — copy the four installer files back to the Windows machine
 via `scp` (not PuTTY's `pscp`: it hit an interactive host-key confirmation that `-batch` mode
 can't get past from this pairing, even with `-hostkey` — plain OpenSSH `scp`/`ssh` work fine
-once the host key is trusted once via an interactive `ssh` call), renaming to the
-version-stripped convention as you go (`mac-versions.txt`, uploaded from a prior release, is the
-source of truth for exact filenames):
+once the host key is trusted once via an interactive `ssh` call). `gui/package.json`'s
+`build.mac.artifactName` (`ChipPalBuilder-${arch}.${ext}`) already gives electron-builder's own
+output the final fixed, version-stripped names directly — no manual rename step needed anymore:
 
 ```
 # Use the actual resolved absolute remote path here, not a literal "$HOME" or "~" in the scp
@@ -277,15 +277,15 @@ source of truth for exact filenames):
 # there is untested/unconfirmed. Get the real path once (`ssh davidmartineau@benjamins.local
 # 'echo $HOME'`) and use it literally, e.g. /Users/davidmartineau/chip-mac-build below.
 BASE='davidmartineau@benjamins.local:/Users/davidmartineau/chip-mac-build'
-scp "$BASE/Chip Pal Builder-<version>.dmg" ChipPalBuilder.dmg
-scp "$BASE/Chip Pal Builder-<version>-mac.zip" ChipPalBuilder-mac.zip
-scp "$BASE/Chip Pal Builder-<version>-arm64.dmg" ChipPalBuilder-arm64.dmg
-scp "$BASE/Chip Pal Builder-<version>-arm64-mac.zip" ChipPalBuilder-arm64-mac.zip
+scp "$BASE/ChipPalBuilder-x64.dmg" .
+scp "$BASE/ChipPalBuilder-x64.zip" .
+scp "$BASE/ChipPalBuilder-arm64.dmg" .
+scp "$BASE/ChipPalBuilder-arm64.zip" .
 
-aws s3 cp ChipPalBuilder.dmg s3://contractpal-cloudpiston-downloads/ChipPalBuilder.dmg
-aws s3 cp ChipPalBuilder-mac.zip s3://contractpal-cloudpiston-downloads/ChipPalBuilder-mac.zip
+aws s3 cp ChipPalBuilder-x64.dmg s3://contractpal-cloudpiston-downloads/ChipPalBuilder-x64.dmg
+aws s3 cp ChipPalBuilder-x64.zip s3://contractpal-cloudpiston-downloads/ChipPalBuilder-x64.zip
 aws s3 cp ChipPalBuilder-arm64.dmg s3://contractpal-cloudpiston-downloads/ChipPalBuilder-arm64.dmg
-aws s3 cp ChipPalBuilder-arm64-mac.zip s3://contractpal-cloudpiston-downloads/ChipPalBuilder-arm64-mac.zip
+aws s3 cp ChipPalBuilder-arm64.zip s3://contractpal-cloudpiston-downloads/ChipPalBuilder-arm64.zip
 aws s3 cp mac-versions.txt s3://contractpal-cloudpiston-downloads/mac-versions.txt
 
 # Clean up the remote build output — it sits inside gui/ (or wherever cwd was), same
@@ -301,9 +301,9 @@ bucket root:
 ```
 0.9.0
 ChipPalBuilder-arm64.dmg
-ChipPalBuilder-arm64-mac.zip
-ChipPalBuilder.dmg
-ChipPalBuilder-mac.zip
+ChipPalBuilder-arm64.zip
+ChipPalBuilder-x64.dmg
+ChipPalBuilder-x64.zip
 ```
 
 `versionCheck.js`'s "new version available" check for macOS reads this file directly (not
