@@ -16,6 +16,21 @@ if (!app.requestSingleInstanceLock()) {
     app.exit(0);
 }
 
+// Linux only: Chromium's SUID sandbox helper can never be correctly configured for an AppImage,
+// since it self-extracts to a fresh /tmp/.mount_.../chrome-sandbox path (owned by the running
+// user, not root) on every single launch - confirmed live 2026-09-15 on Ubuntu 24.04, which also
+// restricts the unprivileged-user-namespace sandbox alternative by default. Without this, the app
+// FATAL-aborts on launch with "The SUID sandbox helper binary was found, but is not configured
+// correctly" - a near-universal failure for AppImage-packaged Electron apps on modern Ubuntu, not
+// specific to this machine. This only affects Chip's own renderer (which only ever displays
+// Chip's own trusted UI, never arbitrary web content) - the separate, Playwright-driven "Preview
+// Browser" used for pal_exercise/pal_screenshot is an independent process and is unaffected
+// either way (confirmed launches fine without this on the same machine). Must run before
+// app.whenReady() - appendSwitch has no effect once the app has started.
+if (process.platform === "linux") {
+    app.commandLine.appendSwitch("no-sandbox");
+}
+
 // Must run before any module below does PATH-dependent work (agent detection, dependency
 // checks) - see fixPath.js for why a Finder/Dock-launched app needs this at all.
 require("./fixPath").fixPathSync();
