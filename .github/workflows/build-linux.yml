@@ -35,6 +35,27 @@ jobs:
         working-directory: gui
         run: npm run build:linux:ci
 
+      # electron-builder's stock AppImage FATAL-aborts on launch on modern Ubuntu (confirmed live
+      # 2026-09-15 - chrome-sandbox can never be root-owned+setuid for a self-extracting AppImage,
+      # and no fix from inside the app's own JS can work since the crash happens in Electron's
+      # native bootstrap before any of the app's code runs). appimagetool repacks the AppImage
+      # with the fix (see patchLinuxAppRun.js) baked into its AppRun launcher script. Installed by
+      # extracting it once via --appimage-extract (no FUSE needed either way, unlike a normal
+      # AppImage launch) so this doesn't depend on FUSE being available on the runner.
+      - name: Install appimagetool
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y squashfs-tools
+          curl -L -o /tmp/appimagetool.AppImage https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /tmp/appimagetool.AppImage
+          cd /tmp && ./appimagetool.AppImage --appimage-extract
+          sudo mv /tmp/squashfs-root /opt/appimagetool
+          sudo ln -s /opt/appimagetool/AppRun /usr/local/bin/appimagetool
+
+      - name: Fix AppImage Chromium sandbox (bake in ELECTRON_DISABLE_SANDBOX)
+        working-directory: gui
+        run: node scripts/patchLinuxAppRun.js
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
