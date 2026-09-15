@@ -8,6 +8,7 @@ export default function DependencyCheckModal({ onClose }) {
     const [status, setStatus] = useState(null);
     const [installing, setInstalling] = useState(false);
     const [installError, setInstallError] = useState(null);
+    const [installProgress, setInstallProgress] = useState("");
 
     function refresh() {
         return window.palsyncGui.checkDependencies().then(setStatus);
@@ -15,9 +16,20 @@ export default function DependencyCheckModal({ onClose }) {
 
     useEffect(() => { refresh(); }, []);
 
+    // Live output while installing - without this, a real install failure (or just a slow one)
+    // looked identical to a hang: the UI showed a static "Downloading…" label with zero feedback
+    // until the whole thing resolved. Keep only the tail so a chatty installer doesn't grow this
+    // unbounded while the modal is open.
+    useEffect(() => {
+        return window.palsyncGui.onInstallChromiumOutput(chunk => {
+            setInstallProgress(prev => (prev + chunk).slice(-2000));
+        });
+    }, []);
+
     async function installChromium() {
         setInstalling(true);
         setInstallError(null);
+        setInstallProgress("");
         const result = await window.palsyncGui.installChromium();
         setInstalling(false);
         if (!result.ok) { setInstallError(result.error || "Install failed."); return; }
@@ -68,7 +80,10 @@ export default function DependencyCheckModal({ onClose }) {
                             <button className="btn btn-primary" onClick={installChromium}>Install</button>
                         )}
                     </div>
-                    {installError && <p className="wizard-error">{installError}</p>}
+                    {installing && installProgress && (
+                        <pre className="dep-install-progress">{installProgress}</pre>
+                    )}
+                    {installError && <pre className="wizard-error dep-install-progress">{installError}</pre>}
                 </div>
 
                 <div className="modal-actions">

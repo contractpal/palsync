@@ -43,6 +43,11 @@ function checkAll() {
     };
 }
 
+// Bound how much of the child's own output gets kept for a failure message — enough to show the
+// actual reason (a download/network error, a permissions error, an antivirus-interference
+// symptom, etc.) without accumulating an unbounded buffer for a run that prints a lot.
+const OUTPUT_TAIL_CAP = 4000;
+
 // Async (not palsync's own spawnSync-based run()) — spawnSync would freeze Electron's whole
 // main process, and every renderer, for the entire ~150MB download.
 function installChromium(onOutput) {
@@ -51,13 +56,26 @@ function installChromium(onOutput) {
         try { cli = playwrightCliPath(); }
         catch (e) { resolve({ ok: false, error: e.message }); return; }
 
+        // Previously a non-zero exit resolved as { ok: false } with no error text at all - every
+        // line the installer actually printed (the real reason it failed: a network error, a
+        // permissions error, antivirus/EDR interfering with the download's extraction, etc.) only
+        // ever reached the live onOutput callback, discarded once the promise resolved. Confirmed
+        // live 2026-09-15: exactly this made a real install failure indistinguishable from a
+        // silent hang - the UI had no way to show a reason because none was ever captured.
+        let tail = "";
+        const capture = (d) => {
+            const s = d.toString();
+            onOutput(s);
+            tail = (tail + s).slice(-OUTPUT_TAIL_CAP);
+        };
+
         const child = spawn(process.execPath, [cli, "install", "chromium"], {
             env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" }
         });
-        child.stdout.on("data", d => onOutput(d.toString()));
-        child.stderr.on("data", d => onOutput(d.toString()));
-        child.on("exit", code => resolve({ ok: code === 0 }));
-        child.on("error", err => resolve({ ok: false, error: err.message }));
+        child.stdout.on("data", capture);
+        child.stderr.on("data", capture);
+        child.on("exit", code => resolve({ ok: code === 0, error: code === 0 ? undefined : (tail.trim() || "exit code " + code) }));
+        child.on("error", err => resolve({ ok: false, error: err.message + (tail.trim() ? "\n" + tail.trim() : "") }));
     });
 }
 

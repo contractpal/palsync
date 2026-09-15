@@ -130,6 +130,10 @@ button:focus-visible, .tab:focus-visible, .card:focus-visible{
 
 .wizard-title{margin:0 0 2px;font-size:13px;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:.03em;}
 .wizard-error{margin:0;font-size:12px;color:var(--danger);}
+.dep-install-progress{
+  margin:6px 0 0;padding:8px 10px;border-radius:7px;background:var(--surface-raised);border:1px solid var(--border);
+  white-space:pre-wrap;overflow-wrap:anywhere;max-height:160px;overflow-y:auto;font-size:11px;font-family:monospace;
+}
 .wizard-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;}
 .wizard-list button{
   text-align:left;border:1px solid var(--border);background:var(--surface-raised);color:var(--text);
