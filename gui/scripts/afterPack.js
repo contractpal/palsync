@@ -117,6 +117,26 @@ async function pruneOnce(asarPath) {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-asar-prune-"));
     try {
         const prunedAny = safeExtractAll(asarPath, tmpDir, { skipJunk: true });
+
+        // Always verify what electron-builder itself just produced, whether or not there was
+        // anything to prune - confirmed live (2026-09-15, GitHub Actions Mac build): a build with
+        // NO junk to prune still shipped a corrupted app.asar (package.json all 0x00 bytes, same
+        // signature as the incident documented below) because electron-builder's own first-pass
+        // asar.createPackage hit the same class of corruption in ITS OWN packaging step this time,
+        // not in this hook's repackage step - and this check used to only run after this hook's
+        // own repackage, so a build with nothing to prune shipped that corruption straight through
+        // undetected. tmpDir already holds everything from the extraction above regardless of
+        // skipJunk's outcome, so this costs nothing extra to check.
+        const zeroedBeforePrune = findZeroedFile(tmpDir);
+        if (zeroedBeforePrune) {
+            throw new Error("[afterPack] integrity check failed: " + path.relative(tmpDir, zeroedBeforePrune) +
+                " in electron-builder's own packaged app.asar is entirely 0x00 bytes");
+        }
+        if (!verifyPackageJsonReadable(tmpDir)) {
+            throw new Error("[afterPack] integrity check failed: electron-builder's own packaged app.asar's " +
+                "package.json is not valid JSON");
+        }
+
         if (!prunedAny) return false;
         console.log("[afterPack] pruned self-referential palsync symlink content from app.asar");
 
