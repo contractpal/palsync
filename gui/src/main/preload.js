@@ -110,6 +110,10 @@ contextBridge.exposeInMainWorld("palsyncGui", {
     // (staged /assets, most-recent-first — see contextInject.js's "Creating new files" section).
     listImages: (palPath, kind) => ipcRenderer.invoke("pal:listImages", palPath, kind),
 
+    readClipboard: () => ipcRenderer.invoke("clipboard:read"),
+    readLatestAgentClipboardFile: (palPath) => ipcRenderer.invoke("clipboard:readLatestAgentFile", palPath),
+    saveClipboard: (palPath, item) => ipcRenderer.invoke("clipboard:save", { palPath, item }),
+
     checkPalsyncVersion: (palPath) => ipcRenderer.invoke("pal:checkPalsyncVersion", palPath),
     syncPalsync: (palPath) => ipcRenderer.invoke("pal:syncPalsync", { palPath }),
     onSyncOutput: (callback) => {

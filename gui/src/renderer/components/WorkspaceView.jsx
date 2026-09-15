@@ -8,7 +8,7 @@ function tabLabel(pal) {
     return pal.path.split(/[\\/]/).pop();
 }
 
-export default function WorkspaceView({ workspace, onWorkspaceChange }) {
+export default function WorkspaceView({ workspace, onWorkspaceChange, onActivePalChange }) {
     const [activeIndex, setActiveIndex] = useState(workspace.activeTabIndex || 0);
     const [addOpen, setAddOpen] = useState(false);
     const [agents, setAgents] = useState([]);
@@ -17,6 +17,12 @@ export default function WorkspaceView({ workspace, onWorkspaceChange }) {
     useEffect(() => {
         window.palsyncGui.listAgents().then(setAgents);
     }, []);
+
+    const pals = workspace.pals || [];
+
+    useEffect(() => {
+        if (onActivePalChange) onActivePalChange(pals[activeIndex] || null);
+    }, [activeIndex, pals]);
 
     function handleAdded(result) {
         onWorkspaceChange(result.workspace);
@@ -37,8 +43,6 @@ export default function WorkspaceView({ workspace, onWorkspaceChange }) {
         onWorkspaceChange(result.workspace);
         setActiveIndex(result.workspace.activeTabIndex || 0);
     }
-
-    const pals = workspace.pals || [];
 
     return (
         <>

@@ -5,10 +5,12 @@ import DependencyCheckModal from "./components/DependencyCheckModal.jsx";
 import AboutModal from "./components/AboutModal.jsx";
 import SettingsModal from "./components/SettingsModal.jsx";
 import BrowsersSettingsModal from "./components/BrowsersSettingsModal.jsx";
+import ClipboardButton from "./components/ClipboardButton.jsx";
 
 export default function App() {
     const [workspace, setWorkspace] = useState(null);
     const [workspacePath, setWorkspacePath] = useState(null);
+    const [activePal, setActivePal] = useState(null);
     const [showLeaveWarning, setShowLeaveWarning] = useState(false);
     const [showDepsCheck, setShowDepsCheck] = useState(false);
     const [showAbout, setShowAbout] = useState(false);
@@ -43,12 +45,14 @@ export default function App() {
             return;
         }
         setWorkspace(null);
+        setActivePal(null);
     }
 
     async function confirmLeave() {
         await window.palsyncGui.killAllConsoles();
         setShowLeaveWarning(false);
         setWorkspace(null);
+        setActivePal(null);
     }
 
     return (
@@ -58,9 +62,12 @@ export default function App() {
                     {workspace ? <b>{workspace.name}</b> : "No workspace open"}
                 </span>
                 {workspace && (
-                    <button className="btn" onClick={leaveWorkspace}>
-                        ← Workspaces
-                    </button>
+                    <div style={{ display: "flex", gap: 8 }}>
+                        <ClipboardButton pal={activePal} />
+                        <button className="btn" onClick={leaveWorkspace}>
+                            ← Workspaces
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -70,6 +77,7 @@ export default function App() {
                     workspace={workspace}
                     workspacePath={workspacePath}
                     onWorkspaceChange={setWorkspace}
+                    onActivePalChange={setActivePal}
                 />
             )}
 

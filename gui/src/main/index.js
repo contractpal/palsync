@@ -37,6 +37,7 @@ const tunnelWorkflow = require("./tunnelWorkflow");
 const debugWorkflow = require("./debugWorkflow");
 const palStatsWorkflow = require("./palStatsWorkflow");
 const imagesPanel = require("./imagesPanel");
+const clipboardPanel = require("./clipboardPanel");
 const workflowList = require("./workflowList");
 const palsyncSync = require("./palsyncSync");
 const webServicesWorkflow = require("./webServicesWorkflow");
@@ -653,6 +654,23 @@ ipcMain.handle("workspace:fetchStats", async (event, filePath) => {
 
 ipcMain.handle("pal:listImages", async (event, workspaceDir, kind) => {
     try { return { result: await imagesPanel.listImages(workspaceDir, kind) }; }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
+// ---- IPC: clipboard bridge (workspace titlebar button) ----
+
+ipcMain.handle("clipboard:read", async () => {
+    try { return { result: clipboardPanel.readClipboard() }; }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
+ipcMain.handle("clipboard:readLatestAgentFile", async (event, palPath) => {
+    try { return { result: await clipboardPanel.readLatestAgentFile(palPath) }; }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+});
+
+ipcMain.handle("clipboard:save", async (event, { palPath, item }) => {
+    try { return { result: await clipboardPanel.saveClipboard(palPath, item) }; }
     catch (e) { return { error: e && e.message ? e.message : String(e) }; }
 });
 

@@ -122,6 +122,12 @@ button:focus-visible, .tab:focus-visible, .card:focus-visible{
 }
 .modal.wide{width:420px;}
 
+.clipboard-preview-text{
+  margin:0;padding:10px;border-radius:7px;background:var(--surface-raised);border:1px solid var(--border);
+  white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow-y:auto;font-size:12px;
+}
+.clipboard-preview-image{max-width:100%;max-height:320px;border-radius:7px;border:1px solid var(--border);display:block;}
+
 .wizard-title{margin:0 0 2px;font-size:13px;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:.03em;}
 .wizard-error{margin:0;font-size:12px;color:var(--danger);}
 .wizard-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;}
