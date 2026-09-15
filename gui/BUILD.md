@@ -178,18 +178,39 @@ won't pick up a new release until it's updated to match.
 
 ## Producing a real installer (Mac) — signing, notarizing, and publishing
 
-**As of 2026-09-14, David's standing setup: this is run from the Windows machine over SSH to
-his real Mac** (`ssh davidmartineau@benjamins.local` — Bonjour hostname, resolves fine from
-Windows over `ssh`/`scp`; no VM, no start/stop step like Linux, it's just always-on and
-SSH-trusted already). Mirrors the Linux VM flow below — get the checkout current, build, verify,
-copy artifacts back to Windows, upload, clean up:
+**Correction, 2026-09-14, same day this was first written: the build/package steps genuinely
+work over SSH from the Windows machine to the real Mac (`ssh davidmartineau@benjamins.local`),
+but the codesigning step does not** — discovered live when it failed on every single file
+(tested by signing a completely unrelated binary, `/bin/cat`, in isolation, no relation to the
+app at all) with `errSecInternalComponent`, and `security show-keychain-info` returned "User
+interaction is not allowed." Root cause: an SSH session runs in its own macOS security/audit
+session, separate from the console GUI login session — even a second interactive SSH session
+run purely to `security unlock-keychain` didn't help, because that unlock doesn't carry over to
+a different SSH session either. The Developer ID private key requires interactive authorization
+to use for signing, and nothing running over SSH can display that prompt. **So: `git pull` /
+`npm install` / the build itself can be driven over SSH exactly as below, but the actual
+`electron-builder --mac` invocation (which signs and notarizes) needs to be run from a real,
+locally-logged-in Terminal.app session on the Mac** until a dedicated, always-unlocked build
+keychain is set up (the standard CI approach — import the Developer ID cert into a separate
+keychain created and unlocked with no auto-lock timeout, so it doesn't depend on the console
+session at all; not set up as of this writing).
+
+Get the checkout current over SSH exactly as planned, then run the actual build command
+yourself, locally, at the Mac:
 
 ```
-# From the Windows machine:
+# From the Windows machine, over SSH — fine for these steps, just not the actual build:
 ssh davidmartineau@benjamins.local "cd ~/palsync && git pull"
 ssh davidmartineau@benjamins.local "cd ~/palsync && npm install"          # picks up any new root deps
 ssh davidmartineau@benjamins.local "cd ~/palsync/gui && npm install"      # picks up any new gui deps
-ssh davidmartineau@benjamins.local 'cd ~/palsync/gui && node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && npx electron-builder --mac --x64 --arm64 --config.directories.output="$HOME/chip-mac-build"'
+```
+```
+# Then, in Terminal.app locally on the Mac itself (not over SSH):
+cd ~/palsync/gui
+node scripts/bumpVersion.js
+npm run build:renderer
+node scripts/writeBuildInfo.js
+npx electron-builder --mac --x64 --arm64 --config.directories.output="$HOME/chip-mac-build"
 ```
 
 **Do NOT write `--config.directories.output=~/chip-mac-build`** (a mistake made live
