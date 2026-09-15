@@ -1,0 +1,59 @@
+name: Build Linux (Chip Pal Builder)
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Upload the AppImage + linux-versions.txt to S3 after a successful build"
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install root dependencies
+        run: npm install
+        env:
+          # The GUI never needs Chromium eagerly (lazy, on first browser-audit use, by design) -
+          # skip it here since it's unrelated to packaging and would just slow the build down.
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+      - name: Install gui dependencies
+        working-directory: gui
+        run: npm install
+
+      - name: Build Linux AppImage
+        working-directory: gui
+        run: npm run build:linux:ci
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChipPalBuilder-linux
+          path: |
+            gui/dist/ChipPalBuilder.AppImage
+            gui/dist/linux-versions.txt
+
+      - name: Configure AWS credentials
+        if: ${{ inputs.publish }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Publish to S3
+        if: ${{ inputs.publish }}
+        working-directory: gui/dist
+        run: |
+          aws s3 cp ChipPalBuilder.AppImage s3://contractpal-cloudpiston-downloads/ChipPalBuilder.AppImage
+          aws s3 cp linux-versions.txt s3://contractpal-cloudpiston-downloads/linux-versions.txt

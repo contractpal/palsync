@@ -1,0 +1,54 @@
+name: Version bump reminder
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check whether gui/package.json's version was bumped
+        id: check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          RESULT=$(node .github/scripts/check-version-bump.js "$BASE_SHA" HEAD)
+          echo "$RESULT"
+          echo "result=$RESULT" >> "$GITHUB_OUTPUT"
+
+      - name: Post or update reminder comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const result = JSON.parse(${{ toJSON(steps.check.outputs.result) }});
+            const marker = "<!-- version-bump-reminder -->";
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+
+            const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.data.find(c => c.body.includes(marker));
+
+            if (result.needsBump) {
+              const body = marker + "\n⚠️ This PR changes files that ship inside Chip Pal Builder, "
+                + "but `gui/package.json`'s `version` (currently `" + result.headVersion + "`) wasn't "
+                + "bumped. Please bump it (you own major/minor by hand; patch for a plain fix) before merging.";
+              if (existing) {
+                await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+              } else {
+                await github.rest.issues.createComment({ owner, repo, issue_number, body });
+              }
+            } else if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id,
+                body: marker + "\n✅ Version bump reminder resolved — thanks!",
+              });
+            }
