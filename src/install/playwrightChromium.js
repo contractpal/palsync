@@ -12,6 +12,25 @@ function playwrightCliPath() {
     return path.join(path.dirname(pkgPath), bin || "cli.js");
 }
 
+// Resolves the exact same playwright package instance playwrightCliPath() uses (relative to
+// THIS file's own location within the palsync package), rather than a bare `require("playwright")`
+// from an unrelated caller's location. Confirmed live 2026-09-15: Chip's GUI (a separate package
+// that depends on palsync) had its own bare `require("playwright")` in dependencyCheck.js, which
+// resolves relative to ITS OWN file location - inside a packaged Electron app, only the copy
+// nested under node_modules/palsync/node_modules/playwright actually ships in app.asar (electron-
+// builder's own default `files` inclusion never picks up a separate, gui-hoisted top-level copy),
+// so that bare require threw MODULE_NOT_FOUND on every real installed copy, silently caught and
+// reported as "Chromium not installed" even right after a successful install (which itself
+// succeeded, via this file's own correctly-resolving playwrightCliPath()). This existed
+// undetected because the same bug happened to look fine when tested by building and running in
+// place inside this exact repo checkout, where Node's module resolution falls through past the
+// asar boundary to a real, incidentally-nearby gui/node_modules/playwright on disk - something no
+// real installed copy would ever have.
+function resolvePlaywright() {
+    const pkgPath = require.resolve("playwright/package.json");
+    return require(path.dirname(pkgPath));
+}
+
 // The one failure mode that isn't a real environment problem: npm installed palsync through its
 // git path (`npm install -g github:<slug>` — what pre-tarball `palsync upgrade` versions ran),
 // which links the package straight out of npm's cache and never places its dependencies. Playwright
@@ -48,4 +67,4 @@ function run({ spawn = spawnSync, cliPath = playwrightCliPath, env = process.env
 
 if (require.main === module) process.exit(run());
 
-module.exports = { playwrightCliPath, tarballRecoveryHint, run };
+module.exports = { playwrightCliPath, resolvePlaywright, tarballRecoveryHint, run };

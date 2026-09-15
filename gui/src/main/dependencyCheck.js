@@ -5,7 +5,7 @@
 // feature (a real "Install" button, since palsync's own installer can do that standalone).
 const fs = require("fs");
 const { spawn } = require("child_process");
-const { playwrightCliPath } = require("palsync/src/install/playwrightChromium");
+const { playwrightCliPath, resolvePlaywright } = require("palsync/src/install/playwrightChromium");
 const { commandOnPath } = require("palsync/src/platform/commandOnPath");
 
 // Matches agentLaunch.js's detectAgents() (REGISTRARS plus Pi's own global-extension special
@@ -27,7 +27,12 @@ function checkAgents() {
 
 function isChromiumInstalled() {
     try {
-        const { chromium } = require("playwright");
+        // Must resolve the exact same playwright package instance playwrightCliPath() (used to
+        // actually run the install) resolves - see resolvePlaywright()'s own comment for the bug
+        // this fixes: a bare require("playwright") here resolved to a copy that was never bundled
+        // into the packaged app at all, so this always reported "not installed" on every real
+        // install, even right after a genuinely successful one.
+        const { chromium } = resolvePlaywright();
         return fs.existsSync(chromium.executablePath());
     } catch (e) {
         return false;
