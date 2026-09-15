@@ -34,15 +34,25 @@ jobs:
         working-directory: gui
         run: npm install
 
+      # electron-builder's own CSC_LINK/CSC_KEY_PASSWORD handling creates its own temporary
+      # keychain but then passes the CERT's password (not the keychain's own randomly-generated
+      # one) to `security set-key-partition-list -k`, which needs the KEYCHAIN's password -
+      # confirmed live (2026-09-15): fails with "SecKeychainUnlock: ... not correct" unless the
+      # two happen to match (see app-builder-lib/out/codeSign/macCodeSign.js's createKeychain/
+      # importCerts). Importing the cert ourselves via this well-tested action sidesteps
+      # electron-builder's buggy path entirely - it does its own, correct partition-list setup,
+      # and leaves the identity in the default keychain for electron-builder to auto-detect, the
+      # same way the local Mac build already works (see BUILD.md).
+      - name: Import signing certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.CSC_LINK }}
+          p12-password: ${{ secrets.CSC_KEY_PASSWORD }}
+
       - name: Build, sign, and notarize (arm64 zip only)
         working-directory: gui
         run: npm run build:mac:ci
         env:
-          # electron-builder imports this cert into a fresh, ephemeral keychain and signs with
-          # it automatically - no manual keychain-unlock prompt, unlike the SSH-to-a-real-Mac
-          # flow this replaces (see BUILD.md's "codesign fails over SSH" writeup for why).
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           # electron-builder auto-notarizes when these three are set - no extra afterSign hook
           # needed (confirmed already true for the local Mac build, per BUILD.md).
           APPLE_ID: ${{ secrets.APPLE_ID }}
