@@ -201,9 +201,18 @@ yourself, locally, at the Mac:
 ```
 # From the Windows machine, over SSH — fine for these steps, just not the actual build:
 ssh davidmartineau@benjamins.local "cd ~/palsync && git pull"
-ssh davidmartineau@benjamins.local "cd ~/palsync && npm install"          # picks up any new root deps
-ssh davidmartineau@benjamins.local "cd ~/palsync/gui && npm install"      # picks up any new gui deps
+ssh davidmartineau@benjamins.local 'zsh -ilc "cd ~/palsync && npm install"'
+ssh davidmartineau@benjamins.local 'zsh -ilc "cd ~/palsync/gui && npm install"'
 ```
+
+**Wrap `npm install` in `zsh -ilc "..."`, not a bare `ssh ... "npm install"`** — a plain
+non-interactive SSH command doesn't source the shell rc files where this Mac's `node`/`npm`
+(Homebrew, `/opt/homebrew/bin`) are on PATH, so it can silently resolve to a different/no npm at
+all. Confirmed live: an `npm install` run without this wrapper reported success but a
+newly-added dependency (`@iarna/toml`) was still completely absent from `node_modules` afterward
+— the shipped 0.9.1/0.9.2 Mac builds crashed on launch as a direct result. Always verify explicitly
+after installing (`ls node_modules/<new-package>`) rather than trusting a clean exit code —
+see the validation checklist below for the full story.
 ```
 # Then, in Terminal.app locally on the Mac itself (not over SSH):
 cd ~/palsync/gui
@@ -301,6 +310,62 @@ ChipPalBuilder-mac.zip
 `getVersionInfo.do` — that endpoint isn't OS-aware, a server-side gap outside this repo; Windows
 and Linux now read their own equivalent `windows-versions.txt`/`linux-versions.txt` the same way)
 and won't pick up a new release until it's updated to match.
+
+### Validating a Mac build before shipping it (2026-09-14 — do all of this, every time)
+
+A signed-and-notarized build that `electron-builder` completed without error is **not** enough
+evidence it actually runs — the 0.9.0 Mac release shipped in exactly that state, completely
+broken (see `gui/BACKLOG.md`'s asar-corruption writeup), and getting 0.9.1 through 0.9.3 each
+surfaced a *different* way "it built fine" and "it actually works" can diverge. Do all of these,
+in order, before uploading:
+
+1. **Confirm any newly-added dependency actually landed**, don't just trust that `npm install`
+   didn't print an error. Found live: `@iarna/toml` (added to the root `package.json` earlier the
+   same day) was silently absent from `node_modules` on the Mac despite a `git pull` + `npm
+   install` having been run — the shipped 0.9.1/0.9.2 Mac builds crashed on launch with `Cannot
+   find module '@iarna/toml'`. Check explicitly: `ls node_modules/<new-package>` at the repo root
+   before building, and confirm it shows up in the final asar's file listing after
+   (`asar.listPackage(archivePath).some(p => p.includes("<new-package>"))` — see
+   `gui/scripts/afterPack.js` for the same `@electron/asar` APIs used elsewhere in this doc).
+
+2. **Scan the built `app.asar` for corruption** — walk every file via `asar.listPackage` +
+   `asar.statFile` + `asar.extractFile` (never `asar.extractAll`, see `afterPack.js`'s own
+   comment) and flag any non-empty file that's entirely `0x00` bytes. Do this for **both**
+   architectures separately; the corruption this guards against was per-build, not something that
+   affects both archs identically.
+
+3. **Verify signing, notarization, and stapling** for both architectures (`spctl -a -vv --type
+   execute`, `codesign --verify --deep --strict`, `xcrun stapler validate` — commands earlier in
+   this section). All three, both archs, every time.
+
+4. **Actually launch it and wait for real proof of life — not just "a process exists a few
+   seconds later."** `ps aux` showing a process 3-4 seconds after `open -W` is not reliable
+   evidence: a build that's about to crash on a slightly-delayed code path can still show a
+   process at that point. Kill any existing instances first (a stale process from an *earlier*
+   test can make a currently-broken build look fine), launch fresh with output captured
+   (`open -W --stdout out.txt --stderr out.txt "<path>/Chip Pal Builder.app"`), wait a genuine
+   10+ seconds, and confirm **both**: `out.txt` has no error, and the process list shows not just
+   the main process but its **Helper (Renderer)** subprocess — that's the real signal a window
+   actually initialized, not just that the main process hasn't crashed yet.
+
+5. **Once verified, replace the actual copy you (or whoever's testing) will open** — don't leave
+   a stale, previously-broken copy sitting in `/Applications` (or wherever) after fixing something
+   upstream. Confirmed live: multiple rounds of "still not running" were the *same already-fixed*
+   bug, just never propagated to where testing was actually happening. Copy the verified `.app`
+   over the installed one directly (`rm -rf "/Applications/Chip Pal Builder.app" && cp -R
+   "<verified path>/Chip Pal Builder.app" /Applications/`) rather than relying on someone
+   re-downloading from the public URL, which brings in the next point:
+
+6. **The public download URL may be fronted by a CDN with its own cache, independent of S3.**
+   Confirmed live: `aws s3 cp` succeeding and `aws s3api head-object` showing the correct new
+   size/`LastModified` on the bucket did **not** mean a fresh download from
+   `downloads.cloudpiston.com` got the new bytes — it kept serving an old, smaller, broken build.
+   Verify what's actually in S3 (`aws s3api head-object --bucket contractpal-cloudpiston-downloads
+   --key <filename>`, check `ContentLength`/`LastModified` match what you just uploaded) as the
+   source of truth, but don't assume the public URL reflects it immediately — for testing
+   purposes, copy the verified file directly to whatever machine you're testing on rather than
+   downloading it. Which CDN (if any) sits in front of that domain, and how to invalidate its
+   cache, isn't documented here yet — whoever manages that infrastructure needs to look into it.
 
 ## Producing a real installer (Linux)
 
