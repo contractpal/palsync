@@ -273,9 +273,15 @@ const { diffWorkspace, describeDiff } = require("../core/localDrift");
 // verified live (2026-09-02) that a record resolved at session start still answers QUERY_DATASET
 // after two further full enumerations minted different ids. A later enumeration ADDS valid ids,
 // it does not invalidate earlier ones for the life of the session.
-async function resolvePalForRead(ctx) {
+// requireMarker: true for drift callers (pal_status) — the lock-free-path stub context.js
+// seeds from record.palId ({id, guid, profileId} only, no lastModifiedDate) is a fine identity
+// cache for dataset-query callers that never look at the marker, but trusting it for a drift
+// check silently reports "in sync" (there's no marker to compare). Identity-only callers keep
+// the fast path; drift callers force a real resolve when the cached entry lacks a marker.
+async function resolvePalForRead(ctx, { requireMarker = false } = {}) {
     const cached = ctx.lifecycle && ctx.lifecycle.lockState && ctx.lifecycle.lockState.resolved;
-    if (cached && cached.guid === ctx.record.palGuid && cached.id && cached.profileId) return cached;
+    if (cached && cached.guid === ctx.record.palGuid && cached.id && cached.profileId &&
+        (!requireMarker || cached.lastModifiedDate)) return cached;
     const resolved = await resolveServerPalByGuid(ctx.session, ctx.record.palGuid);
     // Prime the SAME slot lock.acquireByGuid reads (via ctx.lifecycle.lockState.resolved) so
     // whichever tool resolves the pal first — this one, or a lock-acquiring one — saves the
@@ -289,6 +295,42 @@ async function resolvePalForRead(ctx) {
         }
     }
     return resolved;
+}
+
+// Tools allowed to run before the session's freshness gate has passed: the two that resolve
+// drift (pal_pull, pal_merge), the read-only report of it (pal_status), and the lock lifecycle
+// tools, which don't read or write pal content.
+const DRIFT_GATE_EXEMPT = new Set(["pal_status", "pal_pull", "pal_merge", "pal_lock", "pal_unlock"]);
+
+// Hard gate: the first ctx+lock tool call each session must prove the local marker matches the
+// server's before anything else runs. Per David (2026-09-16): with two people able to open the
+// same pal at once (one in PalBuilder, one via Chip) and no per-file Team locking yet, a session
+// resuming work must not rely on the model remembering to call pal_status/pal_pull itself — it
+// skipped that step in a real session and started editing against a pal a teammate had just
+// changed. Server.js calls this for every tool that builds a locked ctx; pal_status/pal_pull/
+// pal_merge/pal_lock/pal_unlock are exempt so the agent always has a way to satisfy the gate.
+// Cached as ctx._driftGate ("ok") once verified fresh, since ctx is the same object for the rest
+// of the session — this only costs a network round trip once, not per tool call. Only applies to
+// a ctx that came from a real buildContext (has .lifecycle) — a test/harness ctx built by hand
+// has no session worth checking, same exclusion server.js already uses at its onActivity() call.
+async function ensureFreshStart(ctx, toolName) {
+    if (!ctx.lifecycle || DRIFT_GATE_EXEMPT.has(toolName) || ctx._driftGate === "ok") return null;
+    let live, resolveErr = null;
+    try {
+        live = await resolvePalForRead(ctx, { requireMarker: true });
+    } catch (e) { resolveErr = e; }
+    const canVerify = !resolveErr && !!(live && live.lastModifiedDate);
+    const serverNewer = canVerify && drift.serverAdvanced(ctx.record.lastModifiedDate, live.lastModifiedDate);
+    if (canVerify && !serverNewer) { ctx._driftGate = "ok"; return null; }
+    const reason = resolveErr ? "could not reach the server to verify (" + (resolveErr.message || resolveErr) + ")"
+        : serverNewer ? "the server was saved after your last pull"
+        : "the server's current state could not be verified";
+    return {
+        message: "REFUSED (stale-start): " + toolName + " needs a verified-fresh local copy first.\n" +
+            "  reason: " + reason + "\n" +
+            (canVerify ? "  your marker  : " + ctx.record.lastModifiedDate + "\n  server marker: " + live.lastModifiedDate + "\n" : "") +
+            "Run pal_pull (or pal_merge if you have un-pushed local edits) before any other PalSync tool this session."
+    };
 }
 
 // Refresh the record's local baseline after a pull/push: localHash (legacy combined hash) +
@@ -848,8 +890,9 @@ const TOOLS = [
             // Reuses the session's already-resolved pal identity instead of a fresh full-account
             // walk (see resolvePalForRead) — this was previously calling resolveServerPalByGuid
             // directly, which is exactly what made a single "get status" do hundreds of requests.
-            const live = await resolvePalForRead(ctx);
-            const serverNewer = live ? drift.serverAdvanced(ctx.record.lastModifiedDate, live.lastModifiedDate) : false;
+            const live = await resolvePalForRead(ctx, { requireMarker: true });
+            const canVerify = !!(live && live.lastModifiedDate);
+            const serverNewer = canVerify ? drift.serverAdvanced(ctx.record.lastModifiedDate, live.lastModifiedDate) : false;
             // read-only — no lock attempt; reuse the resolve above instead of a second account walk
             const st = await lock.statusByGuid(ctx.session, ctx.record.palGuid, { resolved: live });
             let lockMsg;
@@ -861,14 +904,17 @@ const TOOLS = [
             const localMsg = (d.dirty || d.added.length)
                 ? "Local: UN-PUSHED changes on disk —\n" + describeDiff(d)
                 : "Local: no un-pushed changes.";
+            const driftMsg = !canVerify
+                ? "CANNOT VERIFY against server — no server marker available. Do not treat this as in sync.\n"
+                : (serverNewer ? "Server IS NEWER than your last pull — run pal_pull before pushing.\n" : "In sync with your last pull.\n");
             const message =
                 "Pal: " + ctx.record.palName + " (" + ctx.record.palGuid + ")\n" +
-                (serverNewer ? "Server IS NEWER than your last pull — run pal_pull before pushing.\n" : "In sync with your last pull.\n") +
+                driftMsg +
                 "  your marker  : " + ctx.record.lastModifiedDate + "\n" +
-                "  server marker: " + (live ? live.lastModifiedDate : "(unknown)") + "\n" +
+                "  server marker: " + (canVerify ? live.lastModifiedDate : "(unknown)") + "\n" +
                 localMsg + "\n" +
                 "Lock: " + lockMsg;
-            return { message, serverNewer, storedMarker: ctx.record.lastModifiedDate, liveMarker: live && live.lastModifiedDate,
+            return { message, serverNewer, canVerify, storedMarker: ctx.record.lastModifiedDate, liveMarker: canVerify ? live.lastModifiedDate : null,
                      localChanges: { dirty: d.dirty, changed: d.changed, added: d.added, deleted: d.deleted }, lock: st };
         }
     },
@@ -2276,7 +2322,7 @@ function safeTestResult(result) {
     return safe;
 }
 
-module.exports = { TOOLS, overridePhrase, blockedMessage, formatExpect, formatValidation, isBenignServerNote,
+module.exports = { TOOLS, ensureFreshStart, overridePhrase, blockedMessage, formatExpect, formatValidation, isBenignServerNote,
     htmlRegionResult, recordScreenshotEvidence, screenshotEvidenceIdentity, safeTestResult, formatPushValidationRefusal, seoEnvelopeResults,
     pushVisibilityFindings, testEnvelopeFindings, datasetSaveFindings, testEnvelopeProjection,
     seoEnvelopeProjection, pushEnvelopeProjection, testActionFields, failureLineSummary, addExpectContext,

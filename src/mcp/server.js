@@ -10,7 +10,7 @@
 // exit signals (clean 0 after lock release), and uncaughtException (1 — state may be corrupt).
 const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
-const { TOOLS } = require("./tools");
+const { TOOLS, ensureFreshStart } = require("./tools");
 const { buildContext } = require("./context");
 const usage = require("../core/usage");
 const lintCache = require("../core/lintCache");
@@ -123,6 +123,25 @@ function createServer(getCtx, workspaceDir, options = {}) {
                         ctx = await getCtx({ acquireLock: false });
                     } else {
                         ctx = await getCtx();
+                    }
+                    // Hard freshness gate, checked on the memoized base ctx (never the per-request
+                    // wrapper below) so a passing check's ctx._driftGate = "ok" persists for the
+                    // rest of the session instead of being reset by the next request's wrapper.
+                    // Only applies to the standard ctx+lock path — needsCtx:false tools never touch
+                    // the server, and needsLock:false (dataset reads) query the server directly
+                    // rather than acting on local file content.
+                    if (t.needsCtx !== false && t.needsLock !== false) {
+                        const gate = await ensureFreshStart(ctx, t.name);
+                        if (gate) {
+                            const content = [{ type: "text", text: gate.message }];
+                            const stats = usage.contentStats(content);
+                            usage.recordToolCall(workspaceDir, t.name, stats.bytes, stats.tokens, {
+                                errored: true, rawBytes: stats.bytes, returnedBytes: stats.bytes,
+                                resultCacheHits: 0, resultCacheMisses: 0,
+                                durationMs: Number(process.hrtime.bigint() - started) / 1e6
+                            });
+                            return { isError: true, content };
+                        }
                     }
                     // Metadata is request-local; never mutate the memoized authenticated context.
                     if (extra && extra._meta) {
