@@ -375,6 +375,32 @@ test("exerciseByBrowser falls back to screen hints when ariaSnapshot is unavaila
     assert.equal(res.evidence.jpegBase64, null, "a failed screenshot is best-effort, never a crash");
 });
 
+test("exerciseByBrowser captures jpeg/hints before attempting aria, so a hung ariaSnapshot cannot starve them", async () => {
+    // A live console failure showed real post-click screen-hints captured moments earlier, then
+    // aria/jpeg/hints all coming back null from the SAME page in attachEvidence — consistent with
+    // ariaSnapshot() hanging past its bound and starving whatever evidence call ran after it (the
+    // abandoned browser-side call is never cancelled). ariaSnapshot never resolving here stands in
+    // for that hang; jpeg/hints must still be captured, and captured BEFORE aria is even attempted.
+    const order = [];
+    const pg = {
+        on() {},
+        url: () => "https://example.test/app",
+        getByText() { return { async count() { return 1; }, first() { return this; }, async click() {} }; },
+        locator() { return { async count() { return 1; }, first() { return this; },
+            async ariaSnapshot() { order.push("aria"); return new Promise(() => {}); } }; },
+        async evaluate() { order.push("evaluate"); return { clicks: ["Save"], ids: [], fields: [], headings: [] }; },
+        async screenshot() { order.push("jpeg"); return Buffer.from("fake-jpeg-bytes"); },
+        async innerText() { return "saved"; },
+        async content() { return "<body>saved</body>"; },
+        async goto() {}, async waitForLoadState() {}, async waitForFunction() {}, async waitForTimeout() {}
+    };
+    const res = await runFailingExercise(pg, [{ click: "Save", expect: ["missing"] }], { evidenceTimeout: 30 });
+    assert.equal(res.evidence.aria, null, "the hung ariaSnapshot still bounds out to null");
+    assert.equal(res.evidence.jpegBase64, Buffer.from("fake-jpeg-bytes").toString("base64"), "jpeg survives a hung aria");
+    assert.deepEqual(res.evidence.hints, { clicks: ["Save"], ids: [], fields: [], headings: [] }, "hints survive a hung aria");
+    assert.ok(order.indexOf("jpeg") < order.indexOf("aria"), "jpeg is captured before aria is attempted");
+});
+
 test("formatExercise: failure evidence summary is compact and points at persisted artifacts", () => {
     const out = formatExercise({
         ran: true, kind: "console", mode: "browser", pass: false, failedStep: 1,

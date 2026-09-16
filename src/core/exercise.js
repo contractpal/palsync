@@ -292,14 +292,25 @@ async function captureFailureJpeg(pg, evidenceTimeout) {
 // before the result is returned, so base64 never reaches the calling agent.
 async function attachEvidence(result, pg, step, events, evidenceTimeout) {
     if (!pg) return result; // no page, no browser evidence — caller gets the plain failed/blocked result
+    // jpeg + hints run BEFORE aria on purpose. ariaSnapshot() can take a long time to compute on
+    // a screen with a large/complex accessibility tree (a console screen's own debug/trace panel,
+    // reliably present here) — long enough to blow past its own withBound fallback. withBound only
+    // gives up locally; the real browser-side call is never cancelled (see its header comment), so
+    // an abandoned ariaSnapshot() can leave the renderer's main thread busy well after we've moved
+    // on, starving whatever evidence call runs next. Capturing the cheaper, more reliable jpeg/hints
+    // first means a stuck aria call can no longer take them down too — confirmed live: a run that
+    // captured real post-click screen-hints moments earlier came back with aria/jpeg/hints all null
+    // once aria ran first in this same sequence.
+    const jpegBase64 = await captureFailureJpeg(pg, evidenceTimeout);
+    const hints = await screenHints(pg, evidenceTimeout);
     const aria = await captureAria(pg, step && step.within, evidenceTimeout);
     result.evidence = {
         events: events || [],
         aria: aria ? aria.aria : null,
         ariaScope: aria ? aria.scope : (step && step.within) || "body",
         ariaTruncated: aria ? aria.truncated : false,
-        hints: aria ? null : await screenHints(pg, evidenceTimeout),
-        jpegBase64: await captureFailureJpeg(pg, evidenceTimeout),
+        hints: aria ? null : hints,
+        jpegBase64,
         jpegBytes: null
     };
     return result;
