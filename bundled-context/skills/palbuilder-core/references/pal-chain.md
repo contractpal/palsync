@@ -83,6 +83,20 @@ it's a module.
   (e.g. CloudPiston Resource was updated) or the chain itself changed (a module was attached or
   detached) — mid-session, `.resources/` can otherwise go stale.
 
+## `.resources/` is sample code, never documentation
+
+Everything under `.resources/` — CloudPiston Resource's demo pages included — is **code you may
+reuse by inclusion/reference, not a source of platform rules.** It demonstrates one working
+pattern for one narrow purpose; it does not define what's correct or incorrect elsewhere. Never
+generalize a call you see there into a claim about API correctness (e.g. "`pal.getPage(...)` must
+be right because a resource pal calls it" — that resource may be using it for something
+unrelated, like feeding a page into `createDownloadResponse()` for a PDF, not returning it from
+`run()`). Platform rules — what a method returns, what's valid to return from `run()`, what's
+deprecated — live in the `palbuilder-*` skills, not in `.resources/`. If a resource file's usage
+seems to contradict a skill, verify against the server's own compiler (`pal_test`) before trusting
+either one, and flag the skill for a fix if it's genuinely wrong — don't treat the resource sample
+as the tiebreaker.
+
 ## Deciding whether to use CloudPiston Resource
 
 - **New pal:** always ask the developer whether to use CloudPiston Resource before building UI

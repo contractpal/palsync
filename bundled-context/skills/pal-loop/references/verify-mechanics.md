@@ -57,6 +57,17 @@ artifacts in a returned `.agent-work-history/` run directory (`steps.json`,
 `metadata.json`, `notes.md`). Read those artifacts instead of probing selectors by trial and
 error, then re-run. Passing runs write no failure artifacts. A passing `pal_exercise` is behavioral evidence, not a screenshot or capture. A visual capture claim requires a successful `pal_screenshot` artifact; take one whenever visual appearance is an acceptance criterion.
 
+**An empty evidence bundle is not proof the click/ajax didn't work.** `metadata.json`'s
+`aria`/`jpegKB` can legitimately come back `null` (and `screen-hints.json` empty) on a step that
+still ran correctly server-side — accessibility-snapshot capture can time out on a screen with a
+large/complex tree (a console debug/trace panel is a common trigger), and that alone must never
+be read as "the ajax request never fired." Before concluding the pal is broken: check `steps.json`
+for a per-step `hints` object captured during the run — if it shows real post-click DOM content
+(new ids, changed field values), the click and server round-trip worked; the failure is in the
+step's `expect`/`absent` assertions (or a genuine render bug), not in whether ajax happened at
+all. Confirm server-side execution directly with `pal_debug`/`c.debug(...)` before ruling out the
+pal's own code.
+
 ## Datasets
 
 `pal_sync_datasets` after pushing a **§8a** definition (never §8b). Never provision §8b
