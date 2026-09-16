@@ -192,7 +192,12 @@ async function expandPalFiles(pal) {
     }
     for (const [getter, key, folder] of BASE64_TYPES) {
         for (const entry of pal[getter]) {
-            const content = entry[key] ? entry[key].content : "";
+            // .content is usually a plain base64 string, but CloudPiston can wrap ANY leaf value
+            // as a { _text, _class } node (timestampText's own header comment documents this for
+            // lastModifiedDate) — reused here since the same unwrap applies to any such node, not
+            // just timestamps. An un-unwrapped object reaching Buffer.from() below throws "The
+            // first argument must be of type string ... Received an instance of Object".
+            const content = entry[key] ? timestampText(entry[key].content) : "";
             await writeBase64Entry(pal.path, folder, entry.string, content);
             written.base64.push(path.join(folder, entry.string));
         }
