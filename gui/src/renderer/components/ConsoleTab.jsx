@@ -13,7 +13,7 @@ const DEBUG_LOG_MAX = 50;
 
 // One real terminal per pal tab, lazily connected to its agent CLI on first mount (i.e. first
 // time this tab becomes active) — not eagerly for every tab in the workspace.
-export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
+export default function ConsoleTab({ pal, agents, active, onAgentChosen, onRunningChange }) {
     const hostRef = useRef(null);
     const termRef = useRef(null);
     const fitRef = useRef(null);
@@ -26,6 +26,11 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
     const [debugWidthPct, setDebugWidthPct] = useState(25);
     const [startError, setStartError] = useState(null);
     const [termReady, setTermReady] = useState(false);
+    // Just "is the agent process alive", not "is it actively working" (David, 2026-09-17: the
+    // tab dot only needs to show a started agent, not a busy/idle distinction). Reported to
+    // WorkspaceView via onRunningChange so the tab strip can color its dot without WorkspaceView
+    // needing its own IPC polling — this component already owns the pty lifecycle for this pal.
+    const [running, setRunning] = useState(false);
     const splitRowRef = useRef(null);
 
     // `agents` arrives asynchronously (WorkspaceView starts it at [] and fetches in an
@@ -45,6 +50,10 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
     // tried to spawn a nonexistent command: node-pty doesn't throw for that on macOS, it just
     // exits async with code 1 and no output, so the console-start effect below "succeeded" into
     // a permanently blank terminal with no error surfaced anywhere.
+    useEffect(() => {
+        if (onRunningChange) onRunningChange(running);
+    }, [running]);
+
     useEffect(() => {
         if (agents.length === 0) return;
         if (agentId && agents.some(a => a.id === agentId)) return;
@@ -110,6 +119,7 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
         const offExit = window.palsyncGui.onConsoleExit(pal.cloudPalId + ":" + pal.path, code => {
             term.write("\r\n\x1b[90m[agent process exited" + (code ? " with code " + code : "") + "]\x1b[0m\r\n");
             startedRef.current = false;
+            setRunning(false);
         });
         term.onData(data => window.palsyncGui.writeToConsole(pal.cloudPalId + ":" + pal.path, data));
 
@@ -165,6 +175,8 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
                     if (res && res.error) {
                         setStartError(res.error);
                         startedRef.current = false;
+                    } else {
+                        setRunning(true);
                     }
                 })
                 .catch(err => {
@@ -186,6 +198,7 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen }) {
         if (!newId || newId === agentId) return;
         await window.palsyncGui.killConsole(pal.cloudPalId + ":" + pal.path);
         startedRef.current = false;
+        setRunning(false);
         setStartError(null);
         if (termRef.current) termRef.current.clear();
         setAgentId(newId);

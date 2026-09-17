@@ -13,6 +13,10 @@ export default function WorkspaceView({ workspace, onWorkspaceChange, onActivePa
     const [addOpen, setAddOpen] = useState(false);
     const [agents, setAgents] = useState([]);
     const [pendingRemove, setPendingRemove] = useState(null);
+    // Keyed by pal.path (stable across a pal's lifetime, unlike its index in `pals`). Each
+    // ConsoleTab reports its own pty running state here so the tab strip can color its dot
+    // without WorkspaceView polling the main process itself.
+    const [runningByPath, setRunningByPath] = useState({});
 
     useEffect(() => {
         window.palsyncGui.listAgents().then(setAgents);
@@ -53,7 +57,7 @@ export default function WorkspaceView({ workspace, onWorkspaceChange, onActivePa
                         className={"tab" + (i === activeIndex ? " active" : "")}
                         onClick={() => setActiveIndex(i)}
                     >
-                        <span className="dot" /> {tabLabel(pal)}
+                        <span className={"dot" + (runningByPath[pal.path] ? " running" : "")} /> {tabLabel(pal)}
                         {pal.agentId && <span className="agent"> · {pal.agentId}</span>}
                         <span
                             className="close"
@@ -76,7 +80,8 @@ export default function WorkspaceView({ workspace, onWorkspaceChange, onActivePa
                     )}
                     {pals.map((pal, i) => (
                         <div key={pal.path} style={{ display: i === activeIndex ? "flex" : "none", flex: 1, minHeight: 0 }}>
-                            <ConsoleTab pal={pal} agents={agents} active={i === activeIndex} onAgentChosen={agentId => persistAgent(pal, agentId)} />
+                            <ConsoleTab pal={pal} agents={agents} active={i === activeIndex} onAgentChosen={agentId => persistAgent(pal, agentId)}
+                                onRunningChange={running => setRunningByPath(prev => (prev[pal.path] === running ? prev : { ...prev, [pal.path]: running }))} />
                         </div>
                     ))}
                 </div>
