@@ -45,6 +45,13 @@ test("Pi tool metadata is generated from the MCP schema without drift", () => {
     assert.deepStrictEqual(metadata.map(({ groups, keywords, ...tool }) => tool), expected);
 });
 
+test("generated Pi metadata keeps dataset routing singular and plural", () => {
+    const expected = ["pal_dataset_count", "pal_dataset_query", "pal_sync_datasets"];
+    for (const query of ["dataset", "datasets"]) {
+        assert.deepStrictEqual(routeTools(query, metadata).sort(), expected, query);
+    }
+});
+
 test("every MCP tool is reachable by a deterministic keyword or group", () => {
     const reachable = new Set();
     for (const query of ["sync", "browser", "runtime", "project", "spec"]) {
@@ -298,5 +305,8 @@ test("Pi installer copies owned extension files idempotently and reports pi-mcp"
     for (const [file, source] of Object.entries(registerPi.SHARED_SOURCES)) {
         assert.deepStrictEqual(fs.readFileSync(path.join(first.dir, file)), fs.readFileSync(source));
     }
+    const installedMetadata = JSON.parse(fs.readFileSync(path.join(first.dir, "tools.json"), "utf8"));
+    assert.deepStrictEqual(routeTools("datasets", installedMetadata).sort(),
+        ["pal_dataset_count", "pal_dataset_query", "pal_sync_datasets"]);
     fs.rmSync(homeDir, { recursive: true, force: true });
 });

@@ -992,6 +992,7 @@
     ],
     "keywords": [
       "sync",
+      "dataset",
       "datasets"
     ]
   },
@@ -1400,7 +1401,9 @@
       "data"
     ],
     "keywords": [
+      "data",
       "dataset",
+      "datasets",
       "query"
     ]
   },
@@ -1500,7 +1503,9 @@
       "data"
     ],
     "keywords": [
+      "data",
       "dataset",
+      "datasets",
       "count"
     ]
   }
