@@ -176,6 +176,19 @@ ChipPalBuilder.exe
 `getVersionInfo.do` — same server-side "not actually OS-aware" gap as Mac, outside this repo) and
 won't pick up a new release until it's updated to match.
 
+### CI alternative: signed automatically via Azure Artifact Signing
+
+The above is still the local/manual flow. `.github/workflows/build-win.yml` (`workflow_dispatch`,
+optional `publish` input) builds the same unsigned `gui/dist/ChipPalBuilder.exe`, then signs it
+itself via `azure/login@v3` (OIDC — `AZURE_CLIENT_ID`/`AZURE_TENANT_ID`/`AZURE_SUBSCRIPTION_ID`
+repo secrets, no client secret, no thumb drive) and `azure/artifact-signing-action@v2` against
+Azure's managed signing service (enrollment approved 2026-09-17). `gui/scripts/afterWinCiBuild.js`
+writes `windows-versions.txt` next to the exe from the build's own `package.json` version. With
+`publish: true`, the workflow uploads both files to the same S3 bucket itself — no manual upload
+step needed for a CI-signed build. Requires the app registration behind `AZURE_CLIENT_ID` to carry
+the "Artifact Signing Certificate Profile Signer" role on the `ContractPal-Signing` account's
+`contractpal-prod` certificate profile.
+
 ## Producing a real installer (Mac) — signing, notarizing, and publishing
 
 **Correction, 2026-09-14, same day this was first written: the build/package steps genuinely

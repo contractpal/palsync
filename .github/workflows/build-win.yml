@@ -2,13 +2,20 @@ name: Build Windows (Chip Pal Builder)
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Upload the signed exe + windows-versions.txt to S3 after a successful build"
+        type: boolean
+        default: false
+
+# id-token: write is required for azure/login's OIDC federated-credential auth (no client secret
+# stored anywhere) - see AZURE_CLIENT_ID/AZURE_TENANT_ID/AZURE_SUBSCRIPTION_ID secrets.
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   build:
-    # Unsigned for now - same as the current local flow (the code-signing cert lives on a thumb
-    # drive that deliberately never touches any build machine). Download the artifact this
-    # produces and sign it by hand, same as today, until Azure Trusted Signing is wired up.
-    #
     # Pinned to windows-2022, not windows-latest: confirmed live (2026-09-15) that windows-latest
     # now points at a brand-new image (win25-vs2026) shipping a Visual Studio version this
     # project's @electron/node-gyp (via electron-rebuild, needed for node-pty's native build)
@@ -40,8 +47,49 @@ jobs:
         working-directory: gui
         run: npm run build:win:ci
 
+      - name: Azure login
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Signs gui/dist/ChipPalBuilder.exe in place - Azure Trusted/Artifact Signing (David's
+      # enrollment approved 2026-09-17), replacing the old thumb-drive EV cert + manual signing
+      # step (BUILD.md's local flow still uses that for now). Requires the app registration behind
+      # AZURE_CLIENT_ID to hold the "Artifact Signing Certificate Profile Signer" role on the
+      # signing-account-name/certificate-profile-name below.
+      - name: Sign exe
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: https://eus.codesigning.azure.net/
+          signing-account-name: ContractPal-Signing
+          certificate-profile-name: contractpal-prod
+          files-folder: ${{ github.workspace }}\gui\dist
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ChipPalBuilder-win-unsigned
-          path: gui/dist/ChipPalBuilder.exe
+          name: ChipPalBuilder-win-signed
+          path: |
+            gui/dist/ChipPalBuilder.exe
+            gui/dist/windows-versions.txt
+
+      - name: Configure AWS credentials
+        if: ${{ inputs.publish }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Publish to S3
+        if: ${{ inputs.publish }}
+        working-directory: gui/dist
+        run: |
+          aws s3 cp ChipPalBuilder.exe s3://contractpal-cloudpiston-downloads/ChipPalBuilder.exe
+          aws s3 cp windows-versions.txt s3://contractpal-cloudpiston-downloads/windows-versions.txt

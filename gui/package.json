@@ -10,7 +10,7 @@
     "build:renderer": "vite build",
     "build:win": "node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --win && node scripts/afterWinBuild.js",
     "build:win:dir": "node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --win --dir",
-    "build:win:ci": "npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --win",
+    "build:win:ci": "npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --win && node scripts/afterWinCiBuild.js",
     "build:mac": "node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --mac",
     "build:mac:dir": "node scripts/bumpVersion.js && npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --mac --dir",
     "build:mac:ci": "npm run build:renderer && node scripts/writeBuildInfo.js && electron-builder --mac zip --arm64 && node scripts/afterMacCiBuild.js",
