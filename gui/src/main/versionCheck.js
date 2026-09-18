@@ -18,11 +18,24 @@ const WINDOWS_VERSIONS_URL = "https://downloads.cloudpiston.com/windows-versions
 const LINUX_VERSIONS_URL = "https://downloads.cloudpiston.com/linux-versions.txt";
 const DOWNLOADS_BASE = "https://downloads.cloudpiston.com/";
 
-// Build info gets dropped here by the build process (not yet wired up as of this writing —
-// {commit, version, date, downloadUrl}, version like "2026.1.1.212"). Its absence just means
-// "skip the check" (there's nothing meaningful to compare a dev checkout's version against),
-// not an error.
+// Build info gets dropped here by the build process — {commit, version, date}. Its absence just
+// means "skip the check" (there's nothing meaningful to compare a dev checkout's version
+// against), not an error.
+//
+// In a packaged app this file lives on disk under resources/app.asar.unpacked/build-info.json
+// (see afterPack.js's copyBuildInfoUnpacked — deliberately placed there directly, NOT packed
+// into app.asar's own entry list). A path built as `<app.asar>/build-info.json` looks like it
+// should transparently redirect to that unpacked copy the way electron-builder's asarUnpack
+// normally works, but it doesn't: Electron's asar fs patch only redirects to the unpacked
+// mirror for paths that already exist as an entry in the asar header. Since build-info.json was
+// never packed into app.asar at all (confirmed via `asar list app.asar` — no entry), that read
+// throws ENOENT, readLocalBuildInfo() swallows it, and checkForUpdate() silently no-ops on
+// every platform. So when running from inside app.asar, go straight to the real unpacked path
+// instead of a path that merely looks like it's inside app.asar.
 function buildInfoPath() {
+    if (__dirname.includes("app.asar")) {
+        return path.join(process.resourcesPath, "app.asar.unpacked", "build-info.json");
+    }
     return path.join(__dirname, "..", "..", "build-info.json");
 }
 

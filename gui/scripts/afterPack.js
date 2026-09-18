@@ -82,19 +82,23 @@ async function pruneOnce(asarPath) {
 }
 
 // build-info.json is deliberately NOT in package.json's "files" list — it's placed directly here
-// instead, copied straight to the app.asar.unpacked location Electron's fs already checks first
-// for any path that would otherwise resolve inside app.asar (same runtime behavior electron-
-// builder's own `asarUnpack` config would give, without going through it). Two independent
-// problems ruled this out: (1) the file was one of the ones seen corrupting inside app.asar via
-// the extractAll bug documented above, and (2) actually configuring
-// `asarUnpack: ["build-info.json"]` triggered a SEPARATE, unrelated electron-builder bug: its
-// asarUnpack path-matching (AsarPackager.unpackPattern/getRelativePath) walks the
-// node_modules/palsync symlink (a real symlink to the repo root on Mac/Linux) and hard-fails
-// the whole build the moment it encounters ANY repo-root file outside gui/ (e.g.
-// .claude/settings.local.json) — reproduced identically even after excluding that specific path
-// from "files", since this check runs on a different, symlink-following code path that "files"
-// excludes don't reach. Bypassing electron-builder's asarUnpack config entirely and just placing
-// the file ourselves sidesteps both problems at once.
+// instead, copied straight to the app.asar.unpacked location. NOTE this does NOT get Electron's
+// automatic asar-unpack redirect for a path like `<app.asar>/build-info.json`: that redirect
+// only fires for paths that exist as an entry in the asar header, and since this file is never
+// packed into app.asar at all, such a path just 404s (confirmed via `asar list app.asar` —
+// no entry). versionCheck.js's buildInfoPath() knows this and reads straight from
+// `process.resourcesPath/app.asar.unpacked/build-info.json` instead of a path that only looks
+// like it's inside app.asar. Two independent problems ruled out packing it into app.asar
+// properly: (1) the file was one of the ones seen corrupting inside app.asar via the extractAll
+// bug documented above, and (2) actually configuring `asarUnpack: ["build-info.json"]` triggered
+// a SEPARATE, unrelated electron-builder bug: its asarUnpack path-matching
+// (AsarPackager.unpackPattern/getRelativePath) walks the node_modules/palsync symlink (a real
+// symlink to the repo root on Mac/Linux) and hard-fails the whole build the moment it encounters
+// ANY repo-root file outside gui/ (e.g. .claude/settings.local.json) — reproduced identically
+// even after excluding that specific path from "files", since this check runs on a different,
+// symlink-following code path that "files" excludes don't reach. Bypassing electron-builder's
+// asarUnpack config entirely and just placing the file ourselves sidesteps both problems at
+// once, at the cost of the caller needing to know the real path (see versionCheck.js).
 function copyBuildInfoUnpacked(context, asarPath) {
     const src = path.join(__dirname, "..", "build-info.json");
     if (!fs.existsSync(src)) return; // writeBuildInfo.js wasn't run first — nothing to copy
