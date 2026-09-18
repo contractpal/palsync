@@ -41,10 +41,42 @@ Then run it:
 palsync
 ```
 
+**First run** (no history yet) walks the full wizard:
+
 1. **Pick your cloud** (or enter a custom URL).
 2. **Log in** — saved to your OS keychain; next run skips the prompt.
 3. **Pick your pal** — profile → group → pal.
-4. palsync **pulls + locks** the pal, injects the skills, and **opens the agent** in the workspace.
+4. **Pick a workspace folder** — the default is `~/PalBuilder/<pal-name>`; press Enter to accept it
+   or type any other folder (absolute, relative, `~`, spaces all fine). It is the *exact* folder
+   the pal is stored in — not a parent.
+5. palsync **pulls + locks** the pal, injects the skills, and **opens the agent** in the workspace.
+
+**Every run after that** starts with the pals you actually work on:
+
+```
+$ palsync
+
+┌  Select a Pal
+│  > Audithelm-V1        ~/projects/Audithelm-V1
+│    MacroWeek           ~/PalBuilder/MacroWeek
+│    Open another Pal…
+│    Change workspace directory…
+└
+```
+
+Choosing one authenticates with your saved keychain credential, re-checks that pal on the server,
+reuses the folder and agent you chose last time, and runs the same safe setup. No cloud, profile,
+group, pal, agent, or directory questions — and the menu itself makes **no server calls at all**,
+so it appears instantly. The list is capped at five pals, most recently opened first, then by how
+often you open them; history is stored in `~/.palsync/config.json` (never a password or token —
+credentials stay in your OS keychain, and an entry is added only after a launch actually succeeds).
+A programmatic caller with no terminal gets a clear error instead of a prompt it cannot answer.
+
+The menu always shows **Open another Pal…**, which runs the original wizard (including creating a
+new pal), and **Change workspace directory…** to re-point a remembered folder. Selecting a recent
+pal never skips authentication: if the cached credential is gone or rejected, the normal login
+prompt runs first, and signing in as a different account hands you to the full pal list rather than
+opening the remembered one.
 
 Now just talk to the agent. Ask for a change, then say *"push it."*
 
@@ -59,14 +91,17 @@ palsync --version        # confirm the build
 Install trouble? See [Troubleshooting](#troubleshooting).
 
 The setup wizard also asks which coding agent to launch — Claude Code (default), Codex, Pi, or
-OpenCode. You can skip the question with `--agent <name>`. A workspace carries files for exactly
+OpenCode. You can skip the question with `--agent <name>`; that choice is remembered per pal, so a
+recent launch opens the agent you used last time. Only the chosen agent's prerequisites are checked
+— picking Pi or Codex never asks you to install Claude Code. A workspace carries files for exactly
 one agent at a time; switching agents swaps the palsync-owned files cleanly (your own notes in
 `CLAUDE.md`/`AGENTS.md` survive).
 
 | Flag | What it does |
 |------|--------------|
 | `--version`, `-v` | Print the build version and exit. |
-| `--agent <name>` | Coding agent: `claude` (default), `codex`, `pi`, or `opencode`. |
+| `--agent <name>` | Coding agent: `claude` (default), `codex`, `pi`, or `opencode`. Overrides the remembered agent. |
+| `--dir <path>` | Use this exact folder as the workspace for this session (overrides the remembered one; same meaning as `palsync setup --dir`). |
 | `--eval [spec]` | Benchmark-harness mode (non-interactive eval runs). |
 | `--help`, `-h` | Usage help. |
 
@@ -194,8 +229,24 @@ manual remediation; they never modify those files.
 
 - **Pull is a sync, not a wipe.** New un-pushed files are preserved with their `pal.json` entries; a local file is deleted only when the server actually deleted it.
 - **Pull refuses rather than overwrites.** Un-pushed local edits to server-tracked files make pull refuse and name the files.
-- **The launcher checks too.** Re-running `palsync` into a workspace with un-pushed changes prompts: push first (recommended), merge, pull anyway, skip, or quit — never a silent overwrite.
+- **The launcher checks too.** Re-running `palsync` into a workspace with un-pushed changes prompts: push first (recommended), merge, pull anyway, skip, or quit — never a silent overwrite. The recent-Pal shortcut runs this same code, so it has the same guard.
 - **The MCP server never exits on its own.** Idle releases only the pal lock (a courtesy to teammates); the next tool call re-locks.
+
+## Workspace folders
+
+The wizard's default is `~/PalBuilder/<pal-name>` — unchanged, and what you get if you just press
+Enter. Any other folder works: type an absolute path, a relative one, `~`-prefixed, or one with
+spaces. Whatever you pick is remembered per pal and reused on every later `palsync`, so the question
+is asked once. `palsync --dir <path>` overrides it for one session, and the menu's **Change workspace
+directory…** changes the remembered one.
+
+A remembered folder is a preference, not proof of identity — `.palsync.json` inside it and the
+server you authenticate against stay authoritative:
+
+- A folder belonging to a **different pal**, or one created on a **different cloud**, is refused (nothing in it is touched). This applies to the remembered path, a path you type, and `--dir`.
+- A **non-empty folder with no PalSync workspace** in it is never adopted or overwritten — that is how a mistyped parent directory (`~/projects` instead of `~/projects/My-Pal`) stays safe. The question comes back with the safe default; answering with a path that was already refused ends the launch with the error rather than looping or giving in.
+- If the remembered folder is **missing or moved**, palsync offers to pick the new location or to open another pal; it never creates a replacement checkout somewhere unexpected.
+- A **renamed pal** keeps its local folder (only the display name updates), and a **deleted or no-longer-accessible pal** is reported as such — a transport failure is reported as a failure, not as a missing pal.
 
 ## Bundled skills
 
@@ -231,6 +282,18 @@ workflows, emails, images, styles, attachments, wizards, documents, and datasets
 normally.
 
 ## Troubleshooting
+
+<details>
+<summary>The startup menu doesn't show a pal I opened (or shows a stale folder)</summary>
+
+Recent pals live in `~/.palsync/config.json` under `recentPals` — plain JSON, no secrets, at most
+20 entries. A pal is added **after** a launch succeeds, so a cancelled login, a lock refusal, or an
+aborted un-pushed-changes prompt never adds one. If a folder was moved, use **Change workspace
+directory…** in the menu (or delete that entry and re-open the pal through the wizard); if you want
+a clean slate, delete the `recentPals` key — palsync recreates it on the next successful launch and
+nothing else in the file is affected. Set `PALSYNC_DEBUG=1` to have history problems (unreadable
+config, unparsable entries, failed writes) reported on stderr instead of silently ignored.
+</details>
 
 <details>
 <summary><code>palsync --version</code> shows an old version after install</summary>

@@ -18,12 +18,17 @@ function readConfig() {
     }
 }
 
+// Returns true when the file was written. Callers may ignore it (a preference that can't be
+// saved is not worth failing a launch over) — but the recent-pal history reports it, so a
+// read-only home is at least diagnosable instead of silently losing history.
 function writeConfig(config) {
     try {
         if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
         fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), "utf8");
+        return true;
     } catch (e) {
-        // Silently fail if we can't write config (e.g. read-only filesystem)
+        // Fail quietly if we can't write config (e.g. read-only filesystem)
+        return false;
     }
 }
 
@@ -35,7 +40,7 @@ function get(key, defaultValue) {
 function set(key, value) {
     const config = readConfig();
     config[key] = value;
-    writeConfig(config);
+    return writeConfig(config);
 }
 
 module.exports = { get, set };

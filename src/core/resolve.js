@@ -60,7 +60,11 @@ async function resolveServerPalByGuid(session, guid) {
 // instead of the full account walk. Returns the freshly-shaped pal (new transient id + current
 // lastModifiedDate) or null — e.g. if the pal moved groups — and the caller falls back to the
 // full resolveServerPalByGuid.
-async function refreshResolvedPal(session, resolved) {
+//   rethrow (default false): caller wants to tell "the server answered and the pal is not in that
+//   group" (null) apart from "the request itself failed" (thrown). Used by the launcher's
+//   recent-pal path, which must not report a network/auth failure as a deleted pal. Existing
+//   callers (push.js, MCP) keep the swallow-and-return-null behavior.
+async function refreshResolvedPal(session, resolved, { rethrow = false } = {}) {
     if (!resolved || resolved.profileId == null || resolved.groupId == null) return null;
     try {
         const palResp = await CloudPistonAPIManager.getPalList(session, resolved.profileId, resolved.groupId, { includeTest: true, includeInstalled: true });
@@ -69,7 +73,7 @@ async function refreshResolvedPal(session, resolved) {
         if (!p) return null;
         return shapePal(p, { profileId: resolved.profileId, profileName: resolved.profileName },
                            { groupId: resolved.groupId, name: resolved.groupName });
-    } catch (e) { return null; }
+    } catch (e) { if (rethrow) throw e; return null; }
 }
 
 // Resolve a pal BY NAME (the "don't hardcode GUIDs" path). Returns { resolved, candidates }:

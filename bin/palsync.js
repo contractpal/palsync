@@ -74,10 +74,11 @@ if (argv[0] === "upgrade") {
 if (argv[0] === "help" || argv.includes("--help") || argv.includes("-h")) {
     process.stdout.write(
         "palsync — PalBuilder + AI agents\n\n" +
-        "  palsync                 launch: login → pick pal → pull+lock → inject skills → open agent\n" +
+        "  palsync                 launch: recent Pals (or the full picker) → login → pull+lock → inject skills → open agent\n" +
         "  palsync setup --pal \"<name>\"   headless workspace creation (no prompts; for autonomous/agent boxes)\n" +
         "  palsync push|pull|status|test|preview|open|validate|sync-datasets   headless ops for a workspace (no MCP/agent needed)\n" +
         "  palsync upgrade [--check]   self-update to the latest commit on the default branch\n" +
+        "  palsync --dir <path>    exact workspace folder for this session (overrides the remembered one; same meaning as setup --dir)\n" +
         "  palsync --agent codex|pi|opencode   use Codex, Pi, or OpenCode instead of Claude Code (default: claude)\n" +
         "  palsync --eval [spec]   benchmark-harness mode: pick a spec, force create-pal, inject SPEC.md\n" +
         "  palsync --settings      choose how much checking PalSync does, and whether to review at the end\n" +
@@ -96,14 +97,8 @@ if (subcmd && subcmd !== "setup" && subcmd !== "upgrade") {
     process.exit(1);
 }
 
-// The interactive launcher needs a real terminal — refuse cleanly when run from a pipe or an
-// agent's shell tool instead of hanging forever on an invisible prompt.
-if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    process.stderr.write("palsync: the interactive launcher needs a terminal (stdin/stdout is not a TTY).\n" +
-        "Headless use: `palsync setup --pal \"<name>\"` to create a workspace, or the subcommands (" +
-        SUBCOMMANDS.slice(0, 6).join(", ") + ", ...). If you are an agent inside a palsync session, use the pal_* MCP tools instead.\n");
-    process.exit(1);
-}
+// Flag parsing (no side effects beyond validation) runs before the TTY guard, so a mistyped
+// flag is reported as a flag error even from a pipe — not as "needs a terminal".
 
 // --agent <claude|codex|pi>: choose the coding agent. Default Claude Code (and, when the flag is
 // absent, the interactive picker still runs — agentFlag stays undefined). Threaded through
@@ -140,10 +135,39 @@ function parseEvalFlag(args) {
 }
 const evalFlag = parseEvalFlag(argv);
 
+// --dir <path>: the EXACT workspace folder for this session — the same meaning as
+// `palsync setup --dir`. Overrides a remembered directory for a recent Pal and skips the
+// directory prompt in the full wizard. `~`, relative paths, and paths with spaces are fine.
+function parseDirFlag(args) {
+    const i = args.indexOf("--dir");
+    const eq = args.find(a => a.startsWith("--dir="));
+    if (i === -1 && !eq) return undefined;   // no flag → remembered / prompted directory
+    const val = i !== -1 ? args[i + 1] : eq.slice("--dir=".length);
+    if (!val || val.startsWith("--")) {
+        process.stderr.write("palsync: --dir needs a directory path (e.g. --dir \"~/projects/My-Pal\").\n");
+        process.exit(1);
+    }
+    return val;
+}
+const dirFlag = parseDirFlag(argv);
+
+// The interactive launcher needs a real terminal — refuse cleanly when run from a pipe or an
+// agent's shell tool instead of hanging forever on an invisible prompt.
+if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    process.stderr.write("palsync: the interactive launcher needs a terminal (stdin/stdout is not a TTY).\n" +
+        "Headless use: `palsync setup --pal \"<name>\"` to create a workspace, or the subcommands (" +
+        SUBCOMMANDS.slice(0, 6).join(", ") + ", ...). If you are an agent inside a palsync session, use the pal_* MCP tools instead.\n");
+    process.exit(1);
+}
+
 (async () => {
-    await preflight.run({ agent: agentFlag || "claude" }); // Node >= 18 + the chosen agent's CLI
+    // Node is the runtime palsync itself runs on, so it is validated before anything else. The
+    // agent's own prerequisites (Claude Code / Codex / Pi / OpenCode …) are checked inside run(),
+    // once it is known which agent this session will actually open — a Pi user is never asked to
+    // install Claude Code.
+    preflight.assertNode();
     const clack = await loadClack(); // @clack/prompts is ESM-only; dynamic import works on Node 18+
-    clack.intro("palsync — PalBuilder + Claude Code");
+    clack.intro("palsync — PalBuilder + AI agents");
     const policy = require("../src/core/policy");
     if (argv.includes("--settings")) {
         const chosen = await require("../src/launcher/prompts").pickSettings(policy.resolve(), clack);
@@ -151,7 +175,13 @@ const evalFlag = parseEvalFlag(argv);
         policy.set("review", chosen.review);
     }
     clack.log.info(policy.summaryLine() + "   (change: palsync settings)");
-    const result = await run({ agent: agentFlag, evalSpec: evalFlag, log: (m) => clack.log.step(m) });
+    const result = await run({
+        agent: agentFlag,
+        evalSpec: evalFlag,
+        workspaceDir: dirFlag,
+        preflight: (agentKey) => preflight.run({ agent: agentKey }),
+        log: (m) => clack.log.step(m)
+    });
     if (!result) { clack.cancel("Cancelled."); process.exit(1); }
     clack.log.info(
         "Creatable here: pages, fragments, scripts, workflows, emails, images, styles, attachments, documents.\n" +

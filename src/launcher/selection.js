@@ -5,7 +5,7 @@
 // injectable (real UI in launcher/prompts.js) so the flow is testable headlessly.
 const { CloudPistonAPIManager } = require("../../lib/apiManager");
 const { listKeys } = require("../core/createPal");
-const { timestampText } = require("../core/resolve");
+const { timestampText, shapePal } = require("../core/resolve");
 const { BACK } = require("../core/back");
 
 async function listProfiles(session) {
@@ -76,7 +76,9 @@ async function runSelection(session, prompts, { forceCreate = false, defaultName
             const choice = await prompts.pickPal(pals);
             if (choice === BACK) { step = "group"; continue; }
             if (!choice) return null;
-            return { mode: "open", profile, group, pal: normalizePal(choice) };
+            // `resolved` (additive) is the same pal already shaped by profile/group — handing it
+            // to setup() lets lock/pull skip their own full account walk (see core/resolve.js).
+            return { mode: "open", profile, group, pal: normalizePal(choice), resolved: shapePal(choice, profile, group) };
         } else if (step === "groups") {          // create new — one or more groups
             const all = await listGroups(session, profile.profileId);
             const choice = await prompts.pickGroups(all);

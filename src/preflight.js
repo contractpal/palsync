@@ -9,6 +9,7 @@
 const { spawnSync } = require("child_process");
 const readline = require("readline");
 const { commandOnPath } = require("./platform/commandOnPath");
+const agents = require("./launcher/agents");
 
 const MIN_NODE_MAJOR = 18;
 const REC_NODE = "20"; // recommended LTS major to upgrade to
@@ -115,6 +116,19 @@ function manualPiInstructions() {
     return "Install Pi, then re-run palsync (or launch `pi` manually in the prepared workspace).";
 }
 
+// Install guidance for a non-Claude agent, straight from the registry (fallback for agents with
+// no bespoke instructions yet — e.g. Gemini CLI, Cursor, Copilot).
+function manualAgentInstructions(descriptor) {
+    switch (descriptor.key) {
+        case "codex": return manualCodexInstructions();
+        case "pi": return manualPiInstructions();
+        case "opencode": return manualOpencodeInstructions();
+        default:
+            return "Install " + descriptor.label + " ('" + descriptor.command + "'), then re-run palsync " +
+                "(or prepare the workspace with `palsync setup` and open it yourself).";
+    }
+}
+
 // Non-fatal PATH check shared by every non-Claude agent: warn + print install guidance if the
 // agent's binary is missing, but never block workspace prep. Returns { ok, reason }.
 function ensureAgentOnPath(binName, label, instructions, { onPath = commandOnPath } = {}) {
@@ -155,26 +169,38 @@ async function ensureClaudeCode({ prompt = askYesNo, installer = installClaudeCo
 
 // ---- Entry ---------------------------------------------------------------------------------
 
-async function run({ agent = "claude" } = {}) {
-    // 1) Node: guide only, never auto-run. (Node entirely missing is handled by the shell/npm
-    //    before palsync can start — the README states the Node 18+ prerequisite.)
+// Node only: the runtime palsync itself runs on, so it must be validated before anything else
+// (loading the UI, reaching the network). Cheap, local, no side effects.
+function assertNode() {
     if (nodeMajor() < MIN_NODE_MAJOR) {
         process.stderr.write("\n" + nodeMessage(detectNodeInstallMethod()) + "\n\n");
         process.exit(1);
     }
-    // 2) Agent check.
-    //    - codex/pi/opencode: non-fatal — warn + instruct, then continue (workspace prep + manual
-    //      fallback work). None of these need Claude Code installed.
-    //    - claude (default): auto-install on consent; fatal if it can't be made available.
-    if (agent === "codex") { ensureCodex(); return; }
-    if (agent === "pi") { ensurePi(); return; }
-    if (agent === "opencode") { ensureOpencode(); return; }
+}
+
+async function run({ agent = "claude" } = {}) {
+    // 1) Node: guide only, never auto-run. (Node entirely missing is handled by the shell/npm
+    //    before palsync can start — the README states the Node 18+ prerequisite.)
+    assertNode();
+    // 2) Agent check — for the agent palsync is actually going to open. The launcher resolves
+    //    --agent / the remembered agent / the picked agent FIRST and only then calls this, so
+    //    choosing Pi or Codex never pulls in a Claude Code install or prompt (the old CLI checked
+    //    Claude up front, before it knew which agent the user wanted).
+    //    - every non-Claude agent in the registry: warn + instruct, then continue (workspace prep
+    //      and a manual launch still work); nothing is auto-installed.
+    //    - claude: auto-install on consent, since that npm package is one we have verified; fatal
+    //      if it can't be made available.
+    const descriptor = agents.resolve(agent);
+    if (descriptor && descriptor.key !== "claude") {
+        ensureAgentOnPath(descriptor.command, descriptor.label, manualAgentInstructions(descriptor));
+        return;
+    }
     const claude = await ensureClaudeCode();
     if (!claude.ok) process.exit(1);
 }
 
 module.exports = {
-    run, ensureClaudeCode, ensureCodex, ensureOpencode, ensurePi, manualCodexInstructions,
-    manualOpencodeInstructions, manualPiInstructions, detectNodeInstallMethod,
+    run, assertNode, ensureClaudeCode, ensureCodex, ensureOpencode, ensurePi, manualCodexInstructions,
+    manualOpencodeInstructions, manualPiInstructions, manualAgentInstructions, detectNodeInstallMethod,
     nodeUpgradeCommand, nodeMessage, manualClaudeInstructions, pathFixGuidance, commandOnPath, MIN_NODE_MAJOR
 };

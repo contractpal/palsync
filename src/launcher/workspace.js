@@ -30,6 +30,7 @@ const { registerCopilot } = require("../mcp/registerCopilot");
 const { hashWorkspace, hashPaths } = require("../core/workspaceHash");
 const { diffWorkspace, describeDiff } = require("../core/localDrift");
 const { mergeWorkspace } = require("../core/merge");
+const { sameCloud } = require("./workspacePath");
 
 function slug(name) {
     return String(name).trim().replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "pal";
@@ -122,6 +123,9 @@ const STEPS = ["pull", "lock", "resources", "inject", "register"];
 //   forceLock (optional, default false) — human-confirmed-only escape hatch for a stuck lock (see
 //   src/core/lock.js's allowOverride). CLI/launcher never pass this; only the GUI does, and only
 //   after a human has explicitly checked "Force Lock" having already seen who holds it.
+//   sel.resolved (optional) — a pal already resolved for this session (core/resolve.js). Passed
+//   through to pull() and lock.acquireByGuid() so neither repeats the profile→group→pal account
+//   walk; both still validate it against the server and self-heal if it has gone stale.
 async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", onDrift, log = () => {}, onStep = () => {}, forceLock = false }) {
     // Captured before anything touches disk: if this is a brand-new checkout (this directory
     // didn't exist yet) and setup fails partway through — most commonly a lock conflict, found
@@ -147,6 +151,14 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
                 "Choose a different workspace directory, or remove that workspace if you no longer need it."
             );
         }
+        // Same guid on a DIFFERENT cloud is not the same pal — the two deployments are unrelated
+        // stores. Checked since a remembered workspace directory (or --dir) can point anywhere.
+        if (existing && existing.cloudUrl && cloudUrl && !sameCloud(existing.cloudUrl, cloudUrl)) {
+            throw new Error(
+                "Workspace " + workspaceDir + " was created on " + existing.cloudUrl + ", not on " + cloudUrl +
+                ".\nChoose a different workspace directory, or remove that workspace if you no longer need it."
+            );
+        }
     } catch (e) { if (e.code !== "ENOENT") throw e; /* no .palsync.json = fresh workspace, fine */ }
 
     // Reverse drift guard BEFORE the pull (same pal only — `existing` is this pal's record).
@@ -163,7 +175,7 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
     onStep({ step: "pull", status: "start" });
     if (mode === "pull") {
         log("pulling " + sel.pal.name + " → " + workspaceDir);
-        const res = await pull(session, sel.pal.guid, workspaceDir, { baseline: (existing && existing.fileHashes) || null });
+        const res = await pull(session, sel.pal.guid, workspaceDir, { baseline: (existing && existing.fileHashes) || null, resolved: sel.resolved || null });
         written = res.written; removed = res.removed; preserved = res.preserved;
         if (removed.length) log("  sync removed " + removed.length + " file(s) deleted on server");
         for (const p of preserved) log("  preserved local work: " + p.rel + (p.merged ? "" : " — " + p.note));
@@ -191,7 +203,7 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
     // escape hatch above — CLI/launcher never set it, so they never force-override a PalBuilder lock)
     log("locking pal");
     onStep({ step: "lock", status: "start" });
-    const lk = await lock.acquireByGuid(session, sel.pal.guid, { force: forceLock, allowOverride: forceLock });
+    const lk = await lock.acquireByGuid(session, sel.pal.guid, { force: forceLock, allowOverride: forceLock, resolved: sel.resolved || null });
     if (!lk.acquired) {
         onStep({ step: "lock", status: "error" });
         let message;
