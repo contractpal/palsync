@@ -122,3 +122,48 @@ test("non-strict callers keep the old swallow-and-continue contract", async () =
     const scoped = load({ getPalList: httpFailure(500) });
     assert.equal(await scoped.refreshResolvedPal(newSession(), { guid: "GUID-1", profileId: "P1", groupId: "GR1" }), null);
 });
+
+// A 200 that parses to an object but carries no list element at all. ComposerResult.java
+// initializes profileList/groupList/palInfoList to non-null ArrayLists, so XStream emits the
+// element on every well-formed answer (as <groupList/> when empty). A body missing the element
+// never completed the list operation, and must not read as a confirmed-empty list.
+test("a 200 whose body omits the list element is UNKNOWN, not an empty list", async () => {
+    const noProfileList = load({ getProfileList: async (s) => ok(s, "GetProfileList.do", {}) });
+    await assert.rejects(() => noProfileList.resolveServerPalByGuid(newSession(), "GUID-1", { strict: true }),
+        e => e.lookupIncomplete === true && /no profileList element/.test(e.message));
+
+    const noGroupList = load({ getGroupList: async (s) => ok(s, "GetGroupList.do", {}) });
+    await assert.rejects(() => noGroupList.resolveServerPalByGuid(newSession(), "GUID-1", { strict: true }),
+        e => e.lookupIncomplete === true && /no groupList element/.test(e.message));
+
+    const noPalList = load({ getPalList: async (s) => ok(s, "GetPalList.do", {}) });
+    await assert.rejects(() => noPalList.resolveServerPalByGuid(newSession(), "GUID-1", { strict: true }),
+        e => e.lookupIncomplete === true && /no palInfoList element/.test(e.message));
+
+    // the scoped re-resolve the launcher tries first must refuse it too
+    await assert.rejects(() => noPalList.refreshResolvedPal(newSession(),
+        { guid: "GUID-1", profileId: "P1", groupId: "GR1" }, { rethrow: true }),
+        e => e.lookupIncomplete === true && /no palInfoList element/.test(e.message));
+});
+
+// <groupList/> / <palInfoList/> — the wire form of a genuinely empty list — parses to "" and is
+// a COMPLETE answer. Confirmed absence, not an incomplete lookup.
+test("an empty list element is a complete answer, not a failure", async () => {
+    for (const empty of ["", {}]) {
+        const noGroups = load({ getGroupList: async (s) => ok(s, "GetGroupList.do", { groupList: empty }) });
+        assert.equal(await noGroups.resolveServerPalByGuid(newSession(), "GUID-1", { strict: true }), null);
+
+        const noPals = load({ getPalList: async (s) => ok(s, "GetPalList.do", { palInfoList: empty }) });
+        assert.equal(await noPals.resolveServerPalByGuid(newSession(), "GUID-1", { strict: true }), null);
+        assert.equal(await noPals.refreshResolvedPal(newSession(),
+            { guid: "GUID-1", profileId: "P1", groupId: "GR1" }, { rethrow: true }), null);
+    }
+});
+
+// The structural check is strict-only: the swallow-and-continue callers are untouched.
+test("non-strict callers still ignore a missing list element", async () => {
+    const resolve = load({ getGroupList: async (s) => ok(s, "GetGroupList.do", {}) });
+    assert.equal(await resolve.resolveServerPalByGuid(newSession(), "GUID-1"), null);
+    const scoped = load({ getPalList: async (s) => ok(s, "GetPalList.do", {}) });
+    assert.equal(await scoped.refreshResolvedPal(newSession(), { guid: "GUID-1", profileId: "P1", groupId: "GR1" }), null);
+});

@@ -20,11 +20,19 @@ function timestampText(node) {
 // declined request as a deleted pal) pass strict:true; every existing caller keeps the old
 // swallow-and-return-empty behavior. session.lastTransport — written by fetchAPI on every call —
 // is what tells the HTTP failure apart from a real empty answer.
-function lookupFailure(session, resp, what) {
+// listKey (optional): the ComposerResult field this lookup exists to read. Every list field on
+// com/contractpal/composer/ComposerResult.java is a non-null `new ArrayList<>()`, so XStream
+// serializes it on EVERY well-formed answer — as <palInfoList/> when the list is genuinely empty,
+// which the parser gives back as "". A 200 whose body parses to an object WITHOUT that key is
+// therefore not "the list is empty", it is a response that never carried the list at all (a
+// different/partial ComposerResult); without this check `{}` reads as a confirmed-empty list and
+// the launcher deletes a live pal from recent history. A present-but-empty key is still accepted.
+function lookupFailure(session, resp, what, listKey) {
     const t = session && session.lastTransport;
     if (t && t.ok === false) return what + " failed (HTTP " + t.status + ")";
     if (resp === undefined || resp === null) return what + " returned no response";
     if (typeof resp !== "object") return what + " returned an unreadable response";
+    if (listKey && !(listKey in resp)) return what + " returned no " + listKey + " element";
     return null;
 }
 
@@ -58,7 +66,7 @@ async function enumerateServerPals(session, { profile: profileFilter, group: gro
     const out = [];
     const profileResp = await CloudPistonAPIManager.getProfileList(session);
     if (strict) {
-        const bad = lookupFailure(session, profileResp, "the profile list");
+        const bad = lookupFailure(session, profileResp, "the profile list", "profileList");
         if (bad) throw incompleteLookup(bad);
     }
     const profiles = (profileResp && profileResp.profileList && profileResp.profileList["com.contractpal.pal.ProfileInfo"]) || [];
@@ -69,7 +77,7 @@ async function enumerateServerPals(session, { profile: profileFilter, group: gro
         if (profileFilter && !new RegExp(profileFilter, "i").test(profile.profileName || "")) continue;
         const groupResp = await CloudPistonAPIManager.getGroupList(session, profile.profileId);
         if (strict) {
-            const bad = lookupFailure(session, groupResp, "the group list for " + (profile.profileName || profile.profileId));
+            const bad = lookupFailure(session, groupResp, "the group list for " + (profile.profileName || profile.profileId), "groupList");
             if (bad) throw incompleteLookup(bad);
         }
         const groups = (groupResp && groupResp.groupList && groupResp.groupList["com.contractpal.pal.GroupInfo"]) || [];
@@ -77,7 +85,7 @@ async function enumerateServerPals(session, { profile: profileFilter, group: gro
             if (groupFilter && !new RegExp(groupFilter, "i").test(group.name || "")) continue;
             const palResp = await CloudPistonAPIManager.getPalList(session, profile.profileId, group.groupId, { includeTest: true, includeInstalled: true });
             if (strict) {
-                const bad = lookupFailure(session, palResp, "the pal list for " + (group.name || group.groupId));
+                const bad = lookupFailure(session, palResp, "the pal list for " + (group.name || group.groupId), "palInfoList");
                 if (bad) throw incompleteLookup(bad);
             }
             const pals = (palResp && palResp.palInfoList && palResp.palInfoList.PalInfoEx) || [];
@@ -109,7 +117,7 @@ async function refreshResolvedPal(session, resolved, { rethrow = false } = {}) {
         // Under rethrow the caller is deciding whether a pal still exists, so an HTTP failure or
         // an unreadable body must surface as a failure, not as "not in this group".
         if (rethrow) {
-            const bad = lookupFailure(session, palResp, "the pal list");
+            const bad = lookupFailure(session, palResp, "the pal list", "palInfoList");
             if (bad) throw incompleteLookup(bad);
         }
         const pals = (palResp && palResp.palInfoList && palResp.palInfoList.PalInfoEx) || [];
