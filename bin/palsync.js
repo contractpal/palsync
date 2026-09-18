@@ -3,10 +3,11 @@
 // palsync — the terminal launcher. Logs in, selects a pal, pulls + locks + injects context +
 // registers the MCP server, then opens Claude Code in the workspace. No vscode, no env vars
 // (credentials live in the OS keychain).
-const preflight = require("../src/preflight");
-const { loadClack } = require("../src/platform/uiPrompts");
-const { run } = require("../src/launcher/index");
-const agents = require("../src/launcher/agents");
+// Heavy imports are deliberately NOT loaded here. The launcher chain pulls in
+// src/platform/keychain -> @napi-rs/keyring, a NATIVE .node addon; on Windows a loaded addon
+// cannot be unlinked, so `palsync upgrade` (which spawns `npm install -g` over this very
+// package) made npm fail to remove its own old binary. Lightweight commands — --version,
+// upgrade, subcommands, setup, help — must dispatch before anything requires the launcher.
 const pkg = require("../package.json");
 
 // --version / -v: print the build and exit (works regardless of Node/Claude prereqs, so QA and
@@ -111,6 +112,7 @@ function parseAgentFlag(args) {
     else { const eq = args.find(a => a.startsWith("--agent=")); if (eq) val = eq.slice("--agent=".length); }
     if (val === undefined) return undefined; // no flag → default flow (interactive picker)
     val = String(val).toLowerCase();
+    const agents = require("../src/launcher/agents");
     const agent = agents.resolve(val);
     if (!agent) {
         const keys = agents.AGENTS.map(a => a.key).join(", ");
@@ -166,6 +168,9 @@ if (!process.stdin.isTTY || !process.stdout.isTTY) {
     // agent's own prerequisites (Claude Code / Codex / Pi / OpenCode …) are checked inside run(),
     // once it is known which agent this session will actually open — a Pi user is never asked to
     // install Claude Code.
+    const preflight = require("../src/preflight");
+    const { loadClack } = require("../src/platform/uiPrompts");
+    const { run } = require("../src/launcher/index");
     preflight.assertNode();
     const clack = await loadClack(); // @clack/prompts is ESM-only; dynamic import works on Node 18+
     clack.intro("palsync — PalBuilder + AI agents");

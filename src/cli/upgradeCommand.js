@@ -97,23 +97,31 @@ function npmInstallSpec(slug, sha) {
 }
 
 // A copy-pasteable command that runs palsync's browser install against the globally-installed
-// package. Resolved at paste time via `npm root -g` so it works regardless of the user's npm prefix.
-function browserInstallCommand() {
-    return 'node "$(npm root -g)/' + pkg.name + '/src/install/playwrightChromium.js"';
+// package. Resolved at paste time via `npm root -g` so it works regardless of the user's npm prefix
+// — so it must be written in the shell the user is actually holding: POSIX command substitution is
+// a syntax error in Windows Command Prompt, where `for /f` is the equivalent.
+function browserInstallCommand(platform = process.platform) {
+    const rel = pkg.name + "/src/install/playwrightChromium.js";
+    if (platform === "win32") {
+        return 'for /f "delims=" %i in (\'npm root -g\') do node "%i\\' + rel.replace(/\//g, "\\") + '"';
+    }
+    return 'node "$(npm root -g)/' + rel + '"';
 }
 
 // The exact commands a user can paste to reinstall/recover by hand — the same two steps the
 // automated upgrade runs: install with scripts off (works under any npm config), then fetch the
 // Chromium binary palsync drives (npm's script gate never runs it, so we always run it ourselves).
-function manualInstallCommand(slug, sha) {
-    return "npm install -g " + npmInstallSpec(slug, sha) + " " + NPM_INSTALL_FLAGS.join(" ")
-        + "\n    " + browserInstallCommand();
+function manualInstallCommand(slug, sha, platform = process.platform) {
+    const shell = platform === "win32" ? "(run these in Command Prompt)\n    " : "";
+    return shell + "npm install -g " + npmInstallSpec(slug, sha) + " " + NPM_INSTALL_FLAGS.join(" ")
+        + "\n    " + browserInstallCommand(platform);
 }
 
 // On Windows, npm's post-install cleanup of the old package dir can fail to unlink a native .node
-// binary that's still mapped by another running process (e.g. a live palsync/MCP process holding
-// the keyring addon open). It's harmless — the install itself already succeeded by this point —
-// but npm's raw warning gives no indication of that, so we detect it and add a plain-language note.
+// binary that another running process still has mapped (e.g. a live palsync/MCP process holding the
+// keyring addon open). npm's raw warning says nothing about what it means, so we add a
+// plain-language note — but ONLY when npm exited 0. An EPERM warning on a FAILED install must never
+// be called harmless, and must never be described as a completed upgrade.
 const EPERM_UNLINK_RE = /EPERM: operation not permitted, unlink/i;
 
 function npmInstall(slug, sha, { spawn = spawnSync, fsMod = fs, log = console.warn, out = s => process.stdout.write(s), err = s => process.stderr.write(s) } = {}) {
@@ -127,13 +135,15 @@ function npmInstall(slug, sha, { spawn = spawnSync, fsMod = fs, log = console.wa
     const stderr = r.stderr === undefined || r.stderr === null ? "" : String(r.stderr);
     if (stdout) out(stdout);
     if (stderr) err(stderr);
-    if (EPERM_UNLINK_RE.test(stdout) || EPERM_UNLINK_RE.test(stderr)) {
-        log("Note: npm couldn't delete some old files above because another running process (e.g. a "
-            + "live palsync/MCP process) still had them open — harmless, the upgrade above still "
-            + "completed. If you see this a lot, close other palsync processes before upgrading, or "
-            + "just ignore it; leftover files get cleaned up on the next successful upgrade.");
+    const ok = r.status === 0;
+    if (ok && (EPERM_UNLINK_RE.test(stdout) || EPERM_UNLINK_RE.test(stderr))) {
+        log("Note: the install itself succeeded. npm could not remove some old files above "
+            + "(EPERM on unlink) — another running process, such as a live palsync/MCP session, may "
+            + "still have them open. The leftover files are harmless but are not removed "
+            + "automatically; to clear them, close other palsync processes and delete the reported "
+            + "directory by hand.");
     }
-    return r.status === 0;
+    return ok;
 }
 
 // Run the browser install for the freshly-installed global palsync. We install with --ignore-scripts

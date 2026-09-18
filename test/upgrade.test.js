@@ -136,8 +136,10 @@ test("npmInstall: surfaces a plain-language note when npm's cleanup hits a locke
     assert.equal(ok, true, "the EPERM cleanup warning is non-fatal; npm still exits 0");
     assert.match(err.buf.text, /EPERM/, "the raw npm warning is still shown");
     assert.equal(notes.length, 1);
-    assert.match(notes[0], /harmless/i);
-    assert.match(notes[0], /upgrade above still/i);
+    assert.match(notes[0], /install itself succeeded/i);
+    assert.match(notes[0], /could not remove some old files/i);
+    assert.match(notes[0], /still have them open/i);
+    assert.doesNotMatch(notes[0], /cleaned up on the next/i, "we don't promise automatic cleanup");
     fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -191,7 +193,8 @@ test("installBrowser: reports failure when the browser installer exits non-zero"
 });
 
 test("browserInstallCommand: resolves the global palsync installer at paste time", () => {
-    assert.equal(browserInstallCommand(), 'node "$(npm root -g)/palsync/src/install/playwrightChromium.js"');
+    assert.equal(browserInstallCommand("linux"), 'node "$(npm root -g)/palsync/src/install/playwrightChromium.js"');
+    assert.equal(browserInstallCommand("darwin"), 'node "$(npm root -g)/palsync/src/install/playwrightChromium.js"');
 });
 
 test("manualInstallCommand: pairs a scripts-off tarball install with the explicit browser step", () => {
@@ -237,4 +240,112 @@ test("cleanupBrokenGlobalPackage: keeps a real package directory", () => {
     assert.equal(result.reason, "not-symlink");
     assert.equal(fs.statSync(entry).isDirectory(), true);
     fs.rmSync(root, { recursive: true, force: true });
+});
+
+
+// --- Windows self-lock regression (2026-09-18) ---------------------------------------------
+// npm could not unlink @napi-rs/keyring's .node addon during `palsync upgrade` because the
+// upgrading process had already loaded it. The fix is an import-order one, so these tests
+// exercise a REAL CLI startup with a require() hook, not the source text.
+const { execFileSync } = require("node:child_process");
+const BIN = path.join(__dirname, "..", "bin", "palsync.js");
+const KEYRING_RE = /napi-rs\/keyring|platform\/keychain/;
+
+// Boots bin/palsync.js in a child node process with Module._load instrumented to record any
+// require of the keyring (directly or via src/platform/keychain).
+function runCliTracked(args, { env = {}, stubFetch = null } = {}) {
+    const probe = `
+        const M = require("node:module");
+        const orig = M._load;
+        const hits = [];
+        M._load = function (req) {
+            if (${KEYRING_RE.toString()}.test(req)) hits.push(req);
+            return orig.apply(this, arguments);
+        };
+        ${stubFetch || ""}
+        const report = () => process.stderr.write("KEYRING_HITS:" + JSON.stringify(hits) + "\\n");
+        const realExit = process.exit.bind(process);
+        process.exit = (code) => { report(); realExit(code); };
+        process.on("exit", report);
+        process.argv = [process.argv[0], ${JSON.stringify(BIN)}].concat(${JSON.stringify(args)});
+        require(${JSON.stringify(BIN)});
+    `;
+    let stdout = "", stderr = "", status = 0;
+    try {
+        stdout = execFileSync(process.execPath, ["-e", probe], {
+            encoding: "utf8",
+            env: Object.assign({}, process.env, env),
+            stdio: ["ignore", "pipe", "pipe"]
+        });
+    } catch (e) {
+        status = e.status === undefined ? 1 : e.status;
+        stdout = e.stdout || "";
+        stderr = e.stderr || "";
+        return { status, stdout, stderr, hits: parseHits(e.stderr || "") };
+    }
+    return { status, stdout, stderr, hits: [] };
+}
+
+function parseHits(stderr) {
+    const m = /KEYRING_HITS:(\[.*?\])/.exec(stderr);
+    return m ? JSON.parse(m[1]) : [];
+}
+
+test("upgrade --check: never loads the native keyring before npm would replace the package", () => {
+    // Stub fetch so no network call happens; report a SHA that differs from any stamp.
+    const stubFetch = `globalThis.fetch = async () => ({ ok: true, text: async () => "${"b".repeat(40)}" });`;
+    const r = runCliTracked(["upgrade", "--check"], { stubFetch });
+    const hits = r.hits.length ? r.hits : parseHits(r.stderr);
+    assert.deepEqual(hits, [], "upgrade --check must not load @napi-rs/keyring or src/platform/keychain");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /palsync /);
+});
+
+test("--version: prints the build without loading the native keyring", () => {
+    const r = runCliTracked(["--version"]);
+    const hits = r.hits.length ? r.hits : parseHits(r.stderr);
+    assert.deepEqual(hits, [], "--version must not load the keyring");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, new RegExp("palsync " + pkg.version.replace(/\./g, "\\.")));
+});
+
+test("npmInstall: a FAILED install with an EPERM cleanup warning is never reported as completed", () => {
+    const sha = "a".repeat(40);
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-upgrade-root-"));
+    const notes = [];
+    const out = capture(), err = capture();
+    const warning = "npm warn cleanup Failed to remove some directories\n"
+        + "npm error code EPERM\nnpm error EPERM: operation not permitted, unlink "
+        + "'C:\\Users\\x\\AppData\\Roaming\\npm\\node_modules\\palsync\\node_modules\\"
+        + "@napi-rs\\keyring-win32-x64-msvc\\keyring.win32-x64-msvc.node'\n";
+    const ok = npmInstall("owner/repo", sha, {
+        spawn: (cmd, args) => (args.join(" ") === "root -g"
+            ? { status: 0, stdout: root + "\n" }
+            : { status: 1, stdout: "", stderr: warning }),
+        log: msg => notes.push(msg),
+        out: out.write,
+        err: err.write
+    });
+
+    assert.equal(ok, false, "a non-zero npm exit is a failed install");
+    assert.match(err.buf.text, /EPERM/, "npm's own error output is preserved");
+    assert.deepEqual(notes, [], "no 'harmless' / 'succeeded' note on a failed install");
+    fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("recovery commands: per-platform shell syntax, same install flags", () => {
+    const sha = "c".repeat(40);
+    const win = manualInstallCommand("owner/repo", sha, "win32");
+    const posix = manualInstallCommand("owner/repo", sha, "linux");
+
+    for (const cmd of [win, posix]) {
+        assert.ok(cmd.includes(npmInstallSpec("owner/repo", sha)), "keeps the SHA-pinned tarball");
+        for (const flag of NPM_INSTALL_FLAGS) assert.ok(cmd.includes(flag), "keeps " + flag);
+    }
+
+    assert.ok(!win.includes("$(npm root -g)"), "POSIX command substitution is invalid in cmd.exe");
+    assert.match(win, /Command Prompt/, "names the shell the syntax is for");
+    assert.match(win, /for \/f "delims=" %i in \('npm root -g'\) do node "%i\\palsync\\src\\install\\playwrightChromium\.js"/);
+    assert.ok(posix.includes('node "$(npm root -g)/palsync/src/install/playwrightChromium.js"'));
+    assert.ok(!posix.includes("for /f"));
 });
