@@ -46,6 +46,11 @@ test("--ready: first todo whose depends are all done", () => {
     assert.equal(r.next.id, "T2"); // T1 done, so T2 (depends T1) is ready; T3 waits on T2
 });
 
+test("--ready compares dependency IDs case-insensitively", () => {
+    const r = listTasks(EXEC.replace("| T2 | first page (composition) | frontier | §4, §6 | T1 | todo |", "| T2 | first page (composition) | frontier | §4, §6 | t1 | todo |"), { ready: true });
+    assert.equal(r.next.id, "T2");
+});
+
 test("round-trip: set T2 done, list reflects it, then T3 becomes ready", () => {
     const upd = setStatus(EXEC, "T2", "done");
     assert.ok(upd.ok);

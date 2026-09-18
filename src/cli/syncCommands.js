@@ -315,7 +315,9 @@ async function runTaskCommand(cmd, argv) {
         return 0;
     }
     if (pos.length >= 2) {
-        if (pos[1] === "in_progress") {
+        // Versioned execution plans are jointly approved contracts. Legacy/small-fix task tables
+        // have no contract frontmatter and retain their existing lightweight status workflow.
+        if ((pos[1] === "in_progress" || pos[1] === "done") && /^(?:spec|spec version):\s*/im.test(text)) {
             let specText;
             try { specText = fs.readFileSync(path.join(path.resolve(dir), "SPEC.md"), "utf8"); }
             catch { specText = null; }

@@ -61,6 +61,39 @@ test("completion state machine preserves non-applicable and work-in-progress rep
     fs.rmSync(empty, { recursive: true, force: true });
 });
 
+test("a stale approved execution contract cannot report successful completion", () => {
+    const ws = tmpWorkspace({
+        "SPEC.md": `status: approved
+reality_check: pass
+spec version: 2
+
+## 3. Sitemap
+home
+
+## 11. Constraints
+never
+`,
+        "EXECUTION.md": `spec: SPEC.md (status: approved)
+spec version: 1
+
+## Tasks
+| id | task | tier | spec ref | depends | status | success condition |
+| T1 | foundation | cheap | §3 | — | done | pal_validate 0 errors; pal_test ok |
+
+## Checkpoints
+## Blockers
+`
+    });
+    const gate = completionGate.checkWorkspace(ws, { review: "off" });
+    assert.equal(gate.state, "INCONSISTENT_CONTRACT");
+    assert.equal(gate.allow, false);
+    assert.equal(gate.completionPassed, false);
+    const executionFile = path.join(ws, "EXECUTION.md");
+    fs.writeFileSync(executionFile, fs.readFileSync(executionFile, "utf8").replace("spec version: 1", "spec version: 2"));
+    assert.equal(completionGate.checkWorkspace(ws, { review: "off" }).state, "COMPLETE");
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
 test("review=auto: all-done completion requires a current explicit PASS review", () => {
     const ws = workspace();
     // A PASS review also needs durable clean desktop+mobile render evidence; without these rows

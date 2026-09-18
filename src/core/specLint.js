@@ -144,6 +144,10 @@ function parseFrontmatter(text) {
 const EXECUTION_STATUSES = new Set(["todo", "in_progress", "done", "blocked", "needs-frontier", "needs-human"]);
 const EXECUTION_TIERS = new Set(["cheap", "standard", "frontier"]);
 
+// Task IDs are user-facing labels, but comparisons are case-insensitive throughout the execution
+// contract. Keep original spelling for Markdown rewrites and output.
+function normalizeExecutionTaskId(id) { return String(id == null ? "" : id).trim().toLowerCase(); }
+
 // --- the lint ---
 function lintSpec(text, { workspaceDir, hasBaseline } = {}) {
     const findings = [];
@@ -329,8 +333,8 @@ function validateExecutionPlan(text, { sections, specFrontmatter } = {}) {
     const issues = []; const ids = new Set();
     for (const row of exec.rows) {
         if (!row.id) issues.push({ line: row.line, summary: "Task ID is empty.", fix: "Give every task a unique nonempty ID." });
-        else if (ids.has(row.id.toLowerCase())) issues.push({ line: row.line, summary: "Task ID \"" + row.id + "\" is duplicated.", fix: "Give every task a unique ID." });
-        else ids.add(row.id.toLowerCase());
+        else if (ids.has(normalizeExecutionTaskId(row.id))) issues.push({ line: row.line, summary: "Task ID \"" + row.id + "\" is duplicated.", fix: "Give every task a unique ID." });
+        else ids.add(normalizeExecutionTaskId(row.id));
         if (!EXECUTION_STATUSES.has(row.status)) issues.push({ line: row.line, summary: "Task " + row.id + " has invalid status \"" + row.status + "\".", fix: "Use todo, in_progress, done, blocked, needs-frontier, or needs-human." });
         if (!EXECUTION_TIERS.has(row.tier)) issues.push({ line: row.line, summary: "Task " + row.id + " has invalid tier \"" + row.tier + "\".", fix: "Use cheap, standard, or frontier." });
         if (!row.success || /^[—\-\s]*$/.test(row.success)) issues.push({ line: row.line, summary: "Task " + row.id + " has an empty success condition.", fix: "Add a behavioral, tool-checkable success condition." });
@@ -340,12 +344,17 @@ function validateExecutionPlan(text, { sections, specFrontmatter } = {}) {
             if (!refs.ok) issues.push({ line: row.line, summary: "Task " + row.id + " spec ref \"" + refs.token + "\" does not resolve to a SPEC.md section.", fix: "Use valid SPEC.md section references." });
         }
     }
-    for (const row of exec.rows) for (const dep of row.depends) if (!ids.has(dep.toLowerCase())) issues.push({ line: row.line, summary: "Task " + row.id + " depends on missing task \"" + dep + "\".", fix: "Fix the dependency or add that task." });
-    const byId = new Map(exec.rows.map(row => [row.id.toLowerCase(), row])); const visiting = new Set(), visited = new Set();
-    function visit(id) { if (visiting.has(id)) return true; if (visited.has(id) || !byId.has(id)) return false; visiting.add(id); const cycle = byId.get(id).depends.some(dep => visit(dep.toLowerCase())); visiting.delete(id); visited.add(id); return cycle; }
-    if (exec.rows.some(row => visit(row.id.toLowerCase()))) issues.push({ line: 0, summary: "Task dependencies contain a cycle.", fix: "Make dependencies leaf-first and acyclic." });
+    for (const row of exec.rows) for (const dep of row.depends) if (!ids.has(normalizeExecutionTaskId(dep))) issues.push({ line: row.line, summary: "Task " + row.id + " depends on missing task \"" + dep + "\".", fix: "Fix the dependency or add that task." });
+    const byId = new Map(exec.rows.map(row => [normalizeExecutionTaskId(row.id), row])); const visiting = new Set(), visited = new Set();
+    function visit(id) { if (visiting.has(id)) return true; if (visited.has(id) || !byId.has(id)) return false; visiting.add(id); const cycle = byId.get(id).depends.some(dep => visit(normalizeExecutionTaskId(dep))); visiting.delete(id); visited.add(id); return cycle; }
+    if (exec.rows.some(row => visit(normalizeExecutionTaskId(row.id)))) issues.push({ line: 0, summary: "Task dependencies contain a cycle.", fix: "Make dependencies leaf-first and acyclic." });
     const first = exec.rows[0];
     if (first.tier !== "cheap" || first.depends.length) issues.push({ line: first.line, summary: "The first foundation task must be tier cheap with depends: —.", fix: "Make the standalone foundation task first, cheap, and dependency-free." });
+    // The template names a new-Pal foundation explicitly. Brownfield first tasks may legitimately
+    // be a bounded repair, so only declared foundations need both deterministic verification tools.
+    if (/\bfoundation\b/i.test(first.task) && (!/\bpal_validate\b/i.test(first.success) || !/\bpal_test\b/i.test(first.success))) {
+        issues.push({ line: first.line, summary: "The foundation task success condition must cover both pal_validate and pal_test.", fix: "State successful pal_validate and pal_test results in the foundation success condition." });
+    }
     const specVersion = specFrontmatter && specFrontmatter["spec version"];
     const execVersion = exec.frontmatter["spec version"];
     if (!execVersion) issues.push({ line: 0, summary: "EXECUTION.md is missing its spec version.", fix: "Set spec version to the approved SPEC.md version after reconciling tasks." });
@@ -364,4 +373,4 @@ function formatSpecLint(result) {
     return lines.join("\n");
 }
 
-module.exports = { lintSpec, formatSpecLint, parseSpec, parseFrontmatter, parseExecutionTasks, validateExecutionPlan, bodyText, normalizeSpecRefToken, resolveSpecSection, resolveSpecRefs, STORED_TYPES, PICKER_LABEL_TO_STORED, NON_INDEXABLE };
+module.exports = { lintSpec, formatSpecLint, parseSpec, parseFrontmatter, parseExecutionTasks, validateExecutionPlan, bodyText, normalizeSpecRefToken, normalizeExecutionTaskId, resolveSpecSection, resolveSpecRefs, STORED_TYPES, PICKER_LABEL_TO_STORED, NON_INDEXABLE };

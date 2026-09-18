@@ -32,7 +32,7 @@ spec version: 1
 
 ## Tasks
 | id | task | tier | spec ref | depends | status | success condition |
-| T1 | foundation | cheap | §3 | — | todo | pal_validate 0 errors |
+| T1 | foundation | cheap | §3 | — | todo | pal_validate 0 errors; pal_test ok |
 | T2 | page | standard | §4 | T1 | todo | preview home |
 
 ## Checkpoints
@@ -63,7 +63,20 @@ test("missing or malformed execution cannot receive joint approval", () => {
 test("joint validation rejects invalid references, dependencies, cycles, duplicate IDs, and empty success", () => {
     assert.match(hard(EXEC.replace("| T2 | page | standard | §4 | T1 | todo | preview home |", "| T2 | page | standard | §99 | T1 | todo | preview home |"))[0].summary, /does not resolve/);
     assert.match(hard(EXEC.replace("| T2 | page | standard | §4 | T1 | todo | preview home |", "| T2 | page | standard | §4 | T9 | todo | preview home |"))[0].summary, /missing task/);
-    assert.ok(hard(EXEC.replace("| T1 | foundation | cheap | §3 | — | todo | pal_validate 0 errors |", "| T1 | foundation | cheap | §3 | T2 | todo | pal_validate 0 errors |")).some(f => /cycle/.test(f.summary)));
+    assert.ok(hard(EXEC.replace("| T1 | foundation | cheap | §3 | — | todo | pal_validate 0 errors; pal_test ok |", "| T1 | foundation | cheap | §3 | T2 | todo | pal_validate 0 errors; pal_test ok |")).some(f => /cycle/.test(f.summary)));
     assert.ok(hard(EXEC.replace("| T2 | page | standard | §4 | T1 | todo | preview home |", "| T1 | page | standard | §4 | T1 | todo | preview home |")).some(f => /duplicated/.test(f.summary)));
     assert.ok(hard(EXEC.replace("| T2 | page | standard | §4 | T1 | todo | preview home |", "| T2 | page | standard | §4 | T1 | todo | — |")).some(f => /empty success/.test(f.summary)));
+});
+
+test("dependency IDs are case-insensitive and foundation success covers both required checks", () => {
+    const caseVariant = EXEC.replace("| T2 | page | standard | §4 | T1 | todo | preview home |", "| T2 | page | standard | §4 | t1 | todo | preview home |");
+    assert.deepEqual(hard(caseVariant), []);
+    assert.ok(hard(EXEC.replace("pal_validate 0 errors; pal_test ok", "pal_validate 0 errors")).some(f => /pal_test/.test(f.summary)));
+    assert.ok(hard(EXEC.replace("pal_validate 0 errors; pal_test ok", "pal_test ok")).some(f => /pal_validate/.test(f.summary)));
+});
+
+test("ordinary brownfield first tasks do not acquire new foundation checks", () => {
+    const brownfield = EXEC.replace("foundation", "rename existing fragment")
+        .replace("pal_validate 0 errors; pal_test ok", "fragment renamed");
+    assert.deepEqual(hard(brownfield), []);
 });

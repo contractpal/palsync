@@ -34,7 +34,7 @@ spec version: 1
 
 ## Tasks
 | id | task | tier | spec ref | depends | status | success condition |
-| T1 | foundation | cheap | §3 | — | done | pal_validate 0 errors |
+| T1 | foundation | cheap | §3 | — | done | pal_validate 0 errors; pal_test ok |
 | T2 | show score | standard | §4 | T1 | done | preview rating |
 | T3 | submit score | standard | §4 | T2 | todo | pal_test ok |
 | T4 | unrelated audit | standard | §3 | T1 | done | pal_validate 0 errors |

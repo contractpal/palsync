@@ -4,7 +4,7 @@
 // reading workspace files through taskState/reviewCheck.
 const fs = require("fs");
 const path = require("path");
-const { parseTasks, STATUSES, BLOCKED_STATUSES, terminalReasonState } = require("./taskState");
+const { parseTasks, STATUSES, BLOCKED_STATUSES, terminalReasonState, executableContract } = require("./taskState");
 const reviewCheck = require("./reviewCheck");
 const policy = require("./policy");
 
@@ -55,6 +55,16 @@ function checkWorkspace(workspaceDir, { review } = {}) {
         if (nonDone.every(row => BLOCKED_STATUSES.includes(row.status))) {
             return result("BLOCKED_HANDOFF", true, false, "Terminal blocked/human handoff recorded with reasons.");
         }
+    }
+    // A versioned plan remains a joint SPEC + EXECUTION contract through the final completion
+    // verdict. Non-versioned task tables are legacy/small-fix tracking and intentionally stay
+    // outside this approval workflow.
+    if (/^(?:spec|spec version):\s*/im.test(text)) {
+        let specText;
+        try { specText = fs.readFileSync(path.join(workspaceDir, "SPEC.md"), "utf8"); }
+        catch { specText = null; }
+        const contract = executableContract(text, specText);
+        if (!contract.ok) return result("INCONSISTENT_CONTRACT", false, false, contract.error, { contract });
     }
     // Review is a user preference, not a lifecycle law. Only `auto` makes an independent review
     // part of completion; under `off`/`ask` the work is complete when the work is done, and a stale

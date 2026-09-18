@@ -171,6 +171,46 @@ test("task CLI requires blocker reasons and writes status plus checkpoint once",
     }
 });
 
+test("task CLI blocks stale starts and completion but permits amendment recovery", async () => {
+    const ws = tmpWorkspace({
+        "SPEC.md": `status: approved
+reality_check: pass
+spec version: 2
+
+## 3. Sitemap
+home
+
+## 11. Constraints
+never
+`,
+        "EXECUTION.md": `spec: SPEC.md (status: approved)
+spec version: 1
+
+## Tasks
+| id | task | tier | spec ref | depends | status | success condition |
+| T1 | foundation | cheap | §3 | — | todo | pal_validate 0 errors; pal_test ok |
+
+## Checkpoints
+## Blockers
+`
+    });
+    const oldLog = console.log, oldError = console.error; const errors = [];
+    console.log = () => {}; console.error = value => errors.push(String(value));
+    try {
+        assert.equal(await run("task", ["T1", "in_progress", "--dir", ws]), 1);
+        assert.equal(await run("task", ["T1", "done", "--dir", ws]), 1);
+        assert.match(errors.join("\n"), /spec version/);
+        assert.equal(await run("task", ["T1", "blocked", "--reason", "awaiting approved reconciliation", "--tried", "pal_validate", "--dir", ws]), 0);
+        const executionFile = require("node:path").join(ws, "EXECUTION.md");
+        fs.writeFileSync(executionFile, fs.readFileSync(executionFile, "utf8").replace("spec version: 1", "spec version: 2"));
+        assert.equal(await run("task", ["T1", "in_progress", "--dir", ws]), 0);
+        assert.equal(await run("task", ["T1", "done", "--dir", ws]), 0);
+    } finally {
+        console.log = oldLog; console.error = oldError;
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
 test("parseFlags parses cost record fields", () => {
     assert.deepEqual(
         (({ _positional, model, provider, tokensIn, tokensCached, tokensOut, cost, currency, phase }) =>

@@ -7,7 +7,7 @@
 // The parser tolerates the template's real shape: an optional |---| separator row, columns in any
 // order (identified by header text, not position), and "—"/"-"/blank in depends.
 const fs = require("fs");
-const { parseSpec, parseFrontmatter, validateExecutionPlan, bodyText, resolveSpecRefs } = require("./specLint");
+const { parseSpec, parseFrontmatter, validateExecutionPlan, bodyText, resolveSpecRefs, normalizeExecutionTaskId } = require("./specLint");
 
 const STATUSES = ["todo", "in_progress", "done", "blocked", "needs-frontier", "needs-human"];
 const BLOCKED_STATUSES = ["blocked", "needs-frontier", "needs-human"];
@@ -76,8 +76,8 @@ function listTasks(text, { ready = false } = {}) {
     const p = parseTasks(text);
     if (!p.ok) return p;
     if (!ready) return { ok: true, tasks: p.rows.map(r => ({ id: r.id, status: r.status, depends: r.depends, task: p.cols.task >= 0 ? r.cells[p.cols.task] : "" })) };
-    const doneIds = new Set(p.rows.filter(r => r.status === "done").map(r => r.id));
-    const next = p.rows.find(r => r.status === "todo" && r.depends.every(d => doneIds.has(d)));
+    const doneIds = new Set(p.rows.filter(r => r.status === "done").map(r => normalizeExecutionTaskId(r.id)));
+    const next = p.rows.find(r => r.status === "todo" && r.depends.every(d => doneIds.has(normalizeExecutionTaskId(d))));
     if (!next) return { ok: true, ready: true, next: null };
     return { ok: true, ready: true, next: { id: next.id, status: next.status, depends: next.depends, tier: next.tier || "", specRef: next.specRef || "", task: next.task || "", successCondition: next.successCondition || "" } };
 }
@@ -147,7 +147,7 @@ function setStatus(text, id, status) {
     if (STATUSES.indexOf(status) === -1) return { ok: false, error: "Invalid status \"" + status + "\". Use one of: " + STATUSES.join(" | ") + "." };
     const p = parseTasks(text);
     if (!p.ok) return p;
-    const row = p.rows.find(r => r.id.toLowerCase() === String(id).toLowerCase());
+    const row = p.rows.find(r => normalizeExecutionTaskId(r.id) === normalizeExecutionTaskId(id));
     if (!row) return { ok: false, error: "No task with id \"" + id + "\" in the Tasks table (ids: " + p.rows.map(r => r.id).join(", ") + ")." };
     if (row.status === status) return { ok: true, text, unchanged: true, from: row.status, id: row.id };
     const from = row.status;
@@ -158,7 +158,7 @@ function setStatus(text, id, status) {
 function proposeAmendment(text, { id, specRef, fact, change, tried } = {}) {
     const parsed = parseTasks(text);
     if (!parsed.ok) return parsed;
-    const row = parsed.rows.find(task => task.id.toLowerCase() === String(id || "").toLowerCase());
+    const row = parsed.rows.find(task => normalizeExecutionTaskId(task.id) === normalizeExecutionTaskId(id));
     if (!row) return { ok: false, error: "No task with id \"" + id + "\" in the Tasks table." };
     if (!specRef || !String(fact || "").trim() || !String(change || "").trim()) return { ok: false, error: "Amendment proposal requires specRef, fact, and change." };
     const refs = String(row.specRef || "").split(",").map(ref => ref.trim().replace(/^§/, "").toLowerCase());
@@ -315,8 +315,8 @@ function deriveStatusCounts(rows) {
 }
 
 function findReadyTasks(rows) {
-    const doneIds = new Set(rows.filter(r => r.status === "done").map(r => r.id));
-    return rows.filter(r => r.status === "todo" && r.depends.every(d => doneIds.has(d)));
+    const doneIds = new Set(rows.filter(r => r.status === "done").map(r => normalizeExecutionTaskId(r.id)));
+    return rows.filter(r => r.status === "todo" && r.depends.every(d => doneIds.has(normalizeExecutionTaskId(d))));
 }
 
 function inferNextState(text, explicitNext) {
