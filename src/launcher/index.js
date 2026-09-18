@@ -252,7 +252,10 @@ async function resolveRecentPal(session, entry, ctx) {
     }
     let walked;
     try {
-        walked = await resolve.resolveServerPalByGuid(session, entry.palGuid);
+        // strict: an HTTP/auth failure or an unreadable answer THROWS. `null` from here therefore
+        // means a COMPLETE walk that did not contain the guid — the only outcome that may be
+        // reported as a deleted pal and remove a history row.
+        walked = await resolve.resolveServerPalByGuid(session, entry.palGuid, { strict: true });
     } catch (e) {
         throw new Error(cannotReach(session, e));
     }
@@ -375,7 +378,10 @@ async function runRecent(entry, ctx, { explicitDir = ctx.explicitWorkspaceDir, t
         resolved
     };
     const setupResult = await workspace.setup({ session, cloudUrl, sel, workspaceDir: dir, agent: agent.key, onDrift: ctx.onDrift, log });
-    recordLaunch(ctx, { session, cloudUrl, sel, dir, agent: agent.key, setupResult });
+    // --dir is a one-session override (README/`palsync --help`): it must not replace the folder
+    // this pal is remembered in. A folder the user picked in "Change workspace directory…"
+    // (typedDir) IS the new preference and is remembered normally.
+    recordLaunch(ctx, { session, cloudUrl, sel, dir, agent: agent.key, setupResult, temporaryDir: Boolean(explicitDir) });
 
     // 6. Hand the terminal to the agent; the lock stays held (the MCP server owns release).
     let child = null;
@@ -389,9 +395,20 @@ async function runRecent(entry, ctx, { explicitDir = ctx.explicitWorkspaceDir, t
 // History is only written after setup() returned — so a cancelled login, a lock refusal, or an
 // aborted drift resolution never counts as a launch. A write failure is reported and ignored:
 // losing history must never fail a launch that already succeeded.
-function recordLaunch(ctx, { session, cloudUrl, sel, dir, agent, setupResult }) {
+//   temporaryDir — the workspace came from --dir, an override for THIS session only: the launch
+//   is still recorded (count, time, agent, name), but the remembered folder stays whatever it
+//   already was. A pal with no history yet has no preference to protect, so its first launch —
+//   --dir or not — establishes one.
+function recordLaunch(ctx, { session, cloudUrl, sel, dir, agent, setupResult, temporaryDir = false }) {
     const rec = (setupResult && setupResult.record) || {};
     const resolved = sel.resolved || {};
+    let workspaceDir = dir;
+    if (temporaryDir) {
+        const known = safe(() => ctx.recent.list());
+        const prev = Array.isArray(known) && known.find(e =>
+            e.palGuid === sel.pal.guid && e.username === session.username && e.cloudUrl === cloudUrl);
+        if (prev && prev.workspaceDir) workspaceDir = prev.workspaceDir;
+    }
     const result = ctx.recent.record({
         cloudUrl,
         username: session.username,
@@ -404,7 +421,7 @@ function recordLaunch(ctx, { session, cloudUrl, sel, dir, agent, setupResult }) 
         profileName: resolved.profileName,
         groupName: resolved.groupName,
         branch: sel.pal.branch || resolved.branch,
-        workspaceDir: dir,
+        workspaceDir,
         agent
     });
     if (result && result.ok === false) {
@@ -507,7 +524,7 @@ async function runWizard(ctx, spec, resume) {
         if (!dir) return null;
     }
     const setupResult = await workspace.setup({ session, cloudUrl, sel, workspaceDir: dir, agent: agent.key, onDrift, log });
-    if (!spec) recordLaunch(ctx, { session, cloudUrl, sel, dir, agent: agent.key, setupResult });
+    if (!spec) recordLaunch(ctx, { session, cloudUrl, sel, dir, agent: agent.key, setupResult, temporaryDir: Boolean(ctx.explicitWorkspaceDir) });
 
     // 5b. eval-harness: impact evals first prove and push their fixed baseline under setup's lock,
     //     then atomically inject the exact task arm. Standard eval injection remains unchanged.

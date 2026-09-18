@@ -14,6 +14,27 @@ function timestampText(node) {
     return String(node);
 }
 
+// fetchAPI() maps an HTTP failure (401/500/…) AND an empty 200 to the same `undefined`, so a
+// lookup that never happened otherwise reads as "the server answered: nothing there". Callers
+// that must not confuse the two (the launcher's recent-Pal path, which would otherwise report a
+// declined request as a deleted pal) pass strict:true; every existing caller keeps the old
+// swallow-and-return-empty behavior. session.lastTransport — written by fetchAPI on every call —
+// is what tells the HTTP failure apart from a real empty answer.
+function lookupFailure(session, resp, what) {
+    const t = session && session.lastTransport;
+    if (t && t.ok === false) return what + " failed (HTTP " + t.status + ")";
+    if (resp === undefined || resp === null) return what + " returned no response";
+    if (typeof resp !== "object") return what + " returned an unreadable response";
+    return null;
+}
+
+// Marked so a caller can tell "the lookup could not be completed" from an ordinary error.
+function incompleteLookup(message) {
+    const e = new Error(message);
+    e.lookupIncomplete = true;
+    return e;
+}
+
 // Normalize a PalInfoEx + its profile/group context into palsync's pal shape.
 function shapePal(p, profile, group) {
     return {
@@ -33,17 +54,32 @@ function shapePal(p, profile, group) {
 // Enumerate EVERY server pal once (profile -> group -> pal), shaped. Optional name filters
 // (case-insensitive substring) on profile/group narrow the walk — used to disambiguate a
 // by-name lookup on a big account. The shared walk behind both resolvers.
-async function enumerateServerPals(session, { profile: profileFilter, group: groupFilter } = {}) {
+async function enumerateServerPals(session, { profile: profileFilter, group: groupFilter, strict = false } = {}) {
     const out = [];
     const profileResp = await CloudPistonAPIManager.getProfileList(session);
+    if (strict) {
+        const bad = lookupFailure(session, profileResp, "the profile list");
+        if (bad) throw incompleteLookup(bad);
+    }
     const profiles = (profileResp && profileResp.profileList && profileResp.profileList["com.contractpal.pal.ProfileInfo"]) || [];
+    // An authenticated account always has at least one profile: an empty list here is a
+    // malformed/partial answer, never proof that a pal is gone.
+    if (strict && !profiles.length) throw incompleteLookup("the profile list came back empty");
     for (const profile of profiles) {
         if (profileFilter && !new RegExp(profileFilter, "i").test(profile.profileName || "")) continue;
         const groupResp = await CloudPistonAPIManager.getGroupList(session, profile.profileId);
+        if (strict) {
+            const bad = lookupFailure(session, groupResp, "the group list for " + (profile.profileName || profile.profileId));
+            if (bad) throw incompleteLookup(bad);
+        }
         const groups = (groupResp && groupResp.groupList && groupResp.groupList["com.contractpal.pal.GroupInfo"]) || [];
         for (const group of groups) {
             if (groupFilter && !new RegExp(groupFilter, "i").test(group.name || "")) continue;
             const palResp = await CloudPistonAPIManager.getPalList(session, profile.profileId, group.groupId, { includeTest: true, includeInstalled: true });
+            if (strict) {
+                const bad = lookupFailure(session, palResp, "the pal list for " + (group.name || group.groupId));
+                if (bad) throw incompleteLookup(bad);
+            }
             const pals = (palResp && palResp.palInfoList && palResp.palInfoList.PalInfoEx) || [];
             for (const p of pals) out.push(shapePal(p, profile, group));
         }
@@ -51,8 +87,10 @@ async function enumerateServerPals(session, { profile: profileFilter, group: gro
     return out;
 }
 
-async function resolveServerPalByGuid(session, guid) {
-    const all = await enumerateServerPals(session);
+// strict (default false): a lookup that could not be completed THROWS instead of returning null,
+// so `null` means exactly one thing — a complete walk that did not contain the guid.
+async function resolveServerPalByGuid(session, guid, { strict = false } = {}) {
+    const all = await enumerateServerPals(session, { strict });
     return all.find(p => p.guid === guid) || null;
 }
 
@@ -68,6 +106,12 @@ async function refreshResolvedPal(session, resolved, { rethrow = false } = {}) {
     if (!resolved || resolved.profileId == null || resolved.groupId == null) return null;
     try {
         const palResp = await CloudPistonAPIManager.getPalList(session, resolved.profileId, resolved.groupId, { includeTest: true, includeInstalled: true });
+        // Under rethrow the caller is deciding whether a pal still exists, so an HTTP failure or
+        // an unreadable body must surface as a failure, not as "not in this group".
+        if (rethrow) {
+            const bad = lookupFailure(session, palResp, "the pal list");
+            if (bad) throw incompleteLookup(bad);
+        }
         const pals = (palResp && palResp.palInfoList && palResp.palInfoList.PalInfoEx) || [];
         const p = pals.find(x => x.guid === resolved.guid);
         if (!p) return null;

@@ -217,3 +217,38 @@ test("a workspace created against another cloud is refused (new identity guard)"
     );
     assert.equal(h.calls.length, 0);
 });
+
+// --- INCOMPLETE IDENTITY (the launcher's early check and setup() share one rule) -------------
+
+test("an incomplete .palsync.json never authorizes a pull", async () => {
+    for (const record of [{}, { cloudUrl: "https://cloud.example", palName: "Audithelm-V1" },
+                          { palGuid: "   ", cloudUrl: "https://cloud.example" }]) {
+        const h = harness();
+        fs.mkdirSync(h.workspaceDir, { recursive: true });
+        fs.writeFileSync(path.join(h.workspaceDir, ".palsync.json"), JSON.stringify(record));
+        fs.writeFileSync(path.join(h.workspaceDir, "keep.txt"), "keep me");
+        await assert.rejects(
+            () => h.workspace.setup({ session: h.session, cloudUrl: "https://cloud.example", sel: SEL, workspaceDir: h.workspaceDir, agent: "claude" }),
+            /no usable pal identity/,
+            JSON.stringify(record)
+        );
+        assert.equal(h.calls.length, 0, "nothing was pulled, locked or injected");
+        assert.equal(fs.readFileSync(path.join(h.workspaceDir, "keep.txt"), "utf8"), "keep me");
+        assert.deepEqual(fs.readdirSync(h.workspaceDir).sort(), [".palsync.json", "keep.txt"]);
+    }
+});
+
+test("the same shared pal opened by a second authorized account is allowed", async () => {
+    const h = harness();
+    fs.mkdirSync(h.workspaceDir, { recursive: true });
+    fs.writeFileSync(path.join(h.workspaceDir, ".palsync.json"), JSON.stringify({
+        cloudUrl: "https://cloud.example", palGuid: "GUID-1", palName: "Audithelm-V1",
+        username: "someone.else@example.com", userId: "U-9"
+    }));
+    const result = await h.workspace.setup({
+        session: h.session, cloudUrl: "https://cloud.example", sel: SEL,
+        workspaceDir: h.workspaceDir, agent: "claude"
+    });
+    assert.equal(result.locked, true);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(h.workspaceDir, ".palsync.json"), "utf8")).username, "dev@example.com");
+});

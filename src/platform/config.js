@@ -8,13 +8,33 @@ const os = require("os");
 const CONFIG_DIR = path.join(os.homedir(), ".palsync");
 const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 
+// Reading never throws. It reports whether the existing file could be understood, because a
+// file we could NOT read must not be replaced: overwriting it would erase preferences that are
+// still in there (or still recoverable by hand). `damaged` is what makes set() refuse.
+let warned = false;
+
+function warnDamaged(reason) {
+    if (warned) return;
+    warned = true;
+    try {
+        process.stderr.write(
+            "palsync: could not read " + CONFIG_FILE + " (" + reason + ").\n" +
+            "         Settings (including the recent-Pal list) will not be saved until that file is " +
+            "fixed or removed.\n");
+    } catch (e) { /* stderr gone */ }
+}
+
 function readConfig() {
     try {
-        if (!fs.existsSync(CONFIG_FILE)) return {};
-        const data = fs.readFileSync(CONFIG_FILE, "utf8");
-        return JSON.parse(data);
+        if (!fs.existsSync(CONFIG_FILE)) return { config: {}, damaged: false };
+        const parsed = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            throw new Error("the file does not contain a JSON object");
+        }
+        return { config: parsed, damaged: false };
     } catch (e) {
-        return {};
+        warnDamaged(e && e.message ? e.message : String(e));
+        return { config: {}, damaged: true };
     }
 }
 
@@ -33,12 +53,16 @@ function writeConfig(config) {
 }
 
 function get(key, defaultValue) {
-    const config = readConfig();
+    const { config } = readConfig();
     return config[key] !== undefined ? config[key] : defaultValue;
 }
 
+// A damaged file is never overwritten: the in-memory view of it is empty, so writing would
+// destroy every unrelated preference it still holds. The caller gets false, exactly as it does
+// for a read-only home, and treats it as a non-fatal failed save.
 function set(key, value) {
-    const config = readConfig();
+    const { config, damaged } = readConfig();
+    if (damaged) return false;
     config[key] = value;
     return writeConfig(config);
 }

@@ -37,7 +37,10 @@ test("--help documents the recent-Pal startup, --dir, and the default directory"
         assert.equal(res.status, 0, res.stderr);
         assert.match(res.stdout, /recent Pals/);
         assert.match(res.stdout, /--dir <path>/);
-        assert.match(res.stdout, /overrides the remembered one/);
+        // --dir is documented as a ONE-SESSION override (src/launcher/index.js keeps the
+        // remembered folder); help, README and behavior have to agree.
+        assert.match(res.stdout, /THIS SESSION ONLY/);
+        assert.match(res.stdout, /the remembered folder is kept/);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const {
-    normalizeWorkspaceDir, inspectWorkspace, describeRefusal, sameCloud, shortenHome
+    normalizeWorkspaceDir, inspectWorkspace, describeRefusal, sameCloud, shortenHome, identityRefusal
 } = require("../src/launcher/workspacePath");
 const { defaultWorkspaceDir } = require("../src/launcher/workspace");
 
@@ -169,4 +169,36 @@ test("a forgotten folder explains itself without inventing a path", () => {
     assert.match(message, /is gone/);
     assert.match(message, /will not create a replacement/);
     assert.match(describeRefusal({ reason: "missing" }, { palName: "Audithelm-V1", dir: null }, ), /No workspace folder is remembered/);
+});
+
+// --- INCOMPLETE IDENTITY ---------------------------------------------------------------------
+
+test("a .palsync.json without a usable palGuid proves nothing and is refused", () => {
+    for (const record of [{}, { cloudUrl: "https://secure.cloudpiston.com" }, { palGuid: "" },
+                          { palGuid: "   " }, { palGuid: 17 }]) {
+        const dir = tmpDir();
+        fs.writeFileSync(path.join(dir, ".palsync.json"), JSON.stringify(record));
+        const check = inspectWorkspace(dir, { palGuid: "GUID-1", cloudUrl: "https://secure.cloudpiston.com" });
+        assert.equal(check.ok, false, JSON.stringify(record));
+        assert.equal(check.reason, "incomplete-identity");
+        assert.match(describeRefusal(check, { palName: "Audithelm-V1", dir }), /no usable pal identity/);
+        assert.deepEqual(fs.readdirSync(dir), [".palsync.json"], "nothing was written into it");
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("identityRefusal is the one rule both the launcher and setup() use", () => {
+    const cloud = "https://secure.cloudpiston.com";
+    assert.equal(identityRefusal({ palGuid: "GUID-1", cloudUrl: cloud }, { palGuid: "GUID-1", cloudUrl: cloud }), null);
+    // an older record with no cloudUrl still proves the pal; it just cannot prove another cloud
+    assert.equal(identityRefusal({ palGuid: "GUID-1" }, { palGuid: "GUID-1", cloudUrl: cloud }), null);
+    assert.equal(identityRefusal({ palGuid: "GUID-2", cloudUrl: cloud }, { palGuid: "GUID-1", cloudUrl: cloud }), "other-pal");
+    assert.equal(identityRefusal({ palGuid: "GUID-1", cloudUrl: "https://elsewhere.example" }, { palGuid: "GUID-1", cloudUrl: cloud }), "other-cloud");
+    assert.equal(identityRefusal({}, { palGuid: "GUID-1" }), "incomplete-identity");
+    assert.equal(identityRefusal(null, { palGuid: "GUID-1" }), "incomplete-identity");
+    // a caller that does not know which pal it wants can never be told the folder is the right one
+    assert.equal(identityRefusal({ palGuid: "GUID-1" }, {}), "incomplete-identity");
+    // a shared pal opened by another authorized account on the same cloud is the SAME pal
+    assert.equal(identityRefusal({ palGuid: "GUID-1", cloudUrl: cloud, username: "teammate@example.com" },
+                                 { palGuid: "GUID-1", cloudUrl: cloud, username: "dev@example.com" }), null);
 });

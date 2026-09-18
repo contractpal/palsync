@@ -179,7 +179,9 @@ function smoke(home, env = {}) {
         env: Object.assign({}, process.env, { HOME: home, USERPROFILE: home, PALSYNC_DEBUG: "" }, env)
     });
     assert.equal(res.status, 0, `smoke run failed: ${res.stderr}`);
-    return JSON.parse(res.stdout);
+    const parsed = JSON.parse(res.stdout);
+    parsed.stderr = res.stderr; // warnings (e.g. an unreadable config) go to stderr, not the log
+    return parsed;
 }
 
 function workspaceFile(home, ...rel) {
@@ -322,12 +324,18 @@ test("a corrupted history file falls back to the wizard instead of failing", () 
     try {
         fs.mkdirSync(path.join(home, ".palsync"), { recursive: true });
         fs.writeFileSync(path.join(home, ".palsync", "config.json"), "{ this is not json");
+        const before = fs.readFileSync(path.join(home, ".palsync", "config.json"));
         const res = smoke(home, { PALSYNC_DEBUG: "1" });
         assert.equal(res.ok, true, JSON.stringify(res));
         assert.ok(res.calls.includes("wizard-selection"), "the full wizard ran");
         assert.equal(res.workspaceDir, path.join(home, "PalBuilder", "Audithelm-V1"));
-        // and the file is repaired by the successful launch's history write
-        assert.equal(JSON.parse(fs.readFileSync(path.join(home, ".palsync", "config.json"), "utf8")).recentPals.length, 1);
+        // ...and the damaged file is LEFT ALONE. Writing the new history over it would erase
+        // whatever unrelated preferences are still in there (and still recoverable by hand), so
+        // the failed save is reported instead — the launch itself already succeeded.
+        assert.deepEqual(fs.readFileSync(path.join(home, ".palsync", "config.json")), before,
+            "the malformed config is byte-for-byte unchanged");
+        assert.ok(res.log.some(l => /could not save recent-Pal history/.test(l)), res.log.join("\n"));
+        assert.match(res.stderr, /could not read .*config\.json/);
     } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });
 
@@ -387,9 +395,13 @@ test("--dir overrides the remembered folder, and is an exact path", () => {
         assert.deepEqual(res.questions, ["pal-menu"], "no directory question with --dir");
         assert.ok(fs.existsSync(path.join(elsewhere, "pal.json")));
         assert.equal(JSON.parse(fs.readFileSync(path.join(elsewhere, ".palsync.json"), "utf8")).palGuid, "GUID-SMOKE");
-        // The folder you actually launched in becomes the remembered one — and the previous
+        // --dir is a ONE-SESSION override: the remembered folder is unchanged, and the previous
         // folder is left exactly as it was (never moved, renamed, or deleted).
         assert.ok(fs.existsSync(path.join(home, "PalBuilder", "Audithelm-V1", "pal.json")));
-        assert.equal(smoke(home, {}).workspaceDir, elsewhere);
+        assert.equal(res.history[0].workspaceDir, path.join(home, "PalBuilder", "Audithelm-V1"),
+            "--dir does not rewrite the remembered folder");
+        assert.equal(res.history[0].launchCount, 2, "but the launch still counts");
+        assert.equal(smoke(home, {}).workspaceDir, path.join(home, "PalBuilder", "Audithelm-V1"),
+            "the next plain launch goes back to the remembered folder");
     } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });

@@ -30,7 +30,7 @@ const { registerCopilot } = require("../mcp/registerCopilot");
 const { hashWorkspace, hashPaths } = require("../core/workspaceHash");
 const { diffWorkspace, describeDiff } = require("../core/localDrift");
 const { mergeWorkspace } = require("../core/merge");
-const { sameCloud } = require("./workspacePath");
+const { identityRefusal } = require("./workspacePath");
 
 function slug(name) {
     return String(name).trim().replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "pal";
@@ -138,13 +138,17 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
 
     try {
 
-    // Collision guard. The default workspace path is ~/PalBuilder/<slug(palName)>/ — stable per
-    // pal name. If a different pal already lives in this dir (.palsync.json present with a
-    // different palGuid), refuse rather than mix two pals' state into one workspace.
+    // Identity guard. The default workspace path is ~/PalBuilder/<slug(palName)>/ — stable per
+    // pal name, and a remembered directory (or --dir) can point anywhere — so an EXISTING
+    // .palsync.json has to prove this folder is this pal's workspace on this cloud before the
+    // pull may touch it. The rule lives in workspacePath.identityRefusal() and is the same one
+    // the launcher's early check uses; an incomplete record (no palGuid) proves nothing and is
+    // refused here too, so no caller can reach the pull through a half-written identity file.
     let existing = null;
     try {
         existing = await palsyncfile.read(workspaceDir);
-        if (existing && existing.palGuid && existing.palGuid !== sel.pal.guid) {
+        const refusal = identityRefusal(existing, { palGuid: sel.pal.guid, cloudUrl });
+        if (refusal === "other-pal") {
             throw new Error(
                 "Workspace " + workspaceDir + " already belongs to a different pal: \"" +
                 existing.palName + "\" (" + existing.palGuid + ") on " + existing.cloudUrl + ".\n" +
@@ -152,11 +156,19 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
             );
         }
         // Same guid on a DIFFERENT cloud is not the same pal — the two deployments are unrelated
-        // stores. Checked since a remembered workspace directory (or --dir) can point anywhere.
-        if (existing && existing.cloudUrl && cloudUrl && !sameCloud(existing.cloudUrl, cloudUrl)) {
+        // stores.
+        if (refusal === "other-cloud") {
             throw new Error(
                 "Workspace " + workspaceDir + " was created on " + existing.cloudUrl + ", not on " + cloudUrl +
                 ".\nChoose a different workspace directory, or remove that workspace if you no longer need it."
+            );
+        }
+        if (refusal) {
+            throw new Error(
+                "Workspace " + workspaceDir + " holds a " + palsyncfile.FILENAME + " with no usable pal " +
+                "identity in it (no palGuid).\npalsync cannot prove whose workspace that folder is, so it " +
+                "will not pull into it. Remove that file if the folder holds no PalSync state, or choose a " +
+                "different workspace directory."
             );
         }
     } catch (e) { if (e.code !== "ENOENT") throw e; /* no .palsync.json = fresh workspace, fine */ }

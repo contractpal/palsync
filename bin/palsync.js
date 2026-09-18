@@ -78,7 +78,7 @@ if (argv[0] === "help" || argv.includes("--help") || argv.includes("-h")) {
         "  palsync setup --pal \"<name>\"   headless workspace creation (no prompts; for autonomous/agent boxes)\n" +
         "  palsync push|pull|status|test|preview|open|validate|sync-datasets   headless ops for a workspace (no MCP/agent needed)\n" +
         "  palsync upgrade [--check]   self-update to the latest commit on the default branch\n" +
-        "  palsync --dir <path>    exact workspace folder for this session (overrides the remembered one; same meaning as setup --dir)\n" +
+        "  palsync --dir <path>    exact workspace folder for THIS SESSION ONLY (the remembered folder is kept; same path meaning as setup --dir)\n" +
         "  palsync --agent codex|pi|opencode   use Codex, Pi, or OpenCode instead of Claude Code (default: claude)\n" +
         "  palsync --eval [spec]   benchmark-harness mode: pick a spec, force create-pal, inject SPEC.md\n" +
         "  palsync --settings      choose how much checking PalSync does, and whether to review at the end\n" +
@@ -136,7 +136,8 @@ function parseEvalFlag(args) {
 const evalFlag = parseEvalFlag(argv);
 
 // --dir <path>: the EXACT workspace folder for this session — the same meaning as
-// `palsync setup --dir`. Overrides a remembered directory for a recent Pal and skips the
+// `palsync setup --dir`. A one-session override: it does NOT replace the remembered
+// directory for a recent Pal (see recordLaunch in src/launcher/index.js) and skips the
 // directory prompt in the full wizard. `~`, relative paths, and paths with spaces are fine.
 function parseDirFlag(args) {
     const i = args.indexOf("--dir");

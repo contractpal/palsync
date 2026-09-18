@@ -824,3 +824,104 @@ test("a network failure while checking a pal is not reported as a deleted pal", 
     assert.equal(h.configStore.recentPals[0].launchCount, 3, "and never counts as a launch");
     assert.equal(h.state.logs.some(l => /any more/.test(l)), false, "not reported as a deleted pal");
 });
+
+test("an HTTP failure that returns no response is not a deleted pal either", async () => {
+    // The real trap: fetchAPI() answers an HTTP failure with `undefined` instead of throwing, so
+    // a declined lookup used to arrive as an empty pal list. src/core/resolve.js now raises it
+    // (test/resolveStrict.test.js pins that); here the launcher must stop safely on it.
+    const dir = harness().state.ws("Audithelm-V1", {});
+    const strictOptions = [];
+    const h = harness({
+        history: [entry({ workspaceDir: dir })],
+        resolve: {
+            refreshResolvedPal: async (session, resolved, opts) => {
+                strictOptions.push(opts);
+                const e = new Error("the pal list failed (HTTP 401)");
+                e.lookupIncomplete = true;
+                throw e;
+            },
+            resolveServerPalByGuid: async (session, guid, opts) => {
+                strictOptions.push(opts);
+                const e = new Error("the profile list failed (HTTP 401)");
+                e.lookupIncomplete = true;
+                throw e;
+            }
+        }
+    });
+    await assert.rejects(() => h.run(), /Could not reach https:\/\/cloud\.example to check this Pal: the pal list failed \(HTTP 401\)/);
+    assert.deepEqual(strictOptions, [{ rethrow: true }], "the scoped lookup already refuses to guess");
+    assert.equal(h.state.setupCalls.length, 0, "workspace.setup() never ran");
+    assert.equal(h.configStore.recentPals.length, 1, "history is kept");
+    assert.equal(h.configStore.recentPals[0].launchCount, 3, "and the usage count is untouched");
+    assert.equal(h.configStore.recentPals[0].workspaceDir, dir);
+    assert.equal(h.state.logs.some(l => /anymore/.test(l)), false, "never reported as a deleted pal");
+    assert.deepEqual(fs.readdirSync(dir), [".palsync.json"], "no local file was touched");
+});
+
+test("the full walk is asked for a CONFIRMED answer before a pal counts as gone", async () => {
+    const seen = [];
+    const h = harness({
+        history: [entry()],
+        scoped: null,
+        recovery: () => null,
+        resolve: {
+            refreshResolvedPal: async () => null,
+            resolveServerPalByGuid: async (session, guid, opts) => { seen.push(opts); return null; }
+        }
+    });
+    await h.run();
+    assert.deepEqual(seen, [{ strict: true }], "only a complete walk may confirm absence");
+    assert.deepEqual(h.configStore.recentPals, [], "and then the dead row is cleaned up");
+});
+
+// --- --dir IS A ONE-SESSION OVERRIDE ----------------------------------------------------------
+
+test("--dir launches elsewhere for one session without changing what is remembered", async () => {
+    const h = harness({ history: [] });
+    const a = h.state.ws("A", {});
+    const b = h.state.ws("B", {});
+    const c = h.state.ws("C", {});
+
+    // 1-2. first launch (wizard) establishes A as the remembered folder
+    await h.run({ chooseDir: () => a });
+    assert.equal(h.state.setupCalls[0].workspaceDir, a);
+    assert.equal(h.configStore.recentPals[0].workspaceDir, a, "A is remembered");
+    assert.equal(h.configStore.recentPals[0].launchCount, 1);
+
+    // 3-5. --dir B launches in B, and leaves the preference on A
+    await h.run({ workspaceDir: b });
+    assert.equal(h.state.setupCalls[1].workspaceDir, b, "the session used B");
+    assert.equal(h.configStore.recentPals[0].workspaceDir, a, "A is STILL remembered");
+    assert.equal(h.configStore.recentPals[0].launchCount, 2, "the launch itself still counts");
+
+    // 6-7. a normal launch goes back to A
+    await h.run({ workspaceDir: undefined });
+    assert.equal(h.state.setupCalls[2].workspaceDir, a);
+
+    // 8-9. "Change workspace directory…" is what moves the preference
+    await h.run({ pickRecent: () => ({ kind: "change-dir" }), pickRecentPal: e => e[0], chooseDir: () => c });
+    assert.equal(h.state.setupCalls[3].workspaceDir, c);
+    assert.equal(h.configStore.recentPals[0].workspaceDir, c, "C is now remembered");
+    await h.run({ pickRecent: () => ({ kind: "pal", entry: h.state.seenEntries[0] }), chooseDir: undefined });
+    assert.equal(h.state.setupCalls[4].workspaceDir, c, "later launches use C");
+});
+
+test("a failed --dir launch changes nothing about the remembered folder", async () => {
+    const h = harness({ history: [] });
+    const a = h.state.ws("A", {});
+    await h.run({ chooseDir: () => a });
+    const b = h.state.ws("B", {});
+    h.setSetup(async () => { throw new Error("This pal is locked by Someone Else."); });
+    await assert.rejects(() => h.run({ workspaceDir: b }), /locked by Someone Else/);
+    assert.equal(h.configStore.recentPals[0].workspaceDir, a);
+    assert.equal(h.configStore.recentPals[0].launchCount, 1, "a failed launch is not a launch");
+});
+
+test("a pal with no history yet gets its first remembered folder even from --dir", async () => {
+    const h = harness({ history: [] });
+    const only = path.join(h.state.root, "first-ever", "Audithelm-V1");
+    await h.run({ workspaceDir: only });
+    assert.equal(h.state.setupCalls[0].workspaceDir, only);
+    assert.equal(h.configStore.recentPals[0].workspaceDir, only,
+        "there was no preference to protect, so this establishes one");
+});

@@ -48,6 +48,26 @@ function sameCloud(a, b) {
     return norm(a) === norm(b);
 }
 
+// THE identity rule, shared by inspectWorkspace() (the launcher's early check) and
+// workspace.setup() (the check every caller passes through) so the two can never disagree.
+// A `.palsync.json` only proves ownership when it names a pal GUID and that GUID is the one we
+// are opening; an incomplete record ({} , no palGuid, a hand-truncated file) proves nothing, so
+// the folder is refused rather than pulled into. cloudUrl has been written by every version of
+// buildRecord, but a record without one still cannot be shown to be from ANOTHER cloud, so a
+// missing cloudUrl is not on its own a refusal (sameCloud). The account/username is deliberately
+// NOT part of the rule: a team's shared pal opened by a second authorized account is the same
+// pal, and the server already authorized that account for the GUID.
+// Returns a refusal reason ("incomplete-identity" | "other-pal" | "other-cloud") or null.
+function identityRefusal(record, identity = {}) {
+    if (!record || typeof record !== "object" || Array.isArray(record)) return "incomplete-identity";
+    const recorded = typeof record.palGuid === "string" ? record.palGuid.trim() : "";
+    const wanted = typeof identity.palGuid === "string" ? identity.palGuid.trim() : "";
+    if (!recorded || !wanted) return "incomplete-identity";
+    if (recorded !== wanted) return "other-pal";
+    if (identity.cloudUrl && record.cloudUrl && !sameCloud(identity.cloudUrl, record.cloudUrl)) return "other-cloud";
+    return null;
+}
+
 // `~/projects/Audithelm-V1` for display in the menu.
 function shortenHome(dir, homedir = os.homedir()) {
     if (!dir || !homedir) return dir || "";
@@ -93,12 +113,8 @@ function inspectWorkspace(dir, identity = {}, { fs: fss = fs, path: p = path, al
         return { ok: false, reason: "unrecognized-nonempty", dir };
     }
     if (record) {
-        if (identity.palGuid && record.palGuid && record.palGuid !== identity.palGuid) {
-            return { ok: false, reason: "other-pal", dir, record };
-        }
-        if (identity.cloudUrl && record.cloudUrl && !sameCloud(identity.cloudUrl, record.cloudUrl)) {
-            return { ok: false, reason: "other-cloud", dir, record };
-        }
+        const refusal = identityRefusal(record, identity);
+        if (refusal) return { ok: false, reason: refusal, dir, record };
         // A different account on the same cloud with the same pal GUID is the SAME pal (teams
         // share pals, and the server already authorized this account for the GUID) — allowed.
         return { ok: true, existing: true, sameAccount: !identity.username || record.username === identity.username, dir, record };
@@ -134,6 +150,11 @@ function describeRefusal(result, { palName, dir }) {
             return where + " belongs to a workspace created on " + (record.cloudUrl || "another cloud") +
                 ", not on the cloud you are signing in to.\npalsync will not mix two deployments in one folder.";
         }
+        case "incomplete-identity":
+            return where + " holds a " + FILENAME + " with no usable pal identity in it" +
+                " (no palGuid).\npalsync cannot prove whose workspace that folder is, so it will not " +
+                "pull into it. Remove that file if the folder is really empty of PalSync state, or " +
+                "choose a different folder.";
         case "unrecognized-nonempty":
             return where + " exists and has files, but no PalSync workspace in it" +
                 (result.entries ? " (" + result.entries + " entries)" : "") +
@@ -143,4 +164,4 @@ function describeRefusal(result, { palName, dir }) {
     }
 }
 
-module.exports = { normalizeWorkspaceDir, inspectWorkspace, describeRefusal, sameCloud, shortenHome, FILENAME };
+module.exports = { normalizeWorkspaceDir, inspectWorkspace, identityRefusal, describeRefusal, sameCloud, shortenHome, FILENAME };

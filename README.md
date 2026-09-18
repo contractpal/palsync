@@ -101,7 +101,7 @@ one agent at a time; switching agents swaps the palsync-owned files cleanly (you
 |------|--------------|
 | `--version`, `-v` | Print the build version and exit. |
 | `--agent <name>` | Coding agent: `claude` (default), `codex`, `pi`, or `opencode`. Overrides the remembered agent. |
-| `--dir <path>` | Use this exact folder as the workspace for this session (overrides the remembered one; same meaning as `palsync setup --dir`). |
+| `--dir <path>` | Use this exact folder as the workspace for **this session only** — the remembered folder is left unchanged (same path meaning as `palsync setup --dir`). |
 | `--eval [spec]` | Benchmark-harness mode (non-interactive eval runs). |
 | `--help`, `-h` | Usage help. |
 
@@ -237,8 +237,9 @@ manual remediation; they never modify those files.
 The wizard's default is `~/PalBuilder/<pal-name>` — unchanged, and what you get if you just press
 Enter. Any other folder works: type an absolute path, a relative one, `~`-prefixed, or one with
 spaces. Whatever you pick is remembered per pal and reused on every later `palsync`, so the question
-is asked once. `palsync --dir <path>` overrides it for one session, and the menu's **Change workspace
-directory…** changes the remembered one.
+is asked once. `palsync --dir <path>` overrides it for one session and does **not** change what is remembered (for a pal
+with no history yet there is no preference to protect, so its first launch establishes one); the menu's
+**Change workspace directory…** is what changes the remembered folder.
 
 A remembered folder is a preference, not proof of identity — `.palsync.json` inside it and the
 server you authenticate against stay authoritative:
