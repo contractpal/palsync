@@ -911,6 +911,42 @@
     ]
   },
   {
+    "name": "pal_capture_baseline",
+    "title": "Capture approved regression baseline",
+    "description": "Explicitly capture or refresh the optional regression baseline. Requires the operator's exact approval phrase bound to this Pal GUID and observed server revision; refuses local/server drift, validation or evidence failures. Never pushes or saves production data.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "string",
+          "description": "Exact server revision from pal_status."
+        },
+        "approval": {
+          "type": "string",
+          "description": "Exact operator phrase: CAPTURE <pal-guid> @ <revision>."
+        }
+      },
+      "required": [
+        "revision",
+        "approval"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false
+    },
+    "groups": [
+      "runtime"
+    ],
+    "keywords": [
+      "capture",
+      "baseline",
+      "regression"
+    ]
+  },
+  {
     "name": "pal_regression",
     "title": "Run regression check",
     "description": "Brownfield regression check against baseline/baseline.json (optional; captured on demand). FIRST compares the baseline's mapped marker to the live server — moved => STALE, stops (never verdicts against a stale baseline). Then re-runs validate / pal_test / page-H1 checks vs the baseline, separating CAUSED failures from INHERITED (known_issues) ones; eyeball_only viewports are needs-human, never auto-passed.",

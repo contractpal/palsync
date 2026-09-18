@@ -69,6 +69,34 @@
     }
   },
   {
+    "name": "pal_capture_baseline",
+    "title": "Capture approved regression baseline",
+    "description": "Explicitly capture or refresh the optional regression baseline. Requires the operator's exact approval phrase bound to this Pal GUID and observed server revision; refuses local/server drift, validation or evidence failures. Never pushes or saves production data.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "string",
+          "description": "Exact server revision from pal_status."
+        },
+        "approval": {
+          "type": "string",
+          "description": "Exact operator phrase: CAPTURE <pal-guid> @ <revision>."
+        }
+      },
+      "required": [
+        "revision",
+        "approval"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false
+    }
+  },
+  {
     "name": "pal_context",
     "title": "Load PalSync context",
     "description": "Load an on-demand PalSync contract section by exact id or keyword query (sync-workflow, creating-files, datasets). For LOCAL structural impact before an edit, use pal_impact({target}) instead.",

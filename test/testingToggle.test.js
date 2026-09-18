@@ -49,7 +49,7 @@ test("testing off skips every automated app-running tool before it uses the sess
 
     for (const name of [
         "pal_test", "pal_tunnel_test", "pal_preview", "pal_fetch", "pal_screenshot",
-        "pal_exercise", "pal_seo_audit", "pal_regression"
+        "pal_exercise", "pal_seo_audit", "pal_capture_baseline", "pal_regression"
     ]) {
         const result = await tool(name).run(ctx, {});
         assert.equal(result.ran, false, name);

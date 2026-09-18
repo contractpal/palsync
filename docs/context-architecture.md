@@ -13,16 +13,16 @@ basis that could not be reproduced.
 
 | Runtime | Section | Source | Bytes | Est. tokens | Loading |
 |---|---|---|---:|---:|---|
-| All | `tool-definitions` | `src/mcp/tools.js` | 29,542 | 7,386 | release-stable |
+| All | `tool-definitions` | `src/mcp/tools.js` | 30,303 | 7,576 | release-stable |
 | All | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 3,274 | 819 | release-stable |
 | All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 2,260 | 565 | release-stable |
-| Claude | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,100 | 275 | workspace-stable |
-| Codex/OpenCode | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,100 | 275 | workspace-stable |
-| Pi | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,085 | 272 | workspace-stable |
+| Claude | `sync-section` | `src/launcher/contextInject.js#syncSection` | 2,403 | 601 | workspace-stable |
+| Codex/OpenCode | `sync-section` | `src/launcher/contextInject.js#syncSection` | 2,403 | 601 | workspace-stable |
+| Pi | `sync-section` | `src/launcher/contextInject.js#syncSection` | 2,388 | 597 | workspace-stable |
 | Claude | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,703 | 2,176 | on-demand |
 | Codex/OpenCode | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 8,936 | 2,234 | on-demand |
 | Pi | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 6,901 | 1,726 | on-demand |
-| All | `creating-files` | `src/launcher/contextInject.js#syncDetails` | 3,327 | 832 | on-demand |
+| All | `creating-files` | `src/launcher/contextInject.js#syncDetails` | 4,978 | 1,245 | on-demand |
 | Claude/Codex/OpenCode | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,539 | 885 | on-demand |
 | Pi | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,567 | 892 | on-demand |
 | All | `skill-body:design-build` | `bundled-context/skills/design-build/SKILL.md` | 4,862 | 1,216 | on-demand |

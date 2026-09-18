@@ -95,7 +95,8 @@ The agent calls these for you — you never run them by hand:
 | `pal_data_delete` | Delete a pal-level Data map by name from `pal.json`. Local edit only; `pal_push` to send the removal. |
 | `pal_datalist_set` | Create/update a pal-level DataList (`pal.getDataList("name")`) in `pal.json` — full replace of that name's columns and rows. Local edit only; `pal_push` to send it. |
 | `pal_datalist_delete` | Delete a pal-level DataList by name from `pal.json`. Local edit only; `pal_push` to send the removal. |
-| `pal_regression` | Capture / compare a regression baseline. |
+| `pal_capture_baseline` | Explicitly capture/refresh the approved regression snapshot after operator approval of the exact Pal GUID and server revision; never runs on push. |
+| `pal_regression` | Compare the approved `baseline/baseline.json` regression snapshot; never captures it. |
 | `pal_spec_lint` | Lint a `SPEC.md` for the spec-to-ship workflow. |
 | `pal_status` | Server drift + un-pushed local changes + lock holder. |
 | `pal_lock` / `pal_unlock` | Acquire / release the pal lock. Auto-reclaims your own stale lock; never breaks another user's. |
@@ -120,7 +121,8 @@ palsync screenshot      # screenshot the rendered pal
 palsync exercise        # drive a user flow in a browser
 palsync seo-audit       # on-page SEO audit of a web pal
 palsync sync-datasets   # provision dataset tables from pal.json (safe by default)
-palsync regression      # capture/compare a regression baseline
+palsync regression      # compare an approved regression baseline
+palsync regression capture --revision '<server marker>' --approval 'CAPTURE <pal-guid> @ <server marker>'  # explicit capture
 palsync spec-lint       # lint SPEC.md
 palsync settings        # set verification and final-review preferences
 palsync verify          # explain the offline verification plan for local changes

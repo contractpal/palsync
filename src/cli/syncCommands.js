@@ -53,7 +53,7 @@ const USAGE = [
     "  palsync cost record --model X --provider Y --in N --cached N --out N [--cost N] [--currency USD] [--phase build|review] [--dir <ws>]",
     "  palsync review check|brief [--dir <workspace>]              Check REVIEW.md evidence or print the pre-review evidence ledger (offline)",
     "  palsync completion check [--dir <workspace>]                Enforce all-done independent review or allow a reasoned handoff (offline)",
-    "  palsync regression [--keep-lock] [--dir <ws>]                Brownfield regression vs baseline/baseline.json (freshness -> validate/test/H1; caused vs inherited)",
+    "  palsync regression [capture --revision <marker> --approval <phrase>] [--keep-lock] [--dir <ws>]  Compare or explicitly capture baseline/baseline.json",
     "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Mechanical reality-check of a SPEC.md (offline): placeholders, dead links, §8a types, §12 floor",
     "  palsync session-summary [--mode full|lite] [--next <text>] [--dir <ws>] Append the canonical two-line session handoff summary (offline, derived)",
     "  palsync task list [--ready] [--dir <ws>]                     List EXECUTION.md tasks; --ready prints the ready ticket plus its spec ref sections and \u00A711",
@@ -94,7 +94,7 @@ const USAGE = [
 ].join("\n");
 
 function parseFlags(argv) {
-    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, workflowName: undefined, action: undefined, params: undefined, initial: undefined, browser: false, preview: false, open: undefined, skipValidation: false, datasets: undefined, recreate: false, viewport: undefined, fullPage: false, expect: undefined, selector: undefined, maxChars: undefined };
+    const flags = { force: false, keepLock: false, dir: undefined, help: false, workflow: undefined, workflowName: undefined, action: undefined, params: undefined, initial: undefined, browser: false, preview: false, open: undefined, skipValidation: false, datasets: undefined, recreate: false, viewport: undefined, fullPage: false, expect: undefined, selector: undefined, maxChars: undefined, revision: undefined, approval: undefined };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--force" || a === "-f") flags.force = true;
@@ -128,6 +128,10 @@ function parseFlags(argv) {
         else if (a.startsWith("--selector=")) flags.selector = a.slice("--selector=".length);
         else if (a === "--max-chars") { flags.maxChars = Number(argv[++i]); if (!flags.maxChars) throw new Error("--max-chars requires a number"); }
         else if (a.startsWith("--max-chars=")) flags.maxChars = Number(a.slice("--max-chars=".length));
+        else if (a === "--revision") { flags.revision = argv[++i]; if (!flags.revision) throw new Error("--revision requires a value"); }
+        else if (a.startsWith("--revision=")) flags.revision = a.slice("--revision=".length);
+        else if (a === "--approval") { flags.approval = argv[++i]; if (!flags.approval) throw new Error("--approval requires a value"); }
+        else if (a.startsWith("--approval=")) flags.approval = a.slice("--approval=".length);
         else if (a === "--steps") { flags.steps = argv[++i]; if (!flags.steps) throw new Error("--steps requires a JSON array value"); }
         else if (a.startsWith("--steps=")) flags.steps = a.slice("--steps=".length);
         else if (a === "--steps-file") { flags.stepsFile = argv[++i]; if (!flags.stepsFile) throw new Error("--steps-file requires a path"); }
@@ -622,12 +626,14 @@ async function run(cmd, argv, opts) {
     }
 
     if (cmd === "regression") {
-        const res = await toolByName("pal_regression").run(ctx, {});
+        const capture = flags._positional === "capture";
+        const tool = toolByName(capture ? "pal_capture_baseline" : "pal_regression");
+        const res = await tool.run(ctx, capture ? { revision: flags.revision, approval: flags.approval } : {});
         console.log(res.message);
         if (!flags.keepLock && ctx.session.lockInfo) await releaseLock(ctx);
-        // Exit non-zero on a stale baseline or any CAUSED failure; inherited/needs-human don't fail the run.
-        if (res.stale || (res.ran && res.caused && res.caused.length)) return 1;
-        return 0;
+        if (capture) return res.captured ? 0 : 1;
+        // A missing/unreadable baseline is no comparison verdict, so it must not exit successfully.
+        return res.ran && !res.stale && res.pass === true ? 0 : 1;
     }
 
     if (cmd === "seo-audit") {

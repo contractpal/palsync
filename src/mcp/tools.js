@@ -14,7 +14,7 @@ const { runScreenshot } = require("../core/screenshot");
 const { runExercise, formatExercise, applyRunId, redactStepValues, redactSecretForms } = require("../core/exercise");
 const { mergeWorkspace, formatMerge } = require("../core/merge");
 const { runSeoAudit, formatSeoAudit } = require("../core/seoAudit");
-const { runRegression } = require("../core/regression");
+const { runRegression, captureBaseline, captureApproval } = require("../core/regression");
 const { lintSpec, formatSpecLint } = require("../core/specLint");
 const { syncDatasets } = require("../core/datasets");
 const { upsertData, deleteData, upsertDataList, deleteDataList } = require("../core/dataObjects");
@@ -1840,6 +1840,22 @@ const TOOLS = [
         }
     },
     {
+        name: "pal_capture_baseline",
+        description: "Explicitly capture or refresh the optional regression baseline. Requires the operator's exact approval phrase bound to this Pal GUID and observed server revision; refuses local/server drift, validation or evidence failures. Never pushes or saves production data.",
+        inputShape: {
+            revision: z.string().describe("Exact server revision from pal_status."),
+            approval: z.string().describe("Exact operator phrase: CAPTURE <pal-guid> @ <revision>.")
+        },
+        async run(ctx, args = {}) {
+            const disabled = testingDisabledResult(ctx, "pal_capture_baseline");
+            if (disabled) return disabled;
+            const res = await captureBaseline(ctx.session, ctx.record, ctx.workspaceDir, args);
+            if (ctx.lifecycle) ctx.lifecycle.onActivity();
+            return Object.assign(res, { approvalRequired: captureApproval(ctx.record, args.revision || "<revision>"),
+                message: res.summary || (res.captured ? "Baseline captured." : "BASELINE NOT CAPTURED — " + res.reason) });
+        }
+    },
+    {
         name: "pal_regression",
         description: "Brownfield regression check against baseline/baseline.json (optional; captured on demand). FIRST compares the baseline's mapped marker to the live server — moved => STALE, stops (never verdicts against a stale baseline). Then re-runs validate / pal_test / page-H1 checks vs the baseline, separating CAUSED failures from INHERITED (known_issues) ones; eyeball_only viewports are needs-human, never auto-passed.",
         inputShape: {},
@@ -2294,6 +2310,7 @@ const TOOL_HINTS = {
     pal_exercise: ["Exercise pal behavior", { readOnlyHint: false, destructiveHint: false, idempotentHint: false }],
     pal_seo_audit: ["Audit web page SEO", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_spec_lint: ["Lint pal specification", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_capture_baseline: ["Capture approved regression baseline", { readOnlyHint: false, destructiveHint: false, idempotentHint: false }],
     pal_regression: ["Run regression check", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_pull: ["Pull pal changes", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
     pal_merge: ["Merge pal changes", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],

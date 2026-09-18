@@ -8,20 +8,34 @@ user asks for regression coverage.
 
 ## Capture (before the change)
 
-Record what passes right now:
+Capture is explicit and never runs after `pal_push`. First call `pal_status`, then have the
+operator approve that exact observed marker. Call `pal_capture_baseline` with:
 
-- `pal_validate` → current `diagnosticCount` (`ok:false` → you inherited it; record it).
-- `pal_test` on the primary workflow(s) → current VALIDATED state.
-- Web: `pal_fetch`/`pal_preview` on key pages → note the H1s.
-- `pal_screenshot` the key screens. A viewport that times out is not a failure — record it
-  `eyeball_only` and move on.
+- `revision`: the exact `server marker` from `pal_status`.
+- `approval`: `CAPTURE <pal-guid> @ <revision>` — typed by the operator, not inferred from a
+  passing push or an agent assessment.
 
-Write `baseline/baseline.json` at the workspace root in this exact shape (`pal_regression`
-parses it; do not rename fields):
+Capture refuses unknown identity/revision, any local tracked-file addition/modification/deletion,
+validation errors, failed workflow/page evidence, incomplete required screenshots, or a marker
+change during capture. `force` never bypasses these gates. It does not save the Pal or alter
+production datasets/records.
+
+On refresh it reruns every workflow, page, viewport, and screenshot already in the approved
+snapshot; it preserves `known_issues` and uncaptured `eyeball_only` coverage. A required screenshot
+must produce and write its PNG or the prior baseline remains untouched. A first capture records
+validation plus a fresh server workflow test; add page/screenshot coverage through a reviewed
+baseline rather than letting the agent guess critical screens.
+
+`baseline/baseline.json` is the user-approved regression snapshot. It is separate from
+`.palsync/baseline/`, the internal text-content store used only for push/merge drift protection.
+The snapshot uses this backward-compatible shape (`pal_regression` parses it; do not rename
+load-bearing fields):
 
 ```json
 {
   "mapped": "2026-06-12 17:29:25.0",
+  "captured_at": "2026-06-12T17:31:02.123Z",
+  "metadata": { "pal_guid": "…", "server_timestamp": "2026-06-12 17:29:25.0" },
   "validate": { "errors": 0, "warnings": 0 },
   "test": { "web": { "status": "VALIDATED", "notes": 0 } },
   "pages": {
