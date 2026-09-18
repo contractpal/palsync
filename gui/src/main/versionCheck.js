@@ -119,7 +119,13 @@ async function checkAgainstManifest(local, url, pickFile) {
 
     const parsed = parseVersionsManifest(text);
     if (!parsed) return null;
-    if (compareVersions(parsed.version, local.version) <= 0) return null;
+    // Exact string compare, not compareVersions' numeric ordering: auto-bump-version.yml bumps
+    // gui/package.json's version on every single push to main (patch at minimum), so the
+    // manifest's version - which only ever gets (re)written from a build off main - can never be
+    // behind whatever's locally installed. A local checkout newer than the latest published
+    // manifest just isn't a case that can happen here, so "different" is all "update available"
+    // needs to mean.
+    if (parsed.version === local.version) return null;
 
     const file = pickFile(parsed.files);
     if (!file) return null;
