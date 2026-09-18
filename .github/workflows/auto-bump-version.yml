@@ -1,0 +1,47 @@
+name: Auto bump version
+
+# Bumps gui/package.json's minor version (X.Y.Z -> X.(Y+1).0) after every push to main, so
+# nobody has to remember to do it by hand before a release build. Major bumps are still a human
+# semver call - Claude flags those in conversation when a change looks breaking, but doesn't
+# perform them here.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    # Guard against an infinite loop: this job's own push (tagged [skip ci] below) would
+    # otherwise re-trigger this same workflow.
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Default GITHUB_TOKEN, but persisted so the push step below can use it.
+          persist-credentials: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Bump minor version
+        working-directory: gui
+        # --no-git-tag-version: we commit by hand below instead of letting npm tag/commit.
+        # npm's own `version` command updates package-lock.json's version fields too, which
+        # also fixes the lockfile drifting out of sync with package.json.
+        run: npm version minor --no-git-tag-version
+
+      - name: Commit and push
+        run: |
+          NEW_VERSION=$(node -p "require('./gui/package.json').version")
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add gui/package.json gui/package-lock.json
+          git commit -m "chore(gui): bump version to $NEW_VERSION [skip ci]"
+          git push
