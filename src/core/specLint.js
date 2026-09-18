@@ -131,6 +131,19 @@ function tableRows(bodyLines) {
 
 function bodyText(section) { return section ? section.bodyLines.map(b => b.text).join("\n") : ""; }
 
+function parseFrontmatter(text) {
+    const fields = {};
+    for (const line of String(text).split(/\r?\n/)) {
+        if (/^##\s/.test(line)) break;
+        const match = line.match(/^([a-z][a-z_ ]*):\s*(.*?)\s*$/i);
+        if (match) fields[match[1].toLowerCase()] = match[2];
+    }
+    return fields;
+}
+
+const EXECUTION_STATUSES = new Set(["todo", "in_progress", "done", "blocked", "needs-frontier", "needs-human"]);
+const EXECUTION_TIERS = new Set(["cheap", "standard", "frontier"]);
+
 // --- the lint ---
 function lintSpec(text, { workspaceDir, hasBaseline } = {}) {
     const findings = [];
@@ -257,39 +270,18 @@ function lintSpec(text, { workspaceDir, hasBaseline } = {}) {
         }
     }
 
-    // F. EXECUTION.md spec ref tokens must resolve to a real SPEC.md section.
-    // EXECUTION.md does not exist when the linter runs in pal-spec Step 5
-    // (written in Step 6), so its absence is not a finding.
+    // F. Workspace lint is the joint SPEC + EXECUTION approval gate.
     if (workspaceDir) {
         const execPath = path.join(workspaceDir, "EXECUTION.md");
-        let execText = null;
-        try {
-            if (fs.existsSync(execPath)) execText = fs.readFileSync(execPath, "utf8");
-        } catch (e) { /* ignore */ }
-        if (execText !== null) {
-            const exec = parseExecutionTasks(execText);
-            if (exec.ok) {
-                for (const row of exec.rows) {
-                    const raw = row.specRefRaw;
-                    if (!raw || /^[\u2014\-\s]*$/.test(raw)) continue;
-                    const parts = raw.split(",");
-                    for (let tokRaw of parts) {
-                        const tok = tokRaw.trim();
-                        if (!tok) {
-                            // bundled-context/skills/pal-spec/references/execution-template.md:15-17 — every task names at least one spec ref
-                            add("HARD_FLAG", "EXECUTION.md", row.line,
-                                `Task ${row.id} spec ref "${raw.trim()}" has an empty component between commas.`,
-                                `Fix the spec ref list \u2014 remove the empty component (e.g. "\u00A74,,\u00A76" -> "\u00A74,\u00A76").`);
-                            break;
-                        }
-                        const sec = resolveSpecSection({ sections }, tok);
-                        if (!sec) {
-                            // bundled-context/skills/pal-spec/references/execution-template.md:15-17 — every task names at least one spec ref
-                            add("HARD_FLAG", "EXECUTION.md", row.line,
-                                `Task ${row.id} spec ref "${tok}" does not resolve to a SPEC.md section.`,
-                                `Fix the spec ref to a valid section (e.g. \u00A74, \u00A78b) or add the missing SPEC.md section.`);
-                        }
-                    }
+        if (!fs.existsSync(execPath)) {
+            add("HARD_FLAG", "EXECUTION.md", 0, "EXECUTION.md is required before the specification can be approved.", "Draft EXECUTION.md against this SPEC.md, then run pal_spec_lint again.");
+        } else {
+            let execText;
+            try { execText = fs.readFileSync(execPath, "utf8"); }
+            catch (e) { add("HARD_FLAG", "EXECUTION.md", 0, "EXECUTION.md could not be read.", "Restore a readable EXECUTION.md and re-run pal_spec_lint."); }
+            if (execText !== undefined) {
+                for (const issue of validateExecutionPlan(execText, { sections, specFrontmatter: parseFrontmatter(text) })) {
+                    add("HARD_FLAG", "EXECUTION.md", issue.line, issue.summary, issue.fix);
                 }
             }
         }
@@ -304,7 +296,7 @@ function lintSpec(text, { workspaceDir, hasBaseline } = {}) {
 }
 
 function parseExecutionTasks(text) {
-    const lines = text.split(/\r?\n/);
+    const lines = String(text).split(/\r?\n/);
     let inTasks = false;
     let cols = null;
     const rows = [];
@@ -312,23 +304,53 @@ function parseExecutionTasks(text) {
         const t = lines[i].trim();
         if (/^##\s+Tasks\b/i.test(t)) { inTasks = true; continue; }
         if (inTasks && /^##\s+/.test(t)) break;
-        if (!inTasks) continue;
-        if (t.charAt(0) !== "|") continue;
-        if (/^\|[\s:|-]+\|?\s*$/.test(t)) continue;
+        if (!inTasks || t.charAt(0) !== "|" || /^\|[\s:|-]+\|?\s*$/.test(t)) continue;
         const cells = t.replace(/^\|/, "").replace(/\|\s*$/, "").split("|").map(c => c.trim());
         if (!cols) {
             const idx = re => cells.findIndex(c => re.test(c));
-            cols = { id: idx(/^id$/i), specRef: idx(/spec\s*ref/i) };
-            if (cols.id === -1) return { ok: false };
+            cols = { id: idx(/^id$/i), task: idx(/task/i), tier: idx(/^tier$/i), specRef: idx(/spec\s*ref/i), depends: idx(/depend/i), status: idx(/status/i), success: idx(/success/i) };
             continue;
         }
-        const id = cells[cols.id] || "";
-        if (!id) continue;
-        const specRefRaw = cols.specRef >= 0 ? (cells[cols.specRef] || "") : "";
-        rows.push({ id, specRefRaw, line: i + 1 });
+        const at = n => n >= 0 ? (cells[n] || "") : "";
+        const rawDepends = at(cols.depends);
+        rows.push({ id: at(cols.id), task: at(cols.task), tier: at(cols.tier), specRefRaw: at(cols.specRef), depends: /^[—\-\s]*$/.test(rawDepends) ? [] : rawDepends.split(/[,\s]+/).filter(Boolean), status: at(cols.status), success: at(cols.success), line: i + 1 });
     }
-    if (!cols) return { ok: false };
-    return { ok: true, rows };
+    if (!inTasks || !cols) return { ok: false, error: "EXECUTION.md needs a ## Tasks table." };
+    return { ok: true, cols, rows, frontmatter: parseFrontmatter(text) };
+}
+
+function validateExecutionPlan(text, { sections, specFrontmatter } = {}) {
+    const exec = parseExecutionTasks(text);
+    if (!exec.ok) return [{ line: 0, summary: exec.error, fix: "Add a parseable ## Tasks table from execution-template.md." }];
+    const required = ["id", "task", "tier", "specRef", "depends", "status", "success"];
+    const missing = required.filter(name => exec.cols[name] < 0);
+    if (missing.length) return [{ line: 0, summary: "Tasks table is missing required column(s): " + missing.join(", ") + ".", fix: "Use the Tasks header in execution-template.md." }];
+    if (!exec.rows.length) return [{ line: 0, summary: "Tasks table has no task rows.", fix: "Add the standalone foundation task and its dependent tasks." }];
+    const issues = []; const ids = new Set();
+    for (const row of exec.rows) {
+        if (!row.id) issues.push({ line: row.line, summary: "Task ID is empty.", fix: "Give every task a unique nonempty ID." });
+        else if (ids.has(row.id.toLowerCase())) issues.push({ line: row.line, summary: "Task ID \"" + row.id + "\" is duplicated.", fix: "Give every task a unique ID." });
+        else ids.add(row.id.toLowerCase());
+        if (!EXECUTION_STATUSES.has(row.status)) issues.push({ line: row.line, summary: "Task " + row.id + " has invalid status \"" + row.status + "\".", fix: "Use todo, in_progress, done, blocked, needs-frontier, or needs-human." });
+        if (!EXECUTION_TIERS.has(row.tier)) issues.push({ line: row.line, summary: "Task " + row.id + " has invalid tier \"" + row.tier + "\".", fix: "Use cheap, standard, or frontier." });
+        if (!row.success || /^[—\-\s]*$/.test(row.success)) issues.push({ line: row.line, summary: "Task " + row.id + " has an empty success condition.", fix: "Add a behavioral, tool-checkable success condition." });
+        if (!row.specRefRaw || /^[—\-\s]*$/.test(row.specRefRaw)) issues.push({ line: row.line, summary: "Task " + row.id + " has no spec ref.", fix: "Name at least one SPEC.md section." });
+        else {
+            const refs = resolveSpecRefs({ sections }, row.specRefRaw);
+            if (!refs.ok) issues.push({ line: row.line, summary: "Task " + row.id + " spec ref \"" + refs.token + "\" does not resolve to a SPEC.md section.", fix: "Use valid SPEC.md section references." });
+        }
+    }
+    for (const row of exec.rows) for (const dep of row.depends) if (!ids.has(dep.toLowerCase())) issues.push({ line: row.line, summary: "Task " + row.id + " depends on missing task \"" + dep + "\".", fix: "Fix the dependency or add that task." });
+    const byId = new Map(exec.rows.map(row => [row.id.toLowerCase(), row])); const visiting = new Set(), visited = new Set();
+    function visit(id) { if (visiting.has(id)) return true; if (visited.has(id) || !byId.has(id)) return false; visiting.add(id); const cycle = byId.get(id).depends.some(dep => visit(dep.toLowerCase())); visiting.delete(id); visited.add(id); return cycle; }
+    if (exec.rows.some(row => visit(row.id.toLowerCase()))) issues.push({ line: 0, summary: "Task dependencies contain a cycle.", fix: "Make dependencies leaf-first and acyclic." });
+    const first = exec.rows[0];
+    if (first.tier !== "cheap" || first.depends.length) issues.push({ line: first.line, summary: "The first foundation task must be tier cheap with depends: —.", fix: "Make the standalone foundation task first, cheap, and dependency-free." });
+    const specVersion = specFrontmatter && specFrontmatter["spec version"];
+    const execVersion = exec.frontmatter["spec version"];
+    if (!execVersion) issues.push({ line: 0, summary: "EXECUTION.md is missing its spec version.", fix: "Set spec version to the approved SPEC.md version after reconciling tasks." });
+    else if (!/^\d+$/.test(execVersion) || execVersion !== specVersion) issues.push({ line: 0, summary: "EXECUTION.md spec version \"" + execVersion + "\" does not match SPEC.md version \"" + (specVersion || "missing") + "\".", fix: "Reconcile affected tasks, then set EXECUTION.md spec version to the approved SPEC.md version." });
+    return issues;
 }
 
 function formatSpecLint(result) {
@@ -342,4 +364,4 @@ function formatSpecLint(result) {
     return lines.join("\n");
 }
 
-module.exports = { lintSpec, formatSpecLint, parseSpec, bodyText, normalizeSpecRefToken, resolveSpecSection, resolveSpecRefs, STORED_TYPES, PICKER_LABEL_TO_STORED, NON_INDEXABLE };
+module.exports = { lintSpec, formatSpecLint, parseSpec, parseFrontmatter, parseExecutionTasks, validateExecutionPlan, bodyText, normalizeSpecRefToken, resolveSpecSection, resolveSpecRefs, STORED_TYPES, PICKER_LABEL_TO_STORED, NON_INDEXABLE };

@@ -33,6 +33,9 @@ rules rather than copying them here.
 - `frontier` = the first composition page; routing; anything where the spec gives direction not
   structure; spec changes.
 
+**Contract version** — `spec version` must equal SPEC.md's approved version. After an approved amendment,
+reconcile candidate tasks before updating it; a mismatch safely prevents task selection/start.
+
 **Checkpoints** — append one line per completed task. **Blockers** — what needs the human, stated
 exactly (this is also where pal-loop writes amendment proposals; see `amendment-path.md` (this directory)).
 
@@ -41,6 +44,7 @@ exactly (this is also where pal-loop writes amendment proposals; see `amendment-
 ```markdown
 # EXECUTION — <project name>
 spec: SPEC.md (status: approved)   mode: full | lite
+spec version: 1
 
 ## Build plan
 Dependency order (leaf-first — foundations before things that use them):

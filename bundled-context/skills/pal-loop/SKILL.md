@@ -144,7 +144,7 @@ the user decide; **auto** → dispatch one fresh-context `pal-review` and report
 
 - Never silently edit SPEC.md. For an amendment path, use
   `../pal-spec/references/amendment-path.md`: write an amendment proposal;
-  propose → human approve → re-gate → continue. The loop never silently self-amends.
+  propose → human approve → apply → reconcile EXECUTION.md → re-gate → continue. The loop never silently self-amends.
 - Never violate §11 NEVER constraints.
 - Never create or alter a §8b consumed dataset.
 - Never invent missing copy, facts, or assets.

@@ -54,7 +54,7 @@ const USAGE = [
     "  palsync review check|brief [--dir <workspace>]              Check REVIEW.md evidence or print the pre-review evidence ledger (offline)",
     "  palsync completion check [--dir <workspace>]                Enforce all-done independent review or allow a reasoned handoff (offline)",
     "  palsync regression [capture --revision <marker> --approval <phrase>] [--keep-lock] [--dir <ws>]  Compare or explicitly capture baseline/baseline.json",
-    "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Mechanical reality-check of a SPEC.md (offline): placeholders, dead links, §8a types, §12 floor",
+    "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Joint SPEC.md + EXECUTION.md mechanical approval gate (offline)",
     "  palsync session-summary [--mode full|lite] [--next <text>] [--dir <ws>] Append the canonical two-line session handoff summary (offline, derived)",
     "  palsync task list [--ready] [--dir <ws>]                     List EXECUTION.md tasks; --ready prints the ready ticket plus its spec ref sections and \u00A711",
     "  palsync task <id> <status> [--reason \"<why>\"] [--tried \"<workaround>\"] [--dir <ws>]",
@@ -315,6 +315,13 @@ async function runTaskCommand(cmd, argv) {
         return 0;
     }
     if (pos.length >= 2) {
+        if (pos[1] === "in_progress") {
+            let specText;
+            try { specText = fs.readFileSync(path.join(path.resolve(dir), "SPEC.md"), "utf8"); }
+            catch { specText = null; }
+            const contract = ts.executableContract(text, specText);
+            if (!contract.ok) { console.error("task update failed: " + contract.error + " (nothing changed)"); return 1; }
+        }
         const r = ts.setStatusWithReason(text, pos[0], pos[1], reason, tried);
         if (!r.ok) { console.error("task update failed: " + r.error + " (nothing changed)"); return 1; }
         if (r.unchanged) { console.log(r.id + " already " + pos[1] + " — no change."); return 0; }

@@ -7,7 +7,7 @@
 // The parser tolerates the template's real shape: an optional |---| separator row, columns in any
 // order (identified by header text, not position), and "—"/"-"/blank in depends.
 const fs = require("fs");
-const { parseSpec, bodyText, resolveSpecRefs } = require("./specLint");
+const { parseSpec, parseFrontmatter, validateExecutionPlan, bodyText, resolveSpecRefs } = require("./specLint");
 
 const STATUSES = ["todo", "in_progress", "done", "blocked", "needs-frontier", "needs-human"];
 const BLOCKED_STATUSES = ["blocked", "needs-frontier", "needs-human"];
@@ -82,17 +82,30 @@ function listTasks(text, { ready = false } = {}) {
     return { ok: true, ready: true, next: { id: next.id, status: next.status, depends: next.depends, tier: next.tier || "", specRef: next.specRef || "", task: next.task || "", successCondition: next.successCondition || "" } };
 }
 
+function executableContract(execText, specText) {
+    if (specText == null || typeof specText !== "string" || String(specText).trim() === "") {
+        return { ok: false, error: "SPEC.md is missing or empty — cannot continue. Ensure SPEC.md exists in the workspace.", kind: "missingSpec" };
+    }
+    const specFrontmatter = parseFrontmatter(specText);
+    if (specFrontmatter.status !== "approved" || specFrontmatter.reality_check !== "pass") {
+        return { ok: false, error: "SPEC.md is not jointly approved (status: " + (specFrontmatter.status || "missing") + ", reality_check: " + (specFrontmatter.reality_check || "missing") + "). Run the joint SPEC + EXECUTION reality check before continuing.", kind: "unapprovedSpec" };
+    }
+    const parsedSpec = parseSpec(specText);
+    const issues = validateExecutionPlan(execText, { sections: parsedSpec.sections, specFrontmatter });
+    if (issues.length) return { ok: false, error: "SPEC.md and EXECUTION.md are inconsistent: " + issues[0].summary + " " + issues[0].fix, kind: "inconsistentContract" };
+    return { ok: true, parsedSpec };
+}
+
 // Pure render: (EXECUTION.md text, SPEC.md text) -> printable ready-ticket string.
 // Handles all ready-ticket failures explicitly so the CLI never prints a partial ticket.
 function renderReadyTicket(execText, specText) {
-    if (specText == null || typeof specText !== "string" || String(specText).trim() === "") {
-        return { ok: false, error: "SPEC.md is missing or empty \u2014 cannot render ready ticket. Ensure SPEC.md exists in the workspace.", kind: "missingSpec" };
-    }
+    const contract = executableContract(execText, specText);
+    if (!contract.ok) return contract;
     const r = listTasks(execText, { ready: true });
     if (!r.ok) return { ok: false, error: r.error };
     if (!r.next) return { ok: false, error: "No ready task \u2014 every todo is blocked by an unfinished dependency, or none remain.", noReady: true };
     const next = r.next;
-    const parsedSpec = parseSpec(specText);
+    const parsedSpec = contract.parsedSpec;
     const sec11 = parsedSpec.sections[11];
     if (!sec11) {
         return { ok: false, error: "SPEC.md is missing \u00A711 Constraints (NEVER) \u2014 cannot render ready ticket. Every ticket must include \u00A711.", kind: "missingNever" };
@@ -140,6 +153,25 @@ function setStatus(text, id, status) {
     const from = row.status;
     p.lines[row.lineIndex] = replaceCell(p.lines[row.lineIndex], p.cols.status, status);
     return { ok: true, text: p.lines.join("\n"), from, to: status, id: row.id };
+}
+
+function proposeAmendment(text, { id, specRef, fact, change, tried } = {}) {
+    const parsed = parseTasks(text);
+    if (!parsed.ok) return parsed;
+    const row = parsed.rows.find(task => task.id.toLowerCase() === String(id || "").toLowerCase());
+    if (!row) return { ok: false, error: "No task with id \"" + id + "\" in the Tasks table." };
+    if (!specRef || !String(fact || "").trim() || !String(change || "").trim()) return { ok: false, error: "Amendment proposal requires specRef, fact, and change." };
+    const refs = String(row.specRef || "").split(",").map(ref => ref.trim().replace(/^§/, "").toLowerCase());
+    if (!refs.includes(String(specRef).trim().replace(/^§/, "").toLowerCase())) return { ok: false, error: "Task " + row.id + " does not reference " + specRef + "." };
+    const blocked = setStatusWithReason(text, row.id, "blocked", "Amendment proposed for " + specRef + ": " + String(fact).trim(), tried);
+    if (!blocked.ok) return blocked;
+    const lines = blocked.text.split(/\r?\n/);
+    const start = lines.findIndex(line => /^##\s+Blockers\b/i.test(line.trim()));
+    if (start === -1) return { ok: false, error: "No \"## Blockers\" section found in EXECUTION.md." };
+    let at = start + 1;
+    while (at < lines.length && !/^##\s+/.test(lines[at].trim())) at++;
+    lines.splice(at, 0, "- AMENDMENT PROPOSAL (" + specRef + "): " + String(fact).trim() + ". Proposed minimal change: " + String(change).trim() + ". Awaiting human approval.");
+    return Object.assign({}, blocked, { text: lines.join("\n"), proposal: true });
 }
 
 // Fabricated-completion gate (2026-07-18 haiku equipment_checkout QA report, finding #1): a build
@@ -347,7 +379,7 @@ function buildSessionSummary(text, { mode, next } = {}) {
 function readExecution(file) { return fs.readFileSync(file, "utf8"); }
 function writeExecution(file, text) { fs.writeFileSync(file, text, "utf8"); }
 
-module.exports = { STATUSES, BLOCKED_STATUSES, TRIED_STATUSES, MAX_BLOCKER_REASON, parseTasks, listTasks, renderReadyTicket, setStatus,
-    setStatusWithReason, appendCheckpoint, blockerReasons, terminalReasonState, normalizeBlockerReason,
+module.exports = { STATUSES, BLOCKED_STATUSES, TRIED_STATUSES, MAX_BLOCKER_REASON, parseTasks, listTasks, executableContract, renderReadyTicket, setStatus,
+    setStatusWithReason, proposeAmendment, appendCheckpoint, blockerReasons, terminalReasonState, normalizeBlockerReason,
     replaceCell, readExecution, writeExecution,
     parseModeFromExecution, deriveSessionNumber, deriveStatusCounts, findReadyTasks, inferNextState, formatSessionSummary, buildSessionSummary };

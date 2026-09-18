@@ -216,6 +216,8 @@ test("ordinary statuses reject reasons and remain backward compatible without on
 // --- slice 02: ready-ticket print (pure render seam) ---
 const SPEC_READY = `# SPEC \u2014 demo
 status: approved
+reality_check: pass
+spec version: 1
 
 ## 1. Vision
 vision body
@@ -251,6 +253,7 @@ const SPEC_NEVER_TITLE = SPEC_READY.replace("## 11. Guardrails", "## 11. Custom 
 
 const EXEC_READY = `# EXECUTION \u2014 demo
 spec: SPEC.md (status: approved)   mode: full
+spec version: 1
 
 ## Build plan
 Leaf-first.
@@ -323,13 +326,14 @@ test("\u00A711 is spliced on every ready ticket, located by number not title", (
 test("\u00A78b ref splices only the consumed-dataset subsection", () => {
     const exec8b = `# EXECUTION \u2014 demo
 spec: SPEC.md (status: approved)   mode: full
+spec version: 1
 
 ## Build plan
 Leaf-first.
 
 ## Tasks
 | id | task | tier | spec ref | depends | status | success condition |
-| T1 | data task | standard | \u00A78b | \u2014 | todo | ok |
+| T1 | data task | cheap | \u00A78b | \u2014 | todo | ok |
 
 ## Checkpoints
 ## Blockers
@@ -355,15 +359,15 @@ test("unresolvable spec ref token fails with task id and token, no partial ticke
     const execBad = EXEC_READY.replace("\u00A74, \u00A76", "\u00A799");
     const rendered = renderReadyTicket(execBad, SPEC_READY);
     assert.equal(rendered.ok, false);
-    assert.equal(rendered.token, "\u00A799");
-    assert.equal(rendered.taskId, "T2");
+    assert.equal(rendered.kind, "inconsistentContract");
     assert.match(rendered.error, /T2/);
     assert.match(rendered.error, /\u00A799/);
     assert.equal(rendered.ticket, undefined, "no partial ticket");
     const execMal = EXEC_READY.replace("\u00A74, \u00A76", "abc");
     const mal = renderReadyTicket(execMal, SPEC_READY);
     assert.equal(mal.ok, false);
-    assert.equal(mal.token, "abc");
+    assert.equal(mal.kind, "inconsistentContract");
+    assert.match(mal.error, /abc/);
 });
 
 test("missing SPEC.md exits non-zero with distinct message", () => {
@@ -407,13 +411,14 @@ test("missing \u00A711 is a hard failure before any ticket is produced", () => {
     assert.notEqual(rendered.error, missing.error);
     assert.notEqual(rendered.kind, missing.kind);
     const bad = renderReadyTicket(EXEC_READY.replace("\u00A74, \u00A76", "\u00A799"), SPEC_READY);
-    assert.equal(bad.kind, "badRef");
+    assert.equal(bad.kind, "inconsistentContract");
     assert.notEqual(rendered.error, bad.error);
 });
 
 test("no ready task case behaves as today: message plus non-zero", () => {
     const execNoReady = `# EXECUTION \u2014 demo
 spec: SPEC.md (status: approved)   mode: full
+spec version: 1
 
 ## Build plan
 

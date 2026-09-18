@@ -10,8 +10,8 @@ correctly; a vague spec makes every model guess. The output is a **gated chain**
 a gate:
 
 ```
-MINE → INTERVIEW → LOCK ASSUMPTIONS → SPEC.md draft → REALITY CHECK → approved → EXECUTION.md
-                        gate                             gate                        gate
+MINE → INTERVIEW → LOCK ASSUMPTIONS → SPEC.md draft → EXECUTION.md draft → JOINT REALITY CHECK → jointly approved
+                        gate                                                gate                         gate
 ```
 
 **Hard rules:**
@@ -117,28 +117,26 @@ OPEN QUESTIONS (I will not invent answers):
 **Step 4 — Write SPEC.md.** Read `references/spec-template.md` now and follow it. Set
 `status: draft`. Walk the user through copy and behavior; apply corrections.
 
-**Step 5 — REALITY CHECK (gate).** Proves the spec is buildable on PalBuilder before anyone codes:
-1. Run **`pal_spec_lint`** on SPEC.md. It checks the mechanical half deterministically
+**Step 5 — Write EXECUTION.md.** Read `references/execution-template.md` now and follow it (Build Plan first, then Tasks). Draft it against the current SPEC.md; it is not approved independently.
+
+The **first task is always a standalone foundation task**. Give it its own row, tier `cheap`, `depends: —`, and a success condition requiring the model to copy matching templates and canonical runtime files with bash `cp` (never read-then-write), author a readable per-project `styles/styles.css`, register the four runtime entries in `pal.json`, and — for console pals — establish the `run()` skeleton from the copied template.
+
+**Step 6 — JOINT REALITY CHECK (gate).** Proves the specification and execution contract are buildable before anyone codes:
+1. Run **`pal_spec_lint`** on SPEC.md with both files present. It checks the mechanical half deterministically
    (placeholders, dead §3 links, §8a types/keys/sizes/indexability, §5 dataset references,
-   the §12 floor, the brownfield REGRESSION criterion). Clear every `HARD_FLAG`.
+   the §12 floor, execution task IDs/statuses/tiers/refs/dependencies/success conditions/version,
+   and the brownfield REGRESSION criterion). Clear every `HARD_FLAG`.
 2. Read `references/reality-check.md` and do the judgment half the linter cannot:
    capability→primitive mapping, §6 components exist in COMPONENTS.md, §8b consumed fields
    verified against the live dataset, scope honesty.
    For any visually significant page, check §6 against the design-principles reference:
    user journey, hierarchy, grouping, target sizing, and progressive disclosure are explicit enough
    for a build agent to implement.
-3. Write results into §13. Any hard flag → stay `status: draft`, `reality_check: blocked`.
-   All clear → `status: approved`, `reality_check: pass`.
+3. Write results into §13. Any hard flag → both artifacts remain draft/unapproved.
+   All clear → set `status: approved`, `reality_check: pass`, and confirm EXECUTION.md's `spec version`
+   matches SPEC.md. The pair is then jointly approved.
 
-**Step 6 — Write EXECUTION.md.** Read `references/execution-template.md` now and follow it
-(Build Plan first, then Tasks).
-
-The **first task is always a standalone foundation task**. Give it its own row, tier `cheap`,
-`depends: —`, and a success condition requiring the model to copy matching templates and canonical
-runtime files with bash `cp` (never read-then-write), author a readable per-project
-`styles/styles.css`, register the four runtime entries in `pal.json`, and — for console pals —
-establish the `run()` skeleton from the copied template.
-The task must reach `ok:true`, `diagnosticCount:0` from both `pal_validate` and `pal_test` on that hand-built shell. Every task
+The foundation task must reach `ok:true`, `diagnosticCount:0` from both `pal_validate` and `pal_test` on that hand-built shell. Every task
 that adapts the shell, fragments, or workflow depends on this foundation task (datasets are leaves
 and may be created before or alongside it). Existing pals that lack `styles.css` are not migrated.
 

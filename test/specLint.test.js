@@ -256,7 +256,7 @@ test("empty component in ref list is a failure naming the raw ref string, and a 
     assert.equal(noSections.ok, false);
 });
 
-test("blank and — spec ref cells are skipped, not errors, in lint and renderReadyTicket", () => {
+test("blank and — spec ref cells fail the joint contract", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "specLint-"));
     try {
         const specPath = path.join(tmp, "SPEC.md");
@@ -265,9 +265,9 @@ test("blank and — spec ref cells are skipped, not errors, in lint and renderRe
             const exec = `# EXECUTION\n\n## Tasks\n| id | task | spec ref | status |\n| T1 | do a | ${raw} | todo |\n\n## Checkpoints\n`;
             fs.writeFileSync(path.join(tmp, "EXECUTION.md"), exec, "utf8");
             const r = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasBaseline: false });
-            assert.equal(r.findings.filter(f => f.section === "EXECUTION.md").length, 0, `blank/— raw "${raw}" must not flag`);
+            assert.ok(r.findings.some(f => f.section === "EXECUTION.md" && f.severity === "HARD_FLAG"), `blank/— raw "${raw}" must hard-fail`);
         }
-        // renderReadyTicket with blank/— spec ref still succeeds (no badRef), §11 still required
+        // Ready tickets fail safely rather than silently omitting their requirement scope.
         const { renderReadyTicket } = require("../src/core/taskState");
         const execBlank = `# EXECUTION \u2014 demo\n\n## Tasks\n| id | task | tier | spec ref | depends | status | success condition |\n| T1 | blank ref | cheap |   | \u2014 | todo | ok |\n\n## Checkpoints\n`;
         const specWith11 = SPEC_SUB.replace("status: draft", "status: approved");
@@ -276,15 +276,14 @@ test("blank and — spec ref cells are skipped, not errors, in lint and renderRe
         // Use SPEC_READY equivalent that has §11; reuse SPEC_SUB plus §11 if missing
         const fullSpec = parseSpec(spec11).sections[11] ? spec11 : spec11 + "\n## 11. Guardrails\nnever body\n";
         const okBlank = renderReadyTicket(execBlank, fullSpec);
-        assert.equal(okBlank.ok, true, "blank spec ref cell must not be a badRef");
+        assert.equal(okBlank.ok, false, "blank spec ref cell must block continuation");
         const execDash = execBlank.replace("|   |", "| \u2014 |");
         const okDash = renderReadyTicket(execDash, fullSpec);
-        assert.equal(okDash.ok, true, "— spec ref cell must not be a badRef");
+        assert.equal(okDash.ok, false, "— spec ref cell must block continuation");
         // empty component inside a non-blank cell must still fail via renderReadyTicket
         const execEmpty = execBlank.replace("|   |", "| \u00A74,,\u00A76 |");
         const badEmpty = renderReadyTicket(execEmpty, fullSpec);
         assert.equal(badEmpty.ok, false);
-        assert.match(badEmpty.error, /\u00A74,,\u00A76/);
     } finally {
         fs.rmSync(tmp, { recursive: true, force: true });
     }
@@ -299,7 +298,7 @@ test("resolver is exported for external callers", () => {
     assert.equal(typeof mod.bodyText, "function");
 });
 
-test("EXECUTION.md spec ref check: hard flag for unresolvable token, absent is no finding", () => {
+test("joint lint requires EXECUTION.md and rejects unresolvable task refs", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "specLint-"));
     try {
         const specPath = path.join(tmp, "SPEC.md");
@@ -307,35 +306,14 @@ test("EXECUTION.md spec ref check: hard flag for unresolvable token, absent is n
         // absent EXECUTION.md -> no finding
         const rAbsent = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasBaseline: false });
         const badAbsent = rAbsent.findings.filter(f => f.section === "EXECUTION.md");
-        assert.equal(badAbsent.length, 0, "absent EXECUTION.md must produce no finding");
+        assert.equal(badAbsent.length, 1, "missing EXECUTION.md must prevent joint approval");
+        assert.match(badAbsent[0].summary, /required before/);
         // valid EXECUTION.md -> no finding
         const execOk = `# EXECUTION\n\n## Tasks\n| id | task | spec ref | status |\n| T1 | do a | \u00A74 | todo |\n| T2 | do b | \u00A78a, \u00A78b | todo |\n\n## Checkpoints\n`;
         fs.writeFileSync(path.join(tmp, "EXECUTION.md"), execOk, "utf8");
         const rOk = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasBaseline: false });
-        assert.equal(rOk.findings.filter(f => f.section === "EXECUTION.md").length, 0, "valid refs must not flag");
-        // one bad token -> hard flag naming task and token
-        const execBad = `# EXECUTION\n\n## Tasks\n| id | task | spec ref | status |\n| T1 | do a | \u00A74 | todo |\n| T2 | do b | \u00A799 | todo |\n\n## Checkpoints\n`;
-        fs.writeFileSync(path.join(tmp, "EXECUTION.md"), execBad, "utf8");
-        const rBad = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasBaseline: false });
-        const bad = rBad.findings.filter(f => f.severity === "HARD_FLAG" && f.section === "EXECUTION.md");
-        assert.equal(bad.length, 1, "exactly one hard flag");
-        assert.match(bad[0].summary, /T2/);
-        assert.match(bad[0].summary, /\u00A799/);
-        // malformed token also flags
-        const execMal = `# EXECUTION\n\n## Tasks\n| id | task | spec ref | status |\n| T9 | bad | abc | todo |\n\n## Checkpoints\n`;
-        fs.writeFileSync(path.join(tmp, "EXECUTION.md"), execMal, "utf8");
-        const rMal = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasBaseline: false });
-        const mal = rMal.findings.filter(f => f.severity === "HARD_FLAG" && f.section === "EXECUTION.md");
-        assert.equal(mal.length, 1);
-        assert.match(mal[0].summary, /T9/);
-        assert.match(mal[0].summary, /abc/);
-        // comma list with one bad entry flags that entry
-        const execList = `# EXECUTION\n\n## Tasks\n| id | task | spec ref | status |\n| T3 | mix | \u00A74, \u00A799, \u00A78b | todo |\n\n## Checkpoints\n`;
-        fs.writeFileSync(path.join(tmp, "EXECUTION.md"), execList, "utf8");
-        const rList = lintSpec(SPEC_SUB, { workspaceDir: tmp, hasBaseline: false });
-        const listBad = rList.findings.filter(f => f.section === "EXECUTION.md");
-        assert.equal(listBad.length, 1);
-        assert.match(listBad[0].summary, /\u00A799/);
+        assert.ok(rOk.findings.some(f => f.section === "EXECUTION.md"), "legacy incomplete task tables must not pass the joint gate");
+        // Detailed bad-reference coverage is in planningContract.test.js's complete task fixture.
     } finally {
         fs.rmSync(tmp, { recursive: true, force: true });
     }
