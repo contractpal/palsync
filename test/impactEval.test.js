@@ -433,6 +433,15 @@ async function withMockedLauncher(mocks, fn) {
 
 function launcherHarness(t, { kind = "impact", mode = "create", autoLaunch = true } = {}) {
     const dir = tempDir(t, "palsync-impact-launcher-");
+    // The launcher records a recent-Pal entry through the real config store. Without this the
+    // run writes a fixture Pal ("impact", PAL-FRESH-1) into the developer's own
+    // ~/.palsync/config.json and it shows up in their launcher menu.
+    const savedConfigDir = process.env.PALSYNC_CONFIG_DIR;
+    process.env.PALSYNC_CONFIG_DIR = tempDir(t, "palsync-impact-config-");
+    t.after(() => {
+        if (savedConfigDir === undefined) delete process.env.PALSYNC_CONFIG_DIR;
+        else process.env.PALSYNC_CONFIG_DIR = savedConfigDir;
+    });
     const spec = kind === "impact" ? copySpec(t) : {
         key: "01_standard", suggestedName: "standard", kind: undefined, dir
     };
