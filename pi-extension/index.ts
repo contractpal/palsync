@@ -172,7 +172,7 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
       description: "Activate additional PalSync tools by deterministic keyword or group: sync, browser, runtime, project, spec.",
       promptSnippet: "Load PalSync tools for the current task by keyword or group",
       promptGuidelines: [
-        "After pal_tools returns Activated, attempt the required pal_* tool directly on the next model response. Do not claim activation failed or fall back to the PalSync CLI unless that direct tool call returns an error."
+        "Before calling a required inactive pal_* tool, call pal_tools once with its exact name; combine immediately needed names, but skip already-active tools. After pal_tools returns Activated, attempt the required pal_* tool directly on the next model response. Do not claim activation failed or fall back to the PalSync CLI unless that direct tool call returns an error."
       ],
       parameters: { type: "object", properties: { query: { type: "string", description: "Keywords or groups for tools to activate." } }, required: ["query"], additionalProperties: false } as any,
       async execute(_id, params: any) {

@@ -80,6 +80,26 @@ test("unknown/default profile fails open to the full static set", async () => {
     fs.rmSync(workspaceDir, { recursive: true, force: true });
 });
 
+test("exact-name lazy activation is additive and idempotent", async () => {
+    const { client, workspaceDir } = await connect("pi-minimal");
+    const before = (await client.listTools()).tools.map(tool => tool.name);
+    assert.ok(!before.includes("pal_status"), "pal_status stays lazy in Pi");
+    assert.deepStrictEqual(routeTools("pal_status", metadata), ["pal_status"]);
+    assert.deepStrictEqual(routeTools("pal_push pal_test", metadata).sort(), ["pal_push", "pal_test"]);
+    await client.callTool({ name: "pal_tools", arguments: { query: "pal_status" } });
+    const statusActive = (await client.listTools()).tools.map(tool => tool.name);
+    for (const name of before) assert.ok(statusActive.includes(name), name);
+    assert.ok(statusActive.includes("pal_status"));
+    await client.callTool({ name: "pal_tools", arguments: { query: "pal_status" } });
+    assert.deepStrictEqual((await client.listTools()).tools.map(tool => tool.name), statusActive,
+        "already-active tools need no repeated activation");
+    await client.callTool({ name: "pal_tools", arguments: { query: "pal_push pal_test" } });
+    const after = (await client.listTools()).tools.map(tool => tool.name);
+    for (const name of ["pal_status", "pal_push", "pal_test"]) assert.ok(after.includes(name), name);
+    await client.close();
+    fs.rmSync(workspaceDir, { recursive: true, force: true });
+});
+
 test("lazy dataset activation enables only the dataset tools, is idempotent, and makes reads callable", async () => {
     const { client, workspaceDir, changed } = await connect("pi-minimal");
     const before = (await client.listTools()).tools.map(tool => tool.name);

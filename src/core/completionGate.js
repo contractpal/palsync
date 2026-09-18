@@ -21,6 +21,20 @@ function checkWorkspace(workspaceDir, { review } = {}) {
         if (e && e.code === "ENOENT") return result("NOT_APPLICABLE", true, false, "No EXECUTION.md; completion enforcement does not apply.");
         return result("MALFORMED_EXECUTION", false, false, "Cannot read EXECUTION.md: " + (e.message || e));
     }
+    const isVersioned = /^(?:spec|spec version):\s*/im.test(text);
+    let contract;
+    function versionedContract() {
+        if (contract) return contract;
+        let specText;
+        try { specText = fs.readFileSync(path.join(workspaceDir, "SPEC.md"), "utf8"); }
+        catch { specText = null; }
+        contract = executableContract(text, specText);
+        return contract;
+    }
+    function inconsistentContract() {
+        const value = versionedContract();
+        return result("INCONSISTENT_CONTRACT", false, false, value.error, { contract: value });
+    }
     const parsed = parseTasks(text);
     // An EXECUTION.md with no "## Tasks" section at all is not a malformed task table — it is a
     // workspace that does not use task tracking, exactly like a Tasks table with no rows below.
@@ -28,11 +42,15 @@ function checkWorkspace(workspaceDir, { review } = {}) {
     // cannot add it, and the Stop hook re-blocked every turn until the host force-overrode. The
     // impact eval fixtures (a bounded rename, no task table) hit this on the first live arm.
     if (!parsed.ok && parsed.missingSection) {
+        if (isVersioned) return inconsistentContract();
         return result("NOT_APPLICABLE", true, false,
             "EXECUTION.md has no \"## Tasks\" section; completion enforcement does not apply.");
     }
     if (!parsed.ok) return result("MALFORMED_EXECUTION", false, false, parsed.error);
-    if (!parsed.rows.length) return result("NOT_APPLICABLE", true, false, "EXECUTION.md has no task rows; completion enforcement does not apply.");
+    if (!parsed.rows.length) {
+        if (isVersioned) return inconsistentContract();
+        return result("NOT_APPLICABLE", true, false, "EXECUTION.md has no task rows; completion enforcement does not apply.");
+    }
     const invalid = parsed.rows.filter(row => !STATUSES.includes(row.status));
     if (invalid.length) return result("MALFORMED_EXECUTION", false, false,
         "EXECUTION.md has invalid task status: " + invalid.map(row => row.id + "=" + row.status).join(", ") + ".");
@@ -59,13 +77,7 @@ function checkWorkspace(workspaceDir, { review } = {}) {
     // A versioned plan remains a joint SPEC + EXECUTION contract through the final completion
     // verdict. Non-versioned task tables are legacy/small-fix tracking and intentionally stay
     // outside this approval workflow.
-    if (/^(?:spec|spec version):\s*/im.test(text)) {
-        let specText;
-        try { specText = fs.readFileSync(path.join(workspaceDir, "SPEC.md"), "utf8"); }
-        catch { specText = null; }
-        const contract = executableContract(text, specText);
-        if (!contract.ok) return result("INCONSISTENT_CONTRACT", false, false, contract.error, { contract });
-    }
+    if (isVersioned && !versionedContract().ok) return inconsistentContract();
     // Review is a user preference, not a lifecycle law. Only `auto` makes an independent review
     // part of completion; under `off`/`ask` the work is complete when the work is done, and a stale
     // REVIEW.md from an earlier build is not even read (it used to trap unrelated sessions).

@@ -68,8 +68,13 @@ test("Pi registers every routed tool before activating the eager subset", () => 
     const activateEager = source.indexOf("activate(eagerToolNames(metadata as any[]));");
     assert.ok(registerAll >= 0, "all deferred tools must be registered during session_start");
     assert.ok(registerAll < activateEager, "deferred tools must be registered before activation");
+    assert.match(source, /Before calling a required inactive pal_\* tool, call pal_tools once with its exact name/);
+    assert.match(source, /combine immediately needed names, but skip already-active tools/);
     assert.match(source, /After pal_tools returns Activated[\s\S]*attempt the required pal_\* tool directly/);
     assert.match(source, /Do not claim activation failed or fall back to the PalSync CLI/);
+    const loop = fs.readFileSync(path.join(__dirname, "..", "bundled-context", "skills", "pal-loop", "SKILL.md"), "utf8");
+    assert.match(loop, /before calling a required inactive `pal_\*` tool, call `pal_tools` once with its exact name/i);
+    assert.match(loop, /`pal_status` \(activate it first in Pi if inactive\)/);
 });
 
 test("Pi activation is eager-small and additive with a mocked ExtensionAPI", () => {

@@ -31,8 +31,9 @@ understand → inspect only what is needed → edit → cheap feedback → push
 
 Only this:
 
+- In Pi, before calling a required inactive `pal_*` tool, call `pal_tools` once with its exact name (combine immediately needed names when useful), then call it directly. Skip activation when it is already active; do not retry an inactive tool or use the CLI merely because activation was needed.
 - Read EXECUTION.md (`palsync task list --ready`) — on resume it outranks model memory.
-- `pal_status`; server newer than your last pull → `pal_pull` before editing.
+- `pal_status` (activate it first in Pi if inactive); server newer than your last pull → `pal_pull` before editing.
 - Not a git repo → `git init && git add -A && git commit -m "loop start"`.
 - State the policy line once: `PalSync: <verification> checks · Final review: <review>`.
 

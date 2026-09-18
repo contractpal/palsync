@@ -61,6 +61,33 @@ test("completion state machine preserves non-applicable and work-in-progress rep
     fs.rmSync(empty, { recursive: true, force: true });
 });
 
+test("versioned execution plans without tasks cannot bypass completion", () => {
+    const spec = `status: approved
+reality_check: pass
+spec version: 1
+
+## 3. Sitemap
+home
+
+## 11. Constraints
+never
+`;
+    const cases = [
+        ["missing Tasks section", "spec: SPEC.md (status: approved)\nspec version: 1\n\n# Execution\n"],
+        ["empty Tasks table", "spec: SPEC.md (status: approved)\nspec version: 1\n\n## Tasks\n| id | task | tier | spec ref | depends | status | success condition |\n\n## Checkpoints\n"]
+    ];
+    for (const [name, executionText] of cases) {
+        const ws = tmpWorkspace({ "SPEC.md": spec, "EXECUTION.md": executionText });
+        const gate = completionGate.checkWorkspace(ws, { review: "off" });
+        assert.equal(gate.state, "INCONSISTENT_CONTRACT", name);
+        assert.equal(gate.allow, false, name);
+        assert.equal(gate.completionPassed, false, name);
+        assert.match(gate.message, /Tasks/, name);
+        assert.ok(claudeStopOutput(gate), name + " must block the Stop hook");
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
 test("a stale approved execution contract cannot report successful completion", () => {
     const ws = tmpWorkspace({
         "SPEC.md": `status: approved
