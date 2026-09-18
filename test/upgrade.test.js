@@ -82,12 +82,15 @@ test("npmInstall: installs with lifecycle scripts OFF so npm's allow-scripts gat
     const sha = "a".repeat(40);
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-upgrade-root-"));
     const calls = [];
+    const out = capture(), err = capture();
     const ok = npmInstall("owner/repo", sha, {
         spawn: (cmd, args, opts) => {
             calls.push({ cmd, args, opts });
             if (args.join(" ") === "root -g") return { status: 0, stdout: root + "\n" };
-            return { status: 0 };
-        }
+            return { status: 0, stdout: "changed 1 package\n", stderr: "" };
+        },
+        out: out.write,
+        err: err.write
     });
 
     assert.equal(ok, true);
@@ -105,8 +108,54 @@ test("npmInstall: installs with lifecycle scripts OFF so npm's allow-scripts gat
     // Scripts must be off — the strict-allow-scripts gate blocks unallowlisted lifecycle scripts
     // (palsync's postinstall AND transitive native deps), which would abort the whole install.
     assert.ok(calls[1].args.includes("--ignore-scripts"));
-    assert.equal(calls[1].opts.stdio, "inherit");
+    assert.equal(calls[1].opts.encoding, "utf8");
     assert.equal(calls[1].opts.shell, process.platform === "win32");
+    assert.match(out.buf.text, /changed 1 package/);
+    fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("npmInstall: surfaces a plain-language note when npm's cleanup hits a locked native binary (EPERM unlink)", () => {
+    const sha = "a".repeat(40);
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-upgrade-root-"));
+    const notes = [];
+    const out = capture(), err = capture();
+    const npmCleanupWarning = "npm warn cleanup Failed to remove some directories [\n"
+        + "npm warn cleanup   [Error: EPERM: operation not permitted, unlink "
+        + "'C:\\Users\\x\\AppData\\Roaming\\npm\\node_modules\\.palsync-abc\\node_modules\\"
+        + "@napi-rs\\keyring-win32-x64-msvc\\keyring.win32-x64-msvc.node'] {\n"
+        + "npm warn cleanup ]\n";
+    const ok = npmInstall("owner/repo", sha, {
+        spawn: (cmd, args) => (args.join(" ") === "root -g"
+            ? { status: 0, stdout: root + "\n" }
+            : { status: 0, stdout: "changed 118 packages\n", stderr: npmCleanupWarning }),
+        log: msg => notes.push(msg),
+        out: out.write,
+        err: err.write
+    });
+
+    assert.equal(ok, true, "the EPERM cleanup warning is non-fatal; npm still exits 0");
+    assert.match(err.buf.text, /EPERM/, "the raw npm warning is still shown");
+    assert.equal(notes.length, 1);
+    assert.match(notes[0], /harmless/i);
+    assert.match(notes[0], /upgrade above still/i);
+    fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("npmInstall: stays quiet when there's no EPERM cleanup warning", () => {
+    const sha = "a".repeat(40);
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-upgrade-root-"));
+    const notes = [];
+    const ok = npmInstall("owner/repo", sha, {
+        spawn: (cmd, args) => (args.join(" ") === "root -g"
+            ? { status: 0, stdout: root + "\n" }
+            : { status: 0, stdout: "changed 1 package\n", stderr: "" }),
+        log: msg => notes.push(msg),
+        out: () => {},
+        err: () => {}
+    });
+
+    assert.equal(ok, true);
+    assert.equal(notes.length, 0);
     fs.rmSync(root, { recursive: true, force: true });
 });
 

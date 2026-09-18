@@ -110,13 +110,29 @@ function manualInstallCommand(slug, sha) {
         + "\n    " + browserInstallCommand();
 }
 
-function npmInstall(slug, sha, { spawn = spawnSync, fsMod = fs, log = console.warn } = {}) {
+// On Windows, npm's post-install cleanup of the old package dir can fail to unlink a native .node
+// binary that's still mapped by another running process (e.g. a live palsync/MCP process holding
+// the keyring addon open). It's harmless — the install itself already succeeded by this point —
+// but npm's raw warning gives no indication of that, so we detect it and add a plain-language note.
+const EPERM_UNLINK_RE = /EPERM: operation not permitted, unlink/i;
+
+function npmInstall(slug, sha, { spawn = spawnSync, fsMod = fs, log = console.warn, out = s => process.stdout.write(s), err = s => process.stderr.write(s) } = {}) {
     // npm can leave git global installs as dangling links into ~/.npm/_cacache/tmp/git-clone*
     // after a failed/interrupted upgrade. Its next rename then fails with ENOTDIR before install.
     cleanupBrokenGlobalPackage(pkg.name, { spawn, fsMod, log });
     const spec = npmInstallSpec(slug, sha);
     const useShell = process.platform === "win32";
-    const r = spawn("npm", ["install", "-g", spec].concat(NPM_INSTALL_FLAGS), { stdio: "inherit", shell: useShell });
+    const r = spawn("npm", ["install", "-g", spec].concat(NPM_INSTALL_FLAGS), { encoding: "utf8", shell: useShell });
+    const stdout = r.stdout === undefined || r.stdout === null ? "" : String(r.stdout);
+    const stderr = r.stderr === undefined || r.stderr === null ? "" : String(r.stderr);
+    if (stdout) out(stdout);
+    if (stderr) err(stderr);
+    if (EPERM_UNLINK_RE.test(stdout) || EPERM_UNLINK_RE.test(stderr)) {
+        log("Note: npm couldn't delete some old files above because another running process (e.g. a "
+            + "live palsync/MCP process) still had them open — harmless, the upgrade above still "
+            + "completed. If you see this a lot, close other palsync processes before upgrading, or "
+            + "just ignore it; leftover files get cleaned up on the next successful upgrade.");
+    }
     return r.status === 0;
 }
 

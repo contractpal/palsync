@@ -280,6 +280,9 @@ _None open right now._
 
 ## Fixed
 
+- **Core CLI: `palsync upgrade` now explains a harmless Windows EPERM cleanup warning instead of dumping raw npm noise — 2026-09-18**
+  David hit this via a screenshot: after a successful `palsync upgrade`, npm's own post-install cleanup printed a scary-looking `npm warn cleanup ... EPERM: operation not permitted, unlink ...keyring.win32-x64-msvc.node` block. Harmless — it's npm failing to delete an old native binary still held open by another running palsync/MCP process; the upgrade itself had already succeeded (exit 0, packages changed). `npmInstall()` in `src/cli/upgradeCommand.js` now captures npm's stdout/stderr (previously `stdio: "inherit"`, so output now shows after npm finishes rather than streaming live) and prints a plain-language note when it detects that EPERM/unlink pattern, explaining it's non-fatal and how to avoid it (close other running palsync processes) or just ignore it. Covered by two new tests in `test/upgrade.test.js`.
+
 - **Windows + Linux builds of today's session's work — SHIPPED 2026-09-11**
   Both platforms built, published to `s3://contractpal-cloudpiston-downloads/`, and confirmed live at their public URLs:
   - **Windows**: `ChipPalBuilder.exe` v0.7.0, signed by David (valid ContractPal, Inc. EV cert via Sectigo, verified with `Get-AuthenticodeSignature` before upload — `Status: Valid`). `https://downloads.cloudpiston.com/windows-versions.txt` confirmed live at `0.7.0`.
