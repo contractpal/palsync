@@ -14,6 +14,11 @@ Run `pal_regression` only if `baseline/baseline.json` exists AND the change was 
 is `thorough`. A change confined to what you edited does not get a regression sweep; say so
 instead of running one.
 
+No `baseline/` is not a reason to skip the sweep on a high-risk change — most pals never capture
+one. Run `pal_test` for each workflow kind the pal registers instead; it is the cheap floor under
+"did I break something I did not touch?". A baseline buys the comparison to a known-good past
+state on top of that, and nothing else.
+
 `pal_regression` does the whole mechanical check: freshness gate (stale → `{stale}`; recapture
 per `../../shared/references/regression-baseline.md`), validate/`pal_test`/page-`h1s` vs
 `baseline.json`, `eyeball_only` viewports → `needs_human`, inherited (`known_issues`) vs caused

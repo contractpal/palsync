@@ -42,12 +42,13 @@ resulting plan for the current local diff, and `pal_impact` answers dependency q
 | --- | --- | --- |
 | **Low** | CSS, colors, type, static copy, simple markup, an isolated leaf component, no known dependents | push, then **one** targeted render/screenshot if seeing it materially helps. Nothing else. |
 | **Medium** | one interaction, one form, one action handler, page-specific dynamic behavior, a file with 1–2 dependents | push, then prove **the behavior that changed** (`pal_exercise`, or `pal_fetch`/`pal_screenshot` with `expect`). `pal_exercise` starts with a fresh server compile, so do not call `pal_test` first. |
-| **High** | shared fragment/workflow with 3+ consumers, auth, transactions, destructive actions, dataset schema, tunnels/webservices, 8+ files at once | `pal_impact` first, then targeted tests plus the affected regression coverage (`pal_regression` when `baseline/baseline.json` exists). |
+| **High** | shared fragment/workflow with 3+ consumers, auth, transactions, destructive actions, dataset schema, tunnels/webservices, 8+ files at once | `pal_impact` first, then targeted tests plus the affected regression coverage (`pal_regression` when `baseline/baseline.json` exists; with no baseline, `pal_test` each workflow kind the pal registers — that is the only sweep covering what you did not touch). |
 
-Do NOT automatically run, in Standard: broad workflow smoke tests, `pal_exercise` for a
-presentation-only edit, full regression, desktop+mobile screenshot suites, `pal_seo_audit`, or
-`pal-review`. A public page is not a reason to audit SEO — a padding, colour, or layout edit does
-not change what a crawler reads. Run `pal_seo_audit` when it is asked for by name.
+Do NOT automatically run, in Standard: broad workflow smoke tests (the High row's no-baseline
+sweep is the one exception, and only there), `pal_exercise` for a presentation-only edit, full
+regression, desktop+mobile screenshot suites, `pal_seo_audit`, or `pal-review`. A public page is
+not a reason to audit SEO — a padding, colour, or layout edit does not change what a crawler
+reads. Run `pal_seo_audit` when it is asked for by name.
 
 ## Thorough
 
