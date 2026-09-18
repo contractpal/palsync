@@ -1,9 +1,13 @@
 name: Auto bump version
 
-# Bumps gui/package.json's minor version (X.Y.Z -> X.(Y+1).0) after every push to main, so
-# nobody has to remember to do it by hand before a release build. Major bumps are still a human
-# semver call - Claude flags those in conversation when a change looks breaking, but doesn't
-# perform them here.
+# Bumps gui/package.json's version after every push to main, so nobody has to remember to do it
+# by hand before a release build:
+#   - minor (X.Y.Z -> X.(Y+1).0) if the push touched anything under gui/ - that's the Electron
+#     app itself, so a change there gets its own visible bump.
+#   - patch (X.Y.Z -> X.Y.(Z+1)) otherwise - covers everything else that still ships inside Chip
+#     (e.g. node_modules/palsync/** bundling the repo root).
+# Major bumps are still a human semver call - Claude flags those in conversation when a change
+# looks breaking, but doesn't perform them here.
 on:
   push:
     branches: [main]
@@ -30,12 +34,31 @@ jobs:
         with:
           node-version: 20
 
-      - name: Bump minor version
+      - name: Decide bump level
+        id: level
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          # BEFORE_SHA is all-zeros on a branch's first push, and can point at unrelated history
+          # after a force-push (git diff against it would then either fail or produce a bogus
+          # diff) - default to the safer minor bump in either case rather than risk silently
+          # under-bumping.
+          if [ -z "$BEFORE_SHA" ] || [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            echo "level=minor" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" -- gui/ | grep -q .; then
+            echo "level=minor" >> "$GITHUB_OUTPUT"
+          else
+            echo "level=patch" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump version
         working-directory: gui
         # --no-git-tag-version: we commit by hand below instead of letting npm tag/commit.
         # npm's own `version` command updates package-lock.json's version fields too, which
         # also fixes the lockfile drifting out of sync with package.json.
-        run: npm version minor --no-git-tag-version
+        run: npm version ${{ steps.level.outputs.level }} --no-git-tag-version
 
       - name: Commit and push
         run: |
