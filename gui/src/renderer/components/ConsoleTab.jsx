@@ -94,6 +94,11 @@ export default function ConsoleTab({ pal, agents, active, onAgentChosen, onRunni
             if (event.type !== "keydown") return true;
             const noModifierConflict = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey;
             if (noModifierConflict && event.key === "v") {
+                // preventDefault, not just returning false: xterm's own keydown handling stops
+                // on `false`, but the browser's native paste event on xterm's hidden textarea
+                // still fires afterward and xterm has built-in handling for that too — without
+                // this, that second path pastes the clipboard a second time.
+                event.preventDefault();
                 navigator.clipboard.readText().then(text => {
                     if (text) term.paste(text);
                 }).catch(() => {});
