@@ -9,8 +9,8 @@ const { writeIfChanged } = require("../core/atomicWrite");
 
 const MCP_BIN = path.resolve(__dirname, "..", "..", "bin", "palsync-mcp.js");
 
-function buildMcpConfig(workspaceDir, { nodePath = process.execPath, chipSessionId, toolProfile = "claude" } = {}) {
-    const env = { PALSYNC_WORKSPACE: workspaceDir, PALSYNC_TOOL_PROFILE: toolProfile };
+function buildMcpConfig(workspaceDir, { nodePath = process.execPath, chipSessionId } = {}) {
+    const env = { PALSYNC_WORKSPACE: workspaceDir };
     // Chip-only: identifies this agent+pal window to the server via the Chip-Session-ID header
     // (see lib/apiManager.js). Absent when the plain CLI's own workspace.setup() calls
     // register() without it — never invented here.
@@ -48,7 +48,7 @@ async function register(workspaceDir, opts = {}) {
 
 // Shared by any agent whose MCP config is a JSON file with the same "mcpServers: { palsync: {
 // command, args, env } }" shape as Claude's .mcp.json, just at a different path (Gemini CLI,
-// Cursor, GitHub Copilot CLI) — only the location and `toolProfile` differ per vendor.
+// Cursor, GitHub Copilot CLI) — only the location differs per vendor.
 async function registerToMcpServersFile(workspaceDir, filePath, opts = {}) {
     return mergeJsonConfig(filePath, buildMcpConfig(workspaceDir, opts), "mcpServers");
 }

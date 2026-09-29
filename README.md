@@ -173,8 +173,8 @@ palsync upgrade         # self-update from the latest commit
 
 All workspace commands take `--dir <workspace>` (default: current directory). Semantics are
 identical to the MCP tools — same drift guards, same preserve-on-pull. Pi users do not register an
-MCP server manually: its native extension privately spawns `palsync-mcp` with the `pi-minimal`
-profile and activates tools lazily.
+MCP server manually: its native extension privately spawns `palsync-mcp` and activates tools
+lazily in the prompt.
 
 ### Verification and final review settings
 

@@ -42,10 +42,10 @@ async function readToml(filePath) {
 // something palsync can fix). Given the only working alternative traded away real workspace
 // scoping for functionality, David chose to revert entirely and accept Codex's own default
 // approval-prompt friction instead (2026-09-14) rather than either broken option.
-async function writeProjectConfig(workspaceDir, { nodePath, chipSessionId, toolProfile = "codex" } = {}) {
+async function writeProjectConfig(workspaceDir, { nodePath, chipSessionId } = {}) {
     const filePath = path.join(workspaceDir, ".codex", "config.toml");
     const existing = await readToml(filePath);
-    const env = { PALSYNC_WORKSPACE: workspaceDir, PALSYNC_TOOL_PROFILE: toolProfile };
+    const env = { PALSYNC_WORKSPACE: workspaceDir };
     if (chipSessionId) env.PALSYNC_CHIP_SESSION_ID = chipSessionId;
     const merged = Object.assign({}, existing, {
         mcp_servers: Object.assign({}, existing.mcp_servers, {
@@ -94,8 +94,8 @@ async function patchEnv(filePath, envPatch) {
 // Register (or refresh) the palsync MCP server with Codex for this one workspace, project-scoped
 // — unlike registerCodex.js's `codex mcp add`, two pal tabs both using Codex no longer fight over
 // one shared global entry. Never throws.
-async function registerCodexProject(workspaceDir, { nodePath = process.execPath, chipSessionId, toolProfile = "codex", globalConfigPath } = {}) {
-    const project = await writeProjectConfig(workspaceDir, { nodePath, chipSessionId, toolProfile });
+async function registerCodexProject(workspaceDir, { nodePath = process.execPath, chipSessionId, globalConfigPath } = {}) {
+    const project = await writeProjectConfig(workspaceDir, { nodePath, chipSessionId });
     const trust = await ensureProjectTrusted(workspaceDir, globalConfigPath);
     return {
         ok: true,

@@ -8,7 +8,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
 const { InMemoryTransport } = require("@modelcontextprotocol/sdk/inMemory.js");
-const { createServer, TOOLS, PROFILE_TOOLS } = require("../src/mcp/server");
+const { createServer, TOOLS } = require("../src/mcp/server");
 const { serializeEnvelope } = require("../src/mcp/envelope");
 const { stableStringify } = require("../src/core/stableStringify");
 const { makeRunId, readExerciseOrdinal, takeExerciseOrdinal } = require("../src/core/exercise");
@@ -20,9 +20,9 @@ function stubGetCtx() {
     return async () => { throw new Error("context must stay lazy"); };
 }
 
-async function connect(profile, workspaceDir) {
+async function connect(workspaceDir) {
     const ws = workspaceDir || tmpWorkspace();
-    const server = createServer(stubGetCtx(), ws, { profile });
+    const server = createServer(stubGetCtx(), ws);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     const client = new Client({ name: "determinism-test", version: "1" });
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
@@ -45,26 +45,24 @@ function assertAscending(names) {
     }
 }
 
-test("listTools is byte-identical across consecutive calls (pi-minimal)", async () => {
-    const { client, workspaceDir } = await connect("pi-minimal");
+test("listTools is byte-identical across consecutive calls", async () => {
+    const { client, workspaceDir } = await connect();
     const first = await client.listTools();
     const second = await client.listTools();
     assert.equal(JSON.stringify(second), JSON.stringify(first));
     await close(client, workspaceDir);
 });
 
-test("listTools names are strictly ascending by code-point (all profiles)", async () => {
-    for (const profile of Object.keys(PROFILE_TOOLS)) {
-        const { client, workspaceDir } = await connect(profile);
-        const names = namesOf(await client.listTools());
-        assertAscending(names);
-        await close(client, workspaceDir);
-    }
+test("listTools names are strictly ascending by code-point", async () => {
+    const { client, workspaceDir } = await connect();
+    const names = namesOf(await client.listTools());
+    assertAscending(names);
+    await close(client, workspaceDir);
 });
 
 test("two separately constructed servers list byte-identical tools", async () => {
-    const a = await connect("pi-standard");
-    const b = await connect("pi-standard");
+    const a = await connect();
+    const b = await connect();
     const first = await a.client.listTools();
     const second = await b.client.listTools();
     assert.equal(JSON.stringify(second), JSON.stringify(first));
@@ -72,24 +70,12 @@ test("two separately constructed servers list byte-identical tools", async () =>
     await close(b.client, b.workspaceDir);
 });
 
-test("claude profile is the eager full set: identical to codex, no pal_tools", async () => {
-    const claude = await connect("claude");
-    const codex = await connect("codex");
-    const claudeListing = await claude.client.listTools();
-    const codexListing = await codex.client.listTools();
-    assert.equal(JSON.stringify(claudeListing), JSON.stringify(codexListing));
-    const names = namesOf(claudeListing);
-    assert.ok(!names.includes("pal_tools"), "eager claude profile must not list pal_tools");
+test("server lists the full static TOOLS set with no pal_tools", async () => {
+    const { client, workspaceDir } = await connect();
+    const names = namesOf(await client.listTools());
+    assert.ok(!names.includes("pal_tools"), "the server never gates tools with pal_tools");
     assert.deepStrictEqual(names.slice().sort(), TOOLS.map(tool => tool.name).sort());
     assertAscending(names);
-    await close(claude.client, claude.workspaceDir);
-    await close(codex.client, codex.workspaceDir);
-});
-
-test("pi-minimal lists exactly 5 sorted tools with pal_tools in sorted position", async () => {
-    const { client, workspaceDir } = await connect("pi-minimal");
-    const names = namesOf(await client.listTools());
-    assert.deepStrictEqual(names, ["pal_context", "pal_spec_lint", "pal_stats", "pal_tools", "pal_validate"]);
     await close(client, workspaceDir);
 });
 
@@ -134,7 +120,7 @@ test("identical offline executions return identical bytes via callTool", async (
     // pal_validate is needsCtx:false (bare { workspaceDir }, no login/lock) and fully
     // deterministic on a fixed workspace, so two real protocol-path executions must agree.
     const ws = tmpWorkspace({ "pages/demo.html": "<input name=\"demo\">\n" });
-    const server = createServer(stubGetCtx(), ws, { profile: "pi-minimal" });
+    const server = createServer(stubGetCtx(), ws);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     const client = new Client({ name: "determinism-test", version: "1" });
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);

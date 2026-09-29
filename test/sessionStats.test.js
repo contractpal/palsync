@@ -279,7 +279,7 @@ test("a harness can hand pal_stats live counters over MCP request _meta", async 
     const { createServer } = require("../src/mcp/server");
     const ws = tmpWorkspace({ "CLAUDE.palsync.md": "doc" });
     const server = createServer(async () => { throw new Error("stats must never need login or a lock"); },
-        ws, { profile: "pi-minimal" });
+        ws);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     const client = new Client({ name: "stats-test", version: "1" });
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);

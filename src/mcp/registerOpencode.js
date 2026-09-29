@@ -7,7 +7,7 @@ const path = require("path");
 const { mergeJsonConfig, MCP_BIN } = require("./register");
 
 function buildOpencodeConfig(workspaceDir, { nodePath = process.execPath, chipSessionId } = {}) {
-    const environment = { PALSYNC_WORKSPACE: workspaceDir, PALSYNC_TOOL_PROFILE: "opencode" };
+    const environment = { PALSYNC_WORKSPACE: workspaceDir };
     // Chip-only — see register.js's buildMcpConfig for why.
     if (chipSessionId) environment.PALSYNC_CHIP_SESSION_ID = chipSessionId;
     return {

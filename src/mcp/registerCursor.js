@@ -10,7 +10,7 @@ const { registerToMcpServersFile } = require("./register");
 
 async function registerCursor(workspaceDir, opts = {}) {
     const filePath = path.join(workspaceDir, ".cursor", "mcp.json");
-    const config = await registerToMcpServersFile(workspaceDir, filePath, Object.assign({ toolProfile: "cursor" }, opts));
+    const config = await registerToMcpServersFile(workspaceDir, filePath, opts);
     return { filePath, config };
 }
 

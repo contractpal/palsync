@@ -8,7 +8,7 @@ const { registerToMcpServersFile } = require("./register");
 
 async function registerGemini(workspaceDir, opts = {}) {
     const filePath = path.join(workspaceDir, ".gemini", "settings.json");
-    const config = await registerToMcpServersFile(workspaceDir, filePath, Object.assign({ toolProfile: "gemini" }, opts));
+    const config = await registerToMcpServersFile(workspaceDir, filePath, opts);
     return { filePath, config };
 }
 

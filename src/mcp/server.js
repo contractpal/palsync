@@ -14,51 +14,14 @@ const { TOOLS, ensureFreshStart } = require("./tools");
 const { buildContext } = require("./context");
 const usage = require("../core/usage");
 const lintCache = require("../core/lintCache");
-const { z } = require("zod");
-const toolMetadata = require("./pi-tools.json");
-const { routeTools } = require("../core/piHelpers");
 const { stableStringify } = require("../core/stableStringify");
 const { serializeToolDefinitions } = require("./toolSchema");
 const { ListToolsRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
 const pkg = require("../../package.json");
 const SERVER_INSTRUCTIONS = "PalSync runtime tools act on the LAST PUSHED server version. Push local changes with pal_push before runtime tests, previews, screenshots, fetches, exercises, tunnels, or SEO audits.";
-const LAZY_PROFILES = new Set(["pi-minimal", "pi-standard"]);
-// Claude Code boots the FULL static set (eager): it re-renders the entire prompt prefix
-// when tools/list changes, so mid-session pal_tools activation guaranteed full-prefix
-// KV-cache invalidations, and every real session activated at least once (the 3-tool core
-// cannot push/test/preview). Pi keeps lazy activation (see docs/decisions/lazy-tool-activation.md).
-const PROFILE_TOOLS = {
-    // pal_stats is eager in every profile: pal-loop requires it at completion, so routing it
-    // through pal_tools would add a guaranteed activation round trip for a deterministic call.
-    "pi-minimal": ["pal_validate", "pal_spec_lint", "pal_context", "pal_stats"],
-    "pi-standard": ["pal_validate", "pal_spec_lint", "pal_context", "pal_stats", "pal_status", "pal_test", "pal_push", "pal_pull"],
-    "pi-full": TOOLS.map(tool => tool.name),
-    // Eager: full static set at boot, no pal_tools — stable prefix for Claude Code.
-    claude: TOOLS.map(tool => tool.name),
-    codex: TOOLS.map(tool => tool.name),
-    opencode: TOOLS.map(tool => tool.name),
-    gemini: TOOLS.map(tool => tool.name),
-    cursor: TOOLS.map(tool => tool.name),
-    copilot: TOOLS.map(tool => tool.name)
-};
-
-const PAL_TOOLS = {
-    name: "pal_tools",
-    title: "Activate PalSync tools",
-    description: "Activate additional PalSync tools additively by deterministic keyword or group.",
-    inputShape: { query: z.string().describe("Task keywords or groups: sync, browser, runtime, project, spec.") }
-};
-
-function normalizeProfile(value) {
-    return Object.prototype.hasOwnProperty.call(PROFILE_TOOLS, value) ? value : "codex";
-}
-
-function instructionsForProfile(profile) {
-    return SERVER_INSTRUCTIONS + (LAZY_PROFILES.has(profile)
-        ? " Use pal_tools with task keywords to activate additional PalSync tools."
-        : "");
-}
-
+// The server never gates tools: every TOOLS entry is registered and listed unconditionally.
+// Prompt-side activation belongs to the harness (Pi's native extension calls pi.setActiveTools),
+// and a server-side profile would only duplicate that gate and reject the tools it activated.
 function byToolName(a, b) {
     // Code-point order, NOT localeCompare — locale/ICU dependent, wrong for a determinism patch.
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
@@ -71,40 +34,22 @@ function byToolName(a, b) {
 function logErr(msg) { try { process.stderr.write("[palsync-mcp] " + msg + "\n"); } catch (e) { /* stderr gone */ } }
 function stackOf(err) { return err && err.stack ? err.stack : String(err); }
 
-function createServer(getCtx, workspaceDir, options = {}) {
+function createServer(getCtx, workspaceDir) {
     // In-memory only: a first stats call is a real zero for this MCP process, never prior PID data.
     usage.initializeUsageTally(workspaceDir);
-    const profile = normalizeProfile(options.profile || process.env.PALSYNC_TOOL_PROFILE);
-    // Keep the same rule in affected tool descriptions: Pi's MCP adapter lists tools but does not
-    // surface initialize-result instructions to the model, so server instructions are additive.
+    // Pi's MCP adapter lists tools but does not surface initialize-result instructions to the model,
+    // so server instructions are additive: tool descriptions repeat any rule the model needs.
     const server = new McpServer(
         { name: "palsync", version: pkg.version },
-        { instructions: instructionsForProfile(profile) }
+        { instructions: SERVER_INSTRUCTIONS }
     );
-    const registered = new Map();
-    // The MCP SDK's ListToolsRequestSchema handler returns tools in registration
-    // (insertion) order with no sort (verified: node_modules/@modelcontextprotocol/sdk/
-    // dist/cjs/server/mcp.js ~lines 78-102), so sorted insertion = sorted listing.
-    // Sort a COPY — never mutate the exported TOOLS order (tests/tools import it).
-    // pal_tools (lazy profiles only) joins the same sorted list so the final
-    // advertised list is fully sorted, not appended last.
+    // tools/list is served in code-point name order (see the handler below). Sort a COPY — never
+    // mutate the exported TOOLS order (tests/tools import it).
     const pending = TOOLS.map(t => ({ name: t.name, tool: t }));
-    if (LAZY_PROFILES.has(profile)) pending.push({ name: "pal_tools", tool: PAL_TOOLS, palTools: true });
     pending.sort(byToolName);
     for (const entry of pending) {
-        if (entry.palTools) {
-            const handle = server.registerTool("pal_tools", {
-                title: PAL_TOOLS.title, description: PAL_TOOLS.description, inputSchema: PAL_TOOLS.inputShape
-            }, async ({ query }) => {
-                const names = routeTools(query, toolMetadata);
-                for (const name of names) registered.get(name)?.enable();
-                return { content: [{ type: "text", text: names.length ? "Activated: " + names.join(", ") : "No PalSync tools matched that query." }] };
-            });
-            registered.set("pal_tools", handle);
-            continue;
-        }
         const t = entry.tool;
-        const handle = server.registerTool(
+        server.registerTool(
             t.name,
             { description: t.description, inputSchema: t.inputShape, annotations: t.annotations, title: t.title },
             async (args, extra) => {
@@ -195,17 +140,13 @@ function createServer(getCtx, workspaceDir, options = {}) {
                 }
             }
         );
-        registered.set(t.name, handle);
-        if (!PROFILE_TOOLS[profile].includes(t.name)) handle.disable();
     }
     // Answer tools/list from toolSchema.js instead of the SDK's own conversion. The input schemas
     // are identical; this drops per-tool boilerplate the SDK adds ($schema, zod's MAX_SAFE_INTEGER
     // bounds, the default execution.taskSupport) that every host would otherwise put in the prompt.
     const definitions = serializeToolDefinitions(pending.map(entry => entry.tool));
     server.server.removeRequestHandler("tools/list");
-    server.server.setRequestHandler(ListToolsRequestSchema, () => ({
-        tools: definitions.filter(def => registered.get(def.name).enabled)
-    }));
+    server.server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: definitions }));
     return server;
 }
 
@@ -251,7 +192,7 @@ async function main() {
         }
         return unlockedPromise;
     };
-    const server = createServer(getCtx, workspaceDir, { profile: process.env.PALSYNC_TOOL_PROFILE });
+    const server = createServer(getCtx, workspaceDir);
 
     // Lock the pal the moment this session opens — not lazily on whichever tool call happens to
     // be first. Per David (2026-09-10): "it should have been locked when I opened it." Kicking
@@ -314,5 +255,4 @@ async function main() {
     logErr("serving for workspace " + workspaceDir);
 }
 
-module.exports = { createServer, main, installProcessGuards, TOOLS, SERVER_INSTRUCTIONS,
-    PROFILE_TOOLS, normalizeProfile, instructionsForProfile };
+module.exports = { createServer, main, installProcessGuards, TOOLS, SERVER_INSTRUCTIONS };

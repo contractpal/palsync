@@ -133,8 +133,8 @@ DeepSeek / local) and the human-approval gateway (Telegram, etc.).
 
 **Pi** — `palsync setup --agent pi` (or `palsync --agent pi`) prepares the workspace with the
 `.agents/skills/` + `AGENTS.md` open standard and launches `pi`. Users do not register a Pi MCP
-server manually: the native extension privately spawns `palsync-mcp` with the `pi-minimal` profile
-and activates tools lazily. Shell-out subcommands remain available for direct CLI use.
+server manually: the native extension privately spawns `palsync-mcp` and activates tools lazily
+in the prompt. Shell-out subcommands remain available for direct CLI use.
 
 ### Shell-out (no MCP)
 

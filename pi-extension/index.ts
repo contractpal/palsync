@@ -54,7 +54,7 @@ class PalsyncClient {
     const mcpBin = process.env.PALSYNC_MCP_BIN;
     this.child = spawn(mcpBin ? process.execPath : "palsync-mcp", mcpBin ? [mcpBin] : [], {
       cwd: this.workspace,
-      env: { ...process.env, PALSYNC_WORKSPACE: this.workspace, PALSYNC_TOOL_PROFILE: "pi-minimal" },
+      env: { ...process.env, PALSYNC_WORKSPACE: this.workspace },
       stdio: ["pipe", "pipe", "pipe"]
     });
     this.child.stdout.on("data", chunk => {
@@ -177,7 +177,6 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
       parameters: { type: "object", properties: { query: { type: "string", description: "Keywords or groups for tools to activate." } }, required: ["query"], additionalProperties: false } as any,
       async execute(_id, params: any) {
         if (hasPiMcpCollision(pi.getActiveTools())) throw new Error("pi-mcp is already serving palsync; configure one integration only.");
-        await client!.call("pal_tools", { query: params.query });
         const names = routeTools(params.query, metadata as any[]);
         activate(names);
         const guidance = activationGuidance(names);

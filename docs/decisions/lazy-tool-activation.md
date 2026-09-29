@@ -24,3 +24,15 @@ the native extension may add only explicitly named `pal_*` tools, narrow screens
 requests, or the fixed requirements of an exactly-expanded bundled `pal-review` skill. Generic
 prose does not activate groups; `pal_tools` remains the fallback. Codex CLI and OpenCode keep the
 complete static set as before.
+
+## Revision 2026-09-29 — the server no longer gates tools
+
+The server once carried its own profiles (`PROFILE_TOOLS`, `PALSYNC_TOOL_PROFILE`) and disabled every
+tool outside the active profile. Pi's native extension duplicated that gate with `pi.setActiveTools`,
+and the two disagreed: a tool the extension activated in `before_agent_start` (for example
+`pal_test` or `pal_screenshot` for a review turn) stayed disabled on the server, so the model's
+first call failed with "Tool pal_test disabled". Every other host already received the full static
+set, so the server-side gate added no capability the model could not already reach — it only refused
+tools the harness had exposed. The profile mechanism is gone: every `TOOLS` entry is registered and
+listed by every host, and the server has no `pal_tools` tool. Pi keeps its prompt lazy via
+`setActiveTools`; its extension is the only prompt gate.

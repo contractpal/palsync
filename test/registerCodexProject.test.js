@@ -16,7 +16,7 @@ test("writeProjectConfig writes a project-scoped mcp_servers.palsync table", asy
     assert.deepEqual(written.mcp_servers.palsync, {
         command: "/test/node",
         args: [MCP_BIN],
-        env: { PALSYNC_WORKSPACE: ws, PALSYNC_TOOL_PROFILE: "codex", PALSYNC_CHIP_SESSION_ID: "sess-1" }
+        env: { PALSYNC_WORKSPACE: ws, PALSYNC_CHIP_SESSION_ID: "sess-1" }
     });
     fs.rmSync(ws, { recursive: true, force: true });
 });
