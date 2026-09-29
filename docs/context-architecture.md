@@ -21,12 +21,12 @@ basis that could not be reproduced.
 | All | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 7,843 | 1,961 | on-demand |
 | All | `creating-files` | `src/launcher/contextInject.js#syncDetails` | 4,978 | 1,245 | on-demand |
 | All | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,524 | 881 | on-demand |
-| All | `skill-body:design-build` | `bundled-context/skills/design-build/SKILL.md` | 4,862 | 1,216 | on-demand |
+| All | `skill-body:design-build` | `bundled-context/skills/design-build/SKILL.md` | 4,928 | 1,232 | on-demand |
 | All | `skill-body:design-system-init` | `bundled-context/skills/design-system-init/SKILL.md` | 18,126 | 4,532 | on-demand |
 | All | `skill-body:pal-fix` | `bundled-context/skills/pal-fix/SKILL.md` | 4,167 | 1,042 | on-demand |
-| All | `skill-body:pal-loop` | `bundled-context/skills/pal-loop/SKILL.md` | 8,611 | 2,153 | on-demand |
-| All | `skill-body:pal-review` | `bundled-context/skills/pal-review/SKILL.md` | 16,744 | 4,186 | on-demand |
-| All | `skill-body:pal-spec` | `bundled-context/skills/pal-spec/SKILL.md` | 10,398 | 2,600 | on-demand |
+| All | `skill-body:pal-loop` | `bundled-context/skills/pal-loop/SKILL.md` | 8,554 | 2,139 | on-demand |
+| All | `skill-body:pal-review` | `bundled-context/skills/pal-review/SKILL.md` | 16,713 | 4,179 | on-demand |
+| All | `skill-body:pal-spec` | `bundled-context/skills/pal-spec/SKILL.md` | 10,404 | 2,601 | on-demand |
 | All | `skill-body:palbuilder-core` | `bundled-context/skills/palbuilder-core/SKILL.md` | 3,210 | 803 | on-demand |
 | All | `skill-body:palbuilder-data` | `bundled-context/skills/palbuilder-data/SKILL.md` | 15,966 | 3,992 | on-demand |
 | All | `skill-body:palbuilder-email` | `bundled-context/skills/palbuilder-email/SKILL.md` | 5,690 | 1,423 | on-demand |
