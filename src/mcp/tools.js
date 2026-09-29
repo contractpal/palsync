@@ -870,7 +870,7 @@ const TOOLS = [
                 ? "Local: UN-PUSHED changes on disk —\n" + describeDiff(d)
                 : "Local: no un-pushed changes.";
             const driftMsg = !canVerify
-                ? "CANNOT VERIFY against server — no server marker available. Do not treat this as in sync.\n"
+                ? "CANNOT VERIFY against server — no server marker available. Do not treat this as in sync; retry pal_status, and tell the user if it persists (pal_push still runs its own drift check).\n"
                 : (serverNewer ? "Server IS NEWER than your last pull — run pal_pull before pushing.\n" : "In sync with your last pull.\n");
             const message =
                 "Pal: " + ctx.record.palName + " (" + ctx.record.palGuid + ")\n" +
@@ -934,7 +934,8 @@ const TOOLS = [
                     return { ran: false, message: "No runnable workflow to test on this pal (need a console/web/transaction workflow)." };
                 }
                 if (res.blocked === "no-lock" || /lock/.test(res.blocked || "")) {
-                    return { ran: false, message: "Couldn't acquire the lock to test (" + res.blocked + (res.holder ? ", held by " + res.holder : "") + ")." };
+                    return { ran: false, message: "Couldn't acquire the lock to test (" + res.blocked + (res.holder ? ", held by " + res.holder : "") + ")." +
+                        " Ask the user to release it (a PalBuilder checkout is released in PalBuilder); do not retry until then." };
                 }
                 return { ran: false, message: "Test could not run (" + (res.blocked || "unknown") + ")." };
             }
