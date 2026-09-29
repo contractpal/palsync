@@ -1,8 +1,8 @@
 "use strict";
-// MCP tool-wrapper seam tests for pal_dataset_query and pal_dataset_count.
+// MCP tool-wrapper seam tests for pal_dataset_query.
 // Invoke the advertised descriptor from TOOLS, stub the server, never call CloudPiston.
 // Covers: wire shape (verified identity contract + XStream list wrappers), operator mapping,
-// paging, row mapping, count-only, every distinct server-error branch, malformed response,
+// paging, row mapping, every distinct server-error branch, malformed response,
 // every cap, invalid dataset/column/operator/bounds rejected before server, no mutating
 // endpoint reachable, and no local artifact written.
 
@@ -133,7 +133,6 @@ function loadToolsWithStub({ queryResult, rawResponse, queryImpl, capture, resol
     delete require.cache[toolsPath];
     const { TOOLS } = require("../src/mcp/tools");
     const queryTool = TOOLS.find(t => t.name === "pal_dataset_query");
-    const countTool = TOOLS.find(t => t.name === "pal_dataset_count");
 
     function restore() {
         origApi.CloudPistonAPIManager.queryDataset = origQuery;
@@ -147,7 +146,6 @@ function loadToolsWithStub({ queryResult, rawResponse, queryImpl, capture, resol
 
     return {
         queryTool,
-        countTool,
         getCallCount: () => callCount,
         getLastFilter: () => lastFilter,
         getLastResolved: () => lastResolved,
@@ -174,7 +172,7 @@ const RESOLVED = { id: "INTERNAL-SESSION-ID", guid: "test-guid-123", profileId: 
 // Adapter-level resolver matching what the MCP handlers pass in.
 const resolvePal = async () => RESOLVED;
 
-test("partial persisted identity upgrades once for dataset query and count", async () => {
+test("partial persisted identity upgrades once for dataset query", async () => {
     const dir = tmpWorkspaceWithDataset();
     const ctx = makeCtx(dir);
     const upgraded = { id: "INTERNAL-SESSION-ID", guid: "test-guid-123", profileId: "REAL-PROFILE-ID" };
@@ -195,9 +193,7 @@ test("partial persisted identity upgrades once for dataset query and count", asy
         assert.equal(ctx.record.profileId, upgraded.profileId, "legacy metadata is upgraded for the next session");
         assert.equal(persistCalls, 1);
 
-        const count = await loaded.countTool.run(ctx, { dataset: "equipment" });
         const secondQuery = await loaded.queryTool.run(ctx, { dataset: "equipment" });
-        assert.equal(count.ok, true, "count shares the upgraded query identity");
         assert.equal(secondQuery.ok, true, "second query reuses the upgraded identity");
         assert.equal(resolveCalls, 1, "complete cached identity avoids another account walk");
     } finally {
@@ -316,7 +312,7 @@ test("row mapping: columns/data aligned to row objects including empty and null 
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("query returns rows plus totalRecords, count returns only totalRecords and requests one row", async () => {
+test("query returns rows plus totalRecords and requests the caller's page", async () => {
     const dir = tmpWorkspaceWithDataset();
     const ctx = makeCtx(dir);
 
@@ -332,34 +328,19 @@ test("query returns rows plus totalRecords, count returns only totalRecords and 
         assert.equal(loaded.getLastFilter().limit, 20);
         loaded.restore();
     }
-    // Count path — hard-coded limit 1, no rows in return
-    {
-        const loaded = loadToolsWithStub({
-            queryResult: { columns: ["a"], data: [["1"]], totalRecords: 99, startRecord: 0, limit: 1 }
-        });
-        const res = await loaded.countTool.run(ctx, {
-            dataset: "equipment",
-            conditions: [{ column: "status", operator: "EQUAL", value1: "available" }]
-        });
-        assert.equal(res.ok, true);
-        assert.equal(res.totalRecords, 99);
-        assert.equal(res.rows, undefined, "count must not return rows");
-        assert.equal(loaded.getLastFilter().limit, 1, "count must request at most one row");
-        assert.equal(loaded.getLastFilter().startRecord, 0);
-        loaded.restore();
-    }
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("count ignores caller limit and always requests one row", async () => {
+test("a count is a limit:1 query: one row requested, totalRecords still truthful", async () => {
     const dir = tmpWorkspaceWithDataset();
     const ctx = makeCtx(dir);
     const loaded = loadToolsWithStub({
         queryResult: { columns: ["a"], data: [["1"]], totalRecords: 5, startRecord: 0, limit: 1 }
     });
-    // Even if caller tries to pass limit via count (not in schema, but adapter hard-codes)
-    const res = await loaded.countTool.run(ctx, { dataset: "equipment" });
+    const res = await loaded.queryTool.run(ctx, { dataset: "equipment", limit: 1 });
     assert.equal(res.ok, true);
+    assert.equal(res.totalRecords, 5);
+    assert.equal(res.rows.length, 1);
     assert.equal(loaded.getLastFilter().limit, 1);
     loaded.restore();
     fs.rmSync(dir, { recursive: true, force: true });
@@ -446,7 +427,7 @@ test("each server failure mode is reported honestly and distinctly", async () =>
     {
         const loaded = loadToolsWithStub({});
         const { executeDatasetQuery } = require("../src/core/datasetQuery");
-        const res = await executeDatasetQuery(dir, ctx.session, "test-guid-123", { dataset: "equipment" }, false, async () => null);
+        const res = await executeDatasetQuery(dir, ctx.session, "test-guid-123", { dataset: "equipment" }, async () => null);
         assert.equal(res.ok, false);
         assert.match(res.error, /could not resolve pal/i);
         assert.equal(loaded.getCallCount(), 0);
@@ -499,7 +480,7 @@ test("caps: every cap is enforced — row count, condition count, string lengths
         const loaded = loadToolsWithStub({});
         // Bypass zod by calling adapter directly with limit 200 (simulates caller tampering)
         const { executeDatasetQuery } = require("../src/core/datasetQuery");
-        const r = await executeDatasetQuery(dir, ctx.session, ctx.record.palGuid, { dataset: "equipment", limit: 200 }, false, resolvePal);
+        const r = await executeDatasetQuery(dir, ctx.session, ctx.record.palGuid, { dataset: "equipment", limit: 200 }, resolvePal);
         assert.equal(r.ok, false);
         assert.match(r.error, /limit/i);
         assert.equal(loaded.getCallCount(), 0, "must be refused before server call");
@@ -717,19 +698,15 @@ test("returned values are not persisted into usage, evidence, or work-history", 
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("both tools are read-only in MCP annotations", () => {
+test("the dataset query tool is read-only in MCP annotations", () => {
     const toolsPath = require.resolve("../src/mcp/tools");
     delete require.cache[toolsPath];
     const { TOOLS } = require("../src/mcp/tools");
     const q = TOOLS.find(t => t.name === "pal_dataset_query");
-    const c = TOOLS.find(t => t.name === "pal_dataset_count");
     assert.ok(q, "pal_dataset_query must exist");
-    assert.ok(c, "pal_dataset_count must exist");
-    for (const t of [q, c]) {
-        assert.equal(t.annotations.readOnlyHint, true, t.name + " must be readOnly");
-        assert.equal(t.annotations.destructiveHint, false, t.name + " must be non-destructive");
-        assert.equal(t.annotations.idempotentHint, true, t.name + " must be idempotent");
-    }
+    assert.equal(q.annotations.readOnlyHint, true, "pal_dataset_query must be readOnly");
+    assert.equal(q.annotations.destructiveHint, false, "pal_dataset_query must be non-destructive");
+    assert.equal(q.annotations.idempotentHint, true, "pal_dataset_query must be idempotent");
 });
 
 test("Current Pal only: validates against local manifest, view is always false", async () => {

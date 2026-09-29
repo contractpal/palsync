@@ -118,7 +118,7 @@ test("4 — dataset query distinguishes no-response vs malformed shape", async (
     };
     delete require.cache[require.resolve("../src/core/datasetQuery")];
     const { executeDatasetQuery } = require("../src/core/datasetQuery");
-    let r = await executeDatasetQuery(dir, session, "g", { dataset: "equipment" }, false, resolvePal);
+    let r = await executeDatasetQuery(dir, session, "g", { dataset: "equipment" }, resolvePal);
     assert.equal(r.ok, false);
     assert.match(r.error, /HTTP 502/, "an HTTP failure must report its status");
     assert.doesNotMatch(r.error, /malformed/i);
@@ -129,7 +129,7 @@ test("4 — dataset query distinguishes no-response vs malformed shape", async (
         s.lastTransport = { endpoint: "ProcessPalBuilder.do", status: 200, ok: true, bytes: 0 };
         return undefined;
     };
-    r = await executeDatasetQuery(dir, session, "g", { dataset: "equipment" }, false, resolvePal);
+    r = await executeDatasetQuery(dir, session, "g", { dataset: "equipment" }, resolvePal);
     assert.equal(r.ok, false);
     assert.match(r.error, /declined/i, "an empty 200 must be reported as a declined request");
     assert.doesNotMatch(r.error, /malformed/i);
@@ -139,7 +139,7 @@ test("4 — dataset query distinguishes no-response vs malformed shape", async (
     require(apiManagerPath).CloudPistonAPIManager.queryDataset = async () => ({
         success: false, messages: { "com.contractpal.Message": { message: "Pal not found" } }
     });
-    r = await executeDatasetQuery(dir, session, "g", { dataset: "equipment" }, false, resolvePal);
+    r = await executeDatasetQuery(dir, session, "g", { dataset: "equipment" }, resolvePal);
     assert.equal(r.ok, false);
     assert.match(r.error, /Pal not found/, "the server message must be surfaced verbatim");
     assert.doesNotMatch(r.error, /malformed/i);
@@ -148,7 +148,7 @@ test("4 — dataset query distinguishes no-response vs malformed shape", async (
     require(apiManagerPath).CloudPistonAPIManager.queryDataset = async () => ({
         success: true, customObject: { queryResult: { columns: "not-a-list", totalRecords: 0 } }
     });
-    r = await executeDatasetQuery(dir, session, "g", { dataset: "equipment" }, false, resolvePal);
+    r = await executeDatasetQuery(dir, session, "g", { dataset: "equipment" }, resolvePal);
     assert.equal(r.ok, false);
     assert.match(r.error, /malformed/i, "shape error must be malformed");
 

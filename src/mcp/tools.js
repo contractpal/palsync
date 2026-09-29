@@ -2171,7 +2171,7 @@ const TOOLS = [
     },
     {
         name: "pal_dataset_query",
-        description: "Query a bounded page of dataset rows from the current Pal (read-only). Validates dataset and columns against the local pal.json before the server call. Uses the dedicated QUERY_DATASET operation only.",
+        description: "Query a bounded page of dataset rows from the current Pal (read-only). Validates dataset and columns against the local pal.json before the server call. Uses the dedicated QUERY_DATASET operation only. Returns totalRecords for the filter; use limit:1 when you only need a count.",
         needsLock: false,
         inputShape: {
             dataset: z.string().describe("Dataset name as defined in pal.json."),
@@ -2192,7 +2192,7 @@ const TOOLS = [
         async run(ctx, args = {}) {
             // This tool is structurally read-only: it never acquires a lock, never writes
             // usage/evidence/work-history, and never persists returned dataset values.
-            const result = await executeDatasetQuery(ctx.workspaceDir, ctx.session, ctx.record.palGuid, args, false,
+            const result = await executeDatasetQuery(ctx.workspaceDir, ctx.session, ctx.record.palGuid, args,
                 () => resolvePalForRead(ctx));
             if (!result.ok) {
                 return { ok: false, error: result.error, message: result.error };
@@ -2208,40 +2208,6 @@ const TOOLS = [
                 truncated: !!result.truncated,
                 message,
                 content: [{ type: "text", text: message }]
-            };
-        }
-    },
-    {
-        name: "pal_dataset_count",
-        description: "Count matching dataset records in the current Pal (read-only). Same filter vocabulary as pal_dataset_query but requests at most one row and returns only the total count.",
-        needsLock: false,
-        inputShape: {
-            dataset: z.string().describe("Dataset name as defined in pal.json."),
-            mode: z.enum(["AND", "OR"]).optional().describe("Top-level filter mode for conditions (default AND)."),
-            conditions: z.array(z.object({
-                column: z.string(),
-                operator: z.enum(["NULL", "NOT_NULL", "EQUAL", "NOT_EQUAL", "GREATER_THAN", "LESS_THAN", "GREATER_THAN_EQUAL", "LESS_THAN_EQUAL", "BETWEEN", "LIKE", "NOT_LIKE"]),
-                value1: z.string().optional(),
-                value2: z.string().optional()
-            })).optional().describe("Flat filter conditions using the vendored operator vocabulary."),
-            orderBy: z.array(z.object({
-                column: z.string(),
-                order: z.enum(["ASC", "DESC", "NATURAL"]).optional()
-            })).optional().describe("Column ordering (validated but not needed for count).")
-        },
-        async run(ctx, args = {}) {
-            // Count is the same shared adapter with limit hard-coded to 1 and only totalRecords returned.
-            // Values are never persisted to usage/evidence/work-history.
-            const result = await executeDatasetQuery(ctx.workspaceDir, ctx.session, ctx.record.palGuid, args, true,
-                () => resolvePalForRead(ctx));
-            if (!result.ok) {
-                return { ok: false, error: result.error, message: result.error };
-            }
-            return {
-                ok: true,
-                dataset: args.dataset,
-                totalRecords: result.totalRecords,
-                message: "Dataset " + JSON.stringify(args.dataset) + ": totalRecords=" + result.totalRecords
             };
         }
     }
@@ -2278,7 +2244,6 @@ const TOOL_HINTS = {
     // destructive and clients should present a confirmation affordance.
     pal_sync_datasets: ["Synchronize pal datasets", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
     pal_dataset_query: ["Query dataset rows", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
-    pal_dataset_count: ["Count dataset records", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_data_set: ["Set pal Data map", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
     pal_data_delete: ["Delete pal Data map", { readOnlyHint: false, destructiveHint: true, idempotentHint: true }],
     pal_datalist_set: ["Set pal DataList", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],

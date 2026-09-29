@@ -1,7 +1,6 @@
 "use strict";
-// Shared read adapter for pal_dataset_query and pal_dataset_count.
-// Both tools use the builder's dedicated dataset-query operation and must remain
-// structurally read-only. Evidence per repo policy: operation constant, dataset-mode
+// Read adapter for pal_dataset_query. It uses the builder's dedicated dataset-query
+// operation and must remain structurally read-only. Evidence per repo policy: operation constant, dataset-mode
 // flag, operator vocabulary, and total-count field are cited from vendored server
 // source in comments and in the adapter's hard-coded values.
 
@@ -212,14 +211,13 @@ function validateOrderBy(palJson, datasetName, orderBy) {
     return null;
 }
 
-function validatePaging(startRecord, limit, isCount) {
+function validatePaging(startRecord, limit) {
     if (startRecord !== undefined && startRecord !== null) {
         if (!Number.isInteger(startRecord) || startRecord < 0) {
             return "startRecord must be an integer >= 0";
         }
         if (String(startRecord).length > 10) return "startRecord string too long";
     }
-    if (isCount) return null; // limit is hard-coded for count, caller value ignored
     if (limit !== undefined && limit !== null) {
         if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
             return "limit must be an integer between 1 and " + MAX_LIMIT;
@@ -235,10 +233,10 @@ function validatePaging(startRecord, limit, isCount) {
 // to QUERY_DATASET and view is hard-coded to false (dataset mode) —
 // caller input cannot select a different operation or DataView mode.
 // ---------------------------------------------------------------------------
-function buildWireFilter(args, isCount) {
+function buildWireFilter(args) {
     const dataset = args.dataset;
     const startRecord = args.startRecord !== undefined && args.startRecord !== null ? args.startRecord : 0;
-    const limit = isCount ? 1 : (args.limit !== undefined && args.limit !== null ? args.limit : DEFAULT_QUERY_LIMIT);
+    const limit = args.limit !== undefined && args.limit !== null ? args.limit : DEFAULT_QUERY_LIMIT;
     const mode = args.mode || "AND";
     const conditions = args.conditions || [];
     const orderBy = args.orderBy || [];
@@ -349,7 +347,7 @@ function checkResponseBytes(obj) {
 // maps result, enforces response byte cap. Never acquires a lock, never
 // writes to usage/evidence/work-history, never persists returned values.
 // ---------------------------------------------------------------------------
-async function executeDatasetQuery(workspaceDir, session, palGuid, args, isCount, resolvePal) {
+async function executeDatasetQuery(workspaceDir, session, palGuid, args, resolvePal) {
     const palJson = readPalJson(workspaceDir);
     if (!palJson) {
         return { ok: false, error: "cannot read pal.json in workspace " + workspaceDir };
@@ -365,7 +363,7 @@ async function executeDatasetQuery(workspaceDir, session, palGuid, args, isCount
         return { ok: false, error: 'REFUSED: mode must be "AND" or "OR"' };
     }
 
-    const pagingErr = validatePaging(args.startRecord, args.limit, isCount);
+    const pagingErr = validatePaging(args.startRecord, args.limit);
     if (pagingErr) return { ok: false, error: "REFUSED: " + pagingErr };
 
     const condErr = validateConditions(palJson, args.dataset, args.conditions);
@@ -379,7 +377,7 @@ async function executeDatasetQuery(workspaceDir, session, palGuid, args, isCount
         return { ok: false, error: "REFUSED: operation and view are not caller-settable" };
     }
 
-    const wireFilter = buildWireFilter(args, isCount);
+    const wireFilter = buildWireFilter(args);
 
     // String length cap already enforced per field; also enforce filter JSON size quickly
     const filterBytes = Buffer.byteLength(JSON.stringify(wireFilter), "utf8");
@@ -433,16 +431,15 @@ async function executeDatasetQuery(workspaceDir, session, palGuid, args, isCount
 
     // Row limit first, then the byte cap: a server returning many small rows must not exceed the
     // requested page size just because the payload happens to fit.
-    const effectiveLimit = isCount ? 1 : (args.limit !== undefined && args.limit !== null ? args.limit : DEFAULT_QUERY_LIMIT);
+    const effectiveLimit = args.limit !== undefined && args.limit !== null ? args.limit : DEFAULT_QUERY_LIMIT;
     let rows = mapped.rows;
     let truncated = false;
-    if (!isCount && rows.length > effectiveLimit) {
+    if (rows.length > effectiveLimit) {
         rows = rows.slice(0, effectiveLimit);
         truncated = true;
     }
-    const payloadForSize = isCount ? { totalRecords: mapped.totalRecords } : { rows, totalRecords: mapped.totalRecords };
-    let bytes = checkResponseBytes(payloadForSize);
-    if (!isCount && bytes > MAX_RESPONSE_BYTES) {
+    let bytes = checkResponseBytes({ rows, totalRecords: mapped.totalRecords });
+    if (bytes > MAX_RESPONSE_BYTES) {
         // Truncate row array until under cap, preserving totalRecords truthfully.
         truncated = true;
         let lo = 0;
@@ -459,9 +456,6 @@ async function executeDatasetQuery(workspaceDir, session, palGuid, args, isCount
         bytes = checkResponseBytes({ rows, totalRecords: mapped.totalRecords });
     }
 
-    if (isCount) {
-        return { ok: true, totalRecords: mapped.totalRecords };
-    }
     return {
         ok: true,
         rows: rows,

@@ -61,15 +61,13 @@ test("pal_ast is lazily reachable by weak-model words and not in the eager core"
     assert.ok(routeTools("project", metadata).includes("pal_ast"), "project group");
 });
 
-test("dataset routing reaches sync, query, and count for singular and plural requests", () => {
-    const expected = ["pal_dataset_count", "pal_dataset_query", "pal_sync_datasets"];
+test("dataset routing reaches sync and query for singular and plural requests", () => {
+    const expected = ["pal_dataset_query", "pal_sync_datasets"];
     for (const query of ["dataset", "datasets"]) {
         assert.deepStrictEqual(routeTools(query, metadata).sort(), expected, query);
     }
     assert.ok(routeTools("query", metadata).includes("pal_dataset_query"));
-    assert.ok(routeTools("count", metadata).includes("pal_dataset_count"));
     assert.ok(routeTools("data", metadata).includes("pal_dataset_query"));
-    assert.ok(routeTools("data", metadata).includes("pal_dataset_count"));
     assert.ok(routeTools("sync", metadata).includes("pal_sync_datasets"));
 });
 
@@ -103,20 +101,18 @@ test("exact-name lazy activation is additive and idempotent", async () => {
 test("lazy dataset activation enables only the dataset tools, is idempotent, and makes reads callable", async () => {
     const { client, workspaceDir, changed } = await connect("pi-minimal");
     const before = (await client.listTools()).tools.map(tool => tool.name);
-    const expected = ["pal_dataset_count", "pal_dataset_query", "pal_sync_datasets"];
+    const expected = ["pal_dataset_query", "pal_sync_datasets"];
     const first = await client.callTool({ name: "pal_tools", arguments: { query: "datasets" } });
-    assert.match(first.content.map(item => item.text || "").join("\n"), /Activated: pal_sync_datasets, pal_dataset_query, pal_dataset_count/);
+    assert.match(first.content.map(item => item.text || "").join("\n"), /Activated: pal_sync_datasets, pal_dataset_query/);
     const afterFirst = (await client.listTools()).tools.map(tool => tool.name);
     assert.deepStrictEqual(afterFirst.filter(name => !before.includes(name)).sort(), expected);
     await client.callTool({ name: "pal_tools", arguments: { query: "datasets" } });
     assert.deepStrictEqual((await client.listTools()).tools.map(tool => tool.name), afterFirst, "activation is idempotent");
-    for (const name of ["pal_dataset_query", "pal_dataset_count"]) {
-        try {
-            const result = await client.callTool({ name, arguments: { dataset: "equipment" } });
-            assert.doesNotMatch((result.content || []).map(item => item.text || "").join("\n"), /disabled|not enabled|not found/i, name);
-        } catch (error) {
-            assert.doesNotMatch(String(error && error.message), /disabled|not enabled|not found/i, name);
-        }
+    try {
+        const result = await client.callTool({ name: "pal_dataset_query", arguments: { dataset: "equipment" } });
+        assert.doesNotMatch((result.content || []).map(item => item.text || "").join("\n"), /disabled|not enabled|not found/i, "pal_dataset_query");
+    } catch (error) {
+        assert.doesNotMatch(String(error && error.message), /disabled|not enabled|not found/i, "pal_dataset_query");
     }
     assert.ok(changed() > 0);
     await client.close();
