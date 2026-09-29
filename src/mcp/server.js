@@ -18,6 +18,8 @@ const { z } = require("zod");
 const toolMetadata = require("./pi-tools.json");
 const { routeTools } = require("../core/piHelpers");
 const { stableStringify } = require("../core/stableStringify");
+const { serializeToolDefinitions } = require("./toolSchema");
+const { ListToolsRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
 const pkg = require("../../package.json");
 const SERVER_INSTRUCTIONS = "PalSync runtime tools act on the LAST PUSHED server version. Push local changes with pal_push before runtime tests, previews, screenshots, fetches, exercises, tunnels, or SEO audits.";
 const LAZY_PROFILES = new Set(["pi-minimal", "pi-standard"]);
@@ -38,6 +40,13 @@ const PROFILE_TOOLS = {
     gemini: TOOLS.map(tool => tool.name),
     cursor: TOOLS.map(tool => tool.name),
     copilot: TOOLS.map(tool => tool.name)
+};
+
+const PAL_TOOLS = {
+    name: "pal_tools",
+    title: "Activate PalSync tools",
+    description: "Activate additional PalSync tools additively by deterministic keyword or group.",
+    inputShape: { query: z.string().describe("Task keywords or groups: sync, browser, runtime, project, spec.") }
 };
 
 function normalizeProfile(value) {
@@ -80,19 +89,18 @@ function createServer(getCtx, workspaceDir, options = {}) {
     // pal_tools (lazy profiles only) joins the same sorted list so the final
     // advertised list is fully sorted, not appended last.
     const pending = TOOLS.map(t => ({ name: t.name, tool: t }));
-    if (LAZY_PROFILES.has(profile)) pending.push({ name: "pal_tools", palTools: true });
+    if (LAZY_PROFILES.has(profile)) pending.push({ name: "pal_tools", tool: PAL_TOOLS, palTools: true });
     pending.sort(byToolName);
     for (const entry of pending) {
         if (entry.palTools) {
-            server.registerTool("pal_tools", {
-                title: "Activate PalSync tools",
-                description: "Activate additional PalSync tools additively by deterministic keyword or group.",
-                inputSchema: { query: z.string().describe("Task keywords or groups: sync, browser, runtime, project, spec.") }
+            const handle = server.registerTool("pal_tools", {
+                title: PAL_TOOLS.title, description: PAL_TOOLS.description, inputSchema: PAL_TOOLS.inputShape
             }, async ({ query }) => {
                 const names = routeTools(query, toolMetadata);
                 for (const name of names) registered.get(name)?.enable();
                 return { content: [{ type: "text", text: names.length ? "Activated: " + names.join(", ") : "No PalSync tools matched that query." }] };
             });
+            registered.set("pal_tools", handle);
             continue;
         }
         const t = entry.tool;
@@ -190,6 +198,14 @@ function createServer(getCtx, workspaceDir, options = {}) {
         registered.set(t.name, handle);
         if (!PROFILE_TOOLS[profile].includes(t.name)) handle.disable();
     }
+    // Answer tools/list from toolSchema.js instead of the SDK's own conversion. The input schemas
+    // are identical; this drops per-tool boilerplate the SDK adds ($schema, zod's MAX_SAFE_INTEGER
+    // bounds, the default execution.taskSupport) that every host would otherwise put in the prompt.
+    const definitions = serializeToolDefinitions(pending.map(entry => entry.tool));
+    server.server.removeRequestHandler("tools/list");
+    server.server.setRequestHandler(ListToolsRequestSchema, () => ({
+        tools: definitions.filter(def => registered.get(def.name).enabled)
+    }));
     return server;
 }
 

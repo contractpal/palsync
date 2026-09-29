@@ -850,8 +850,8 @@ const TOOLS = [
     {
         name: "pal_status",
         description: "Report whether the server is newer than your last pull, and who holds the lock (read-only).",
-        inputShape: diagnosticInputShape,
-        async run(ctx, args = {}) {
+        inputShape: {},
+        async run(ctx) {
             // Reuses the session's already-resolved pal identity instead of a fresh full-account
             // walk (see resolvePalForRead) — this was previously calling resolveServerPalByGuid
             // directly, which is exactly what made a single "get status" do hundreds of requests.
@@ -1055,7 +1055,7 @@ const TOOLS = [
     },
     {
         name: "pal_debug",
-        description: "Read and clear server c.debug output. The buffer is consume-once per your own Chip session — reading it clears only your copy, never the human's PalBuilder view or another Chip session's — and nothing attaches it for you automatically, so call this yourself whenever you actually want it (e.g. after a delayed system workflow finishes, or after watching a user navigate the site), not reflexively after every run.",
+        description: "Read and clear your Chip session's server c.debug output (only your copy; the human's PalBuilder view is unaffected). Nothing attaches it automatically: call it when you want it (after a run you are diagnosing, a delayed system workflow, or watching a user navigate), not after every run.",
         inputShape: {},
         async run(ctx) {
             const dbg = await retrieveServerDebug(ctx.session, ctx.record.palGuid, { palId: ctx.debugPalId });
@@ -1279,7 +1279,7 @@ const TOOLS = [
     },
     {
         name: "pal_screenshot",
-        description: "Render the last-pushed pal, detect runtime errors, and return a browser-computed designAudit. Capture desktop and mobile; require zero audit errors and inspect pixels. imageless:true returns only the audit. Missing browser/auth is unavailable, never a pass. Optional workflow/workflowName select the engine/workflow explicitly (takes precedence over auto-detection, extension stripped); console/transaction action+params render the action state before capture (encoded via URLSearchParams).",
+        description: "Render the last-pushed pal, detect runtime errors, and return a browser-computed designAudit. Capture desktop and mobile; require zero audit errors and inspect pixels. imageless:true returns only the audit. Missing browser/auth is unavailable, never a pass. workflow/workflowName override auto-detection; console/transaction action+params render that action's state before capture.",
         inputShape: {
             page: z.string().optional().describe("WEB page path; default is home."),
             feature: z.string().optional().describe("Work-history feature label."),
@@ -1287,7 +1287,7 @@ const TOOLS = [
             fullPage: z.boolean().optional().describe("Capture the full scroll height."),
             imageless: z.boolean().optional().describe("Return designAudit without image data."),
             workflow: z.enum(["console", "web", "transaction"]).optional().describe("Explicit workflow type — overrides auto-detection."),
-            workflowName: z.string().optional().describe("Registered workflow name (with or without file extension — extension is stripped consistently)."),
+            workflowName: z.string().optional().describe("Registered workflow name (file extension optional)."),
             action: z.string().optional().describe("Console/transaction action, c:a form: name or name?key=value."),
             expect: z.array(z.string()).optional().describe("Visible strings proving the intended screen; without them the capture is state-unverified."),
             params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional().describe("Scalar query parameters appended with the action (reserved keys cp-auth/nxProfileId/cp-workflow/cp-ws-doaction are refused).")
@@ -1685,7 +1685,7 @@ const TOOLS = [
     },
     {
         name: "pal_stats",
-        description: "Report this session's PalSync stats in one read: model usage when the harness exposes it, PalSync tool calls / bytes returned / durations, injected-context size and locally stable prefix, and verification-evidence counts. Offline, read-only, idempotent — the only stats surface.",
+        description: "Report this session's PalSync stats: model usage (when the harness exposes it), tool calls/bytes/durations, injected-context size, and verification-evidence counts. Offline and read-only.",
         needsCtx: false,
         inputShape: {},
         async run(ctx) {
@@ -1716,7 +1716,7 @@ const TOOLS = [
     },
     {
         name: "pal_resources",
-        description: "Refresh .resources/ from the server's GET_CHAIN: every pal in this pal's chain (module dependencies, resource pals, and cloud-wide system pals such as CloudPiston Resource) extracted read-only, one folder per chain pal (pages/fragments/workflows/etc., same shape as a pulled pal). Runs automatically at session start; call this again only if a chain pal (e.g. CloudPiston Resource) may have changed server-side, or the chain itself changed (a module was attached/detached). Never edit files under .resources/ — they are not part of this pal and are wiped and rewritten on every refresh.",
+        description: "Refresh .resources/: read-only copies of every pal in this pal's chain (modules, resource pals, system pals such as CloudPiston Resource), one pulled-pal-shaped folder each. Runs at session start; call again only if a chain pal or the chain itself changed. Never edit .resources/ — it is rewritten on every refresh.",
         inputShape: {},
         async run(ctx) {
             // "Runs automatically at session start" made this one of the very first calls of a
@@ -1779,7 +1779,7 @@ const TOOLS = [
     },
     {
         name: "pal_spec_lint",
-        description: "Lint a SPEC.md OFFLINE for the MECHANICAL half of pal-spec's reality check: placeholders (TBD/decide-later), dead §3 links, §8a primary-key/type/size/indexability against palbuilder-types.md, §5 dataset references, and the §12 floor (plus the REGRESSION criterion when a regression baseline sits beside it). Returns HARD_FLAG/FLAG/NOTE findings; capability->primitive mapping and component checks stay manual.",
+        description: "Lint SPEC.md offline for the mechanical half of pal-spec's reality check: placeholders, dead §3 links, §8a field keys/types/sizes/indexes, §5 dataset references, the §12 floor, and the REGRESSION criterion when a baseline exists. Returns HARD_FLAG/FLAG/NOTE findings; design-level checks stay manual.",
         needsCtx: false,
         inputShape: { spec: z.string().optional().describe("Path to the SPEC.md (default: SPEC.md in the workspace).") },
         async run(ctx, { spec } = {}) {
@@ -1999,7 +1999,7 @@ const TOOLS = [
     },
     {
         name: "pal_push",
-        description: "Push local changes after validating changed files and cross-file contracts. Validation errors cannot be bypassed; force:true handles server drift only. Warnings never block. Refuses locks unless the user supplies the exact typed override. Standalone pal_validate checks the whole workspace; this gate does not re-block pre-existing errors in untouched files. When the response reports sourceControlEnabled:true, decide for yourself (the developer never sees or writes this) whether this push is a completed piece of work or just exploratory/testing: for completed work, pass commitMessage with a concise summary of what changed and why — it is recorded verbatim, prefixed \"Chip: \"; for exploratory/testing pushes, omit it. commitMessage is ignored (never sent) when sourceControlEnabled is false — don't bother passing it.",
+        description: "Push local changes after validating changed files and cross-file contracts. Validation errors cannot be bypassed; force:true handles server drift only. Warnings never block. Refuses locks unless the user supplies the exact typed override. Standalone pal_validate checks the whole workspace; this gate does not re-block pre-existing errors in untouched files. When a response reports sourceControlEnabled:true, pass commitMessage (a concise what/why summary, recorded as \"Chip: <message>\") on pushes that complete a piece of work; omit it for exploratory pushes. It is ignored when source control is off.",
         // skipValidation is deliberately NOT in inputShape (the MCP layer strips unknown keys, so
         // agents cannot pass it). In the test-06 haiku run the agent read the "call pal_push with
         // skipValidation:true" hint in this tool's refusal message, decided the validator was
