@@ -28,7 +28,7 @@ never pal-loop's self-report.
   §6 layout, §11 constraints, §12 acceptance criteria.
 - `EXECUTION.md` — what was built and in what state.
 - `DESIGN_SYSTEM.md` / `COMPONENTS.md` — what "on-brand / good" means visually.
-- `design-system-init/references/design-principles.md` (from the injected skills folder) —
+- `../design-system-init/references/design-principles.md` —
   applied UX/hierarchy/grouping/target/simplicity rubric for visually significant screens.
 - Built artifacts: `pal_fetch` each web page (server-rendered HTML); workflow/fragment files
   on disk.

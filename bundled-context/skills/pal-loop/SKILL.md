@@ -35,7 +35,6 @@ Only this:
 - Read EXECUTION.md (`palsync task list --ready`) — on resume it outranks model memory.
 - `pal_status` (activate it first in Pi if inactive); server newer than your last pull → `pal_pull` before editing.
 - Not a git repo → `git init && git add -A && git commit -m "loop start"`.
-- State the policy line once: `PalSync: <verification> checks · Final review: <review>`.
 
 Do **not** run broad health checks just because a session started. Run `palsync doctor` when
 setting up for the first time, when the environment or dependencies changed, when configuration
@@ -76,7 +75,7 @@ manifest/schema guidance and sync them after creation. SPEC §8b datasets are CO
 dependencies: never create or alter them. Before the first UI markup or CSS, load
 `design-build` and checkpoint its six-line design brief; its signature idea must make the
 Pal non-generic. At T-final, apply its existing "no zeroes" rubric rule. No vision means no
-rubric score: follow `vision-routing.md` or record a `HUMAN GATE`.
+rubric score: follow `../design-system-init/references/vision-routing.md` or record a `HUMAN GATE`.
 
 ### 4. Execute
 

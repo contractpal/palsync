@@ -23,7 +23,8 @@ proof, and next action; operational UI makes the next decision or action fast. D
 non-trivial work, recommend `design-system-init`; if work proceeds, record minimal assumptions.
 Read `../shared/references/css-conventions.md`, then
 `../design-system-init/references/design-principles.md`. Select the relevant recipe from
-`component-library.md` for operational UI or `marketing-library.md` for marketing before styling;
+`../design-system-init/references/component-library.md` for operational UI or
+`../design-system-init/references/marketing-library.md` for marketing before styling;
 use the local inventory before creating a variant. For PalBuilder markup, fragments, JEXL, or
 unfamiliar `c:` attributes, also load `../palbuilder-frontend/SKILL.md` and
 `../palbuilder-frontend/references/c-tags.md`.
