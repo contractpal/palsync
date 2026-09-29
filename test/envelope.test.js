@@ -4,7 +4,7 @@ const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
-const { buildEnvelope, serializeEnvelope } = require("../src/mcp/envelope");
+const { buildEnvelope, serializeEnvelope, modelView } = require("../src/mcp/envelope");
 const { tmpWorkspace, parseEnvelope } = require("./helpers");
 
 test("envelope serialization is byte-identical and keeps the trailer last", () => {
@@ -16,12 +16,29 @@ test("envelope serialization is byte-identical and keeps the trailer last", () =
     const second = serializeEnvelope(ws, "pal_validate", source);
     assert.equal(second.message, first.message);
     const parsed = parseEnvelope(first.message);
-    assert.deepStrictEqual(parsed.envelope, first.envelope);
-    assert.equal(parsed.envelope.detailsRef, first.detailsRef);
+    assert.deepStrictEqual(parsed.envelope, modelView(first.envelope));
+    assert.equal(parsed.trailer, "Full result: " + first.detailsRef);
+    assert.equal(first.envelope.detailsRef, first.detailsRef, "the structured envelope keeps its fixed shape");
     const artifact = path.join(ws, first.detailsRef);
     assert.equal(fs.existsSync(artifact), true);
     assert.equal(first.rawBytes, fs.statSync(artifact).size, "usage bytes share the artifact's canonical serialization");
     fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("the model view drops duplicated and null fields but keeps every root cause", () => {
+    const envelope = buildEnvelope({ ok: false, filesChecked: 1, cacheHits: 0, cacheMisses: 1, findings: [
+        { severity: "error", rule: "demo", file: "pages/a.html", line: 2, message: "Remove it. Fix: delete the tag." },
+        { severity: "warn", rule: "own", file: "b.js", line: 3, message: "Explicit fix.", fix: "Do this." },
+        { severity: "warn", rule: "none", file: "c.js", line: 4, message: "No fix here." }
+    ], detailsRef: ".agent-work-history/pal_validate/ref.json" });
+    const view = modelView(envelope);
+    assert.deepStrictEqual(Object.keys(view), ["ok", "filesChecked", "diagnosticCount", "infoCount", "uniqueRootCauses", "diagnostics"]);
+    assert.deepStrictEqual(view.diagnostics.map(item => [item.code, item.message, item.fix, item.locations]), [
+        ["demo", "Remove it.", "delete the tag.", [{ file: "pages/a.html", line: 2 }]],
+        ["own", "Explicit fix.", "Do this.", [{ file: "b.js", line: 3 }]],
+        ["none", "No fix here.", undefined, [{ file: "c.js", line: 4 }]]
+    ]);
+    assert.equal(envelope.diagnostics[0].message, "Remove it. Fix: delete the tag.", "the structured envelope is not mutated");
 });
 
 test("truncation collapses repeats without dropping a unique root cause", () => {

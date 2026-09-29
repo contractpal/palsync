@@ -120,6 +120,25 @@ function buildEnvelope(source, options = {}) {
     return envelope;
 }
 
+// What the model reads. The structured envelope keeps its fixed shape for callers and tests; the
+// message drops what the model cannot use or already has: detailsRef (the trailer carries it),
+// null fields, lint-cache counters, and per-diagnostic file/line (locations[0] repeats them).
+// A fix extracted from a "Fix:" suffix is shown once, in `fix`, not also inside `message`.
+function modelView(envelope) {
+    const view = {};
+    for (const [key, value] of Object.entries(envelope)) {
+        if (value === null || key === "detailsRef" || key === "cacheHits" || key === "cacheMisses") continue;
+        view[key] = key === "diagnostics" && Array.isArray(value) ? value.map(item => {
+            const { file, line, fix, ...rest } = item;
+            if (fix == null) return rest;
+            const suffix = rest.message.match(/\s*Fix:\s*(.+)$/i);
+            if (suffix && suffix[1] === fix) rest.message = rest.message.slice(0, suffix.index);
+            return Object.assign(rest, { fix });
+        }) : value;
+    }
+    return view;
+}
+
 function serializeEnvelope(workspaceDir, tool, source, options = {}) {
     // One canonical serialization feeds both the content-addressed artifact and usage
     // accounting. The envelope may use a smaller projection, but the artifact retains the
@@ -136,10 +155,10 @@ function serializeEnvelope(workspaceDir, tool, source, options = {}) {
         // would bury the verdict behind diagnostics. It is still byte-deterministic: every key
         // order here is fixed by buildEnvelope above, independent of source insertion order.
         // Only the artifact bytes (detailsRef/rawBytes) need the canonical sorted form.
-        message: JSON.stringify(envelope) + "\n" + trailer,
+        message: JSON.stringify(modelView(envelope)) + "\n" + trailer,
         detailsRef,
         rawBytes: Buffer.byteLength(serializedSource)
     };
 }
 
-module.exports = { buildEnvelope, collapseFindings, serializeEnvelope };
+module.exports = { buildEnvelope, collapseFindings, serializeEnvelope, modelView };

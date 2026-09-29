@@ -60,8 +60,8 @@ test("1. a passing regression yields a parseable envelope, a durable artifact, a
     assert.deepEqual(envelope.diagnostics, []);
     // The artifact is the point: the verdict is now checkable from disk, not from the transcript.
     assert.match(trailer, /^Full result: .+$/);
-    assert.ok(envelope.detailsRef, "envelope carries a details reference");
-    const artifact = path.join(ctx.workspaceDir, envelope.detailsRef.split("#")[0].replace(/^\.\//, ""));
+    const detailsRef = trailer.slice("Full result: ".length);
+    const artifact = path.join(ctx.workspaceDir, detailsRef.split("#")[0].replace(/^\.\//, ""));
     assert.equal(fs.existsSync(artifact), true, artifact);
     assert.equal(JSON.parse(fs.readFileSync(artifact, "utf8")).summary, PASSING.summary);
     assert.ok(result._usage.rawBytes > 0);

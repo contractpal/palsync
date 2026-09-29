@@ -60,8 +60,7 @@ test("search through the MCP wrapper returns location-addressed astMatch diagnos
     assert.equal(envelope.ok, true);
     const hits = envelope.diagnostics.filter(d => d.code === "astMatch");
     assert.equal(hits.length, 1);
-    assert.equal(hits[0].file, "pages/form.html");
-    assert.equal(hits[0].line, 2);
+    assert.deepStrictEqual(hits[0].locations, [{ file: "pages/form.html", line: 2 }]);
     assert.match(hits[0].message, /Skip/);
     assert.equal(result.matches.length, 1);
 });
@@ -96,7 +95,7 @@ test("a rewrite preview through the wrapper exposes astChange diagnostics and th
     assert.equal(envelope.ok, true);
     const changes = envelope.diagnostics.filter(d => d.code === "astChange");
     assert.equal(changes.length, 1);
-    assert.equal(changes[0].file, "pages/form.html");
+    assert.equal(changes[0].locations[0].file, "pages/form.html");
     assert.equal(envelope.summary.filesChanged, 1);
     assert.match(envelope.summary.diff, /confirm="1"/);
     assert.equal(fs.readFileSync(path.join(ws, "pages/form.html"), "utf8"), FORM_HTML, "preview must not write");
