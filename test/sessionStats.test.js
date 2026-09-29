@@ -312,7 +312,7 @@ test("pal_context behavior is untouched by the stats consolidation", async () =>
     assert.deepEqual(Object.keys(palContext.inputShape).sort(), ["query", "section"]);
     const catalog = await palContext.run({ workspaceDir: ws }, {});
     assert.deepEqual(JSON.parse(catalog.message).sections.map(item => item.id),
-        require("../src/launcher/contextInject").onDemandSyncSections(null, { cli: false, skillsDir: ".claude/skills" })
+        require("../src/launcher/contextInject").onDemandSyncSections()
             .map(item => item.id));
     const selected = await palContext.run({ workspaceDir: ws }, { section: "datasets" });
     assert.equal(JSON.parse(selected.message).sections[0].id, "datasets");

@@ -58,10 +58,7 @@ async function buildManifest({ agent, palName, skills, parts, bundleRoot = path.
         section("skill-catalog", "release-stable", 2, JSON.stringify(skillCatalog), "bundled-context/skills/*/SKILL.md#frontmatter"),
         section("sync-section", "workspace-stable", 3, parts.sync, "src/launcher/contextInject.js#syncSection")
     ];
-    for (const item of onDemandSyncSections(palName, {
-        cli: agent === "pi",
-        skillsDir: agent === "claude" ? ".claude/skills" : ".agents/skills"
-    })) {
+    for (const item of onDemandSyncSections()) {
         sections.push(section(item.id, "on-demand", sections.length, item.content,
             "src/launcher/contextInject.js#syncDetails", { eager: false, keywords: item.keywords }));
     }

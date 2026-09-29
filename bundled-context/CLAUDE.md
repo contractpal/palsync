@@ -34,4 +34,4 @@ Make the smallest change that satisfies the request. Reuse existing Pal code and
 
 Use PalSync's deterministic/server/runtime checks for the behavior you changed. Compile/validation success is not runtime/render evidence. Do not claim UI state, saved data, or completed behavior that a tool did not actually observe.
 
-Detailed sync, file-creation, dataset, and completion behavior is provided by PalSync's managed/on-demand context.
+Detailed sync, file-creation, and dataset rules are served on demand by `pal_context`.

@@ -31,7 +31,7 @@ function assertJsonMessage(result) {
 }
 
 test("workspace-stable sync tail stays below 4096 bytes", () => {
-    const text = contextInject.syncSection("Demo", { cli: false, skillsDir: ".claude/skills" });
+    const text = contextInject.syncSection("Demo", { skillsDir: ".claude/skills" });
     assert.ok(Buffer.byteLength(text) < 4096, Buffer.byteLength(text) + " bytes");
 });
 
@@ -51,7 +51,7 @@ test("context manifest exposes detailed sync contracts on demand", async () => {
 test("pal_context preserves exact no-arg, section, query, and section-over-query behavior", async () => {
     const ws = tmpWorkspace({ ".palsync.json": JSON.stringify({ palName: "Demo" }) });
     const tool = TOOLS.find(item => item.name === "pal_context");
-    const sections = contextInject.onDemandSyncSections("Demo", { cli: false, skillsDir: ".claude/skills" });
+    const sections = contextInject.onDemandSyncSections();
     const cases = [
         {},
         { section: "datasets" },
@@ -142,7 +142,7 @@ test("pal_impact requires target and formats target errors as bounded JSON; pal_
     // retired `target` input) is ignored, never surfaced as an impact result or an error.
     const sectionTool = TOOLS.find(item => item.name === "pal_context");
     const sectionWs = tmpWorkspace({ ".palsync.json": JSON.stringify({ palName: "Demo" }) });
-    const sections = contextInject.onDemandSyncSections("Demo", { cli: false, skillsDir: ".claude/skills" });
+    const sections = contextInject.onDemandSyncSections();
     const plain = await sectionTool.run({ workspaceDir: sectionWs }, { section: "datasets" });
     const withStray = await sectionTool.run({ workspaceDir: sectionWs }, { section: "datasets", target: "pages/home.html" });
     assert.deepStrictEqual(withStray, plain);

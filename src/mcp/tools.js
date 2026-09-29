@@ -1709,11 +1709,7 @@ const TOOLS = [
             query: z.string().optional().describe("Keywords used when the exact section id is unknown.")
         },
         async run(ctx, { section, query } = {}) {
-            let record = null;
-            try { record = await palsyncfile.read(ctx.workspaceDir); } catch (e) { /* optional context */ }
-
-            const palName = record && record.palName;
-            const sections = onDemandSyncSections(palName, { cli: false, skillsDir: ".claude/skills" });
+            const sections = onDemandSyncSections();
             let ids = section ? [section] : query ? routeItems(query, sections) : [];
             if (!ids.length && !section && !query) {
                 const catalog = sections.map(item => ({ id: item.id, keywords: item.keywords }));
