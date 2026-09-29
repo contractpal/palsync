@@ -59,7 +59,7 @@ async function measure() {
 
         const current = manifestApi.readManifest(ws);
         const skills = await contextInject.bundledSkills();
-        const parts = await contextInject.buildPalsyncParts("Beta", { cli: false, skillsDir: ".agents/skills" });
+        const parts = await contextInject.buildPalsyncParts("Beta", { skillsDir: ".agents/skills" });
         const isolatedBundle = path.join(ws, "isolated-bundle");
         fs.cpSync(path.join(__dirname, "..", "bundled-context"), isolatedBundle, { recursive: true });
         const beforeSkillEdit = await manifestApi.buildManifest({ agent: "codex", palName: "Beta", skills, parts, bundleRoot: isolatedBundle });

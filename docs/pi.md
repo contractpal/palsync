@@ -11,7 +11,7 @@ Do not serve PalSync through both integrations. If the general `pi-mcp` extensio
 ## Manual smoke
 
 1. Open Pi in a workspace containing `.palsync.json`.
-2. Confirm only `pal_tools`, `pal_context`, `pal_validate`, and `pal_spec_lint` are initially active.
+2. Confirm only `pal_tools`, `pal_context`, `pal_validate`, `pal_spec_lint`, and `pal_stats` are initially active.
 3. Call `pal_tools` with `browser testing`.
 4. Confirm preview, fetch, screenshot, exercise, SEO, and runtime-test tools were added and the original tools remain active.
 5. Call `pal_tools` with `project` and confirm its result includes routing guidance for `pal_impact` and `pal_ast`.
