@@ -358,29 +358,6 @@ function testingDisabledResult(ctx, toolName) {
     };
 }
 
-// Render-verification tracking (session-lifetime, lives on ctx so it survives across tool calls).
-// ctx.renderVerified: undefined/false = not verified since the last push, true = a clean
-// pal_screenshot/pal_fetch/pal_preview(expect) confirmed it, "unavailable" = the check tool
-// isn't available in this runtime (accepted fallback: ask the user to eyeball it).
-// Exists because pal_validate/pal_test only prove the code COMPILES — agents (esp. weaker
-// models) declare a build "done" straight off that, without ever calling the one tool that can
-// see the actual render. This reminder rides the tool response text itself (read every call),
-// not just a skill doc read once at the start of a long session.
-function renderNotVerifiedReminder(ctx) {
-    if (ctx.renderVerified === true || ctx.renderVerified === "unavailable") return "";
-    // Full paragraph once per session; every repeat rides the context window for the rest of
-    // the conversation, so later occurrences use the short form (same rule, fewer bytes).
-    if (ctx.renderReminderShown) {
-        return "\n\n⚠ RENDER NOT VERIFIED — run pal_screenshot, or WEB pal_fetch/pal_preview with expect:[strings], before declaring done.";
-    }
-    ctx.renderReminderShown = true;
-    return "\n\n⚠ RENDER NOT VERIFIED — this only proves the code compiles, not that it renders." +
-        " Call pal_screenshot (web or console/transaction) — or for a WEB pal, pal_fetch/pal_preview with" +
-        " expect:[strings] — before declaring this done. Do not report page content, saved data, or a" +
-        " completed user flow (\"clicked Save\", \"item appears in the list\") as fact unless one of those" +
-        " tools actually showed it to you.";
-}
-
 function formatStyleStatus(status) {
     if (!status || !status.inspected) return "CSS: not inspected";
     const parts = [
@@ -460,7 +437,7 @@ function screenshotEnvelopeProjection(res, fields = {}) {
 
 // A page-level visual gate is only complete after every route the agent has started reviewing has
 // one clean desktop and one clean mobile capture. A later failure replaces the prior pass, so stale
-// evidence can never leave renderVerified=true. pal_push clears this map because screenshots prove
+// evidence can never leave the gate complete. pal_push clears this map because screenshots prove
 // the last pushed version, not whatever is currently on disk.
 function recordScreenshotEvidence(ctx, { route, viewportName, clean }) {
     const routeKey = route || "/";
@@ -473,7 +450,6 @@ function recordScreenshotEvidence(ctx, { route, viewportName, clean }) {
         return evidence.desktop !== true || evidence.mobile !== true;
     });
     const complete = Object.keys(ctx.renderViewportEvidence).length > 0 && incomplete.length === 0;
-    ctx.renderVerified = complete;
     return { complete, route: routeKey, viewportName, clean: clean === true, incomplete };
 }
 
@@ -687,17 +663,6 @@ function debugFailed(out) {
         out.fetched === false || out.ran === false || out.emptyBody === true || out.renderError ||
         Number(out.errors) > 0 || Number(out.designAudit && out.designAudit.errors) > 0 ||
         Number(out.status) >= 400));
-}
-
-function saveServerDebug(workspaceDir, text) {
-    try {
-        const run = createWorkHistoryRun(workspaceDir, { tool: "pal_debug", feature: "auto-attached" });
-        const filePath = writeArtifactFile(run, "server-debug.txt", text, "utf8");
-        if (filePath) writeRunNotes(run, ["# Auto-attached server debug", "", "- Artifact: `server-debug.txt`"]);
-        return filePath;
-    } catch (e) {
-        return null;
-    }
 }
 
 function cappedFailureDebug(text) {
@@ -1364,7 +1329,6 @@ const TOOLS = [
             if (!res.captured) {
                 let persistNote = "";
                 if (res.available === false) {
-                    ctx.renderVerified = "unavailable"; // accepted fallback: ask the user to eyeball it
                     res.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, Object.assign(evidenceBase(screenshotEvidenceIdentity({ kind: workflow, workflowName: normalizedWorkflowName, page, action })), {
                         viewportName: null, renderClean: false, unavailable: true
                     }));
@@ -1401,8 +1365,7 @@ const TOOLS = [
             // the login page. Requiring an expectation there would be pure ceremony.
             const stateTargeted = !!(res.requestedState && (res.requestedState.action || res.requestedState.page));
             const stateOk = stateTargeted ? res.stateVerified === true : res.stateVerified !== false;
-            // A clean capture (no renderError) is the only thing that actually proves the UI renders —
-            // a renderError leaves renderVerified false so the reminder keeps firing until it's fixed.
+            // A clean capture (no renderError) is the only thing that actually proves the UI renders.
             const auditClean = res.designAudit && res.designAudit.inspected && res.designAudit.errors === 0;
             const screenshotClean = stateOk && !res.renderError && (!res.styleStatus || res.styleStatus.likelyLoaded !== false) && auditClean;
             // One credential-safe identity for this screenshot — derived from the NORMALIZED result
@@ -1888,7 +1851,6 @@ const TOOLS = [
                 // The push inside sync advanced the baseline — persist it.
                 if (res.saveResult && res.saveResult.serverPaths) refreshBaseline(ctx.record, ctx.workspaceDir, res.saveResult.serverPaths);
                 await ctx.persist();
-                ctx.renderVerified = false;
                 ctx.renderViewportEvidence = {};
                 const verb = res.recreated ? "RECREATED (dropped + rebuilt, data deleted)" : "synced (created/updated, data kept)";
                 const freeformNote = (res.freeformDefaulted && res.freeformDefaulted.length)
@@ -2065,7 +2027,6 @@ const TOOLS = [
                 ctx.pushRefusalStreak = null;
                 refreshBaseline(ctx.record, ctx.workspaceDir, res.serverPaths);
                 await ctx.persist();
-                ctx.renderVerified = false; // a push can change what renders — re-verify before declaring done
                 ctx.renderViewportEvidence = {};
                 // Surface any pre-push WARNINGS even on success (errors can't reach here unless
                 // skipValidation forced past them — say so loudly).

@@ -1319,7 +1319,6 @@ test("pal_screenshot render error and unavailable browser both leave durable row
         const result = await findTool(loaded.tools, "pal_screenshot").run(ctx, { page: "/board" });
         assert.equal(result.captured, false);
         assert.equal(result.evidenceRecorded, true);
-        assert.equal(ctx.renderVerified, "unavailable");
         const rows = usage.readToolEvidence(ws);
         assert.equal(rows.length, 2);
         assert.equal(rows[1].viewportName, null);

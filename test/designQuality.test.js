@@ -10,17 +10,14 @@ test("responsive visual gate requires both viewports and clears on a later failu
     const ctx = {};
     let gate = recordScreenshotEvidence(ctx, { route: "/", viewportName: "desktop", clean: true });
     assert.equal(gate.complete, false);
-    assert.equal(ctx.renderVerified, false);
 
     gate = recordScreenshotEvidence(ctx, { route: "/", viewportName: "mobile", clean: true });
     assert.equal(gate.complete, true);
-    assert.equal(ctx.renderVerified, true);
 
     gate = recordScreenshotEvidence(ctx, { route: "/about", viewportName: "desktop", clean: true });
     assert.equal(gate.complete, false, "a newly reviewed route still needs its mobile capture");
     gate = recordScreenshotEvidence(ctx, { route: "/about", viewportName: "mobile", clean: false });
-    assert.equal(gate.complete, false);
-    assert.equal(ctx.renderVerified, false, "a later failed capture must clear the prior pass");
+    assert.equal(gate.complete, false, "a later failed capture must clear the prior pass");
 });
 
 test("browser design audit executes its real DOM, geometry, and accessibility checks", async (t) => {
