@@ -30,7 +30,7 @@ test("advertised MCP tool schema matches the committed wire snapshot", async () 
     const actual = JSON.stringify(advertised.tools, null, 2) + "\n";
     const fixture = fs.readFileSync(path.join(__dirname, "fixtures", "tool-schema.snapshot.json"), "utf8");
     assert.equal(advertised.tools.length, 30);
-    assert.equal(Buffer.byteLength(JSON.stringify(advertised.tools)), 25872);
+    assert.equal(Buffer.byteLength(JSON.stringify(advertised.tools)), 25668);
     const workflows = Object.fromEntries(advertised.tools
         .filter(tool => ["pal_test", "pal_preview", "pal_screenshot", "pal_exercise"].includes(tool.name))
         .map(tool => [tool.name, tool.inputSchema.properties.workflow.enum]));

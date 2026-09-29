@@ -154,9 +154,6 @@
         },
         "values": {
           "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
           "additionalProperties": {
             "type": "string"
           },
@@ -377,9 +374,6 @@
               "params": {
                 "description": "WEB action query parameters.",
                 "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                },
                 "additionalProperties": {
                   "anyOf": [
                     {
@@ -394,9 +388,6 @@
               "fill": {
                 "description": "Input name/value pairs to fill before clicking.",
                 "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                },
                 "additionalProperties": {
                   "anyOf": [
                     {
@@ -467,9 +458,6 @@
             "params": {
               "description": "Action params; conflicts with the action suffix are rejected.",
               "type": "object",
-              "propertyNames": {
-                "type": "string"
-              },
               "additionalProperties": {
                 "anyOf": [
                   {
@@ -825,9 +813,6 @@
         "params": {
           "description": "Scalar query parameters appended with the action (reserved keys cp-auth/nxProfileId/cp-workflow/cp-ws-doaction are refused).",
           "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
           "additionalProperties": {
             "anyOf": [
               {
@@ -1071,9 +1056,6 @@
         "payload": {
           "description": "Top-level payload values; nested objects do not survive the wire.",
           "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
           "additionalProperties": {}
         },
         "payloadFile": {
