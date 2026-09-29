@@ -353,7 +353,8 @@ test("on-demand file guidance requires a fragment stub and distinguishes DataVie
         assert.match(doc, /Fragment content is missing/);
         assert.match(doc, /DataView is a read-only join\/read model, not a table/);
         assert.match(doc, /provisions DataSet tables only/);
-        assert.match(doc, /DataViews\/data\/datalists stay PalBuilder-created/);
+        assert.match(doc, /DataViews stay PalBuilder-created/);
+        assert.match(doc, /`pal_data_set`\/`pal_datalist_set`/, "Data/DataList entries are created with their tools, not described as PalBuilder-only");
     }
 });
 

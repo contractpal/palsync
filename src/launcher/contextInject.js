@@ -133,9 +133,10 @@ function syncDetails() {
         "  owner and refuses. Do NOT casually override: overriding may destroy unsaved work. Override requires an",
         "  exact typed `confirmOverride` phrase; tell the user to unlock and close it in PalBuilder instead.",
         "- Datasets: you can create/update their TABLES with " + T.datasets + " (define in pal.json → sync). A normal",
-        "  sync never deletes data; `recreate` does and needs a typed confirmation. Data/dataList/DataView manifest",
-        "  entries stay PalBuilder-provisioned, not created by push. Workflows may build a runtime DataView with `pal.createDataViewBuilder()`;",
-        "  see palbuilder-data/references/dataviews.md.",
+        "  sync never deletes data; `recreate` does and needs a typed confirmation. Create/update/delete `data` and",
+        "  `datalists` entries with `pal_data_set`/`pal_datalist_set` (and their `_delete` twins), never by hand-editing",
+        "  pal.json. DataView manifest entries stay PalBuilder-provisioned; workflows may build a",
+        "  runtime DataView with `pal.createDataViewBuilder()` (see palbuilder-data/references/dataviews.md).",
         "- **Never run `palsync` sync/server commands from your shell** (push/pull/status/validate/test/…) —",
         "  the pal_* tools ARE the interface, and the bare `palsync` command opens an interactive human",
         "  launcher. Offline helpers a skill tells you to run (`palsync task`, `checkpoint`, `completion check`,",
@@ -286,7 +287,7 @@ function syncDetails() {
         "  and must never be used to make an additive change. Only suggest recreate when a column type must change",
         "  or a column is removed, and always warn the user it deletes all data first.",
         "- " + T.datasets + " provisions DataSet tables only. A DataView is a read-only join/read model, not a table;",
-        "  DataViews/data/datalists stay PalBuilder-created, and push/pull only preserves them."
+        "  DataViews stay PalBuilder-created, and push/pull only preserves them."
     ].join("\n");
 }
 

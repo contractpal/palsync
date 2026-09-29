@@ -18,9 +18,9 @@ basis that could not be reproduced.
 | All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 2,260 | 565 | release-stable |
 | Claude | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,519 | 380 | workspace-stable |
 | Codex/OpenCode/Pi | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,650 | 413 | workspace-stable |
-| All | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 7,723 | 1,931 | on-demand |
+| All | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 7,843 | 1,961 | on-demand |
 | All | `creating-files` | `src/launcher/contextInject.js#syncDetails` | 4,978 | 1,245 | on-demand |
-| All | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,539 | 885 | on-demand |
+| All | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,524 | 881 | on-demand |
 | All | `skill-body:design-build` | `bundled-context/skills/design-build/SKILL.md` | 4,862 | 1,216 | on-demand |
 | All | `skill-body:design-system-init` | `bundled-context/skills/design-system-init/SKILL.md` | 18,126 | 4,532 | on-demand |
 | All | `skill-body:pal-fix` | `bundled-context/skills/pal-fix/SKILL.md` | 4,167 | 1,042 | on-demand |
