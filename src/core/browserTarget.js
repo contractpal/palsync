@@ -144,11 +144,28 @@ async function observeScreen(pg, boundMs = STATE_TIMEOUT_MS) {
 // The state oracle. `expect` is a small list of strings that MUST be visible on the screen the
 // caller asked for. Returns verified:null when the caller declared no expectation — that is an
 // honest "not proven", never a pass.
+// innerText applies CSS text-transform, so markup "Step 1 of 8" styled uppercase reads "STEP 1 OF 8".
+// Expectations are written from markup or from screenshots, so matching accepts either form: the
+// displayed text plus, when it differs, the same visible text with text-transform switched off.
+// Exact matching against real on-screen text only; no case folding ("Saved" never matches "saved").
+async function readMatchText(pg, displayed, boundMs = STATE_TIMEOUT_MS) {
+    const source = await withBound(Promise.resolve().then(() => pg.evaluate(() => {
+        const style = document.createElement("style");
+        style.textContent = "*,*::before,*::after{text-transform:none!important}";
+        (document.head || document.documentElement).appendChild(style);
+        try { return document.body ? document.body.innerText : ""; }
+        finally { style.remove(); }
+    })), boundMs, null);
+    const shown = String(displayed || "");
+    return typeof source === "string" && source && source !== shown ? shown + "\n" + source : shown;
+}
+
 async function verifyState(pg, expect, boundMs = STATE_TIMEOUT_MS) {
     const wanted = Array.isArray(expect) ? expect.filter(s => typeof s === "string") : [];
     const observed = await observeScreen(pg, boundMs);
     if (!wanted.length) return { verified: null, expect: [], observed };
-    const text = await withBound(Promise.resolve().then(() => pg.innerText("body")), boundMs, "");
+    const shown = await withBound(Promise.resolve().then(() => pg.innerText("body")), boundMs, "");
+    const text = await readMatchText(pg, shown, boundMs);
     const results = wanted.map(s => ({ string: s, found: !!s.trim() && String(text).indexOf(s) !== -1 }));
     return { verified: results.every(r => r.found), expect: results, observed };
 }
@@ -396,7 +413,7 @@ async function attemptWithFreshTest(session, guid, testOpts, attempt, deps = {})
 }
 
 module.exports = {
-    normalizeTarget, buildTargetUrl, observeScreen, verifyState, describeTargetMismatch, isScalar,
+    normalizeTarget, buildTargetUrl, observeScreen, verifyState, readMatchText, describeTargetMismatch, isScalar,
     deriveWebBase, resolveTargetUrl, openAuthenticatedScreen, attemptWithFreshTest, STATE_TIMEOUT_MS,
     authDiagnostics, formatAuthDiagnostics, withPalTestTurn
 };

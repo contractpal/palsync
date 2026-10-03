@@ -129,3 +129,24 @@ test("a step-driven capture is its own reviewed state identity", () => {
     assert.equal(base, "console:default:openOrders");
     assert.equal(behind, "console:default:openOrders>Fake API Order");
 });
+
+describe("text-transform aware matching", () => {
+    const { readMatchText } = require("../src/core/browserTarget");
+    const { checkBrowserStep } = require("../src/core/exercise");
+    const pg = { async evaluate() { return "Step 1 of 8\nSaved"; } };
+
+    test("an expect written from markup matches CSS-uppercased text", async () => {
+        const text = await readMatchText(pg, "STEP 1 OF 8\nSaved");
+        assert.equal(checkBrowserStep(text, "", { expect: ["Step 1 of 8", "STEP 1 OF 8"] }).pass, true);
+    });
+
+    test("matching stays exact: no case folding", async () => {
+        const text = await readMatchText({ async evaluate() { return "Changes not saved"; } }, "Changes not saved");
+        assert.equal(checkBrowserStep(text, "", { expect: ["Saved"] }).pass, false);
+    });
+
+    test("a page that cannot report untransformed text falls back to displayed text", async () => {
+        assert.equal(await readMatchText({ async evaluate() { throw new Error("gone"); } }, "STEP 1"), "STEP 1");
+        assert.equal(await readMatchText({ async evaluate() { return {}; } }, "STEP 1"), "STEP 1");
+    });
+});

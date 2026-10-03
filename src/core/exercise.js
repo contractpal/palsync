@@ -25,7 +25,7 @@ const { detectRenderError } = require("./screenshot");
 const { sanitizeUrl, sanitizeResourceUrl, releaseBrowser, waitForRenderablePage } = require("./browser");
 // Target normalization, the authenticated bootstrap, the state oracle and the retry boundary are
 // shared with pal_screenshot — neither tool may interpret a console action differently.
-const { normalizeTarget, openAuthenticatedScreen, attemptWithFreshTest, deriveWebBase, describeTargetMismatch } = require("./browserTarget");
+const { normalizeTarget, openAuthenticatedScreen, attemptWithFreshTest, deriveWebBase, describeTargetMismatch, readMatchText } = require("./browserTarget");
 
 const MAX_STEPS = 10;
 
@@ -1227,8 +1227,9 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
                     try { lastText = await pg.innerText("body"); } catch (e) { lastText = ""; }
                     try { lastHtml = await pg.content(); } catch (e) { lastHtml = ""; }
                     lastRenderError = detectRenderError(lastText) || detectRenderError(lastHtml);
+                    const matchText = await readMatchText(pg, lastText, evidenceTimeout);
                     if (lastRenderError) {
-                        lastChk = checkBrowserStep(lastText, lastHtml, step);
+                        lastChk = checkBrowserStep(matchText, lastHtml, step);
                         const dialogs = acceptedDialogs.splice(0);
                         const hints = await screenHints(pg, evidenceTimeout);
                         results.push({ step: i + 1, label: stepLabel(step), pass: false,
@@ -1238,7 +1239,7 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
                             category: "behavior", potentialMutationStarted, failedStep: i + 1, steps: results
                         }, pg, step, events, evidenceTimeout);
                     }
-                    lastChk = checkBrowserStep(lastText, lastHtml, step);
+                    lastChk = checkBrowserStep(matchText, lastHtml, step);
                     if (lastChk.pass) {
                         finalVisibleText = lastText;
                         const dialogs = acceptedDialogs.splice(0);
@@ -1267,7 +1268,7 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
             // Browser assertions prove what the user can see, not incidental source markup.
             // Searching HTML made a failed Save look successful whenever the submitted value
             // survived in an input's value= attribute on the still-open form.
-            const chk = checkBrowserStep(text, html, step);
+            const chk = checkBrowserStep(await readMatchText(pg, text, evidenceTimeout), html, step);
             const pass = chk.pass && !renderError;
             const dialogs = acceptedDialogs.splice(0);
             const hints = pass ? null : await screenHints(pg, evidenceTimeout);

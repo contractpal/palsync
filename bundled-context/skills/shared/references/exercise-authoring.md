@@ -26,7 +26,8 @@ Unscoped duplicate-text clicks, the first matching action, list order, and a sha
 scope are ambiguous. Console workflows use fill/click for every screen after the first, and `initial` for the first.
 
 Use full unique edit values such as `Old {{runId}}` and `New {{runId}}`; neither may be a substring of
-the other. An input `value` is not visible text, and CSS `text-transform` does not change source casing.
+the other. An input `value` is not visible text. Browser checks accept markup casing or the CSS `text-transform`
+display casing ("Step 1" or "STEP 1"), but never ignore case otherwise.
 
 ## Mutation assertions
 
