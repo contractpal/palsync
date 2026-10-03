@@ -453,6 +453,36 @@ function recordScreenshotEvidence(ctx, { route, viewportName, clean }) {
     return { complete, route: routeKey, viewportName, clean: clean === true, incomplete };
 }
 
+// pal_exercise step and initial-screen shapes. pal_screenshot reuses them without per-field
+// descriptions (pal_exercise already advertises those) so both tools accept the same step language.
+function exerciseStepSchema(doc = true) {
+    const d = (schema, text) => doc ? schema.describe(text) : schema;
+    return z.object({
+        page: d(z.string().optional(), "WEB page path to load first."),
+        action: d(z.string().optional(), "WEB workflow action invoked with query params."),
+        params: d(z.record(z.union([z.string(), z.number()])).optional(), "WEB action query parameters."),
+        fill: d(z.record(z.union([z.string(), z.number()])).optional(), "Input name/value pairs to fill before clicking."),
+        click: d(z.string().optional(), "Exact visible text or simple selector to click."),
+        within: d(z.string().optional(), "CSS scope when click text matches multiple elements."),
+        upload: d(z.string().optional(), "Workspace-relative file for the screen's c:upload widget; submitted for you."),
+        expect: d(z.array(z.string()).optional(), "Visible strings required after this step."),
+        absent: d(z.array(z.string()).optional(), "Unique visible strings forbidden after this step."),
+        waitFor: d(z.object({
+            timeoutMs: d(z.number().int().min(1).max(60000).optional(), "Bounded wait timeout in ms (default 15000, max 60000)."),
+            intervalMs: d(z.number().int().min(100).max(60000).optional(), "Poll interval in ms (default 500, min 100).")
+        }).optional(), "Bounded wait for existing expect/absent to become true; polls visible text only, never replays the mutation.")
+    });
+}
+function exerciseInitialSchema(doc = true) {
+    const d = (schema, text) => doc ? schema.describe(text) : schema;
+    return z.object({
+        action: d(z.string().optional(), "Console/transaction action, c:a form: name or name?key=value."),
+        params: d(z.record(z.union([z.string(), z.number(), z.boolean()])).optional(), "Action params; conflicts with the action suffix are rejected."),
+        page: d(z.string().optional(), "WEB route to load first."),
+        expect: d(z.array(z.string()).optional(), "Visible strings proving this screen; no step runs until seen.")
+    });
+}
+
 // One credential-safe identity per reviewed screen — the route key for BOTH the in-memory
 // (recordScreenshotEvidence) and durable (appendToolEvidence row.route) responsive-coverage
 // maps. Previously route = page || "/" so every Console action collided under "/", letting
@@ -462,8 +492,15 @@ function recordScreenshotEvidence(ctx, { route, viewportName, clean }) {
 // default entry screen). Parameter KEY names are safe to include; parameter VALUES never are —
 // the raw MCP action argument ("openClientSetup?id=9") carries values, so only the pre-"?"
 // action name is used.
-function screenshotEvidenceIdentity({ kind, workflowName, page, action, paramKeys } = {}) {
+// A step-driven capture appends its click path (">Add>Save"): the state behind the clicks is a
+// separate reviewed screen, never evidence for the screen it started from. Fill values never enter.
+function screenshotEvidenceIdentity({ kind, workflowName, page, action, paramKeys, clickPath } = {}) {
     const norm = (s) => String(s == null ? "" : s).trim();
+    const clicks = (Array.isArray(clickPath) ? clickPath : []).map(c => ">" + norm(c).slice(0, 40)).join("");
+    return (screenshotScreenIdentity(norm, { kind, workflowName, page, action, paramKeys }) + clicks).slice(0, 220);
+}
+
+function screenshotScreenIdentity(norm, { kind, workflowName, page, action, paramKeys }) {
     const actionName = norm(action).split("?")[0].trim().slice(0, 100);
     const keys = (Array.isArray(paramKeys) ? paramKeys : []).map(k => norm(k).slice(0, 40)).filter(Boolean).sort().slice(0, 20);
     const k = norm(kind).toLowerCase().slice(0, 40);
@@ -1291,9 +1328,11 @@ const TOOLS = [
             workflowName: z.string().optional().describe("Registered workflow name (file extension optional)."),
             action: z.string().optional().describe("Console/transaction action, c:a form: name or name?key=value."),
             expect: z.array(z.string()).optional().describe("Visible strings proving the intended screen; without them the capture is state-unverified."),
-            params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional().describe("Scalar query parameters appended with the action (reserved keys cp-auth/nxProfileId/cp-workflow/cp-ws-doaction are refused).")
+            params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional().describe("Scalar query parameters appended with the action (reserved keys cp-auth/nxProfileId/cp-workflow/cp-ws-doaction are refused)."),
+            initial: exerciseInitialSchema(false).optional().describe("With steps: first screen, as in pal_exercise (replaces page/action/params)."),
+            steps: z.array(exerciseStepSchema(false)).min(1).max(10).optional().describe("pal_exercise steps run before capture, to reach states behind clicks/fills/AJAX (modals, panels, form results). Captures after the last step; its expect (plus expect) proves the screen.")
         },
-        async run(ctx, { page, feature, viewport, fullPage, imageless, workflow, workflowName, action, params, expect } = {}) {
+        async run(ctx, { page, feature, viewport, fullPage, imageless, workflow, workflowName, action, params, expect, initial, steps } = {}) {
             // Durable render evidence (.palsync/tool-evidence.jsonl), mirroring pal_exercise at
             // its appendToolEvidence call: `palsync review check` is a separate offline process
             // that cannot see ctx, so every path — clean capture, unavailable browser, testing
@@ -1325,7 +1364,7 @@ const TOOLS = [
                 if (!disabled.evidenceRecorded) disabled.message += persistWarning;
                 return disabled;
             }
-            const res = await runScreenshot(ctx.session, ctx.record.palGuid, { page, viewport, fullPage, imageless, workflow, workflowName, action, params, expect });
+            const res = await runScreenshot(ctx.session, ctx.record.palGuid, { page, viewport, fullPage, imageless, workflow, workflowName, action, params, expect, initial, steps, workspaceDir: ctx.workspaceDir });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             if (!res.captured) {
                 let persistNote = "";
@@ -1364,7 +1403,7 @@ const TOOLS = [
             // A capture that targeted nothing has no ambiguity to resolve: the pal's own entry screen
             // is the only screen it could be, and the login-redirect check already proved it isn't
             // the login page. Requiring an expectation there would be pure ceremony.
-            const stateTargeted = !!(res.requestedState && (res.requestedState.action || res.requestedState.page));
+            const stateTargeted = !!(res.requestedState && (res.requestedState.action || res.requestedState.page || res.requestedState.steps));
             const stateOk = stateTargeted ? res.stateVerified === true : res.stateVerified !== false;
             // A clean capture (no renderError) is the only thing that actually proves the UI renders.
             const auditClean = res.designAudit && res.designAudit.inspected && res.designAudit.errors === 0;
@@ -1378,7 +1417,8 @@ const TOOLS = [
                 page: (res.requestedState && res.requestedState.page) || page,
                 action: res.action,
                 paramKeys: (res.requestedState && Array.isArray(res.requestedState.paramKeys)) ? res.requestedState.paramKeys
-                    : (params && typeof params === "object" ? Object.keys(params) : [])
+                    : (params && typeof params === "object" ? Object.keys(params) : []),
+                clickPath: res.requestedState && res.requestedState.clickPath
             });
             const visualGate = recordScreenshotEvidence(ctx, {
                 route: identity,
@@ -1496,10 +1536,10 @@ const TOOLS = [
             const stateLine = res.stateVerified === true
                 ? "\n  state: VERIFIED — " + (res.requestedState.expect || []).map(s => JSON.stringify(s)).join(", ") + " all visible"
                 : (stateTargeted
-                    ? "\n  ⚠ state: NOT VERIFIED — you targeted " + (res.requestedState.action ? "action " + res.requestedState.action : "page " + res.requestedState.page) +
+                    ? "\n  ⚠ state: NOT VERIFIED — you targeted " + (res.requestedState.steps ? res.requestedState.steps + " step(s)" : res.requestedState.action ? "action " + res.requestedState.action : "page " + res.requestedState.page) +
                         " but declared no expect:[...], so this image is not proven to be that screen and does NOT count toward the render gate." +
                         " Re-capture with expect:[<visible strings that prove the screen>]." +
-                        " Observed headings: " + ((res.observedState && res.observedState.headings.length) ? res.observedState.headings.map(h => JSON.stringify(h)).join(", ") : "(none)") + "."
+                        (res.requestedState.steps ? "" : " Observed headings: " + ((res.observedState && res.observedState.headings.length) ? res.observedState.headings.map(h => JSON.stringify(h)).join(", ") : "(none)") + ".")
                     : "");
             const text = (res.kind ? res.kind.toUpperCase() : "WEB") + " screenshot captured — " + res.viewportName + " " + res.viewport.width + "x" + res.viewport.height +
                 (fullPage ? " (full page)" : "") + "\n  url=" + res.url + stateLine +
@@ -1539,27 +1579,8 @@ const TOOLS = [
         name: "pal_exercise",
         description: "Exercise last-pushed actions end-to-end and assert results. Read local markup first; do not discover fields or selectors by retries. Steps stop at the first failure. WEB steps use action+params; console/transaction opens its first screen with initial and reaches later screens by clicking rendered link text (step action/page is rejected there, never ignored). Scope duplicate controls with within and unique {{runId}}. waitFor waits a bounded time for the step's existing expect/absent to become true by polling visible text only (never replaying the mutation). Use after create/edit/delete.",
         inputShape: {
-            steps: z.array(z.object({
-                page: z.string().optional().describe("WEB page path to load first."),
-                action: z.string().optional().describe("WEB workflow action invoked with query params."),
-                params: z.record(z.union([z.string(), z.number()])).optional().describe("WEB action query parameters."),
-                fill: z.record(z.union([z.string(), z.number()])).optional().describe("Input name/value pairs to fill before clicking."),
-                click: z.string().optional().describe("Exact visible text or simple selector to click."),
-                within: z.string().optional().describe("CSS scope when click text matches multiple elements."),
-                upload: z.string().optional().describe("Workspace-relative file for the screen's c:upload widget; submitted for you."),
-                expect: z.array(z.string()).optional().describe("Visible strings required after this step."),
-                absent: z.array(z.string()).optional().describe("Unique visible strings forbidden after this step."),
-                waitFor: z.object({
-                    timeoutMs: z.number().int().min(1).max(60000).optional().describe("Bounded wait timeout in ms (default 15000, max 60000)."),
-                    intervalMs: z.number().int().min(100).max(60000).optional().describe("Poll interval in ms (default 500, min 100).")
-                }).optional().describe("Bounded wait for existing expect/absent to become true; polls visible text only, never replays the mutation.")
-            })).min(1).max(10).describe("Ordered; stops at first failure."),
-            initial: z.object({
-                action: z.string().optional().describe("Console/transaction action, c:a form: name or name?key=value."),
-                params: z.record(z.union([z.string(), z.number(), z.boolean()])).optional().describe("Action params; conflicts with the action suffix are rejected."),
-                page: z.string().optional().describe("WEB route to load first."),
-                expect: z.array(z.string()).optional().describe("Visible strings proving this screen; no step runs until seen.")
-            }).optional().describe("First screen to establish and verify before step 1."),
+            steps: z.array(exerciseStepSchema()).min(1).max(10).describe("Ordered; stops at first failure."),
+            initial: exerciseInitialSchema().optional().describe("First screen to establish and verify before step 1."),
             workflow: z.enum(["console", "web", "transaction"]).optional().describe("Engine; default auto-detected."),
             browser: z.boolean().optional().describe("Force a real browser for a WEB pal instead of fetch."),
             viewport: z.enum(["desktop", "mobile"]).optional().describe("Viewport; default desktop.")

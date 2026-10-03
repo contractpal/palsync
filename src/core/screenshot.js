@@ -444,11 +444,14 @@ function redactParamValuesFromRenderError(err, params) {
 // requested state, verified it against the caller's expectations, and captured THAT state. It does
 // not mean "Playwright produced a PNG" — a capture of the wrong screen is returned as a targeting
 // FAILURE carrying the image as labelled failure evidence, never as accepted render evidence.
-async function runScreenshot(session, guid, { page, viewport, fullPage, imageless, workflow, workflowName, action, params, expect } = {}, deps = {}) {
+async function runScreenshot(session, guid, { page, viewport, fullPage, imageless, workflow, workflowName, action, params, expect, steps, initial, workspaceDir } = {}, deps = {}) {
     const chromium = (deps.loadChromium || loadChromium)();
     if (!chromium) {
         return { captured: false, available: false,
                  reason: "Playwright/Chromium is not installed in this runtime — visual review falls back to the human eyeball gate. Enable with: npm i playwright && npx playwright install chromium" };
+    }
+    if (steps != null || initial != null) {
+        return runStepScreenshot(session, guid, { steps, initial, viewport, fullPage, imageless, workflow, workflowName, page, action, params, expect, workspaceDir }, deps);
     }
 
     // Normalize the requested target BEFORE any Test call: reserved keys never overwrite
@@ -521,21 +524,8 @@ async function runScreenshot(session, guid, { page, viewport, fullPage, imageles
         const pg = open.pg;
         try {
             if (!open.ok) return await failedCapture(open, t, requestedState, target, viewportName, imageless);
-            const styleStatus = await inspectStyleStatus(pg, styleEvents);
-            let designAudit = await inspectDesignQuality(pg, { kind: t.kind, viewportName });
-            const buf = imageless ? null : await pg.screenshot({ fullPage: !!fullPage });
-            const pngBase64 = buf ? buf.toString("base64") : null;
-            // A pal that validated can still THROW at render time; the error block is text-detectable.
-            let renderError = null;
-            try { renderError = detectRenderError(await pg.innerText("body")); } catch (e) { /* best effort */ }
-            // The page may echo a param value into visible text, which then flows into these
-            // browser-derived structures — redact before they are persisted or projected.
             const secretValues = target ? target.params : null;
-            if (secretValues && Object.keys(secretValues).length) {
-                designAudit = redactParamValuesFromAudit(designAudit, secretValues);
-                renderError = redactParamValuesFromRenderError(renderError, secretValues);
-            }
-            const small = pngBase64 ? await downscaleToJpeg(pg, pngBase64) : null;
+            const shot = await captureScreen(pg, { kind: t.kind, viewportName, fullPage, imageless, styleEvents, secretValues });
             const safeSelection = {};
             if (workflow) safeSelection.workflow = workflow;
             if (workflowName) safeSelection.workflowName = normalizeWorkflowName(workflowName);
@@ -556,12 +546,7 @@ async function runScreenshot(session, guid, { page, viewport, fullPage, imageles
                 // WEB landing is the webpals host (no creds). CONSOLE landing may retain cp-auth in
                 // the URL — sanitize to origin+path so no credential is ever returned.
                 url: isWeb ? pg.url() : sanitizeUrl(pg.url()),
-                renderError,
-                styleStatus,
-                designAudit,
-                pngBase64,
-                jpegSmallBase64: small ? small.dataUrl.replace(/^data:image\/jpeg;base64,/, "") : null,
-                smallDims: small ? { width: small.width, height: small.height } : null
+                ...shot
             };
         } catch (e) {
             const msg = (e && e.message ? e.message.split("\n")[0] : String(e)).replace(/https?:\/\/\S+/g, "<url>");
@@ -577,6 +562,114 @@ async function runScreenshot(session, guid, { page, viewport, fullPage, imageles
     const res = await attemptWithFreshTest(session, guid, { kind: workflow, workflowName }, capture, deps);
     if (res && typeof res === "object") delete res.retryable;
     return res;
+}
+
+// Capture the CURRENT screen of an open page: style status, design audit, image and render error.
+// Shared by the single-screen path and the step-driven path so both judge a render identically.
+async function captureScreen(pg, { kind, viewportName, fullPage, imageless, styleEvents, secretValues }) {
+    const styleStatus = await inspectStyleStatus(pg, styleEvents);
+    let designAudit = await inspectDesignQuality(pg, { kind, viewportName });
+    const buf = imageless ? null : await pg.screenshot({ fullPage: !!fullPage });
+    const pngBase64 = buf ? buf.toString("base64") : null;
+    // A pal that validated can still THROW at render time; the error block is text-detectable.
+    let renderError = null;
+    try { renderError = detectRenderError(await pg.innerText("body")); } catch (e) { /* best effort */ }
+    // The page may echo a param value into visible text, which then flows into these
+    // browser-derived structures — redact before they are persisted or projected.
+    if (secretValues && Object.keys(secretValues).length) {
+        designAudit = redactParamValuesFromAudit(designAudit, secretValues);
+        renderError = redactParamValuesFromRenderError(renderError, secretValues);
+    }
+    const small = pngBase64 ? await downscaleToJpeg(pg, pngBase64) : null;
+    return {
+        renderError,
+        styleStatus,
+        designAudit,
+        pngBase64,
+        jpegSmallBase64: small ? small.dataUrl.replace(/^data:image\/jpeg;base64,/, "") : null,
+        smallDims: small ? { width: small.width, height: small.height } : null
+    };
+}
+
+// Step-driven capture: reach a state that needs clicks/fills/AJAX (modal, expanded panel, form
+// result) by running pal_exercise's step engine, then capture the final screen. Steps stop at the
+// first failure and a failed run never captures. The final screen is proven by the last step's
+// expect (top-level expect is merged into it); without one the capture is state-unverified.
+async function runStepScreenshot(session, guid, { steps, initial, viewport, fullPage, imageless, workflow, workflowName, page, action, params, expect, workspaceDir }, deps) {
+    if (page || action || params) {
+        return { captured: false, available: true, blocked: "invalid-steps",
+                 reason: "With steps, select the first screen with initial ({ action, params, page, expect }), not top-level page/action/params." };
+    }
+    if (workflowName) {
+        return { captured: false, available: true, blocked: "invalid-steps",
+                 reason: "workflowName is not supported with steps; steps run against the pal's default workflow." };
+    }
+    if (!Array.isArray(steps) || !steps.length) {
+        return { captured: false, available: true, blocked: "invalid-steps", reason: "steps must be a non-empty array." };
+    }
+    if (expect != null && (!Array.isArray(expect) || expect.some(s => typeof s !== "string" || !s.trim()))) {
+        return { captured: false, available: true, blocked: "invalid-expect",
+                 reason: "expect must be an array of non-whitespace visible strings that prove the final screen was reached." };
+    }
+    const last = steps[steps.length - 1] || {};
+    const finalExpect = [...new Set([...(Array.isArray(last.expect) ? last.expect : []), ...(expect || [])])];
+    const runSteps = steps.slice(0, -1).concat([Object.assign({}, last, finalExpect.length ? { expect: finalExpect } : {})]);
+    // Param values never reach persisted audit/render-error text (same rule as the single-screen path).
+    const secretValues = {};
+    for (const src of [initial && initial.params].concat(steps.map(s => s && s.params))) {
+        if (src && typeof src === "object") Object.assign(secretValues, src);
+    }
+    const viewportName = VIEWPORTS[viewport] ? viewport : "desktop";
+    let styleEvents = { responses: [], failed: [] };
+    const capture = {
+        onPage: (pg) => { styleEvents = watchStylesheetNetwork(pg); },
+        afterSteps: async (pg, { kind, viewport: vp }) => {
+            try {
+                const shot = await captureScreen(pg, { kind, viewportName, fullPage, imageless, styleEvents, secretValues });
+                return Object.assign(shot, { viewport: vp, url: kind === "web" ? pg.url() : sanitizeUrl(pg.url()) });
+            } catch (e) {
+                return { error: (e && e.message ? e.message.split("\n")[0] : String(e)).replace(/https?:\/\/\S+/g, "<url>") };
+            }
+        }
+    };
+    // Lazy: exercise.js requires this module.
+    const { runExercise, formatExercise } = require("./exercise");
+    const ex = await (deps.runExercise || runExercise)(session, guid, { steps: runSteps, initial, workflow, viewport: viewportName, workspaceDir, capture }, deps);
+    const clickPath = runSteps.map(s => s && s.click).filter(Boolean).map(c => String(c).slice(0, 60));
+    const requestedState = {
+        workflow: workflow || null, workflowName: null,
+        page: (initial && initial.page) || null,
+        action: initial && initial.action ? String(initial.action).split("?")[0] : null,
+        paramKeys: initial && initial.params ? Object.keys(initial.params).sort() : [],
+        steps: runSteps.length, clickPath,
+        expect: finalExpect
+    };
+    const shot = ex && ex.capture;
+    if (!ex || ex.pass !== true || !shot || shot.error) {
+        // Exercise failure evidence (failure JPEG etc.) is pal_exercise's concern; drop it here.
+        if (ex) delete ex.evidence;
+        return {
+            captured: false, available: !(ex && ex.available === false), kind: ex && ex.kind,
+            viewportName, requestedState, blocked: ex && ex.invalid ? "invalid-steps" : undefined,
+            reason: shot && shot.error ? "Steps passed but the final screen could not be captured (" + shot.error + ")."
+                : "Steps did not reach the screen to capture, so nothing was captured.\n" + (ex ? formatExercise(ex) : "")
+        };
+    }
+    const lastResult = (ex.steps || [])[ex.steps.length - 1] || {};
+    return Object.assign({
+        captured: true, available: true, kind: ex.kind, viewportName,
+        selection: workflow ? { workflow } : null,
+        workflow: workflow || null, workflowName: null,
+        action: requestedState.action,
+        requestedState,
+        // Every step passed, so the last step's expect strings were all visible on this screen.
+        stateVerified: finalExpect.length ? true : null,
+        observedState: {
+            headings: [], title: null,
+            expect: (lastResult.expect || []).map(r => ({ string: r.string, found: r.found }))
+        },
+        stepResults: (ex.steps || []).map(r => ({ step: r.step, label: r.label, pass: r.pass }))
+    }, shot);
 }
 
 // Bounded, credential-safe projection of what the browser actually showed.

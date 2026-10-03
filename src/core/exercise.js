@@ -868,7 +868,9 @@ function failureEvidenceLines(res) {
 //   workflow: "console" | "web" | "transaction" (optional — auto-detected)
 //   viewport: "desktop" | "mobile" (browser mode only)
 // Stops at the first failing step (later steps usually depend on earlier writes).
-async function runExercise(session, guid, { steps, workflow, viewport, workspaceDir, initial, browser } = {}, deps = {}) {
+// `capture` ({ onPage(pg), afterSteps(pg, info) }) is pal_screenshot's hook: it forces the browser
+// path and runs on the final screen after every step passed, before the browser closes.
+async function runExercise(session, guid, { steps, workflow, viewport, workspaceDir, initial, browser, capture } = {}, deps = {}) {
     const runId = makeRunId(steps, takeExerciseOrdinal(workspaceDir));
     const problems = validateSteps(steps).concat(validateInitial(initial))
         // Resolve upload paths before a test instance is minted: a missing fixture or a path that
@@ -929,8 +931,8 @@ async function runExercise(session, guid, { steps, workflow, viewport, workspace
                      problems: ["initial.page is a WEB route selector; a " + t.kind + " pal selects its first screen with initial.action."] };
         }
 
-        const useFetch = isWeb && !browser && !needsBrowser(steps) && !hasWaitFor(steps);
-        const res = useFetch ? await exerciseByFetch(t, steps, start) : await browserFn(t, steps, viewport, deps, start, workspaceDir);
+        const useFetch = isWeb && !browser && !capture && !needsBrowser(steps) && !hasWaitFor(steps);
+        const res = useFetch ? await exerciseByFetch(t, steps, start) : await browserFn(t, steps, viewport, deps, start, workspaceDir, capture);
         // The retry rule lives here, once: only a blocked auth/navigation failure that provably
         // preceded any mutation may be replayed against a fresh test instance.
         if (res && res.retryable === undefined) {
@@ -1077,7 +1079,7 @@ async function exerciseByFetch(t, steps, start = null) {
 // The authenticated bootstrap, the initial target dispatch and its state verification are shared
 // with pal_screenshot; only the step loop below is exercise-specific. No step runs until the
 // browser has positively reached the requested initial state.
-async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, workspaceDir = null) {
+async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, workspaceDir = null, capture = null) {
     const isWeb = t.kind === "web";
     const results = [];
     const evidenceTimeout = deps.evidenceTimeout || EVIDENCE_TIMEOUT_MS;
@@ -1094,6 +1096,7 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
         contextTimeouts: { action: ACTION_TIMEOUT_MS, navigation: NAV_TIMEOUT_MS },
         stateTimeout: evidenceTimeout,
         onPage: (pg) => {
+            if (capture && capture.onPage) capture.onPage(pg);
             // Listeners attach BEFORE any navigation so console/page errors, failed requests and
             // HTTP >= 400 responses during the auth redirect are captured too.
             events = attachBrowserEvidence(pg);
@@ -1276,7 +1279,9 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
                 category: "behavior", potentialMutationStarted, failedStep: i + 1, steps: results
             }, pg, step, events, evidenceTimeout);
         }
-        return { ran: true, kind: t.kind, mode: "browser", pass: true, status: "passed", category: "behavior", potentialMutationStarted, steps: results, finalSnapshot: makeFinalSnapshot(finalVisibleText, "visible") };
+        const passed = { ran: true, kind: t.kind, mode: "browser", pass: true, status: "passed", category: "behavior", potentialMutationStarted, steps: results, finalSnapshot: makeFinalSnapshot(finalVisibleText, "visible") };
+        if (capture && capture.afterSteps) passed.capture = await capture.afterSteps(pg, { kind: t.kind, viewport: open.viewport });
+        return passed;
     } catch (e) {
         const category = !isWeb && pageIsLoginRedirect(pg) ? "auth" : "navigation";
         return attachEvidence({

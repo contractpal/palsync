@@ -826,6 +826,119 @@
               }
             ]
           }
+        },
+        "initial": {
+          "description": "With steps: first screen, as in pal_exercise (replaces page/action/params).",
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              }
+            },
+            "page": {
+              "type": "string"
+            },
+            "expect": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "steps": {
+          "description": "pal_exercise steps run before capture, to reach states behind clicks/fills/AJAX (modals, panels, form results). Captures after the last step; its expect (plus expect) proves the screen.",
+          "minItems": 1,
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string"
+              },
+              "params": {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                }
+              },
+              "fill": {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                }
+              },
+              "click": {
+                "type": "string"
+              },
+              "within": {
+                "type": "string"
+              },
+              "upload": {
+                "type": "string"
+              },
+              "expect": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "absent": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "waitFor": {
+                "type": "object",
+                "properties": {
+                  "timeoutMs": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 60000
+                  },
+                  "intervalMs": {
+                    "type": "integer",
+                    "minimum": 100,
+                    "maximum": 60000
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },

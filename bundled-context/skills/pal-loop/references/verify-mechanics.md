@@ -55,7 +55,7 @@ visible; otherwise the result is `category:"targeting"` with zero steps run and 
 artifacts in a returned `.agent-work-history/` run directory (`steps.json`,
 `browser-events.json`, `aria-snapshot.txt` or `screen-hints.json`, `failure.jpg` when captured,
 `metadata.json`, `notes.md`). Read those artifacts instead of probing selectors by trial and
-error, then re-run. Passing runs write no failure artifacts. A passing `pal_exercise` is behavioral evidence, not a screenshot or capture. A visual capture claim requires a successful `pal_screenshot` artifact; take one whenever visual appearance is an acceptance criterion.
+error, then re-run. Passing runs write no failure artifacts. A passing `pal_exercise` is behavioral evidence, not a screenshot or capture. A visual capture claim requires a successful `pal_screenshot` artifact; take one whenever visual appearance is an acceptance criterion. For a state behind clicks, fills, or AJAX (modal, expanded panel, form result), give `pal_screenshot` the same `initial` + `steps` as `pal_exercise`; it captures after the last step, whose `expect` proves the screen.
 
 **An empty evidence bundle is not proof the click/ajax didn't work.** `metadata.json`'s
 `aria`/`jpegKB` can legitimately come back `null` (and `screen-hints.json` empty) on a step that
