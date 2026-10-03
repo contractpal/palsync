@@ -651,8 +651,12 @@ async function runStepScreenshot(session, guid, { steps, initial, viewport, full
         return {
             captured: false, available: !(ex && ex.available === false), kind: ex && ex.kind,
             viewportName, requestedState, blocked: ex && ex.invalid ? "invalid-steps" : undefined,
+            // A blocked run (no browser, auth, navigation) never reached the steps: report its own
+            // reason. Only a run whose steps executed gets the step-by-step report.
             reason: shot && shot.error ? "Steps passed but the final screen could not be captured (" + shot.error + ")."
-                : "Steps did not reach the screen to capture, so nothing was captured.\n" + (ex ? formatExercise(ex) : "")
+                : ex && ex.status === "blocked" && ex.reason ? ex.reason
+                : "Steps did not reach the screen to capture, so nothing was captured.\n" +
+                    (ex ? formatExercise(ex).replace(/^pal_exercise\b/, "steps") : "")
         };
     }
     const lastResult = (ex.steps || [])[ex.steps.length - 1] || {};

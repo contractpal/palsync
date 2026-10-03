@@ -104,6 +104,16 @@ describe("runScreenshot with steps", () => {
         assert.match(res.reason, /Steps did not reach the screen/);
     });
 
+    test("a blocked run reports its own reason, not a step failure", async () => {
+        const deps = Object.assign(browserDeps(fakePage(["Orders"])), {
+            getBrowser: async () => { throw new Error("Executable doesn't exist"); }
+        });
+        const res = await runScreenshot({}, "g", { workflow: "console", steps: [{ click: "Add" }] }, deps);
+        assert.equal(res.captured, false);
+        assert.match(res.reason, /Chromium browser is not/);
+        assert.doesNotMatch(res.reason, /Steps did not reach|pal_exercise/);
+    });
+
     test("top-level action with steps is rejected before any browser work", async () => {
         const res = await runScreenshot({}, "g", { action: "openOrders", steps: [{ click: "Add" }] },
             { loadChromium: () => ({}), runTest: async () => { throw new Error("must not mint a test"); } });
