@@ -61,6 +61,8 @@ contextBridge.exposeInMainWorld("palsyncGui", {
         checkoutSteps: () => ipcRenderer.invoke("cloud:checkoutSteps"),
         createSteps: () => ipcRenderer.invoke("cloud:createSteps"),
         createAndMaterialize: (opts) => ipcRenderer.invoke("cloud:createAndMaterialize", opts),
+        searchTemplates: (search) => ipcRenderer.invoke("cloud:searchTemplates", search),
+        getTemplate: (token) => ipcRenderer.invoke("cloud:getTemplate", token),
         listPals: (profileId, groupId) => ipcRenderer.invoke("cloud:listPals", { profileId, groupId }),
         openAndMaterialize: (opts) => ipcRenderer.invoke("cloud:openAndMaterialize", opts),
         onProgress: (callback) => {

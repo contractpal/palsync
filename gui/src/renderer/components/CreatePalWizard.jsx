@@ -1,10 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import CheckoutChecklist from "./CheckoutChecklist.jsx";
 
 // Multi-panel wizard: cloud -> login (only if no cached credential auto-resolves) -> profile
 // -> groups (1+) -> details -> submit. Shares its step shape with what "open from cloud" will
 // need later (cloud/profile/group), just diverging at the last step.
-export default function CreatePalWizard({ onCreated, onClose }) {
+//
+// fromTemplate: swaps the "details" step for a template picker (search + radio list on the left,
+// preview image and details on the right). Choosing a radio fetches that template's full record
+// (GetTemplate.do — the only call that returns the preview image); Create stays disabled until one
+// is chosen and sends its token as templateId on CreatePalFromBuilder.do.
+export default function CreatePalWizard({ onCreated, onClose, fromTemplate = false }) {
     const [step, setStep] = useState("cloud");
     const [error, setError] = useState(null);
     const [busy, setBusy] = useState(false);
@@ -27,6 +32,15 @@ export default function CreatePalWizard({ onCreated, onClose }) {
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [category, setCategory] = useState("");
+
+    const [templateQuery, setTemplateQuery] = useState("");
+    const [templates, setTemplates] = useState([]);
+    const [templatesLoading, setTemplatesLoading] = useState(false);
+    const [selectedToken, setSelectedToken] = useState(null);
+    const [templateDetail, setTemplateDetail] = useState(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [nameTouched, setNameTouched] = useState(false);
+    const latestToken = useRef(null); // ignore a slow GetTemplate answer once another radio is chosen
 
     const [folderConflict, setFolderConflict] = useState(null);
     const [folderNameInput, setFolderNameInput] = useState("");
@@ -124,6 +138,58 @@ export default function CreatePalWizard({ onCreated, onClose }) {
         }
     }
 
+    // Where "Back" lands after the final-details step: the template picker replaces details.
+    const detailsStep = fromTemplate ? "templates" : "details";
+
+    async function goToTemplates() {
+        setStep("templates");
+        await searchTemplates("");
+    }
+
+    async function searchTemplates(query) {
+        setError(null);
+        setTemplatesLoading(true);
+        try {
+            const result = await window.palsyncGui.cloud.searchTemplates(query.trim());
+            if (result.error) { setError(result.error); return; }
+            setTemplates(result.templates);
+            // A search that no longer lists the chosen template must not leave Create enabled for it.
+            if (selectedToken && !result.templates.some(t => t.token === selectedToken)) clearSelection();
+        } catch (e) {
+            setError(e && e.message ? e.message : String(e));
+        } finally {
+            setTemplatesLoading(false);
+        }
+    }
+
+    function clearSelection() {
+        latestToken.current = null;
+        setSelectedToken(null);
+        setTemplateDetail(null);
+        setDetailLoading(false);
+    }
+
+    async function selectTemplate(t) {
+        setError(null);
+        latestToken.current = t.token;
+        setSelectedToken(t.token);
+        setTemplateDetail(null);
+        setDescription(t.description || "");
+        setCategory(t.categories[0] || "");
+        if (!nameTouched) setName(t.name);
+        setDetailLoading(true);
+        try {
+            const result = await window.palsyncGui.cloud.getTemplate(t.token);
+            if (latestToken.current !== t.token) return;
+            if (result.error) { setError(result.error); return; }
+            setTemplateDetail(result.template);
+        } catch (e) {
+            if (latestToken.current === t.token) setError(e && e.message ? e.message : String(e));
+        } finally {
+            if (latestToken.current === t.token) setDetailLoading(false);
+        }
+    }
+
     function toggleGroup(groupId) {
         setSelectedGroupIds(prev =>
             prev.includes(groupId) ? prev.filter(g => g !== groupId) : [...prev, groupId]
@@ -133,6 +199,7 @@ export default function CreatePalWizard({ onCreated, onClose }) {
     async function submitDetails() {
         if (!name.trim()) { setError("Name is required."); return; }
         if (!selectedGroupIds.length) { setError("Pick at least one group."); return; }
+        if (fromTemplate && !selectedToken) { setError("Choose a template."); return; }
         setError(null);
         setBusy(true);
         try {
@@ -164,6 +231,7 @@ export default function CreatePalWizard({ onCreated, onClose }) {
             const result = await window.palsyncGui.cloud.createAndMaterialize({
                 profile, groupIds: selectedGroupIds,
                 name: name.trim(), description: description.trim(), category: category.trim(),
+                templateId: fromTemplate ? selectedToken : undefined,
                 agentKey: "claude", folderName
             });
             if (result.error) { setError(result.error); return; }
@@ -176,13 +244,13 @@ export default function CreatePalWizard({ onCreated, onClose }) {
     }
 
     return (
-        <div className="modal-backdrop" onClick={() => !busy && onClose()}>
-            <div className="modal wide" onClick={e => e.stopPropagation()}>
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+            <div className={"modal wide" + (step === "templates" ? " template-picker" : "")} onClick={e => e.stopPropagation()}>
                 {error && <p className="wizard-error">{error}</p>}
 
                 {step === "cloud" && (
                     <>
-                        <h3>Create a new pal</h3>
+                        <h3>{fromTemplate ? "Create a pal from a template" : "Create a new pal"}</h3>
                         <p className="wizard-title">Choose a cloud</p>
                         <div className="wizard-list">
                             {clouds.map(c => (
@@ -273,7 +341,7 @@ export default function CreatePalWizard({ onCreated, onClose }) {
                         </div>
                         <div className="modal-actions">
                             <button className="btn" onClick={onClose}>Cancel</button>
-                            <button className="btn btn-primary" disabled={!selectedGroupIds.length} onClick={() => setStep("details")}>
+                            <button className="btn btn-primary" disabled={!selectedGroupIds.length} onClick={() => (fromTemplate ? goToTemplates() : setStep("details"))}>
                                 Continue
                             </button>
                         </div>
@@ -303,9 +371,76 @@ export default function CreatePalWizard({ onCreated, onClose }) {
                     </>
                 )}
 
+                {step === "templates" && (
+                    <>
+                        <button className="wizard-back" onClick={() => setStep("groups")}>← Choose different groups</button>
+                        <h3>Choose a template</h3>
+                        <div className="template-body">
+                            <div className="template-left">
+                                <div className="template-search">
+                                    <input
+                                        value={templateQuery}
+                                        onChange={e => setTemplateQuery(e.target.value)}
+                                        placeholder="Search templates"
+                                        onKeyDown={e => { if (e.key === "Enter") searchTemplates(templateQuery); }}
+                                        autoFocus
+                                    />
+                                    <button className="btn" onClick={() => searchTemplates(templateQuery)} disabled={templatesLoading}>Go</button>
+                                </div>
+                                <div className="template-list" role="radiogroup" aria-label="Templates">
+                                    {templates.map(t => (
+                                        <label key={t.token} className={"template-row" + (t.token === selectedToken ? " selected" : "")}>
+                                            <input
+                                                type="radio"
+                                                name="template"
+                                                checked={t.token === selectedToken}
+                                                onChange={() => selectTemplate(t)}
+                                            />
+                                            {t.name}
+                                        </label>
+                                    ))}
+                                    {!templates.length && !templatesLoading && <p className="empty-state">No templates found.</p>}
+                                    {templatesLoading && <p className="empty-state">Searching…</p>}
+                                </div>
+                            </div>
+                            <div className="template-right">
+                                <div className="template-image">
+                                    {templateDetail && templateDetail.icon
+                                        ? <img alt={templateDetail.name} src={"data:" + templateDetail.icon.contentType + ";base64," + templateDetail.icon.base64} />
+                                        : <span className="empty-state">{detailLoading ? "Loading…" : selectedToken ? "No image" : ""}</span>}
+                                </div>
+                                <div className="template-details">
+                                    <h4>Template Details</h4>
+                                    {!selectedToken && <p className="empty-state">Select a template to see its details.</p>}
+                                    {selectedToken && detailLoading && <p className="empty-state">Loading…</p>}
+                                    {templateDetail && (
+                                        <dl>
+                                            <dt>Name</dt><dd>{templateDetail.name}</dd>
+                                            {templateDetail.description && <><dt>Description</dt><dd>{templateDetail.description}</dd></>}
+                                            {templateDetail.publisher && <><dt>Publisher</dt><dd>{templateDetail.publisher}</dd></>}
+                                            {templateDetail.version && <><dt>Version</dt><dd>{templateDetail.version}</dd></>}
+                                            {templateDetail.source && <><dt>Source</dt><dd>{templateDetail.source}</dd></>}
+                                            {templateDetail.categories.length > 0 && <><dt>Categories</dt><dd>{templateDetail.categories.join(", ")}</dd></>}
+                                            {templateDetail.industries.length > 0 && <><dt>Industries</dt><dd>{templateDetail.industries.join(", ")}</dd></>}
+                                        </dl>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="wizard-field">
+                            <label>Name for the new pal</label>
+                            <input value={name} onChange={e => { setName(e.target.value); setNameTouched(true); }} disabled={!selectedToken} />
+                        </div>
+                        <div className="modal-actions">
+                            <button className="btn" onClick={onClose}>Cancel</button>
+                            <button className="btn btn-primary" onClick={submitDetails} disabled={busy || !selectedToken || !name.trim()}>Create Pal</button>
+                        </div>
+                    </>
+                )}
+
                 {step === "folderConflict" && folderConflict && (
                     <>
-                        <button className="wizard-back" onClick={() => setStep("details")}>← Back</button>
+                        <button className="wizard-back" onClick={() => setStep(detailsStep)}>← Back</button>
                         <h3>{folderConflict.conflict === "workspace"
                             ? "This project is already in the workspace"
                             : "This project is already on disk"}</h3>
@@ -334,7 +469,7 @@ export default function CreatePalWizard({ onCreated, onClose }) {
                         {error && (
                             <div className="modal-actions">
                                 <button className="btn" onClick={onClose}>Cancel</button>
-                                <button className="btn btn-primary" onClick={() => { setError(null); setStep("details"); }}>Back</button>
+                                <button className="btn btn-primary" onClick={() => { setError(null); setStep(detailsStep); }}>Back</button>
                             </div>
                         )}
                     </>

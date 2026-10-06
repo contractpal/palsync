@@ -9,7 +9,7 @@ export default function AboutModal({ onClose }) {
     }, []);
 
     return (
-        <div className="modal-backdrop" onClick={onClose}>
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ alignItems: "center", textAlign: "center" }}>
                 <img src={chipLogo} alt="Chip" style={{ width: 96, height: 96 }} />
                 <h3 style={{ margin: 0 }}>Chip Pal Builder</h3>

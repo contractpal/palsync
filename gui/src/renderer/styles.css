@@ -121,6 +121,23 @@ button:focus-visible, .tab:focus-visible, .card:focus-visible{
   margin:0 -20px;padding:12px 20px 20px;border-top:1px solid var(--border);
 }
 .modal.wide{width:420px;}
+.modal.template-picker{width:760px;max-width:calc(100vw - 40px);}
+.template-body{display:flex;gap:16px;min-height:340px;}
+.template-left{flex:0 0 40%;min-width:0;display:flex;flex-direction:column;gap:8px;}
+.template-search{display:flex;gap:6px;}
+.template-search input{flex:1;min-width:0;}
+.template-list{flex:1;overflow-y:auto;max-height:300px;display:flex;flex-direction:column;gap:2px;}
+.template-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:13px;cursor:pointer;}
+.template-row:hover{background:var(--surface-raised);}
+.template-row.selected{background:var(--surface-raised);outline:1px solid var(--accent);}
+.template-right{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;}
+.template-image{height:150px;border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--surface);}
+.template-image img{max-width:100%;max-height:100%;object-fit:contain;}
+.template-details{flex:1;border:1px solid var(--border);border-radius:6px;padding:10px 12px;overflow-y:auto;max-height:170px;font-size:12.5px;}
+.template-details h4{margin:0 0 6px;font-size:12.5px;}
+.template-details dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 10px;}
+.template-details dt{color:var(--text-faint);}
+.template-details dd{margin:0;overflow-wrap:anywhere;}
 
 .clipboard-preview-text{
   margin:0;padding:10px;border-radius:7px;background:var(--surface-raised);border:1px solid var(--border);
@@ -230,7 +247,7 @@ button:focus-visible, .tab:focus-visible, .card:focus-visible{
 .add-pal h3{margin:0 0 3px;font-size:13.5px;}
 .add-pal p.hint{margin:0 0 14px;font-size:12px;color:var(--text-faint);}
 .add-pal p.error{margin:0 0 10px;font-size:12px;color:var(--danger);}
-.add-options{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.add-options{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
 .add-option{
   text-align:left;border:1px solid var(--border);background:var(--surface);border-radius:8px;
   padding:12px 13px;cursor:pointer;display:flex;flex-direction:column;gap:4px;

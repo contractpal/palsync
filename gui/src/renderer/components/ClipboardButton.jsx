@@ -56,7 +56,7 @@ export default function ClipboardButton({ pal }) {
                 Clipboard
             </button>
             {open && (
-                <div className="modal-backdrop" onClick={close}>
+                <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) close(); }}>
                     <div className="modal wide" onClick={e => e.stopPropagation()}>
                         <h3>Clipboard</h3>
                         <div className="tabstrip" style={{ marginBottom: 12 }}>

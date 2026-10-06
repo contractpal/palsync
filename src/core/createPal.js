@@ -24,7 +24,7 @@ function xstreamDate(d) {
 // Build the PalInfoEx body object (the inner object; apiManager wraps it in the root
 // element). groupIds serializes as the XStream String[] shape: <groupIds><string>..</string>.
 // `now` is injectable so tests are deterministic; createDate + lastModifiedDate are stamped to it.
-function buildPalInfoEx({ name, description, category, groupIds, activationKeyId, now = new Date() }) {
+function buildPalInfoEx({ name, description, category, groupIds, activationKeyId, templateId, now = new Date() }) {
     if (!name) throw new Error("createPal: name is required");
     if (!groupIds || !groupIds.length) throw new Error("createPal: at least one groupId is required");
     const ts = xstreamDate(now);
@@ -53,6 +53,7 @@ function buildPalInfoEx({ name, description, category, groupIds, activationKeyId
     };
     // activationKeyId is required by the server; included only when known (createNewPal fetches it).
     if (activationKeyId) body.activationKeyId = activationKeyId;
+    if (templateId) body.templateId = templateId;
     return body;
 }
 
@@ -105,7 +106,10 @@ function chooseDefaultKey(keys) {
 // Create the pal and return { id, guid, name }. profileId is sent as a header; groupIds in
 // the body. No lock (the pal does not exist yet). When no activationKeyId is supplied, fetch
 // the profile's keys and pick a sensible default (a non-developer key — see chooseDefaultKey).
-async function createNewPal(session, { profileId, groupIds, name, description, category, activationKeyId }) {
+// templateId (optional): a SearchTemplates token — creates the pal from that template. It rides
+// in the PalInfoEx BODY (PalInfoEx.templateId; PalBuilder reads info.getTemplateId()). Sending it
+// as a query parameter is silently ignored and yields an empty pal (verified live 2026-10-06).
+async function createNewPal(session, { profileId, groupIds, name, description, category, activationKeyId, templateId }) {
     if (!profileId) throw new Error("createPal: profileId is required");
     if (!activationKeyId) {
         const keys = await listKeys(session, profileId);
@@ -115,7 +119,7 @@ async function createNewPal(session, { profileId, groupIds, name, description, c
         }
         activationKeyId = chosen.value;
     }
-    const palInfoEx = buildPalInfoEx({ name, description, category, groupIds, activationKeyId });
+    const palInfoEx = buildPalInfoEx({ name, description, category, groupIds, activationKeyId, templateId });
     const resp = await CloudPistonAPIManager.createPal(session, profileId, palInfoEx);
     return extractCreated(resp);
 }

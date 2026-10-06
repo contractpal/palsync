@@ -66,7 +66,7 @@ export default function BrowsersSettingsModal({ onClose }) {
     }
 
     return (
-        <div className="modal-backdrop" onClick={() => !pendingDelete && onClose()}>
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !pendingDelete) onClose(); }}>
             <div className="modal wide" onClick={e => e.stopPropagation()}>
                 <h3>Browsers</h3>
                 {error && <p className="wizard-error">{error}</p>}

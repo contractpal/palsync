@@ -193,7 +193,7 @@ export default function OpenFromCloudWizard({ onOpened, onClose }) {
     }
 
     return (
-        <div className="modal-backdrop" onClick={() => !busy && onClose()}>
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
             <div className="modal wide" onClick={e => e.stopPropagation()}>
                 {error && <p className="wizard-error">{error}</p>}
 

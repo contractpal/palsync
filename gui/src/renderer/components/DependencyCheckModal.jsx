@@ -39,7 +39,7 @@ export default function DependencyCheckModal({ onClose }) {
     if (!status) return null;
 
     return (
-        <div className="modal-backdrop" onClick={() => !installing && onClose()}>
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !installing) onClose(); }}>
             <div className="modal wide" onClick={e => e.stopPropagation()}>
                 <h3>Check Dependencies</h3>
 

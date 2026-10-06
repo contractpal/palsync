@@ -1469,5 +1469,34 @@
       "datasets",
       "query"
     ]
+  },
+  {
+    "name": "pal_search_templates",
+    "title": "Search pal templates",
+    "description": "Search pal-store templates (read-only). Case-insensitive match on name, description, categories, industries; omit search to list all.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "search": {
+          "description": "Text to match.",
+          "type": "string"
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    },
+    "groups": [
+      "project"
+    ],
+    "keywords": [
+      "template",
+      "templates",
+      "store",
+      "gallery",
+      "search"
+    ]
   }
 ]

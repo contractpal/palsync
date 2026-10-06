@@ -44,7 +44,7 @@ export default function SystemWorkflowDialog({ pal, onClose }) {
     }
 
     return (
-        <div className="modal-backdrop" onClick={onClose}>
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
             <div className="modal" onClick={e => e.stopPropagation()}>
                 <h3>Test System — {pal.name}</h3>
                 {error && <p className="wizard-error">{error}</p>}

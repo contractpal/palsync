@@ -17,6 +17,7 @@ const { runSeoAudit, formatSeoAudit } = require("../core/seoAudit");
 const { runRegression, captureBaseline, captureApproval } = require("../core/regression");
 const { lintSpec, formatSpecLint } = require("../core/specLint");
 const { syncDatasets } = require("../core/datasets");
+const { searchTemplates, formatTemplates } = require("../core/templates");
 const { upsertData, deleteData, upsertDataList, deleteDataList } = require("../core/dataObjects");
 const { validateWorkspace, formatValidation: formatLint } = require("../core/validate");
 const { buildImpactSnapshot } = require("../core/validate/snapshot");
@@ -2232,6 +2233,19 @@ const TOOLS = [
                 content: [{ type: "text", text: message }]
             };
         }
+    },
+    {
+        name: "pal_search_templates",
+        description: "Search pal-store templates (read-only). Case-insensitive match on name, description, categories, industries; omit search to list all.",
+        needsLock: false,
+        inputShape: {
+            search: z.string().optional().describe("Text to match.")
+        },
+        async run(ctx, { search } = {}) {
+            const result = await searchTemplates(ctx.session, { search });
+            if (!result.ok) return { ok: false, error: result.error, message: result.error };
+            return { ok: true, search: result.search, templates: result.templates, message: formatTemplates(result) };
+        }
     }
 ];
 
@@ -2266,6 +2280,7 @@ const TOOL_HINTS = {
     // destructive and clients should present a confirmation affordance.
     pal_sync_datasets: ["Synchronize pal datasets", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
     pal_dataset_query: ["Query dataset rows", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_search_templates: ["Search pal templates", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_data_set: ["Set pal Data map", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
     pal_data_delete: ["Delete pal Data map", { readOnlyHint: false, destructiveHint: true, idempotentHint: true }],
     pal_datalist_set: ["Set pal DataList", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],

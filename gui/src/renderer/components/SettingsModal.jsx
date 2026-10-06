@@ -40,7 +40,7 @@ export default function SettingsModal({ onClose }) {
     if (!settings) return null;
 
     return (
-        <div className="modal-backdrop" onClick={onClose}>
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
             <div className="modal wide" onClick={e => e.stopPropagation()}>
                 <h3>PalSync Settings</h3>
                 <Group

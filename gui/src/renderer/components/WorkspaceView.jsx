@@ -88,7 +88,7 @@ export default function WorkspaceView({ workspace, onWorkspaceChange, onActivePa
             </div>
 
             {pendingRemove && (
-                <div className="modal-backdrop" onClick={() => setPendingRemove(null)}>
+                <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setPendingRemove(null); }}>
                     <div className="modal" onClick={e => e.stopPropagation()}>
                         <h3>Remove "{tabLabel(pendingRemove)}" from this workspace?</h3>
                         <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>

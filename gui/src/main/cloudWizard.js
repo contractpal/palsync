@@ -9,6 +9,9 @@ const config = require("palsync/src/platform/config");
 const { getClouds } = require("palsync/src/auth/credentials");
 const { CloudPistonAPIManager } = require("palsync/lib/apiManager");
 const { createNewPal } = require("palsync/src/core/createPal");
+const templates = require("palsync/src/core/templates");
+const palsyncfile = require("palsync/src/core/palsyncfile");
+const { push } = require("palsync/src/core/push");
 const workspace = require("palsync/src/launcher/workspace");
 const palFolder = require("./palFolder");
 const { ensureElectronRunAsNode, ensureElectronRunAsNodeForHooks } = require("./agentLaunch");
@@ -136,9 +139,23 @@ async function listGroups(profileId) {
     return (resp.groupList && resp.groupList["com.contractpal.pal.GroupInfo"]) || [];
 }
 
-async function createPal({ profileId, groupIds, name, description, category }) {
+async function createPal({ profileId, groupIds, name, description, category, templateId }) {
     const session = requireSession();
-    return createNewPal(session, { profileId, groupIds, name, description, category });
+    return createNewPal(session, { profileId, groupIds, name, description, category, templateId });
+}
+
+// Pal-store templates for the "Create from Template" dialog. The list rows carry no preview image
+// (icons come only from getTemplate), so listing stays cheap.
+async function searchTemplates(search) {
+    const result = await templates.searchTemplates(requireSession(), { search });
+    if (!result.ok) throw new Error(result.error);
+    return result.templates;
+}
+
+async function getTemplate(token) {
+    const result = await templates.getTemplate(requireSession(), token);
+    if (!result.ok) throw new Error(result.error);
+    return result.template;
 }
 
 // PalInfoEx's own field names (name, guid, description, branchName, lastModifiedDate) —
@@ -194,7 +211,29 @@ async function materialize({ profile, palGuid, palName, workspaceDir, agentKey, 
     return palFolder.tabFromRecord(workspaceDir, validation.record);
 }
 
+// PalBuilder (the desktop app) saves a pal immediately after creating it; so does Chip. Called right
+// after materialize() on the create flows only (never on open-from-cloud). Runs the normal push of the
+// freshly pulled folder — Chip already holds the lock, and nothing has changed locally, so this is a
+// plain server-side save of the pal as created (for a template, that's the copy of the template).
+// Never throws: the pal already exists and is usable, so a failed save is reported, not fatal.
+async function saveNewPal(workspaceDir) {
+    try {
+        const session = requireSession();
+        const record = await palsyncfile.read(workspaceDir);
+        if (!record || !record.palGuid) return { saved: false, reason: "no usable .palsync.json in " + workspaceDir };
+        const res = await push(session, record, workspaceDir, {});
+        if (!res.pushed) {
+            const why = res.refused ? "refused: " + res.refused : "the server did not accept the save";
+            return { saved: false, reason: why };
+        }
+        await palsyncfile.write(workspaceDir, record); // push advanced record.lastModifiedDate
+        return { saved: true };
+    } catch (e) {
+        return { saved: false, reason: e && e.message ? e.message : String(e) };
+    }
+}
+
 module.exports = {
     listClouds, listCustomClouds, addCloud, deleteCloud, renameCloud, knownAccountsForCloud, authenticate: doAuthenticate, tryAutoLogin,
-    listProfiles, listGroups, listPals, createPal, defaultWorkspaceDir, resolveAvailableDir, materialize
+    listProfiles, listGroups, listPals, createPal, saveNewPal, searchTemplates, getTemplate, defaultWorkspaceDir, resolveAvailableDir, materialize
 };

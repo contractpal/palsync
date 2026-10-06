@@ -395,7 +395,7 @@ const CHECKOUT_STEPS = [
 ];
 // create-new-pal has one extra step before the shared checkout steps: creating the pal itself
 // on CloudPiston (open-from-cloud skips this — the pal already exists).
-const CREATE_STEPS = [{ step: "create", label: "Create the pal on CloudPiston" }, ...CHECKOUT_STEPS];
+const CREATE_STEPS = [{ step: "create", label: "Create the pal on CloudPiston" }, ...CHECKOUT_STEPS, { step: "save", label: "Save the new pal" }];
 
 function addTabToWorkspace(tab) {
     if (!currentWorkspace) return { error: "No workspace open." };
@@ -477,14 +477,29 @@ ipcMain.handle("cloud:checkFolder", (event, name) => checkFolderConflict(name));
 ipcMain.handle("cloud:checkoutSteps", () => CHECKOUT_STEPS);
 ipcMain.handle("cloud:createSteps", () => CREATE_STEPS);
 
-ipcMain.handle("cloud:createAndMaterialize", async (event, { profile, groupIds, name, description, category, agentKey, folderName }) => {
+ipcMain.handle("cloud:searchTemplates", async (event, search) => {
+    try { return { templates: await cloudWizard.searchTemplates(search) }; }
+    catch (e) { return { error: e.message }; }
+});
+
+ipcMain.handle("cloud:getTemplate", async (event, token) => {
+    try { return { template: await cloudWizard.getTemplate(token) }; }
+    catch (e) { return { error: e.message }; }
+});
+
+ipcMain.handle("cloud:createAndMaterialize", async (event, { profile, groupIds, name, description, category, templateId, agentKey, folderName }) => {
     if (!currentWorkspace) return { error: "No workspace open." };
     try {
         sendStep({ step: "create", status: "start" });
-        const created = await cloudWizard.createPal({ profileId: profile.profileId, groupIds, name, description, category });
+        const created = await cloudWizard.createPal({ profileId: profile.profileId, groupIds, name, description, category, templateId });
         sendStep({ step: "create", status: "done" });
         const workspaceDir = resolveWorkspaceDir(created.name, folderName);
         const tab = await cloudWizard.materialize({ profile, palGuid: created.guid, palName: created.name, workspaceDir, agentKey, onLog: sendProgress, onStep: sendStep });
+        // PalBuilder saves immediately after creating a pal; do the same. Non-fatal — see saveNewPal.
+        sendStep({ step: "save", status: "start" });
+        const saved = await cloudWizard.saveNewPal(workspaceDir);
+        sendStep({ step: "save", status: saved.saved ? "done" : "error" });
+        if (!saved.saved) sendProgress("The new pal was created, but its first save did not complete (" + saved.reason + ").");
         return addTabToWorkspace(tab);
     } catch (e) {
         return { error: e && e.message ? e.message : String(e) };

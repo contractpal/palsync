@@ -82,7 +82,7 @@ export default function App() {
             )}
 
             {showLeaveWarning && (
-                <div className="modal-backdrop" onClick={() => setShowLeaveWarning(false)}>
+                <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowLeaveWarning(false); }}>
                     <div className="modal" onClick={e => e.stopPropagation()}>
                         <h3>You have agents running</h3>
                         <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>

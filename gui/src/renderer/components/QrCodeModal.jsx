@@ -4,7 +4,7 @@ import React from "react";
 // rendered in the main process (see qrCode.js) so the raw preview URL never reaches here.
 export default function QrCodeModal({ label, dataUrl, onClose }) {
     return (
-        <div className="modal-backdrop" onClick={onClose}>
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ alignItems: "center", textAlign: "center" }}>
                 <h3>Scan to test "{label}" on your phone</h3>
                 <img src={dataUrl} alt="QR code" width={240} height={240} style={{ alignSelf: "center", borderRadius: 8 }} />

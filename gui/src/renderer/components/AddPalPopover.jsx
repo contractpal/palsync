@@ -6,6 +6,7 @@ export default function AddPalPopover({ onAdded, onClose }) {
     const [error, setError] = useState(null);
     const [showCreateWizard, setShowCreateWizard] = useState(false);
     const [showOpenWizard, setShowOpenWizard] = useState(false);
+    const [showTemplateWizard, setShowTemplateWizard] = useState(false);
 
     async function addExistingFolder() {
         setError(null);
@@ -18,6 +19,11 @@ export default function AddPalPopover({ onAdded, onClose }) {
 
     function handleCreated(result) {
         setShowCreateWizard(false);
+        onAdded(result);
+    }
+
+    function handleCreatedFromTemplate(result) {
+        setShowTemplateWizard(false);
         onAdded(result);
     }
 
@@ -40,6 +46,10 @@ export default function AddPalPopover({ onAdded, onClose }) {
                     <span className="label">Create new pal</span>
                     <span className="desc">Start a fresh pal on CloudPiston, then work it locally.</span>
                 </button>
+                <button className="add-option" onClick={() => setShowTemplateWizard(true)}>
+                    <span className="label">Create from Template</span>
+                    <span className="desc">Start a pal from a pal-store template.</span>
+                </button>
                 <button className="add-option" onClick={() => setShowOpenWizard(true)}>
                     <span className="label">Open from cloud</span>
                     <span className="desc">Pull an existing pal down locally.</span>
@@ -48,6 +58,9 @@ export default function AddPalPopover({ onAdded, onClose }) {
 
             {showCreateWizard && (
                 <CreatePalWizard onCreated={handleCreated} onClose={() => setShowCreateWizard(false)} />
+            )}
+            {showTemplateWizard && (
+                <CreatePalWizard fromTemplate onCreated={handleCreatedFromTemplate} onClose={() => setShowTemplateWizard(false)} />
             )}
             {showOpenWizard && (
                 <OpenFromCloudWizard onOpened={handleOpened} onClose={() => setShowOpenWizard(false)} />

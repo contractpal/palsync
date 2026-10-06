@@ -219,7 +219,7 @@ export default function TestRibbon({ pal, debugVisible, onToggleDebug, statsVisi
             {showWebServices && <WebServicesPanel pal={pal} onClose={() => setShowWebServices(false)} />}
 
             {syncConfirming && syncCheck && (
-                <div className="modal-backdrop" onClick={() => setSyncConfirming(false)}>
+                <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setSyncConfirming(false); }}>
                     <div className="modal wide" onClick={e => e.stopPropagation()}>
                         <h3>Resync this pal's palsync?</h3>
                         <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>
@@ -237,7 +237,7 @@ export default function TestRibbon({ pal, debugVisible, onToggleDebug, statsVisi
             )}
 
             {(syncRunning || syncResult) && (
-                <div className="modal-backdrop" onClick={() => { if (!syncRunning) setSyncResult(null); }}>
+                <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !syncRunning) setSyncResult(null); }}>
                     <div className="modal wide" onClick={e => e.stopPropagation()}>
                         <h3>{syncRunning ? "Resyncing palsync…" : (syncResult.ok ? "Resynced" : "Resync failed")}</h3>
                         {syncLog.length > 0 && (
