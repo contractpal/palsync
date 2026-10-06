@@ -57,9 +57,18 @@ export default function DependencyCheckModal({ onClose }) {
                             </span>
                             {!a.found && (
                                 <button className="btn" onClick={() => window.palsyncGui.openExternal(a.docsUrl)}>
-                                    Install docs →
+                                    {a.broken ? "Reinstall docs →" : "Install docs →"}
                                 </button>
                             )}
+                        </div>
+                    ))}
+                    {status.agents.filter(a => a.broken).map(a => (
+                        <div key={a.id + "-broken"}>
+                            <p className="dep-hint">
+                                {a.label} is on your PATH but failed to run (`{a.command} --version`). Reinstall it
+                                (without --ignore-scripts / --omit=optional), then re-open this screen:
+                            </p>
+                            <pre className="wizard-error dep-install-progress">{a.brokenReason}</pre>
                         </div>
                     ))}
                     {status.agents.some(a => a.comingSoon) && (

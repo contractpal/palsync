@@ -21,8 +21,43 @@ const SUPPORTED_AGENTS = [
     { id: "codex", command: "codex", label: "Codex", docsUrl: "https://developers.openai.com/codex/cli/" }
 ];
 
-function checkAgents() {
-    return SUPPORTED_AGENTS.map(a => Object.assign({}, a, { found: commandOnPath(a.command) }));
+// Only Claude Code gets a health probe: its npm wrapper can be on PATH yet unusable (native
+// binary never downloaded because of --ignore-scripts / --omit=optional), which exits non-zero
+// on `--version` with an explanatory message. "On PATH" alone reported that as fine.
+const HEALTH_PROBE_IDS = new Set(["claude-code"]);
+const HEALTH_PROBE_TIMEOUT_MS = 8000;
+
+function probeVersion(command) {
+    return new Promise(resolve => {
+        let out = "";
+        let done = false;
+        const finish = (r) => { if (!done) { done = true; clearTimeout(timer); resolve(r); } };
+        let child;
+        try {
+            // shell on Windows so npm's claude.cmd shim resolves.
+            child = process.platform === "win32"
+                ? spawn(command + " --version", { shell: true, windowsHide: true })
+                : spawn(command, ["--version"]);
+        } catch (e) { finish({ ok: false, error: e.message }); return; }
+        const timer = setTimeout(() => { try { child.kill(); } catch (e) { /* already gone */ } finish({ ok: false, error: "Timed out running `" + command + " --version`." }); }, HEALTH_PROBE_TIMEOUT_MS);
+        const capture = d => { out = (out + d.toString()).slice(-OUTPUT_TAIL_CAP); };
+        child.stdout.on("data", capture);
+        child.stderr.on("data", capture);
+        child.on("error", err => finish({ ok: false, error: err.message }));
+        child.on("exit", code => finish(code === 0 ? { ok: true } : { ok: false, error: out.trim() || "exit code " + code }));
+    });
+}
+
+async function checkAgents() {
+    return Promise.all(SUPPORTED_AGENTS.map(async a => {
+        const onPath = commandOnPath(a.command);
+        const result = Object.assign({}, a, { found: onPath });
+        if (onPath && HEALTH_PROBE_IDS.has(a.id)) {
+            const probe = await probeVersion(a.command);
+            if (!probe.ok) { result.found = false; result.broken = true; result.brokenReason = probe.error; }
+        }
+        return result;
+    }));
 }
 
 function isChromiumInstalled() {
@@ -39,8 +74,8 @@ function isChromiumInstalled() {
     }
 }
 
-function checkAll() {
-    const agents = checkAgents();
+async function checkAll() {
+    const agents = await checkAgents();
     return {
         agentDetected: agents.some(a => a.found),
         agents,
