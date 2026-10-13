@@ -91,3 +91,16 @@ test("extractCreated: throws on failure or missing guid", () => {
     assert.throws(() => extractCreated(undefined), /failed/);
     assert.throws(() => extractCreated({ success: true, PalInfoEx: { id: "1" } }), /no guid/);
 });
+
+test("extractKeys: empty list (system enterprise) yields no keys", () => {
+    assert.deepEqual(extractKeys({ success: true, customObject: { _class: "list" } }), []);
+});
+
+test("buildPalInfoEx: omits activationKeyId when absent, rejects non-scalar", () => {
+    const base = { name: "N", groupIds: ["g"] };
+    assert.equal("activationKeyId" in buildPalInfoEx(base), false);
+    assert.equal("activationKeyId" in buildPalInfoEx({ ...base, activationKeyId: "" }), false);
+    assert.equal(buildPalInfoEx({ ...base, activationKeyId: "AbC" }).activationKeyId, "AbC");
+    assert.throws(() => buildPalInfoEx({ ...base, activationKeyId: { _class: "list" } }), /must be a string/);
+    assert.throws(() => buildPalInfoEx({ ...base, activationKeyId: ["A"] }), /must be a string/);
+});

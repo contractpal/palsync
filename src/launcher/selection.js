@@ -95,7 +95,8 @@ async function runSelection(session, prompts, { forceCreate = false, defaultName
         } else { // key — entitlements vary per key (Developer keys can't run Web workflows) and
                  // the keys API doesn't expose them, so the human picks. One key -> use it silently.
             const keys = await listKeys(session, profile.profileId);
-            if (!keys.length) throw new Error("No activation keys available for this profile (GetKeysForBuilder).");
+            // No keys (e.g. the system enterprise) needs none — create without one.
+            if (!keys.length) return { mode: "create", profile, groups, details, activationKey: null };
             if (keys.length === 1) {
                 return { mode: "create", profile, groups, details, activationKey: keys[0].value };
             }

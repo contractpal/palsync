@@ -51,8 +51,15 @@ function buildPalInfoEx({ name, description, category, groupIds, activationKeyId
         // Empty shell — server creates a bare pal; suppressEmptyNode drops the empty collections.
         importPal: { layout: { name: name, category: category || name, description: description || name } }
     };
-    // activationKeyId is required by the server; included only when known (createNewPal fetches it).
-    if (activationKeyId) body.activationKeyId = activationKeyId;
+    // activationKeyId is a String on the server. Sent only when known — the system enterprise has
+    // no keys and needs none. Anything but a scalar would serialize as nested XML (e.g. an object
+    // becomes <activationKeyId class="list"/>) and fail server-side, so refuse it here.
+    if (activationKeyId !== undefined && activationKeyId !== null && activationKeyId !== "") {
+        if (typeof activationKeyId !== "string" && typeof activationKeyId !== "number") {
+            throw new Error("createPal: activationKeyId must be a string, got " + JSON.stringify(activationKeyId));
+        }
+        body.activationKeyId = String(activationKeyId);
+    }
     if (templateId) body.templateId = templateId;
     return body;
 }
@@ -66,10 +73,11 @@ function extractKeys(resp) {
     if (arr && typeof arr === "object" && arr["com.contractpal.NameValue"]) arr = arr["com.contractpal.NameValue"];
     if (!arr || arr === "") return [];
     if (!Array.isArray(arr)) arr = [arr];
+    // An empty list (system enterprise) parses to {_class:"list"} — no entry carries a scalar value.
     return arr.map(k => {
         const nv = (k && k["com.contractpal.NameValue"]) || k;
         return { name: nv && nv.name, value: nv && nv.value !== undefined ? nv.value : nv };
-    });
+    }).filter(k => typeof k.value === "string" || typeof k.value === "number");
 }
 
 // Pull the new pal's id + guid out of the create result. The response carries the newly
@@ -114,10 +122,8 @@ async function createNewPal(session, { profileId, groupIds, name, description, c
     if (!activationKeyId) {
         const keys = await listKeys(session, profileId);
         const chosen = chooseDefaultKey(keys);
-        if (!chosen) {
-            throw new Error("No activation keys available for this profile (GetKeysForBuilder).");
-        }
-        activationKeyId = chosen.value;
+        // No keys (e.g. the system enterprise) is valid: create without an activationKeyId.
+        if (chosen) activationKeyId = chosen.value;
     }
     const palInfoEx = buildPalInfoEx({ name, description, category, groupIds, activationKeyId, templateId });
     const resp = await CloudPistonAPIManager.createPal(session, profileId, palInfoEx);
