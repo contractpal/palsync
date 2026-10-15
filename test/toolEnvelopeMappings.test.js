@@ -7,7 +7,7 @@ const {
     seoEnvelopeResults, pushVisibilityFindings, testEnvelopeFindings, datasetSaveFindings,
     testEnvelopeProjection, seoEnvelopeProjection, pushEnvelopeProjection, testActionFields,
     failureLineSummary, addExpectContext, expectBodyBlock, debugHasDiagnosticLines, debugFailed, cappedFailureDebug,
-    screenshotEnvelopeProjection, testPreviewStatus
+    screenshotEnvelopeProjection, testPreviewStatus, serverFindings
 } = require("../src/mcp/tools");
 
 test("sitewide SEO envelope keeps page, fetch, crawler, and passing details", () => {
@@ -188,4 +188,14 @@ test("push envelope warns for every unpushed stray and skipped file", () => {
         ["warn", "pushSkipped", "fonts/brand.ttf"]
     ]);
     assert.match(findings[1].message, /not creatable via push/);
+});
+
+test("serverFindings honors server note code severity", () => {
+    const sev = notes => serverFindings(notes, true).map(f => f.severity);
+    assert.deepStrictEqual(sev([
+        { code: 0, message: "fatal" }, { code: 1, message: "Variable action not declared" },
+        { code: "1", message: "string code" }, { code: 2, message: "warn" }, { code: 3, message: "info" },
+        { message: "no code" }
+    ]), ["error", "error", "error", "warn", "info", "warn"]);
+    assert.strictEqual(serverFindings([{ message: "no code" }], false)[0].severity, "error");
 });

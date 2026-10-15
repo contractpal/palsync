@@ -179,9 +179,20 @@ function pushEnvelopeProjection(source) {
     };
 }
 
+// Server note `code` per ValidationResult.java:14-17: 0 fatal (not saved), 1 error ("Pal is saved but
+// cannot be run"), 2 warning, 3 info. Without a code, fall back to the push-state heuristic.
+function serverNoteSeverity(note, validated) {
+    if (isBenignServerNote(note)) return "info";
+    const code = typeof note.code === "string" && note.code.trim() !== "" ? Number(note.code) : note.code;
+    if (code === 0 || code === 1) return "error";
+    if (code === 2) return "warn";
+    if (code === 3) return "info";
+    return validated ? "warn" : "error";
+}
+
 function serverFindings(notes, validated) {
     return (notes || []).map(note => ({
-        severity: isBenignServerNote(note) ? "info" : (validated ? "warn" : "error"),
+        severity: serverNoteSeverity(note, validated),
         code: note.group || "serverValidation",
         file: note.object || null,
         message: note.message || "Server validation note"
@@ -2074,13 +2085,21 @@ const TOOLS = [
                 const commitBlock = res.commitMessage
                     ? "\n\n📝 Recorded as a commit: \"" + res.commitMessage + "\""
                     : "";
+                const serverFindingList = serverFindings(res.validation, true);
+                const serverFindingSet = new Set(serverFindingList);
                 const findings = (res.lint && res.lint.findings || [])
-                    .concat(serverFindings(res.validation, true), pushVisibilityFindings(res));
+                    .concat(serverFindingList, pushVisibilityFindings(res));
+                // The push itself succeeded, but server-reported errors mean the pal cannot run.
+                const serverErrors = findings.filter(f => f.severity === "error" && serverFindingSet.has(f));
+                const serverErrorBlock = serverErrors.length
+                    ? "\n\n✖ Files were saved (no push retry needed), but the server reports the pal cannot run until these errors are fixed:\n" +
+                      [...new Set(serverErrors.map(f => "   - " + (f.file ? f.file + ": " : "") + f.message))].join("\n")
+                    : "";
                 const source = Object.assign({}, res, {
-                    ok: true,
+                    ok: serverErrors.length === 0,
                     filesChecked: res.lint ? res.lint.filesChecked : null,
                     findings,
-                    debug: [folderBlock, skippedBlock, warnBlock, webBlock, consoleBlock, commitBlock].filter(Boolean).join("\n") || null
+                    debug: [serverErrorBlock.trim(), folderBlock, skippedBlock, warnBlock, webBlock, consoleBlock, commitBlock].filter(Boolean).join("\n") || null
                 });
                 const projection = pushEnvelopeProjection(source);
                 const out = Object.assign({
@@ -2300,7 +2319,7 @@ function safeTestResult(result) {
     return safe;
 }
 
-module.exports = { TOOLS, ensureFreshStart, overridePhrase, blockedMessage, formatExpect, formatValidation, isBenignServerNote,
+module.exports = { TOOLS, serverFindings, ensureFreshStart, overridePhrase, blockedMessage, formatExpect, formatValidation, isBenignServerNote,
     htmlRegionResult, recordScreenshotEvidence, screenshotEvidenceIdentity, safeTestResult, formatPushValidationRefusal, seoEnvelopeResults,
     pushVisibilityFindings, testEnvelopeFindings, datasetSaveFindings, testEnvelopeProjection,
     seoEnvelopeProjection, pushEnvelopeProjection, testActionFields, failureLineSummary, addExpectContext,
