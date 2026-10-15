@@ -464,6 +464,8 @@ function exerciseStepSchema(doc = true) {
         params: d(z.record(z.union([z.string(), z.number()])).optional(), "WEB action query parameters."),
         fill: d(z.record(z.union([z.string(), z.number()])).optional(), "Input name/value pairs to fill before clicking."),
         click: d(z.string().optional(), "Exact visible text or simple selector to click."),
+        login: d(z.boolean().optional(), "Sign in on the platform login page the previous step reached; credentials are filled in for you and never shown."),
+        as: d(z.string().optional(), "With login: test-account alias to sign in as; omit to use the developer's own account."),
         within: d(z.string().optional(), "CSS scope when click text matches multiple elements."),
         upload: d(z.string().optional(), "Workspace-relative file for the screen's c:upload widget; submitted for you."),
         expect: d(z.array(z.string()).optional(), "Visible strings required after this step."),
@@ -955,7 +957,7 @@ const TOOLS = [
     },
     {
         name: "pal_test",
-        description: "Compile a workflow on the server and return validation notes. This does not render the pal; use pal_screenshot or pal_exercise for agent-visible verification. preview:true opens a credential-bearing URL only for human review; the URL is never returned.",
+        description: "Compile a workflow on the server and return validation notes. \"Test console/transaction/web\" = workflow:\"console\"/\"transaction\"/\"web\"; omit only to auto-detect. This does not render the pal; use pal_screenshot or pal_exercise for agent-visible verification. preview:true opens a credential-bearing URL only for human review; the URL is never returned.",
         inputShape: Object.assign({
             workflow: z.enum(["console", "console-system", "web", "transaction"]).optional(),
             workflowName: z.string().optional(),
@@ -1331,7 +1333,7 @@ const TOOLS = [
             expect: z.array(z.string()).optional().describe("Visible strings proving the intended screen; without them the capture is state-unverified."),
             params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional().describe("Scalar query parameters appended with the action (reserved keys cp-auth/nxProfileId/cp-workflow/cp-ws-doaction are refused)."),
             initial: exerciseInitialSchema(false).optional().describe("With steps: first screen, as in pal_exercise (replaces page/action/params)."),
-            steps: z.array(exerciseStepSchema(false)).min(1).max(10).optional().describe("pal_exercise steps run before capture, to reach states behind clicks/fills/AJAX (modals, panels, form results). Captures after the last step; its expect (plus expect) proves the screen.")
+            steps: z.array(exerciseStepSchema(false)).min(1).max(30).optional().describe("pal_exercise steps run before capture, to reach states behind clicks/fills/AJAX (modals, panels, form results). Captures after the last step; its expect (plus expect) proves the screen.")
         },
         async run(ctx, { page, feature, viewport, fullPage, imageless, workflow, workflowName, action, params, expect, initial, steps } = {}) {
             // Durable render evidence (.palsync/tool-evidence.jsonl), mirroring pal_exercise at
@@ -1580,7 +1582,7 @@ const TOOLS = [
         name: "pal_exercise",
         description: "Exercise last-pushed actions end-to-end and assert results. Read local markup first; do not discover fields or selectors by retries. Steps stop at the first failure. WEB steps use action+params; console/transaction opens its first screen with initial and reaches later screens by clicking rendered link text (step action/page is rejected there, never ignored). Scope duplicate controls with within and unique {{runId}}. waitFor waits a bounded time for the step's existing expect/absent to become true by polling visible text only (never replaying the mutation). Use after create/edit/delete.",
         inputShape: {
-            steps: z.array(exerciseStepSchema()).min(1).max(10).describe("Ordered; stops at first failure."),
+            steps: z.array(exerciseStepSchema()).min(1).max(30).describe("Ordered; stops at first failure."),
             initial: exerciseInitialSchema().optional().describe("First screen to establish and verify before step 1."),
             workflow: z.enum(["console", "web", "transaction"]).optional().describe("Engine; default auto-detected."),
             browser: z.boolean().optional().describe("Force a real browser for a WEB pal instead of fetch."),
@@ -1623,7 +1625,7 @@ const TOOLS = [
             if (res.ran === true && res.pass === true) {
                 const boundedUnique = values => [...new Set(values.map(value => String(value).slice(0, 80)))].slice(0, 10);
                 const summary = {
-                    stepCount: Math.min(10, steps.length),
+                    stepCount: Math.min(30, steps.length),
                     webActions: boundedUnique(steps.map(step => step && step.action).filter(Boolean)),
                     browserInteractionCount: Math.min(30, steps.reduce((count, step) =>
                         count + (step && step.page ? 1 : 0) + (step && step.click ? 1 : 0) +

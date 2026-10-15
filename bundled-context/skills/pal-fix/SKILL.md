@@ -43,6 +43,7 @@ A fix to a widely-used fragment or workflow is still a fix — it just gets wide
    - Console render fix → `pal_screenshot`: `captured:true` with `renderError` null = fixed;
      `captured:false` → `HUMAN GATE:` eyeball entry, don't claim the render fixed.
      (Full rule: `../pal-review/references/console-render-verification.md`.)
+   - User asked to "test console/web/transaction" → `../shared/references/test-requests.md`.
 
    If the failure can be demonstrated and then shown fixed at a strong enough seam, that is
    enough. Do not add unrelated screenshots, exercises, or server tests to a fix that did not

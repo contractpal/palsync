@@ -13,8 +13,8 @@ basis that could not be reproduced.
 
 | Runtime | Section | Source | Bytes | Est. tokens | Loading |
 |---|---|---|---:|---:|---|
-| All | `tool-definitions` | `src/mcp/tools.js` | 27,313 | 6,829 | release-stable |
-| All | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 3,494 | 874 | release-stable |
+| All | `tool-definitions` | `src/mcp/tools.js` | 27,752 | 6,938 | release-stable |
+| All | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 3,569 | 893 | release-stable |
 | All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 2,260 | 565 | release-stable |
 | Claude | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,519 | 380 | workspace-stable |
 | Codex/OpenCode/Pi | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,650 | 413 | workspace-stable |
@@ -23,7 +23,7 @@ basis that could not be reproduced.
 | All | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,524 | 881 | on-demand |
 | All | `skill-body:design-build` | `bundled-context/skills/design-build/SKILL.md` | 4,928 | 1,232 | on-demand |
 | All | `skill-body:design-system-init` | `bundled-context/skills/design-system-init/SKILL.md` | 18,126 | 4,532 | on-demand |
-| All | `skill-body:pal-fix` | `bundled-context/skills/pal-fix/SKILL.md` | 4,167 | 1,042 | on-demand |
+| All | `skill-body:pal-fix` | `bundled-context/skills/pal-fix/SKILL.md` | 4,262 | 1,066 | on-demand |
 | All | `skill-body:pal-loop` | `bundled-context/skills/pal-loop/SKILL.md` | 8,554 | 2,139 | on-demand |
 | All | `skill-body:pal-review` | `bundled-context/skills/pal-review/SKILL.md` | 17,714 | 4,429 | on-demand |
 | All | `skill-body:pal-spec` | `bundled-context/skills/pal-spec/SKILL.md` | 10,941 | 2,736 | on-demand |

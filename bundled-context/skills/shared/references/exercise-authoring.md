@@ -14,7 +14,7 @@ Batch a create → edit → delete flow into one `steps` call. Web steps use
 and select their first screen with `initial:{action, params, expect}` — a step-level `action`/`page`
 is rejected on a console pal. A console opens on its list view, so click Add/Create before filling
 the create form. Split flows longer
-than 10 steps. For every spec effect, read the record back and assert every named field, including fields
+than 30 steps. For every spec effect, read the record back and assert every named field, including fields
 not rendered by the default fragment.
 
 ## Selectors and data
@@ -58,7 +58,7 @@ Safety: each `action`/`click` executes exactly once. The wait loop only re-reads
 and current markup — it never navigates, reloads, fetches, clicks, or invokes a workflow again while
 polling. A render error aborts the wait immediately. A timeout is a behavior failure that retains the
 last observed assertion state as evidence. Waiting does not change the pre-mutation retry boundary or
-the step-count cap (still 10 steps).
+the step-count cap (still 30 steps).
 
 ## Failure evidence
 

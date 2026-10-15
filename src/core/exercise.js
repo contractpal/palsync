@@ -21,13 +21,16 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { stableStringify } = require("./stableStringify");
+const testAccounts = require("../platform/testAccounts");
 const { detectRenderError } = require("./screenshot");
 const { sanitizeUrl, sanitizeResourceUrl, releaseBrowser, waitForRenderablePage } = require("./browser");
 // Target normalization, the authenticated bootstrap, the state oracle and the retry boundary are
 // shared with pal_screenshot — neither tool may interpret a console action differently.
 const { normalizeTarget, openAuthenticatedScreen, attemptWithFreshTest, deriveWebBase, describeTargetMismatch, readMatchText } = require("./browserTarget");
 
-const MAX_STEPS = 10;
+const MAX_STEPS = 30;
+const LOGIN_FORM_TIMEOUT_MS = 8000;
+const LOGIN_SUBMIT_TIMEOUT_MS = 20000;
 
 // Per-step bounded wait: a step may wait for its existing expect/absent assertions to become
 // true without replaying the mutation. Waiting forces browser observation so current visible
@@ -381,8 +384,12 @@ function validateSteps(steps) {
     steps.forEach((s, i) => {
         const at = "step " + (i + 1);
         if (!s || typeof s !== "object") { errs.push(at + " is not an object"); return; }
-        if (!s.action && !s.page && !s.fill && !s.click && !s.upload && !(s.expect && s.expect.length) && !(s.absent && s.absent.length)) {
-            errs.push(at + " does nothing — give it an action, page, fill, click, upload, expect, or absent");
+        if (!s.action && !s.page && !s.fill && !s.click && !s.upload && !s.login && !(s.expect && s.expect.length) && !(s.absent && s.absent.length)) {
+            errs.push(at + " does nothing — give it an action, page, fill, click, upload, login, expect, or absent");
+        }
+        if (s.login !== undefined && s.login !== true) errs.push(at + " login must be true (it signs in on the platform login page the previous step reached)");
+        if (s.as !== undefined && (typeof s.as !== "string" || !s.as.trim() || !s.login)) {
+            errs.push(at + " as must be a test-account alias and only goes with login:true");
         }
         if (s.upload !== undefined && (typeof s.upload !== "string" || !s.upload.trim())) {
             errs.push(at + " upload must be a workspace-relative path to the file to attach (e.g. \"fixtures/logo.png\")");
@@ -603,6 +610,7 @@ function stepLabel(step) {
         }
         bits.push("action=" + scrubCredentials(step.action) + params);
     }
+    if (step.login) bits.push(step.as ? "login as " + JSON.stringify(scrubCredentials(step.as)) : "login");
     if (step.fill) bits.push("fill{" + Object.keys(step.fill).join(",") + "}");
     if (step.upload) bits.push("upload " + JSON.stringify(scrubCredentials(step.upload)));
     if (step.click) bits.push("click " + JSON.stringify(scrubCredentials(step.click)));
@@ -737,7 +745,7 @@ async function findUploadTarget(pg) {
 }
 
 function needsBrowser(steps) {
-    return steps.some(s => s.fill || s.click || s.upload);
+    return steps.some(s => s.fill || s.click || s.upload || s.login);
 }
 
 function hasWaitFor(steps) {
@@ -898,6 +906,18 @@ async function runExercise(session, guid, { steps, workflow, viewport, workspace
         start = { target: norm.target, page: withRunId.page || null, expect: withRunId.expect || [] };
     }
 
+    // Login credentials resolve HERE, in-process: the agent only ever names an alias. An unknown
+    // alias stops the run before a test instance is minted or anything is driven.
+    const resolveLogin = deps.resolveLogin || (alias => resolveLoginCredentials(session, alias));
+    for (const s of steps) {
+        if (!s.login) continue;
+        const probe = await resolveLogin(s.as || null);
+        if (!probe || probe.error) {
+            return { ran: false, status: "blocked", category: "credentials", retryable: false, potentialMutationStarted: false,
+                     reason: probe && probe.error ? probe.error : "could not resolve login credentials", runId };
+        }
+    }
+    deps = Object.assign({}, deps, { resolveLogin });
     const browserFn = deps.exerciseByBrowser || exerciseByBrowser;
     const res = await attemptWithFreshTest(session, guid, { kind: workflow }, async (t) => {
         if (!t.ran) {
@@ -1160,6 +1180,30 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
                     }
                     await (deps.waitForRenderablePage || waitForRenderablePage)(pg, base + String(path).replace(/^\/+/, ""), EXERCISE_NAV_OPTS);
                 }
+                if (step.login) {
+                    // Platform login only: the platform's own /login form (#cp-login). Anything else
+                    // (a pal-built form, a pre-registration page) is reported, never guessed at.
+                    const form = "form#cp-login";
+                    try { await pg.waitForSelector(form + " input[name=password]", { timeout: LOGIN_FORM_TIMEOUT_MS }); }
+                    catch (e) {
+                        return fail("the previous step did not reach the platform login page (landed on " + sanitizeUrl(pg.url()) +
+                            "). Not signing in — if this is a pre-registration or custom page, say what to do next." +
+                            formatScreenHints(await screenHints(pg, evidenceTimeout)));
+                    }
+                    const cred = await (deps.resolveLogin || (() => ({ error: "no credential resolver available" })))(step.as || null);
+                    if (!cred || cred.error) return fail(cred && cred.error ? cred.error : "could not resolve login credentials");
+                    await pg.fill(form + " input[name=username]", cred.username, { timeout: ACTION_TIMEOUT_MS });
+                    await pg.fill(form + " input[name=password]", cred.password, { timeout: ACTION_TIMEOUT_MS });
+                    potentialMutationStarted = true; // a sign-in creates a session; never replay it automatically
+                    await pg.click(form + " #sendBtn", { timeout: ACTION_TIMEOUT_MS });
+                    try { await pg.waitForFunction(() => !document.querySelector("form#cp-login"), null, { timeout: LOGIN_SUBMIT_TIMEOUT_MS }); }
+                    catch (e) {
+                        // Still on the login form: clear the typed values so failure evidence never carries them.
+                        try { await pg.fill(form + " input[name=username]", "", { timeout: 2000 }); await pg.fill(form + " input[name=password]", "", { timeout: 2000 }); } catch (e2) { /* page moved */ }
+                        return fail("login was rejected for " + cred.who + " — the platform login page is still showing.");
+                    }
+                    try { await pg.waitForLoadState("networkidle", { timeout: LOGIN_SUBMIT_TIMEOUT_MS }); } catch (e) { /* console keeps long-poll connections */ }
+                }
                 if (step.fill) {
                     for (const [name, value] of Object.entries(step.fill)) {
                         const sel = "[name=" + JSON.stringify(String(name)) + "]";
@@ -1198,7 +1242,7 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
                     await waitForScreenSettle(pg, before);
                 }
             } catch (e) {
-                if (step.page || step.action || step.click) {
+                if (step.page || step.action || step.click || step.login) {
                     const category = !isWeb && pageIsLoginRedirect(pg) ? "auth" : "navigation";
                     return attachEvidence({
                         ran: potentialMutationStarted, kind: t.kind, mode: "browser", pass: false,
@@ -1297,6 +1341,18 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
     }
 }
 
+// Who "test login" signs in as: no alias = the developer's own session credentials; an alias =
+// the test account stored for THIS pal's cloud. Returns { username, password, who } or { error }.
+// The password stays inside this process — it is typed by the login step and never reported.
+function resolveLoginCredentials(session, alias) {
+    if (!alias) return { username: session.username, password: session.password, who: "your own account" };
+    let acct = null;
+    try { acct = testAccounts.getTestAccount(session.environment.url, alias); }
+    catch (e) { return { error: "Could not read test accounts from the OS keychain." }; }
+    if (!acct) return { error: "No test account exists for '" + String(alias).trim() + "'." };
+    return { username: acct.username, password: acct.password, who: "test account '" + acct.alias + "'" };
+}
+
 // Human/agent-readable report. Never includes raw HTML or credential URLs.
 function formatExercise(res) {
     if (res.status === "invalid" || res.invalid) return "pal_exercise — INVALID STEPS — fix the request:\n  - " + res.problems.join("\n  - ") +
@@ -1363,4 +1419,4 @@ function formatExercise(res) {
     return lines.join("\n");
 }
 
-module.exports = { runExercise, exerciseByFetch, exerciseByBrowser, resolveUploadPath, findUploadTarget, validateSteps, validateInitial, webInitialPath, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, makeRunId, readExerciseOrdinal, takeExerciseOrdinal, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, redactSecretFormsForSuccess, makeFinalSnapshot, BROWSER_EVENTS_CAP, EVIDENCE_TIMEOUT_MS, SETTLE_TIMEOUT_MS, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };
+module.exports = { runExercise, resolveLoginCredentials, exerciseByFetch, exerciseByBrowser, resolveUploadPath, findUploadTarget, validateSteps, validateInitial, webInitialPath, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, makeRunId, readExerciseOrdinal, takeExerciseOrdinal, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, redactSecretFormsForSuccess, makeFinalSnapshot, BROWSER_EVENTS_CAP, EVIDENCE_TIMEOUT_MS, SETTLE_TIMEOUT_MS, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };

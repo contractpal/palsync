@@ -92,7 +92,7 @@
   {
     "name": "pal_test",
     "title": "Compile workflow on server",
-    "description": "Compile a workflow on the server and return validation notes. This does not render the pal; use pal_screenshot or pal_exercise for agent-visible verification. preview:true opens a credential-bearing URL only for human review; the URL is never returned.",
+    "description": "Compile a workflow on the server and return validation notes. \"Test console/transaction/web\" = workflow:\"console\"/\"transaction\"/\"web\"; omit only to auto-detect. This does not render the pal; use pal_screenshot or pal_exercise for agent-visible verification. preview:true opens a credential-bearing URL only for human review; the URL is never returned.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -429,7 +429,7 @@
         "steps": {
           "description": "pal_exercise steps run before capture, to reach states behind clicks/fills/AJAX (modals, panels, form results). Captures after the last step; its expect (plus expect) proves the screen.",
           "minItems": 1,
-          "maxItems": 10,
+          "maxItems": 30,
           "type": "array",
           "items": {
             "type": "object",
@@ -467,6 +467,12 @@
                 }
               },
               "click": {
+                "type": "string"
+              },
+              "login": {
+                "type": "boolean"
+              },
+              "as": {
                 "type": "string"
               },
               "within": {
@@ -528,7 +534,7 @@
       "properties": {
         "steps": {
           "minItems": 1,
-          "maxItems": 10,
+          "maxItems": 30,
           "type": "array",
           "items": {
             "type": "object",
@@ -571,6 +577,14 @@
               },
               "click": {
                 "description": "Exact visible text or simple selector to click.",
+                "type": "string"
+              },
+              "login": {
+                "description": "Sign in on the platform login page the previous step reached; credentials are filled in for you and never shown.",
+                "type": "boolean"
+              },
+              "as": {
+                "description": "With login: test-account alias to sign in as; omit to use the developer's own account.",
                 "type": "string"
               },
               "within": {

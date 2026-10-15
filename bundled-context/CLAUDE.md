@@ -10,6 +10,7 @@ Load every skill the task touches.
 - Existing `SPEC.md` / `EXECUTION.md` work → `pal-loop`; independent finished-build review → `pal-review`.
 - Markup/browser UI → `palbuilder-frontend`; workflow code → `palbuilder-workflow`; data/datasets → `palbuilder-data`.
 - Visible UI also requires `design-build`; if no real design system exists, load `design-system-init` first.
+- "Test console/web/transaction" → `shared/references/test-requests.md`.
 - Manifest/structure/restricted workflow-JS questions → `palbuilder-core`. Load other matching `palbuilder-*` skills when relevant.
 
 ## GOLDEN RULES

@@ -341,8 +341,8 @@ test("exerciseByBrowser: polling does not count as extra steps (step-cap invaria
         wait: async () => {},
         now: () => 0
     };
-    // 10 steps each with waitFor should still be within cap
-    const steps = Array.from({ length: 10 }, (_, i) => ({ click: "Step" + i, expect: ["Done"], waitFor: { timeoutMs: 200, intervalMs: 100 } }));
+    // 30 steps each with waitFor should still be within cap
+    const steps = Array.from({ length: 30 }, (_, i) => ({ click: "Step" + i, expect: ["Done"], waitFor: { timeoutMs: 200, intervalMs: 100 } }));
     // Single step wait should produce one result entry, not multiple
     const single = await exerciseByBrowser(
         { kind: "console", _previewUrl: "https://example.test/app" },
@@ -352,7 +352,7 @@ test("exerciseByBrowser: polling does not count as extra steps (step-cap invaria
     );
     assert.equal(single.steps.length, 1, "one wait step produces one result entry");
     assert.equal(single.status, "passed");
-    // Validate 10 steps is allowed
+    // Validate 30 steps is allowed
     assert.deepStrictEqual(validateSteps(steps), []);
     assert.ok(validateSteps([...steps, { click: "extra" }]).some(m => /too many steps/));
 });

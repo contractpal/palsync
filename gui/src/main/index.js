@@ -431,6 +431,14 @@ ipcMain.handle("cloud:list", () => cloudWizard.listClouds());
 
 ipcMain.handle("cloud:knownAccounts", (event, cloudUrl) => cloudWizard.knownAccountsForCloud(cloudUrl));
 
+const testAccountIpc = (fn) => (event, args) => {
+    try { return Object.assign({ ok: true }, fn(args || {})); }
+    catch (e) { return { error: e && e.message ? e.message : String(e) }; }
+};
+ipcMain.handle("cloud:testAccounts:list", testAccountIpc(({ url }) => ({ accounts: cloudWizard.listTestAccounts(url) })));
+ipcMain.handle("cloud:testAccounts:save", testAccountIpc(({ url, alias, username, password }) => { cloudWizard.saveTestAccount(url, alias, username, password); return {}; }));
+ipcMain.handle("cloud:testAccounts:delete", testAccountIpc(({ url, alias }) => ({ deleted: cloudWizard.deleteTestAccount(url, alias) })));
+
 ipcMain.handle("cloud:listCustom", () => cloudWizard.listCustomClouds());
 
 ipcMain.handle("cloud:add", (event, { url, name }) => {

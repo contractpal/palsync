@@ -5,6 +5,7 @@
 const { authenticate } = require("palsync/src/core/session");
 const { resolvePassword } = require("palsync/src/auth/credentialStore");
 const keychain = require("palsync/src/platform/keychain");
+const testAccounts = require("palsync/src/platform/testAccounts");
 const config = require("palsync/src/platform/config");
 const { getClouds } = require("palsync/src/auth/credentials");
 const { CloudPistonAPIManager } = require("palsync/lib/apiManager");
@@ -81,6 +82,13 @@ function listCustomClouds() {
 }
 
 // Deletes every cached credential under the cloud, and removes it from the custom-clouds list
+// Test accounts (extra logins "test login with Bob" can use) live apart from the developer's own
+// credentials — see palsync/src/platform/testAccounts. The renderer only ever gets alias + username.
+function safeAliases(url) { try { return testAccounts.listAliases(url); } catch (e) { return []; } }
+function listTestAccounts(url) { return testAccounts.listAccounts(url); }
+function saveTestAccount(url, alias, username, password) { testAccounts.setTestAccount(url, alias, username, password); }
+function deleteTestAccount(url, alias) { return testAccounts.deleteTestAccount(url, alias); }
+
 // if it's a custom entry. Hardcoded default clouds (Cloudpiston, Nimblewire) have no list entry
 // to remove — deleting one just clears its cached credentials, so the next login there prompts
 // fresh again; the cloud itself still shows up (it's hardcoded), same as it always has.
@@ -88,6 +96,7 @@ function deleteCloud(url) {
     for (const username of knownAccountsForCloud(url)) {
         try { keychain.deleteCredential(url, username); } catch (e) { /* best-effort */ }
     }
+    for (const alias of safeAliases(url)) { try { testAccounts.deleteTestAccount(url, alias); } catch (e) { /* best-effort */ } }
     const custom = listCustomClouds().filter(c => c.url !== url);
     config.set("customClouds", custom);
     const overrides = getNameOverrides();
@@ -234,6 +243,7 @@ async function saveNewPal(workspaceDir) {
 }
 
 module.exports = {
+    listTestAccounts, saveTestAccount, deleteTestAccount,
     listClouds, listCustomClouds, addCloud, deleteCloud, renameCloud, knownAccountsForCloud, authenticate: doAuthenticate, tryAutoLogin,
     listProfiles, listGroups, listPals, createPal, saveNewPal, searchTemplates, getTemplate, defaultWorkspaceDir, resolveAvailableDir, materialize
 };
