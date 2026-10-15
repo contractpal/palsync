@@ -13,8 +13,9 @@ capability call and needs no `--tried`.)
 
 ## Git checkpoint mechanics
 
-Not a git repo → `git init && git add -A && git commit -m "loop start"`. Commit after every
-task. **git is a LOCAL checkpoint only** — the server is the source of truth; `git checkout`
+Not a git repo → `git init && git add -A && git commit -m "loop start"`. Uncommitted
+SPEC.md/EXECUTION.md (a fresh pal-spec approval) → commit them first; never `git stash` or
+discard them. Commit after every task. **git is a LOCAL checkpoint only** — the server is the source of truth; `git checkout`
 does NOT undo a pushed change. Never push this repo.
 
 Transient PalSync artifacts (`.agent-work-history/`, `.palsync/cache/`, usage tallies,

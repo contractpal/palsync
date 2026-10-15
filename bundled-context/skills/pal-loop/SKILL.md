@@ -35,6 +35,7 @@ Only this:
 - Read EXECUTION.md (`palsync task list --ready`) — on resume it outranks model memory.
 - `pal_status` (activate it first in Pi if inactive); server newer than your last pull → `pal_pull` before editing.
 - Not a git repo → `git init && git add -A && git commit -m "loop start"`.
+- Uncommitted SPEC.md/EXECUTION.md are the newly approved plan: commit them before the first task. Never `git stash`, reset, or discard uncommitted work.
 
 Do **not** run broad health checks just because a session started. Run `palsync doctor` when
 setting up for the first time, when the environment or dependencies changed, when configuration

@@ -163,6 +163,8 @@ test("session start is minimal: no unconditional doctor, smoke test, or render b
     assert.doesNotMatch(session, /Smoke-test before picking work/, "the smoke test is gone");
     assert.match(palLoop, /### 1\. Start[\s\S]*references\/session-start\.md/);
     assert.match(palLoop, /Do \*\*not\*\* run broad health checks just because a session started/);
+    assert.match(palLoop, /Never `git stash`, reset, or discard uncommitted work/,
+        "pal-loop must commit a fresh pal-spec approval, never stash it");
     assert.match(palLoop, /Do not run\s*\n?`pal_test` or capture render baselines before a task needs them/);
 });
 test("code-care wording stays pinned: prefactor question, advisory code health, leave-no-worse", () => {
