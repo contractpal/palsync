@@ -6,7 +6,7 @@ const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("fs");
 const path = require("path");
-const { lintSpec, parseSpec, bodyText, normalizeSpecRefToken, resolveSpecSection, resolveSpecRefs, STORED_TYPES } = require("../src/core/specLint");
+const { lintSpec, parseSpec, parseFrontmatter, validateExecutionPlan, bodyText, normalizeSpecRefToken, resolveSpecSection, resolveSpecRefs, STORED_TYPES } = require("../src/core/specLint");
 const os = require("os");
 
 const VALID = `# SPEC — demo
@@ -317,4 +317,10 @@ test("joint lint requires EXECUTION.md and rejects unresolvable task refs", () =
     } finally {
         fs.rmSync(tmp, { recursive: true, force: true });
     }
+});
+
+test("prefactor task row lints clean against a spec with a section 2 prefactor DECISION", () => {
+    const spec = "# SPEC \u2014 demo\nstatus: draft\nspec version: 1\n\n## 2. Decisions\nDECISION: prefactor extract shared card fragment \u2014 rationale: two fragments duplicate the markup\n\n## 3. Foundation\nfoundation body\n";
+    const exec = `# EXECUTION \u2014 demo\nspec version: 1\n\n## Tasks\n| id | task | tier | spec ref | depends | status | success condition |\n| T1 | foundation | cheap | \u00A73 | \u2014 | todo | pal_validate and pal_test both ok:true, diagnosticCount:0 |\n| T2 | prefactor: extract shared card | standard | \u00A72 | T1 | todo | behaviour unchanged: pal_validate/pal_test ok:true diagnosticCount:0; old duplicate no longer exists (rg finds 0 hits) |\n\n## Checkpoints\n`;
+    assert.deepEqual(validateExecutionPlan(exec, { sections: parseSpec(spec).sections, specFrontmatter: parseFrontmatter(spec) }), []);
 });

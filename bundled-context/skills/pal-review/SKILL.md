@@ -76,6 +76,14 @@ proof artifact for rendered output or data effects.
   available and a §5 write action was not exercised, mark that action `NOT VERIFIED` and the
   verdict `CHANGES-NEEDED` with a fix task to run the exercise. Do not convert a plausible
   file:line trace into a data-effects pass.
+- **Code health (advisory — never changes the verdict).** For the files your §5 action trace
+  already opened, note only clear instances of: **duplicated code** (the same logic in two
+  fragments/workflows: extract and share), **scattered edit** (one behaviour needing
+  coordinated edits in many files: gather it), **repeated switch** (the same `case`/`if` chain on
+  the same value in several places: one shared lookup), **speculative generality**
+  (parameters, hooks, or files no spec item uses: delete), **unclear name** (an id/function whose
+  name hides what it does: rename). Quote file:line. Rate each `clear` or `possible`; omit
+  `possible` unless there are none of the other kind. No extra file reads for this; no fix tasks.
 
 - Copy on-brand per BRAND_VOICE / DESIGN_SYSTEM intent, not just present?
 - §6 layout matches the composition the spec described?
@@ -150,6 +158,8 @@ pal_validate: <quote `ok` and `diagnosticCount` — required; missing fields mak
 | action (§5) | trigger (file:line) | routed case (file:line) | params read (file:line) | record op (file:line) | payload keys set (file:line) | fragment refs consuming keys (file:line) | result |
 ## Quality / behavior
 - <finding> — <spec ref> — <why it misses>
+## Code health (advisory — feeds the next pal-spec)
+- <smell> — <file:line> — <clear|possible> — <suggested change>   (`none` when empty)
 ## Visual / UX
 - <finding> — <screenshot ref or "eyeball gate: screen X"> — <fix>
 ## Regression [omit entirely when no baseline/ exists]
@@ -174,7 +184,8 @@ gate, and other harnesses invoke the same CLI gate manually.
 - **Never edit code or the spec.** Findings become fix tasks for pal-loop; a *spec* problem
   (missing/contradictory requirement) is a human blocker, not a self-edit.
 - Judge only against the spec and design system. "I'd have done it differently" is not a
-  finding; "violates §12 criterion 4" is.
+  finding; "violates §12 criterion 4" is. (Code-health notes are advisory and are not findings. They
+  never become fix tasks and never affect the verdict.)
 - **Evidence classes — PASS requires the matching evidence, or it's fabrication:**
   rendered-output criteria need `pal_screenshot`/`pal_fetch` evidence taken from a state where
   the criterion is observable (a data-effects criterion cannot PASS from an empty-list

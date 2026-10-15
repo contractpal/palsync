@@ -165,3 +165,11 @@ test("session start is minimal: no unconditional doctor, smoke test, or render b
     assert.match(palLoop, /Do \*\*not\*\* run broad health checks just because a session started/);
     assert.match(palLoop, /Do not run\s*\n?`pal_test` or capture render baselines before a task needs them/);
 });
+test("code-care wording stays pinned: prefactor question, advisory code health, leave-no-worse", () => {
+    assert.match(palSpec, /what would make this change easy/i);
+    assert.match(palSpec, /DECISION: prefactor/);
+    assert.match(palReview, /Code health \(advisory/);
+    assert.match(palReview, /never changes the verdict/i);
+    assert.match(palReview, /## Rules[\s\S]*I'd have done it differently/);
+    assert.match(routing, /leave the code you touch no worse/i);
+});

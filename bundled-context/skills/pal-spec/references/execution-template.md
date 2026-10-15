@@ -10,7 +10,9 @@ things that use them. Name which tasks are parallel-safe (no shared files) and w
 (task → task, and why). List the risks — e.g. pal_preview never renders console for the agent, so
 pair every console VISUAL task with its human-eyeball fallback. If workflow JS is present, the plan
 must verify the workflow compiles via pal_test after push (TestConsole.do returns fresh validation,
-not a human builder gate). Note natural checkpoints.
+not a human builder gate). Existing pal with a §2 prefactor DECISION: the prefactor is the first
+task after any foundation, and everything that uses the restructured code depends on it. Note
+natural checkpoints.
 
 **Tasks** — one row per task. `spec ref` = which SPEC.md section(s) this task implements (e.g. §5,
 §8a); every task names at least one, so pal-review and a resuming session can trace a task back to
@@ -68,6 +70,7 @@ Checkpoints: <natural human review points>.
 | T1 | copy/adapt shell, styles.css, and workflow foundation | cheap | §3, §6 | — | todo | Page shell and matching templates are copied with bash `cp`, shell/styles plus only runtime scripts with real consumers are present and registered in pal.json, readable `styles/styles.css` and (for console) the documented `run()` skeleton are present; `pal_validate` and `pal_test` both return `ok:true`, `diagnosticCount:0` on the foundation |
 | T2 | first page (composition) | frontier | §4, §6 | T1 | todo | validate 0; push OK; preview "<H1>" |
 | T3 | <action with logic> | standard | §5 | T1 | todo | `pal_test` VALIDATED; `pal_exercise` runs <create/edit/delete flow>, `expect` finds <exact persisted new value>, and `absent` confirms <exact old/deleted value> is gone |
+| Tn | prefactor: <what> | standard | §2 | — | todo | behaviour unchanged: pal_validate/pal_test ok:true diagnosticCount:0; <pal_exercise or pal_fetch of the existing action/page> still shows <exact current value>; <old duplicate> no longer exists (rg finds 0 hits) |
 
 ## Checkpoints (append-only, one line per completed task)
 ## Blockers (what needs the human — be exact)

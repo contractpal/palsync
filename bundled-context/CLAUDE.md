@@ -28,7 +28,7 @@ These are routing-level reminders; details and examples live in the owning skill
 
 ## Work narrowly
 
-Make the smallest change that satisfies the request. Reuse existing Pal code and platform capabilities before adding abstractions. Do not reformat or improve unrelated code. Genuine ambiguity is a reason to ask, not to guess.
+Make the smallest change that satisfies the request, and leave the code you touch no worse: reuse existing Pal code and platform capabilities before adding abstractions; never fork a near-duplicate of an existing fragment, function, or class. Do not reformat or improve unrelated code. If the touched area needs restructuring to fit the change, say so (or add a prefactor task in `pal-spec`) instead of working around it. Genuine ambiguity is a reason to ask, not to guess.
 
 ## Verify claims
 

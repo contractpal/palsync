@@ -58,6 +58,13 @@ reference. Scope the interview and the spec to the CHANGE. Four template places 
 existing pal (§6 layout, §8b consumed datasets, §11 NEVER, §12 acceptance). A `MAP.md` may be read
 if one happens to exist, but nothing requires it and nothing generates one.
 
+While inspecting the touched surface, ask: *what would make this change easy?* If the change
+would otherwise duplicate an existing fragment/function, repeat the same switch/branch in a new
+place, or scatter one logical edit across many files, record `DECISION: prefactor <what> —
+rationale: <the friction>` in §2 and plan a behaviour-preserving prefactor task first. If the
+latest `REVIEW.md` has a "Code health" note for the touched files, weigh it here. Skip the
+prefactor when the friction is speculative. Most changes need none.
+
 **Step 1 — Mine before you ask.** Turn what already exists (the pulled workspace, any live
 site/doc the user points at, DESIGN_SYSTEM.md, the first description) into PROPOSED answers.
 Confirming a proposal costs seconds; an open question costs minutes. Record where each fact
