@@ -304,6 +304,8 @@ current-version successful evidence:
   pal_push: 1
 RESPONSIVE COVERAGE
   none recorded
+DUPLICATE CODE (advisory — judge for Code health, never a finding)
+  none ≥6 lines
 MCP usage sidecar: available
 MCP attempts this session:
   pal_exercise: 0
@@ -336,6 +338,7 @@ test("review brief reports evidence and usage sidecars independently", async () 
     assert.match(output, /tool evidence sidecar: not available/);
     assert.match(output, /current-version successful evidence:\n  exercise evidence for current pushed source: none\n  pal_push: 0/);
     assert.match(output, /RESPONSIVE COVERAGE\n  none recorded/);
+    assert.match(output, /DUPLICATE CODE \(advisory[^\n]*\n  none ≥6 lines/);
     assert.match(output, /MCP usage sidecar: not available/);
     assert.match(output, /pal_exercise: not available/);
     assert.match(output, /session cost sidecar: not available/);

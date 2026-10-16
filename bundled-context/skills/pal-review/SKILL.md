@@ -76,14 +76,16 @@ proof artifact for rendered output or data effects.
   available and a §5 write action was not exercised, mark that action `NOT VERIFIED` and the
   verdict `CHANGES-NEEDED` with a fix task to run the exercise. Do not convert a plausible
   file:line trace into a data-effects pass.
-- **Code health (advisory — never changes the verdict).** For the files your §5 action trace
-  already opened, note only clear instances of: **duplicated code** (the same logic in two
-  fragments/workflows: extract and share), **scattered edit** (one behaviour needing
-  coordinated edits in many files: gather it), **repeated switch** (the same `case`/`if` chain on
-  the same value in several places: one shared lookup), **speculative generality**
-  (parameters, hooks, or files no spec item uses: delete), **unclear name** (an id/function whose
-  name hides what it does: rename). Quote file:line. Rate each `clear` or `possible`; omit
-  `possible` unless there are none of the other kind. No extra file reads for this; no fix tasks.
+- **Code health (advisory — never changes the verdict).** Start from the review brief's DUPLICATE
+  CODE block: for each span, note a shared helper/fragment or say why the repetition is fine. For
+  the files your §5 action trace already opened, note only clear instances of: **duplicated code**
+  (the same logic in two fragments/workflows: extract and share), **scattered edit** (one
+  behaviour needing coordinated edits in many files: gather it), **repeated switch** (the same
+  `case`/`if` chain on the same value in several places: one shared lookup), **speculative
+  generality** (parameters, hooks, or files no spec item uses: delete), **unclear name** (an
+  id/function whose name hides what it does: rename). Quote file:line. Rate each `clear` or
+  `possible`; omit `possible` unless there are none of the other kind. No extra file reads for
+  this beyond the listed spans; no fix tasks.
 
 - Copy on-brand per BRAND_VOICE / DESIGN_SYSTEM intent, not just present?
 - §6 layout matches the composition the spec described?

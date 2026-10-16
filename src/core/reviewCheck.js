@@ -12,6 +12,7 @@ const {
 const { parseTasks, STATUSES } = require("./taskState");
 const { diffWorkspace } = require("./localDrift");
 const { FILENAME: PALSYNC_FILE } = require("./palsyncfile");
+const { findDuplicateSpans } = require("./duplicates");
 
 const REVIEW_TOOLS = ["pal_exercise", "pal_test", "pal_push", "pal_screenshot"];
 
@@ -332,7 +333,10 @@ function buildReviewBrief(workspaceDir) {
     const sourceDigest = record && record.localHash;
     const exerciseEntries = successfulEvidenceEntries(evidence, "pal_exercise", palGuid, marker, sourceDigest);
     const cost = readSessionCost(workspaceDir);
+    let duplicates = [];
+    try { duplicates = findDuplicateSpans(workspaceDir); } catch (e) { /* advisory only */ }
     return {
+        duplicates,
         evidenceAvailable: fs.existsSync(evidencePath),
         exerciseEntries,
         responsive: responsiveEvidence(evidence, palGuid, marker, sourceDigest),
@@ -367,6 +371,13 @@ function responsiveCoverageLines(responsive) {
     return lines;
 }
 
+function duplicateLines(duplicates) {
+    const lines = ["DUPLICATE CODE (advisory — judge for Code health, never a finding)"];
+    if (!duplicates.length) lines.push("  none ≥6 lines");
+    for (const d of duplicates) lines.push("  " + d.lines + " lines  " + d.a + " ≈ " + d.b);
+    return lines;
+}
+
 function formatAccumulator(acc, currency) {
     const cost = acc.hasCost ? acc.cost.toFixed(4) + " " + currency : "not provided";
     return "in=" + acc.tokensIn + " cached=" + acc.tokensCached + " out=" + acc.tokensOut + " cost=" + cost;
@@ -379,6 +390,7 @@ function formatReviewBrief(brief) {
     lines.push(...exerciseSummaryLines(brief.exerciseEntries).map(line => "  " + line));
     lines.push("  pal_push: " + brief.evidence.pal_push);
     lines.push(...responsiveCoverageLines(brief.responsive));
+    lines.push(...duplicateLines(brief.duplicates || []));
     lines.push("MCP usage sidecar: " + (brief.usageAvailable ? "available" : "not available"));
     lines.push("MCP attempts this session:");
     for (const name of REVIEW_TOOLS) {

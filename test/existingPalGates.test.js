@@ -172,6 +172,7 @@ test("code-care wording stays pinned: prefactor question, advisory code health, 
     assert.match(palSpec, /DECISION: prefactor/);
     assert.match(palReview, /Code health \(advisory/);
     assert.match(palReview, /never changes the verdict/i);
+    assert.match(palReview, /review brief's\s+DUPLICATE\s+CODE\s+block:\s+for\s+each\s+span,\s+note\s+a\s+shared\s+helper\/fragment\s+or\s+say\s+why\s+the\s+repetition\s+is\s+fine/);
     assert.match(palReview, /## Rules[\s\S]*I'd have done it differently/);
     assert.match(routing, /leave the code you touch no worse/i);
 });
