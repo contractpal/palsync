@@ -81,17 +81,17 @@ test("4b. workspace-scope rules never appear, on any write", () => {
 });
 
 test("4c. a per-file warning is reported once on a new file and not re-reported as inherited", () => {
-    // debugTagShipped is gate "per-file" and advisory. On a newly added file it is this write's news;
+    // bareAmpersand is gate "per-file" and advisory. On a newly added file it is this write's news;
     // once it sits in the baseline, editing that file again must not repeat it.
-    const withDebug = '<div><c:debug/><p>Hello</p></div>';
+    const withDebug = '<div><p>Tom & Jerry: Hello</p></div>';
     const dir = workspace({ "pages/home.html": withDebug });
     fs.writeFileSync(path.join(dir, "pages", "fresh.html"), withDebug);
     const added = edit(dir, "pages/fresh.html", "Write");
-    assert.equal(added.result.findings.some(f => f.rule === "debugTagShipped" && f.severity === "warn"), true);
+    assert.equal(added.result.findings.some(f => f.rule === "bareAmpersand" && f.severity === "warn"), true);
 
     fs.writeFileSync(path.join(dir, "pages", "home.html"), withDebug.replace("Hello", "Changed"));
     const inherited = edit(dir, "pages/home.html");
-    assert.equal(inherited.result.findings.some(f => f.rule === "debugTagShipped"), false);
+    assert.equal(inherited.result.findings.some(f => f.rule === "bareAmpersand"), false);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 

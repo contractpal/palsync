@@ -192,19 +192,19 @@ test("8. missing and empty literal names are candidates with distinct values", (
         "No local fragment file has this exact runtime identity.");
 });
 
-test("9. extension-bearing names are invalid-static-name candidates", () => {
+test("9. extension-bearing names must match the exact file and are not invalid", () => {
     const impact = query({
         "pages/home.html": '<c:fragment name="nav.HTML"/>',
         "fragments/nav.html": "nav",
     }, "pages/home.html");
     assert.deepStrictEqual(impact.directDependencies, []);
-    assert.deepStrictEqual(impact.candidateMatches[0], {
-        class: "candidateMatch",
-        kind: "invalid-static-name",
-        source: exactSource("pages/home.html", 1, "nav.HTML"),
-        candidateIdentity: "fragments/nav.HTML",
-        reason: "Fragment name must be a non-empty extensionless literal.",
-    });
+    assert.equal(impact.candidateMatches[0].kind, "missing-static-target", "case differs, so no exact file");
+    const exact = query({
+        "pages/home.html": '<c:fragment name="nav.html"/>',
+        "fragments/nav.html": "nav",
+    }, "pages/home.html");
+    assert.equal(exact.directDependencies.length, 1);
+    assert.deepStrictEqual(exact.candidateMatches, []);
 });
 
 test("10. duplicate terminal extensions make an ambiguous candidate without an edge", () => {

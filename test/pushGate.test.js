@@ -10,6 +10,12 @@ const { hashWorkspaceFiles } = require("../src/core/workspaceHash");
 const baseline = require("../src/core/baseline");
 const { tmpWorkspace } = require("./helpers");
 
+// design-system.css is what switches pb-* validation on, and shipping it is itself a blocking error.
+// These tests care about the advisory pb-* warnings, so that one error is expected and nothing else.
+function assertOnlyShippedCatalogError(lint) {
+    assert.deepEqual(lint.findings.filter(f => f.severity === "error").map(f => f.rule), ["referenceStylesheetShipped"]);
+}
+
 test("gateLint surfaces but does not block current workspace-level list/DataList contract warnings", () => {
     const dir = tmpWorkspace({
         "workflows/console.js": [
@@ -189,8 +195,7 @@ test("cache write failure cannot hide an introduced pal.json gate error", () => 
 
 test("gateLint still blocks a pre-existing cross-file contract error in current form", () => {
     const dir = tmpWorkspace({
-        "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="${frag}"/></body></html>',
-        "workflows/console.js": "function run(controller) { var payload = controller.createPayload(); payload.set('main', 'list'); }",
+        "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="nope"/></body></html>',
         "fragments/edited.html": '<c:ignore xmlns:c="contractpal"><p>Before</p></c:ignore>',
     });
     const record = { fileHashes: hashWorkspaceFiles(dir).files };
@@ -200,12 +205,12 @@ test("gateLint still blocks a pre-existing cross-file contract error in current 
 
     const lint = gateLint(record, dir);
     assert.equal(lint.errors, 1);
-    assert.ok(lint.findings.some(f => f.rule === "fragmentBinding" && f.severity === "error"));
+    assert.ok(lint.findings.some(f => f.rule === "missingFragment" && f.severity === "error"));
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("gateLint warns on a bare text input added to a design-system workspace", () => {
-    const dir = tmpWorkspace({ "DESIGN_SYSTEM.md": "# system" });
+    const dir = tmpWorkspace({ "styles/design-system.css": ".pb-btn {}" });
     const record = { fileHashes: hashWorkspaceFiles(dir).files };
     baseline.snapshot(dir, Object.keys(record.fileHashes));
 
@@ -214,7 +219,7 @@ test("gateLint warns on a bare text input added to a design-system workspace", (
         '<c:ignore xmlns:c="contractpal"><input type="text" /></c:ignore>');
 
     const lint = gateLint(record, dir);
-    assert.equal(lint.errors, 0);
+    assertOnlyShippedCatalogError(lint);
     assert.ok(lint.findings.some(f => f.rule === "designClassRequired" && f.severity === "warn"));
     fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -236,7 +241,7 @@ test("gateLint permits the same bare text input without a design system", () => 
 test("gateLint surfaces a baseline design-class warning in a modified file", () => {
     const original = '<c:ignore xmlns:c="contractpal"><input type="text" /></c:ignore>';
     const dir = tmpWorkspace({
-        "DESIGN_SYSTEM.md": "# system",
+        "styles/design-system.css": ".pb-btn {}",
         "fragments/form.html": original,
     });
     const record = { fileHashes: hashWorkspaceFiles(dir).files };
@@ -246,13 +251,14 @@ test("gateLint surfaces a baseline design-class warning in a modified file", () 
         original.replace("</c:ignore>", "<p>Clean edit</p></c:ignore>"));
 
     const lint = gateLint(record, dir);
-    assert.equal(lint.errors, 0, "designClassRequired must not block");
+    assertOnlyShippedCatalogError(lint);
     assert.ok(lint.findings.some(f => f.rule === "designClassRequired" && f.severity === "warn"));
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("gateLint surfaces pbSection and pbUndefinedClass warnings without blocking", () => {
+test("gateLint surfaces the pbUndefinedClass warning without blocking", () => {
     const dir = tmpWorkspace({
+        "styles/design-system.css": ".pb-btn {}",
         "styles/styles.css": ".pb-btn {}",
         "fragments/screen.html": '<c:ignore xmlns:c="contractpal"><div class="pb-invented">Screen</div></c:ignore>',
     });
@@ -260,9 +266,43 @@ test("gateLint surfaces pbSection and pbUndefinedClass warnings without blocking
 
     const lint = gateLint(record, dir);
     const byRule = new Map(lint.findings.map(f => [f.rule, f]));
-    assert.equal(lint.errors, 0);
-    for (const rule of ["pbSection", "pbUndefinedClass"]) {
+    assertOnlyShippedCatalogError(lint);
+    for (const rule of ["pbUndefinedClass"]) {
         assert.equal(byRule.get(rule)?.severity, "warn", "expected advisory " + rule + " finding");
     }
     fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("gateLint blocks a static c:fragment that points at a fragment that is not shipped", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": '<c:ignore xmlns:c="contractpal"><c:fragment name="something"/></c:ignore>',
+    });
+    const record = { fileHashes: {} };
+    const lint = gateLint(record, dir);
+    assert.ok(lint.findings.some(f => f.rule === "missingFragment" && f.severity === "error"));
+    assert.ok(lint.errors > 0);
+
+    // Modified-file path: the cross-file rule must still block when the file has a baseline.
+    fs.writeFileSync(path.join(dir, "pages", "console.html"), '<c:ignore xmlns:c="contractpal"><p>ok</p></c:ignore>');
+    const clean = { fileHashes: hashWorkspaceFiles(dir).files };
+    baseline.snapshot(dir, Object.keys(clean.fileHashes));
+    fs.writeFileSync(path.join(dir, "pages", "console.html"), '<c:ignore xmlns:c="contractpal"><c:fragment name="something"/></c:ignore>');
+    const edited = gateLint(clean, dir);
+    assert.ok(edited.findings.some(f => f.rule === "missingFragment" && f.severity === "error"));
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("lintContent emits every rule the registry gates as per-file", () => {
+    const { lintContent } = require("../src/core/validate");
+    const frag = (body) => '<c:ignore xmlns:c="contractpal">' + body + "</c:ignore>";
+    const cases = [
+        ["fragments/a.html", frag('<c:a action="">x</c:a>'), "emptyAction"],
+        ["fragments/a.html", frag('<c:set name="eq" value="1"/>'), "reservedElWord"],
+        ["fragments/a.html", frag('<script src="gsap.min.js"></script>'), "staleVendor"],
+        ["workflows/a.js", "function run(c) { return pal.getPage('x'); }", "pageResponseSource"],
+        ["workflows/a.js", "function run(c) { return c.createAjaxResponse(); }", "ajaxTransport"],
+    ];
+    for (const [rel, content, rule] of cases) {
+        assert.ok(lintContent(rel, content).some(f => f.rule === rule), rule + " must be emitted by lintContent");
+    }
 });

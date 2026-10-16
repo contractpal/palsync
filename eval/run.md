@@ -15,7 +15,7 @@ Do not edit spec content — a changed spec invalidates every prior row it would
 **Spec revision v2 (2026-07-11):** specs realigned to template-based foundation and the new
 verification discipline. Rows scored against v1 specs are not process-comparable with v2 rows;
 outcome scores (§12/scoring.md) remain comparable because acceptance criteria are unchanged.
-The v2 validation floor includes `debugTagShipped`, `missingFragment`, `designClassRequired`,
+The v2 validation floor includes `missingFragment`, `designClassRequired`,
 `emptyAction`, `pbMain`, and `pbSection`; console audit exceptions must quote
 `[OUTSIDE #cp-root]` sample evidence.
 

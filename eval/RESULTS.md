@@ -8,7 +8,7 @@ capture it, the one-variable rule (§2), and the model matrix (§5). Score each 
 **v2** in notes. v1/v2 rows are not process-comparable, but their §12 outcome scores remain
 comparable because acceptance criteria are unchanged.
 
-v2 validation also blocks shipped `c:debug`, missing static fragments, and missing core-control
+v2 validation also blocks missing static fragments and missing core-control
 `pb-*` classes when a design system is present; console audit exceptions require quoted sample
 ancestry evidence.
 

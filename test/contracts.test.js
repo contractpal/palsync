@@ -169,7 +169,7 @@ test("reserved EL words cannot be c:list ids, c:set names, or c:fragment names",
 
 test("custom control CSS alongside the design system is a bypass warning", () => {
     const dir = tmpWorkspace({
-        "DESIGN_SYSTEM.md": "# system",
+        "styles/design-system.css": ".pb-btn {}",
         "styles/design-system.css": ".pb-btn { color: var(--primary); }",
         "styles/custom.css": "button { background: #123456; }"
     });
@@ -182,7 +182,7 @@ test("custom control CSS alongside the design system is a bypass warning", () =>
 
 test("design-system convention files are exempt from bypass warnings", () => {
     const dir = tmpWorkspace({
-        "DESIGN_SYSTEM.md": "# system",
+        "styles/design-system.css": ".pb-btn {}",
         "styles/design-system.css": ".pb-btn { color: var(--primary); }",
         "styles/spacing.css": "input[type=text] { padding: #123; }",
         "styles/styles.css": "button { background: #123456; }",
@@ -639,52 +639,17 @@ test("clean fixture (modeled on the passing reference pal) — zero contract fin
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("fragment binding — page reads ${frag} but workflow sets payload.set('main', frag) (test-02 mimo bug)", () => {
-    const dir = tmpWorkspace({
-        "pages/console.html": '<html xmlns:c="contractpal"><body><div id="body"><c:fragment name="${frag}"/></div></body></html>',
-        "workflows/console.js": [
-            "function run(controller) {",
-            "    var payload = controller.createPayload();",
-            "    var frag = 'equipmentList';",
-            "    if (frag) { payload.set('main', frag); }",
-            "}",
-        ].join("\n"),
-    });
-    const findings = lintContracts(dir).filter(f => f.rule === "fragmentBinding");
-    assert.strictEqual(findings.length, 1);
-    assert.strictEqual(findings[0].severity, "error");
-    assert.match(findings[0].message, /payload\.set\("main", frag\)/);
-    assert.match(findings[0].message, /payload\.set\("frag", frag\)/);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("fragment binding — no workflow sets the key at all, no rename candidate", () => {
-    const dir = tmpWorkspace({
-        "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="${frag}"/></body></html>',
-        "workflows/console.js": "function run(controller) { var payload = controller.createPayload(); payload.set('title', 'x'); }",
-    });
-    const findings = lintContracts(dir).filter(f => f.rule === "fragmentBinding");
-    assert.strictEqual(findings.length, 1);
-    assert.match(findings[0].message, /keys that are set: title/);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("fragment binding — matching payload.set key produces no finding", () => {
-    const dir = tmpWorkspace({
-        "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="${frag}"/></body></html>',
-        "workflows/console.js": "function run(controller) { var payload = controller.createPayload(); payload.set('frag', 'list'); }",
-    });
-    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "fragmentBinding").length, 0);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("fragment binding — static c:fragment name is not this check's contract", () => {
-    const dir = tmpWorkspace({
-        "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="header"/></body></html>',
-        "workflows/console.js": "function run(controller) {}",
-    });
-    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "fragmentBinding").length, 0);
-    fs.rmSync(dir, { recursive: true, force: true });
+test("c:fragment names containing an EL expression are never validated", () => {
+    const names = ["${frag}", "path/${frag}", "${a}/${b}", "${empty(x) ? 'one' : 'two'}", "pre${frag}post"];
+    for (const name of names) {
+        const dir = tmpWorkspace({
+            "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="' + name + '"/></body></html>',
+            "workflows/console.js": "function run(controller) { var payload = controller.createPayload(); payload.set('unrelated', 'x'); }",
+        });
+        const findings = lintContracts(dir).filter(f => f.rule === "missingFragment" || f.severity === "error");
+        assert.deepStrictEqual(findings, [], name + " must not be validated: " + JSON.stringify(findings));
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
 });
 
 test("static c:fragment names must resolve to shipped fragments", () => {
@@ -756,6 +721,7 @@ test("destructiveConfirm — unrelated action produces no finding", () => {
 
 test("selective pb-* styles warn on browser-default controls, headings, tables, actions, form rhythm, visible skip link, and invented classes", () => {
     const dir = tmpWorkspace({
+        "styles/design-system.css": ".pb-btn {}",
         "styles/styles.css": ":root { --ds-space-1: 4px; } .pb-btn {}",
         "fragments/screen.html": [
             '<c:ignore xmlns:c="contractpal">',
@@ -779,6 +745,7 @@ test("selective pb-* styles warn on browser-default controls, headings, tables, 
 
 test("selective pb-* workspace warns when row actions are ungrouped or conflicting", () => {
     const dir = tmpWorkspace({
+        "styles/design-system.css": ".pb-btn {}",
         "styles/styles.css": [
             ".pb-table {}", ".pb-btn {}", ".pb-btn-secondary {}", ".pb-btn-danger {}", ".pb-row-actions {}"
         ].join("\n"),
@@ -1163,8 +1130,8 @@ test("empty c:a action is an error; dynamic actions remain unchecked", () => {
 });
 
 test("fragment root missing pb-section warns; compliant root passes", () => {
-    const missing = tmpWorkspace({ "fragments/list.html": '<c:ignore xmlns:c="contractpal"><div class="pb-card">List</div></c:ignore>' });
-    const compliant = tmpWorkspace({ "fragments/list.html": '<c:ignore xmlns:c="contractpal"><section class="pb-section console-chrome">List</section></c:ignore>' });
+    const missing = tmpWorkspace({ "styles/design-system.css": ".pb-section {}", "fragments/list.html": '<c:ignore xmlns:c="contractpal"><div class="pb-card">List</div></c:ignore>' });
+    const compliant = tmpWorkspace({ "styles/design-system.css": ".pb-section {}", "fragments/list.html": '<c:ignore xmlns:c="contractpal"><section class="pb-section console-chrome">List</section></c:ignore>' });
     const findings = lintContracts(missing).filter(f => f.rule === "pbSection");
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "warn");
@@ -1174,14 +1141,29 @@ test("fragment root missing pb-section warns; compliant root passes", () => {
 });
 
 test("page shell missing pb-main warns; compliant shell passes", () => {
-    const missing = tmpWorkspace({ "pages/console.html": '<html><body><main id="body"></main></body></html>' });
-    const compliant = tmpWorkspace({ "pages/console.html": '<html><body><main id="body" class="pb-main console-chrome"></main></body></html>' });
+    const missing = tmpWorkspace({ "styles/design-system.css": ".pb-main {}", "pages/console.html": '<html><body><main id="body"></main></body></html>' });
+    const compliant = tmpWorkspace({ "styles/design-system.css": ".pb-main {}", "pages/console.html": '<html><body><main id="body" class="pb-main console-chrome"></main></body></html>' });
     const findings = lintContracts(missing).filter(f => f.rule === "pbMain");
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "warn");
     assert.strictEqual(lintContracts(compliant).filter(f => f.rule === "pbMain").length, 0);
     fs.rmSync(missing, { recursive: true, force: true });
     fs.rmSync(compliant, { recursive: true, force: true });
+});
+
+test("pbMain and pbSection only apply when the pal contains design-system.css (DESIGN_SYSTEM.md alone does not count)", () => {
+    for (const marker of [null, "DESIGN_SYSTEM.md", "styles/design-system.css"]) {
+        const files = {
+            "pages/console.html": '<html><body><main id="body"></main></body></html>',
+            "fragments/list.html": '<c:ignore xmlns:c="contractpal"><div>List</div></c:ignore>',
+        };
+        if (marker) files[marker] = ".pb-section {}";
+        const dir = tmpWorkspace(files);
+        const rules = lintContracts(dir).map(f => f.rule);
+        assert.strictEqual(rules.includes("pbMain"), marker === "styles/design-system.css", "pbMain with marker=" + marker);
+        assert.strictEqual(rules.includes("pbSection"), marker === "styles/design-system.css", "pbSection with marker=" + marker);
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
 });
 
 test("pageResponseSource — c.getPage(...) is the correct source, no finding", () => {
@@ -1335,16 +1317,25 @@ test("missingManifestFilename — fragment entry without Fragment.filename error
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("missingFragment — name= with .html extension leads with the corrected extensionless markup", () => {
+test("c:fragment name may include the file extension", () => {
     const dir = tmpWorkspace({
         "pal.json": basePalJson({}),
-        "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="navbar.html"/></body></html>',
+        "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="navbar.html"/><c:fragment name="navbar"/></body></html>',
         "fragments/navbar.html": "<c:ignore xmlns:c=\"contractpal\">x</c:ignore>",
+    });
+    assert.deepStrictEqual(lintContracts(dir).filter(f => f.rule === "missingFragment"), []);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("missingFragment — a name with an extension that is not shipped names the file it looked for", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({}),
+        "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="frog.html"/></body></html>',
     });
     const findings = lintContracts(dir).filter(f => f.rule === "missingFragment");
     assert.strictEqual(findings.length, 1);
-    assert.match(findings[0].message, /EXTENSIONLESS/);
-    assert.match(findings[0].message, /<c:fragment name="navbar"\/>/);
+    assert.match(findings[0].message, /fragments\/frog\.html, but/);
+    assert.doesNotMatch(findings[0].message, /EXTENSIONLESS|\.html\.html/);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -1352,30 +1343,7 @@ test("missingFragment — name= with .html extension leads with the corrected ex
 // Chain pals are read-only reference code: their workflows/fragments count toward "is it set /
 // routed / shipped", but they are never linted themselves, and a local file at the same path wins.
 
-const CHAIN_PAGE = '<html xmlns:c="contractpal"><body><c:fragment name="${assessmentMessage}"/></body></html>';
 const CHAIN_FRAG = "<c:ignore xmlns:c=\"contractpal\"><p>x</p></c:ignore>";
-
-test("resources — a payload key set by a chain pal's workflow satisfies fragmentBinding", () => {
-    const dir = tmpWorkspace({
-        "pages/console.html": CHAIN_PAGE,
-        "workflows/console.js": "function run(controller) {}",
-        ".resources/H1-Core/workflows/lib/tx_report.js": "page.set('assessmentMessage', 'common/shared/messageDiv');",
-    });
-    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "fragmentBinding").length, 0);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("resources — still an error when neither the pal nor its chain sets the key", () => {
-    const dir = tmpWorkspace({
-        "pages/console.html": CHAIN_PAGE,
-        "workflows/console.js": "function run(controller) {}",
-        ".resources/H1-Core/workflows/lib/other.js": "page.set('somethingElse', 'x');",
-    });
-    const findings = lintContracts(dir).filter(f => f.rule === "fragmentBinding");
-    assert.strictEqual(findings.length, 1);
-    assert.strictEqual(findings[0].file, "pages/console.html");
-    fs.rmSync(dir, { recursive: true, force: true });
-});
 
 test("resources — chain workflows are never linted themselves", () => {
     const dir = tmpWorkspace({
@@ -1411,16 +1379,6 @@ test("resources — a chain pal's default: does not soften an unrouted local act
     const findings = lintContracts(dir).filter(f => /action/i.test(f.rule) && f.file === "pages/console.html");
     assert.ok(findings.length >= 1);
     assert.ok(findings.every(f => f.severity === "error"), JSON.stringify(findings));
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("resources — a local file at the same path shadows the chain copy", () => {
-    const dir = tmpWorkspace({
-        "pages/console.html": CHAIN_PAGE,
-        "workflows/lib/tx_report.js": "// local override, sets nothing",
-        ".resources/H1-Core/workflows/lib/tx_report.js": "page.set('assessmentMessage', 'x');",
-    });
-    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "fragmentBinding").length, 1);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 

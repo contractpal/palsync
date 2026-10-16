@@ -11,7 +11,7 @@ transaction lifecycle self-checks remain mandatory during the build; mobile capt
 final review.
 
 ## Build plan
-Before the first UI task, load `design-build` and checkpoint its six-line design brief; use approved inline SVG icons from `component-library.md` → Icons; validation rules include `debugTagShipped`, `designClassRequired`, `missingFragment`,
+Before the first UI task, load `design-build` and checkpoint its six-line design brief; use approved inline SVG icons from `component-library.md` → Icons; validation rules include `designClassRequired`, `missingFragment`,
 `emptyAction`, `pbMain`, and `pbSection` (page shell owns `pb-main`; fragment root is `pb-section`).
 Dependency order (leaf-first — foundations before things that use them):
 1. Create and sync the serviceRequests dataset.

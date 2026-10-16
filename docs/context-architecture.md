@@ -26,7 +26,7 @@ basis that could not be reproduced.
 | All | `skill-body:design-system-init` | `bundled-context/skills/design-system-init/SKILL.md` | 18,126 | 4,532 | on-demand |
 | All | `skill-body:pal-fix` | `bundled-context/skills/pal-fix/SKILL.md` | 4,262 | 1,066 | on-demand |
 | All | `skill-body:pal-loop` | `bundled-context/skills/pal-loop/SKILL.md` | 8,708 | 2,177 | on-demand |
-| All | `skill-body:pal-review` | `bundled-context/skills/pal-review/SKILL.md` | 17,874 | 4,469 | on-demand |
+| All | `skill-body:pal-review` | `bundled-context/skills/pal-review/SKILL.md` | 17,962 | 4,491 | on-demand |
 | All | `skill-body:pal-spec` | `bundled-context/skills/pal-spec/SKILL.md` | 10,941 | 2,736 | on-demand |
 | All | `skill-body:palbuilder-core` | `bundled-context/skills/palbuilder-core/SKILL.md` | 3,210 | 803 | on-demand |
 | All | `skill-body:palbuilder-data` | `bundled-context/skills/palbuilder-data/SKILL.md` | 15,966 | 3,992 | on-demand |

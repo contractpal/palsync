@@ -32,9 +32,9 @@ test("valid advisory patterns remain non-blocking", () => {
     const lint = gateLint(null, workspace);
     const severities = new Map(lint.findings.map(finding => [finding.rule, finding.severity]));
     assert.equal(lint.errors, 0);
-    for (const rule of ["designClassRequired", "debugTagShipped", "duplicateCase"]) {
-        assert.equal(severities.get(rule), "warn", rule + " must remain advisory");
-    }
+    assert.equal(severities.get("duplicateCase"), "warn", "duplicateCase must remain advisory");
+    // The fixture has a DESIGN_SYSTEM.md but no design-system.css, so pb-* validation stays off.
+    assert.equal(severities.has("designClassRequired"), false);
     fs.rmSync(workspace, { recursive: true, force: true });
 });
 

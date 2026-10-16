@@ -11,8 +11,8 @@ const { tmpWorkspace, parseEnvelope } = require("./helpers");
 test("lint formatting groups remediation but retains every rule, fix, and location", () => {
     const findings = [];
     for (let i = 1; i <= 30; i++) {
-        findings.push({ severity: "error", rule: "debugTagShipped", file: "pages/demo.html", line: i,
-            message: "Remove c:debug before shipping; debug output is shared." });
+        findings.push({ severity: "error", rule: "voidNotClosed", file: "pages/demo.html", line: i,
+            message: "Self-close void elements such as <input/>." });
     }
     findings.push({ severity: "warn", rule: "customControlCss", file: "styles/app.css", line: 7,
         message: "Use the design-system control class instead." });
@@ -83,15 +83,15 @@ test("pal_test sanitization removes every credential-bearing field", () => {
 
 test("pal_push refusal groups 20+ duplicates with at least 50% reduction and no lost locations", () => {
     const findings = Array.from({ length: 25 }, (_, index) => ({
-        severity: "error", rule: "debugTagShipped", file: "pages/demo.html", line: index + 1,
-        message: "Remove c:debug before shipping; debug output is shared."
+        severity: "error", rule: "voidNotClosed", file: "pages/demo.html", line: index + 1,
+        message: "Self-close void elements such as <input/>."
     }));
     const lint = { findings, errors: findings.length, warnings: 0, filesChecked: 1 };
     const legacy = findings.map(f => "ERROR " + f.rule + " " + f.file + ":" + f.line + " — " + f.message +
         " Fix this error before pushing; force cannot bypass validation.").join("\n\n");
     const output = formatPushValidationRefusal(lint);
     assert.ok(Buffer.byteLength(output) <= Buffer.byteLength(legacy) / 2);
-    assert.match(output, /debugTagShipped/);
+    assert.match(output, /voidNotClosed/);
     for (const finding of findings) assert.ok(output.includes(finding.file + ":" + finding.line));
 });
 

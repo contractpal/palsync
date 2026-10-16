@@ -126,11 +126,6 @@ function lintMarkup(rel, src, opts) {
     function checkTag(tag, lt) {
         const lname = tag.name.toLowerCase();
 
-        if (lname === "c:debug") {
-            add(lt, "warn", "debugTagShipped",
-                "<c:debug/> is valid PalBuilder markup, but it can render headerless platform tables that fail designAudit tableHeaders. Remove it from user-facing pages unless the debug output is intentionally required.");
-        }
-
         if (designSystemPresent) {
             const requiredClass = {
                 button: "pb-btn",

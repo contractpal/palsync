@@ -4,9 +4,12 @@ HTML recipe catalog backed by `design-system-init/references/design-system.css`.
 reference-only: never copy, register, link, or load it wholesale. For each component the pal uses,
 copy its dependency-complete token/base/component rules into the pal-owned `styles/styles.css`.
 Include `pb-ui.js` or `pb-motion.js` only when the selected recipe uses their documented behavior.
-When `DESIGN_SYSTEM.md` or the reference design-system catalog is present, missing core-control
-classes (`pb-btn`, `pb-input`, `pb-select`, `pb-textarea`, `pb-table`) are `pal_validate` errors,
-not suggestions; layout-class hints remain warnings.
+`pal_validate` checks `pb-*` classes (core controls `pb-btn`, `pb-input`, `pb-select`,
+`pb-textarea`, `pb-table`; `pb-main`/`pb-section` structure; undefined and layout-class hints) only
+when the pal itself contains `styles/design-system.css`. A `DESIGN_SYSTEM.md` does not turn them on.
+Since that catalog must never ship, a pal built to this guidance gets no `pb-*` validation: apply
+these class rules yourself and verify them by inspection and in `pal-review`. All of these findings
+are warnings.
 
 Marketing sections (hero, bento, pricing, testimonials, logo cloud, CTA band, stats/ticker,
 mockups, text/glow/spotlight effects) live in `marketing-library.md`, not here. Console/app

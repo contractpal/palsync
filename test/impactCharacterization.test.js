@@ -7,14 +7,14 @@
 // Fixture elements (each maps to one pinned finding or its deliberate absence):
 //   pages/console.html      — page with a LITERAL nested fragment reference (c:fragment
 //                             name="nested"; nested.html itself references "leaf") → no finding
-//   pages/dynamic.html      — page with a ${frag} dynamic fragment reference → fragmentBinding
+//   pages/dynamic.html      — page with a ${frag} dynamic fragment reference → deliberately NO fragment finding
 //   pages/missing.html      — page referencing a static fragment that is not shipped
 //                             (fragments/nope.html absent) → missingFragment
 //   pal.json pages.entry    — console.html registered EXACTLY (negative case → no finding);
 //                             entry[3] is a flat malformed entry → malformedManifestEntry
 //   pal.json fragments      — entry[2] has no Fragment.filename → missingManifestFilename;
 //                             entry[3] filename prefixed "fragments/" → bannedFilenamePrefix
-// Every page/fragment also deterministically triggers the structural warnings (pbMain/pbSection).
+// pbMain/pbSection are deliberately absent: they only apply to a pal that contains design-system.css.
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("fs");
@@ -71,54 +71,6 @@ const FIXTURE = {
 // Pinned from a pre-refactor run (2026-08-03): identical outputs on every run since. Final
 // order = lintContracts' own sort (file asc, then line asc).
 const EXPECTED_CONTRACTS = [
-    {
-        file: "fragments/leaf.html",
-        line: 1,
-        column: 0,
-        severity: "warn",
-        rule: "pbSection",
-        message: "Fragment root is missing pb-section; every fragment root must include class pb-section.",
-    },
-    {
-        file: "fragments/nested.html",
-        line: 1,
-        column: 0,
-        severity: "warn",
-        rule: "pbSection",
-        message: "Fragment root is missing pb-section; every fragment root must include class pb-section.",
-    },
-    {
-        file: "pages/console.html",
-        line: 1,
-        column: 0,
-        severity: "warn",
-        rule: "pbMain",
-        message: "Page shell is missing pb-main; the shell must own the pb-main content region.",
-    },
-    {
-        file: "pages/dynamic.html",
-        line: 1,
-        column: 0,
-        severity: "warn",
-        rule: "pbMain",
-        message: "Page shell is missing pb-main; the shell must own the pb-main content region.",
-    },
-    {
-        file: "pages/dynamic.html",
-        line: 2,
-        column: 0,
-        severity: "error",
-        rule: "fragmentBinding",
-        message: "<c:fragment name=\"${main}\"> — no workflow ever sets payload key \"main\" (keys that are set: (no workflow sets any payload key)). The EL variable resolves empty, so the fragment placeholder renders NOTHING and the page is blank on full page load. Fix: in the workflow's non-AJAX path, payload.set(\"main\", <fragmentName>) before page.addPayload(payload). See the palbuilder-frontend skill tag reference, \"c:fragment\".",
-    },
-    {
-        file: "pages/missing.html",
-        line: 1,
-        column: 0,
-        severity: "warn",
-        rule: "pbMain",
-        message: "Page shell is missing pb-main; the shell must own the pb-main content region.",
-    },
     {
         file: "pages/missing.html",
         line: 2,

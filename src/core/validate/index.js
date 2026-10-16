@@ -17,8 +17,8 @@ const { lintWorkflowJs } = require("./workflowJs");
 const { lintMarkup } = require("./markup");
 const { lintDatasetDef, lintPalDatasets } = require("./datasetDef");
 const { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryShape, checkEntryFilenames,
-    checkFolderRegistrations, lineForFinding } = require("./palJson");
-const { lintContracts, lintFileContracts } = require("./contracts");
+    checkFolderRegistrations, checkPrefixedManifestFilenames, checkRoles, lineForFinding } = require("./palJson");
+const { lintContracts, lintFileContracts, lintWorkflowContracts } = require("./contracts");
 const { buildSnapshot } = require("./snapshot");
 const { cachedLint } = require("../lintCache");
 
@@ -36,8 +36,7 @@ function nonParseableSet(snapshot) {
 }
 
 function hasDesignSystem(workspaceDir) {
-    return fs.existsSync(path.join(workspaceDir, "DESIGN_SYSTEM.md")) ||
-        fs.existsSync(path.join(workspaceDir, "styles", "design-system.css")) ||
+    return fs.existsSync(path.join(workspaceDir, "styles", "design-system.css")) ||
         fs.existsSync(path.join(workspaceDir, "Styles", "design-system.css"));
 }
 
@@ -50,8 +49,7 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
     const snapshot = buildSnapshot(workspaceDir);
     const findings = [];
     const nonParseable = nonParseableSet(snapshot);
-    const designSystemPresent = snapshot.allFiles.includes("DESIGN_SYSTEM.md") ||
-        snapshot.allFiles.includes("styles/design-system.css") ||
+    const designSystemPresent = snapshot.allFiles.includes("styles/design-system.css") ||
         snapshot.allFiles.includes("Styles/design-system.css");
     let filesChecked = 0;
     const inScope = (rel) => !only || only.has(rel);
@@ -117,7 +115,7 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
             .filter(rel => /^(?:pages|fragments|styles|Styles|scripts|images|emails|attachments|wizards|datasets)\//.test(rel))
             .sort()
             .map(rel => "manifest-path:" + rel))
-        .concat("DESIGN_SYSTEM.md:<" + (snapshot.allFiles.includes("DESIGN_SYSTEM.md") ? "present" : "absent") + ">")
+        .concat("design-system.css:<" + (designSystemPresent ? "present" : "absent") + ">")
         .join("\n");
     findings.push(...cachedLint(workspaceDir, {
         rel: "<workspace>", content: contractInput, mode: "workspace-contracts"
@@ -195,7 +193,7 @@ function formatValidation(result, { context = "validate" } = {}) {
 // pre-push gate to lint a baseline version vs the current version. Must mirror the folder
 // dispatch in validateWorkspace and the isLintable set in core/baseline.
 function lintContent(rel, content, { designSystemPresent } = {}) {
-    if (rel.startsWith("workflows/") && rel.endsWith(".js")) return lintWorkflowJs(rel, content);
+    if (rel.startsWith("workflows/") && rel.endsWith(".js")) return [...lintWorkflowJs(rel, content), ...lintWorkflowContracts(rel, content)];
     if ((rel.startsWith("pages/") || rel.startsWith("fragments/")) && MARKUP_EXT.has(path.extname(rel).toLowerCase())) {
         return [...lintMarkup(rel, content, { designSystemPresent }), ...lintFileContracts(rel, content)];
     }
@@ -207,9 +205,11 @@ function lintContent(rel, content, { designSystemPresent } = {}) {
                 ...lintPalDatasets(rel, manifest),
                 ...checkEntryShape(manifest),
                 ...checkEntryFilenames(manifest),
+                ...checkPrefixedManifestFilenames(manifest),
                 ...checkUnknownKeys(manifest),
                 ...checkDataStructures(manifest),
-                ...checkFolderRegistrations(manifest)
+                ...checkFolderRegistrations(manifest),
+                ...checkRoles(manifest)
             ];
             for (const finding of findings) finding.line = lineForFinding(content, finding);
             return findings;

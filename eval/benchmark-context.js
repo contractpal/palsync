@@ -70,10 +70,10 @@ async function measure() {
 
         const findings = Array.from({ length: 25 }, (_, index) => ({
             severity: "error",
-            rule: "debugTagShipped",
+            rule: "voidNotClosed",
             file: "pages/demo.html",
             line: index + 1,
-            message: "Remove c:debug before shipping; debug output is shared."
+            message: "Self-close void elements such as <input/>."
         }));
         const validation = { findings, errors: 25, warnings: 0, filesChecked: 1 };
         const rawBytes = Buffer.byteLength(legacyValidation(validation));

@@ -15,7 +15,8 @@ new attributes added since this reference was written.
 ## `c:debug` — Debug Panel
 
 Placed inside `#cp-root` (typically as the last child). Renders the platform debug panel in
-dev builds. No attributes.
+dev builds. The runtime engine ignores it in deployed mode, so it is safe to leave in and the
+validator never flags it. No attributes.
 
 ```html
 <c:debug/>

@@ -21,7 +21,7 @@ const ERROR_MESSAGES = {
 };
 
 const CANDIDATE_REASONS = {
-    "invalid-static-name": "Fragment name must be a non-empty extensionless literal.",
+    "invalid-static-name": "Fragment name must be a non-empty literal.",
     "missing-static-target": "No local fragment file has this exact runtime identity.",
     "ambiguous-static-target": "Multiple local fragment files share this runtime identity.",
 };
@@ -179,12 +179,15 @@ function buildStructuralImpact(snapshot, record) {
 
             const normalizedValue = value.replace(/^\/+|\/+$/g, "");
             const identity = "fragments/" + normalizedValue;
-            if (normalizedValue === "" || MARKUP_EXTENSION.test(normalizedValue)) {
+            if (normalizedValue === "") {
                 candidates.push(candidateRecord("invalid-static-name", source, identity));
                 return;
             }
 
-            const files = identities.get(identity) || [];
+            // A name may carry its extension (name="nav.html"): that matches the exact file only.
+            const files = MARKUP_EXTENSION.test(normalizedValue)
+                ? markup.filter(f => f.rel === identity).map(f => f.rel)
+                : identities.get(identity) || [];
             if (files.length === 1) exact.push(exactRecord(source, files[0], identity));
             else if (files.length === 0) {
                 candidates.push(candidateRecord("missing-static-target", source, identity));

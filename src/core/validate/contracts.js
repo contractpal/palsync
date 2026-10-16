@@ -187,6 +187,16 @@ function collectRoutedActions(workflowFiles) {
     return actions;
 }
 
+function checkEmptyAction(tag, rel, src, pos, findings) {
+    if (!tag.name.toLowerCase().startsWith("c:")) return;
+    const raw = attr(tag, "action");
+    if (raw == null || raw.split("?")[0]) return;
+    findings.push({
+        file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "emptyAction",
+        message: "c:a with empty action never routes at runtime; give it a real action (e.g. action=\"list\") or href"
+    });
+}
+
 function checkActionRouted(markupFiles, workflowFiles, actions, findings) {
     const actionsList = actions.size ? [...actions].sort().join(", ") : "(no workflow has any case label)";
     // A workflow's `default:` case is a legitimate catch-all (real pattern: the implicit
@@ -202,13 +212,7 @@ function checkActionRouted(markupFiles, workflowFiles, actions, findings) {
             const raw = attr(tag, "action");
             if (raw == null) return;
             const name = raw.split("?")[0];
-            if (!name) {
-                findings.push({
-                    file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "emptyAction",
-                    message: "c:a with empty action never routes at runtime; give it a real action (e.g. action=\"list\") or href"
-                });
-                return;
-            }
+            if (!name) return; // emptyAction is reported per file by checkEmptyAction
             if (name.includes("${")) return; // dynamic action name — can't check statically
             if (actions.has(name)) return;
             // Conventional console/web return-to-list links often rely on the workflow default:
@@ -256,17 +260,6 @@ function checkElSyntax(tag, rel, src, pos, findings) {
                 (fixed ? "Fix: test=\"" + fixed + "\"." :
                     "Fix: wrap the whole expression in ${...}.") +
                 " See the palbuilder-frontend skill, \"EL operators\"."
-        });
-    }
-}
-
-function checkReservedElNames(markupFiles, findings) {
-    for (const { rel, src } of markupFiles) {
-        scanTags(src, (tag, pos) => {
-            const tagName = tag.name.toLowerCase();
-            if (tagName === "c:set" || tagName === "c:fragment") {
-                checkReservedElName(tag, rel, src, pos, tagName, "name", attr(tag, "name"), findings);
-            }
         });
     }
 }
@@ -522,88 +515,33 @@ function checkStaleVendor(rel, src, findings) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Check 10 — <c:fragment name="${var}"> placeholder must be bound by a payload.set("var", ...).
-// Real bug (test-02-crud-mimo): page read ${frag} but the workflow ran payload.set("main", frag)
-// — the EL variable resolves empty, <c:fragment name=""> renders nothing, and the whole UI is
-// blank on full page load even though every file compiles and saves cleanly.
+// Check 10 — static <c:fragment name="..."> must resolve to a shipped fragment.
 // ---------------------------------------------------------------------------------------------
 
-function checkFragmentBinding(markupFiles, workflowFiles, findings) {
-    // Every payload key any workflow sets, plus key -> identifier for .set("key", someVar) calls
-    // (used for the rename suggestion when the page var matches the VALUE variable, not the key).
-    const keys = new Set();
-    const keyToIdent = new Map();
-    for (const { src } of workflowFiles) {
-        const re = /\.set\(\s*["']([^"']+)["']\s*(?:,\s*([A-Za-z_$][\w$]*)\s*\))?/g;
-        let m;
-        while ((m = re.exec(src))) {
-            keys.add(m[1]);
-            if (m[2]) keyToIdent.set(m[1], m[2]);
-        }
-    }
-
-    const keysList = keys.size ? [...keys].sort().join(", ") : "(no workflow sets any payload key)";
-    for (const { rel, src } of markupFiles) {
-        scanTags(src, (tag, pos) => {
-            if (tag.name.toLowerCase() !== "c:fragment") return;
-            const name = attr(tag, "name");
-            if (name == null) return;
-            const el = /^\$\{\s*([\w]+)\s*\}$/.exec(name);
-            if (!el) return; // static fragment name — different contract, not this check
-            const v = el[1];
-            if (keys.has(v)) return;
-
-            // Strong case: some payload.set("otherKey", v) passes the SAME variable the page
-            // reads — the key and the EL variable were meant to match but drifted apart.
-            let renamed = null;
-            for (const [key, ident] of keyToIdent) {
-                if (ident === v) { renamed = key; break; }
-            }
-
-            const message = renamed
-                ? "<c:fragment name=\"${" + v + "}\"> — the page reads payload key \"" + v + "\", but the workflow " +
-                  "sets payload.set(\"" + renamed + "\", " + v + ") — the key is \"" + renamed + "\", not \"" + v + "\". " +
-                  "The EL variable resolves empty, so the fragment placeholder renders NOTHING and the page is blank " +
-                  "on full page load. Fix: change the workflow to payload.set(\"" + v + "\", " + v + ") (or change the " +
-                  "page to ${" + renamed + "}) — the payload KEY and the page's ${...} variable must be identical. " +
-                  "See the palbuilder-frontend skill tag reference, \"c:fragment\"."
-                : "<c:fragment name=\"${" + v + "}\"> — no workflow ever sets payload key \"" + v + "\" " +
-                  "(keys that are set: " + keysList + "). The EL variable resolves empty, so the fragment placeholder " +
-                  "renders NOTHING and the page is blank on full page load. Fix: in the workflow's non-AJAX path, " +
-                  "payload.set(\"" + v + "\", <fragmentName>) before page.addPayload(payload). " +
-                  "See the palbuilder-frontend skill tag reference, \"c:fragment\".";
-
-            findings.push({ file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "fragmentBinding", message });
-        });
-    }
-}
-
-// Static c:fragment names are extensionless paths into the shipped fragments/ tree. Dynamic
-// names are handled by checkFragmentBinding because their target is supplied through payload.
+// A static c:fragment name is a path into the shipped fragments/ tree, written with or without the
+// file extension (name="frog" and name="frog.html" both resolve to fragments/frog.html). A name that
+// contains an EL expression (${...}) is resolved at runtime, so it is never validated or blocked.
 function checkStaticFragmentExists(markupFiles, findings, chainMarkupFiles = []) {
-    const shipped = new Set(markupFiles.map(({ rel }) => rel.replace(/\.(?:html?|xhtml)$/i, "")));
+    const shipped = new Set();
+    const addShipped = (rel) => { shipped.add(rel); shipped.add(rel.replace(/\.(?:html?|xhtml)$/i, "")); };
+    markupFiles.forEach(({ rel }) => addShipped(rel));
     // A fragment shipped by a chain pal (.resources/<slug>/fragments/...) resolves like a local one.
     for (const { rel } of chainMarkupFiles) {
         const within = /^\.resources\/[^/]+\/(.*)$/.exec(rel);
-        if (within) shipped.add(within[1].replace(/\.(?:html?|xhtml)$/i, ""));
+        if (within) addShipped(within[1]);
     }
     for (const { rel, src } of markupFiles) {
         scanTags(src, (tag, pos) => {
             if (tag.name.toLowerCase() !== "c:fragment") return;
             const name = attr(tag, "name");
-            if (name == null || /^\$\{\s*[\w]+\s*\}$/.test(name)) return;
+            if (name == null || name.includes("${")) return;
             const target = "fragments/" + String(name).replace(/^\/+|\/+$/g, "");
             if (shipped.has(target)) return;
-            // Trailing ".html" in name= is the most common cause (resolves to <name>.html.html):
-            // lead with the exact corrected markup instead of the generic add-a-file advice.
-            const extIncluded = /\.(?:html?|xhtml)$/i.test(String(name));
+            const file = /\.(?:html?|xhtml)$/i.test(target) ? target : target + ".html";
             findings.push({
                 file: rel, line: lineAt(src, pos), column: 0, severity: "error", rule: "missingFragment",
-                message: extIncluded
-                    ? "<c:fragment name=\"" + name + "\"/> — fragment names are EXTENSIONLESS; this resolves to " +
-                      target + ".html. Fix: <c:fragment name=\"" + String(name).replace(/\.(?:html?|xhtml)$/i, "") + "\"/>."
-                    : "<c:fragment name=\"" + name + "\"/> references " + target + ".html, but that static fragment is not shipped. " +
-                      "Fix: add fragments/" + name + ".html (or change name= to an existing fragment path). See the palbuilder-frontend skill, \"c:fragment\"."
+                message: "<c:fragment name=\"" + name + "\"/> references " + file + ", but that static fragment is not shipped. " +
+                    "Fix: add " + file + " (or change name= to an existing fragment path). See the palbuilder-frontend skill, \"c:fragment\"."
             });
         });
     }
@@ -618,6 +556,7 @@ function checkStaticFragmentExists(markupFiles, findings, chainMarkupFiles = [])
 // ---------------------------------------------------------------------------------------------
 
 function checkPbQualityHints(stylesheetFiles, markupFiles, findings) {
+    if (!workspaceHasDesignSystem(stylesheetFiles)) return;
     const usedInMarkup = markupFiles.some(({ src }) => /class\s*=\s*["'][^"']*\bpb-/.test(src));
     if (!usedInMarkup) return;
 
@@ -860,10 +799,14 @@ function checkScriptWithoutConsumer(snapshot, markupFiles, findings) {
 
 // A pal-owned stylesheet must consume the design-system catalog, not quietly replace its
 // control recipes with bespoke selectors or raw palette values.
-function checkDesignSystemBypass(snapshot, stylesheetFiles, findings) {
-    const hasDesignSystem = snapshot.allFiles.includes("DESIGN_SYSTEM.md") ||
-        stylesheetFiles.some(f => /^(?:styles|Styles)\/design-system\.css$/.test(f.rel));
-    if (!hasDesignSystem) return;
+// The ONE signal that turns on pb-* validation: the pal itself contains design-system.css. A
+// DESIGN_SYSTEM.md notes file in the folder says nothing about the pal's markup and does not count.
+function workspaceHasDesignSystem(stylesheetFiles) {
+    return stylesheetFiles.some(f => /^(?:styles|Styles)\/design-system\.css$/.test(f.rel));
+}
+
+function checkDesignSystemBypass(stylesheetFiles, findings) {
+    if (!workspaceHasDesignSystem(stylesheetFiles)) return;
     for (const f of stylesheetFiles) {
             if (/(^|\/)(?:design-system|spacing|styles)\.css$/i.test(f.rel)) continue;
             const css = f.src;
@@ -882,7 +825,8 @@ function checkDesignSystemBypass(snapshot, stylesheetFiles, findings) {
 // Structural design-system contracts.
 // ---------------------------------------------------------------------------------------------
 
-function checkStructuralClasses(markupFiles, findings) {
+function checkStructuralClasses(stylesheetFiles, markupFiles, findings) {
+    if (!workspaceHasDesignSystem(stylesheetFiles)) return;
     for (const { rel, src } of markupFiles) {
         if (rel.startsWith("pages/")) {
             let hasPbMain = false;
@@ -913,13 +857,28 @@ function checkStructuralClasses(markupFiles, findings) {
 // Entry point.
 // ---------------------------------------------------------------------------------------------
 
+// Rules gated "per-file" in registry.js MUST be emitted from here (markup) or lintWorkflowContracts
+// (workflows): the push gate lints changed files with lintContent(), which only reaches these.
 function lintFileContracts(rel, src) {
     const findings = [];
     scanTags(src, (tag, pos) => {
+        const tagName = tag.name.toLowerCase();
+        if (tagName === "c:set" || tagName === "c:fragment") {
+            checkReservedElName(tag, rel, src, pos, tagName, "name", attr(tag, "name"), findings);
+        }
+        checkEmptyAction(tag, rel, src, pos, findings);
         checkElSyntax(tag, rel, src, pos, findings);
         checkHrefAction(tag, rel, src, pos, findings);
         checkFormTag(tag, rel, src, pos, findings);
     });
+    checkStaleVendor(rel, src, findings);
+    return findings;
+}
+
+function lintWorkflowContracts(rel, src) {
+    const findings = [];
+    checkAjaxTransport(rel, src, findings);
+    checkPageResponseSource(rel, src, findings);
     return findings;
 }
 
@@ -943,7 +902,6 @@ function lintContracts(snapshotOrDir) {
 
     const listNames = collectListNames(contextWorkflowFiles);
     checkListNameContract(markupFiles, listNames, findings);
-    checkReservedElNames(markupFiles, findings);
 
     checkAjaxTargetExists(markupFiles, findings, resourceMarkupFiles);
 
@@ -951,24 +909,18 @@ function lintContracts(snapshotOrDir) {
     // workflowFiles (local only) feeds just the `default:` fallback test: a chain pal's catch-all
     // does not handle this pal's actions, so it must not soften the unrouted-action finding.
     checkActionRouted(markupFiles, workflowFiles, actions, findings);
-    checkStructuralClasses(markupFiles, findings);
+    checkStructuralClasses(stylesheetFiles, markupFiles, findings);
 
     for (const { rel, src } of markupFiles) {
         findings.push(...lintFileContracts(rel, src));
         scanTags(src, (tag, pos) => {
             checkDestructiveConfirm(tag, rel, src, pos, findings);
         });
-        checkStaleVendor(rel, src, findings);
     }
 
-    for (const { rel, src } of workflowFiles) {
-        checkAjaxTransport(rel, src, findings);
-        checkPageResponseSource(rel, src, findings);
-    }
+    for (const { rel, src } of workflowFiles) findings.push(...lintWorkflowContracts(rel, src));
 
     checkParamDropped(markupFiles, contextWorkflowFiles, findings);
-
-    checkFragmentBinding(markupFiles, contextWorkflowFiles, findings);
 
     checkStaticFragmentExists(markupFiles, findings, resourceMarkupFiles);
 
@@ -978,7 +930,7 @@ function lintContracts(snapshotOrDir) {
 
     checkScriptWithoutConsumer(snapshot, markupFiles, findings);
 
-    checkDesignSystemBypass(snapshot, stylesheetFiles, findings);
+    checkDesignSystemBypass(stylesheetFiles, findings);
 
     checkPbQualityHints(stylesheetFiles, markupFiles, findings);
 
@@ -986,4 +938,4 @@ function lintContracts(snapshotOrDir) {
     return findings;
 }
 
-module.exports = { lintContracts, lintFileContracts };
+module.exports = { lintContracts, lintFileContracts, lintWorkflowContracts };

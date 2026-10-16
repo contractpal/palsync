@@ -9,7 +9,7 @@ const { tmpWorkspace } = require("./helpers");
 
 test("design-system workspaces advise on missing core-control pb-* classes", () => {
     const dir = tmpWorkspace({
-        "DESIGN_SYSTEM.md": "# system",
+        "styles/design-system.css": ".pb-btn {}",
         "pages/index.html": "<html><body><button>Save</button><input type=\"text\" /></body></html>"
     });
     const findings = validateWorkspace(dir).findings.filter(f => f.rule === "designClassRequired");
@@ -20,7 +20,7 @@ test("design-system workspaces advise on missing core-control pb-* classes", () 
 
 test("non-text input types are exempt from the pb-input requirement", () => {
     const dir = tmpWorkspace({
-        "DESIGN_SYSTEM.md": "# system",
+        "styles/design-system.css": ".pb-btn {}",
         "pages/index.html": "<html><body>" +
             "<input type=\"checkbox\" name=\"notify\" />" +
             "<input type=\"range\" name=\"threshold\" />" +
@@ -40,13 +40,11 @@ test("core-control classes remain the old clean behavior without a design system
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("shipped c:debug is a validation warning", () => {
+test("c:debug is ignored by the deployed runtime and never produces a finding", () => {
     const dir = tmpWorkspace({
         "pages/index.html": "<html><body><c:debug /></body></html>"
     });
-    const findings = validateWorkspace(dir).findings.filter(f => f.rule === "debugTagShipped");
-    assert.equal(findings.length, 1);
-    assert.equal(findings[0].severity, "warn");
+    assert.deepEqual(validateWorkspace(dir).findings.filter(f => /debug/i.test(f.rule + f.message)), []);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -62,10 +60,4 @@ test("core XHTML and c:tag rules emit their load-bearing findings", () => {
     for (const [rule, rel, src] of cases) {
         assert.ok(lintMarkup(rel, src).some(f => f.rule === rule), rule + " should be emitted");
     }
-});
-
-test("workspace without c:debug has no shipped-debug finding", () => {
-    const dir = tmpWorkspace({ "pages/index.html": "<html><body><p>clean</p></body></html>" });
-    assert.equal(validateWorkspace(dir).findings.filter(f => f.rule === "debugTagShipped").length, 0);
-    fs.rmSync(dir, { recursive: true, force: true });
 });
