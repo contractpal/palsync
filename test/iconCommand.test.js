@@ -54,15 +54,16 @@ test("icon — copies a 48x48 PNG, registers image + consoleSettings, idempotent
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("icon — rejects wrong size with the actual size and keeps the existing icon", async () => {
+test("icon — a failed run never replaces the existing icon", async () => {
     const dir = ws({});
     const good = makePng(48, 48);
     fs.mkdirSync(path.join(dir, "images"), { recursive: true });
     fs.writeFileSync(path.join(dir, "images", "48x48.png"), good);
-    const src = path.join(dir, "big.png");
-    fs.writeFileSync(src, makePng(64, 64));
-    await assert.rejects(() => run("icon", [src, "--label", "X", "--dir", dir]), /64x64/);
+    const src = path.join(dir, "other.png");
+    fs.writeFileSync(src, makePng(48, 48).fill(1, 40, 41));
+    await assert.rejects(() => run("icon", [src, "--dir", dir]), /--label/);
     assert.ok(fs.readFileSync(path.join(dir, "images", "48x48.png")).equals(good));
+    await assert.rejects(() => run("icon", ["logo.bmp", "--label", "X", "--dir", dir]), /Unsupported image/);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -91,15 +92,27 @@ test("icon — requires a label when none exists; rejects HTML label", async () 
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("icon — rasterizes SVG to 48x48 PNG (skipped without Chromium)", async (t) => {
+async function chromiumOk() {
     const chromium = loadChromium();
-    let ok = false;
-    if (chromium) { try { const b = await chromium.launch(); await b.close(); ok = true; } catch (e) { /* no browser */ } }
-    if (!ok) return t.skip("Chromium unavailable");
+    if (!chromium) return false;
+    try { const b = await chromium.launch(); await b.close(); return true; } catch (e) { return false; }
+}
+
+test("icon — fits SVG and oversized PNG to 48x48; --preview registers nothing (skipped without Chromium)", async (t) => {
+    if (!await chromiumOk()) return t.skip("Chromium unavailable");
     const dir = ws({});
     const svg = path.join(dir, "i.svg");
     fs.writeFileSync(svg, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="red"/></svg>');
-    await quiet(() => run("icon", [svg, "--label", "S", "--dir", dir]));
-    assert.deepStrictEqual(pngSize(fs.readFileSync(path.join(dir, "images", "48x48.png"))), { width: 48, height: 48 });
+    const big = path.join(dir, "logo.png");
+    fs.writeFileSync(big, makePng(120, 64));
+    const before = fs.readFileSync(path.join(dir, "pal.json"), "utf8");
+    await quiet(() => run("icon", ["--preview", svg, big, "--dir", dir]));
+    assert.ok(pngSize(fs.readFileSync(path.join(dir, "assets", "console-icon-preview.png"))).width > 48);
+    assert.strictEqual(fs.readFileSync(path.join(dir, "pal.json"), "utf8"), before);
+    assert.ok(!fs.existsSync(path.join(dir, "images", "48x48.png")));
+    for (const src of [svg, big]) {
+        await quiet(() => run("icon", [src, "--label", "S", "--dir", dir]));
+        assert.deepStrictEqual(pngSize(fs.readFileSync(path.join(dir, "images", "48x48.png"))), { width: 48, height: 48 });
+    }
     fs.rmSync(dir, { recursive: true, force: true });
 });

@@ -21,7 +21,7 @@ basis that could not be reproduced.
 | All | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 7,924 | 1,981 | on-demand |
 | All | `creating-files` | `src/launcher/contextInject.js#syncDetails` | 4,978 | 1,245 | on-demand |
 | All | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,524 | 881 | on-demand |
-| All | `skill-body:console-icon` | `bundled-context/skills/console-icon/SKILL.md` | 2,262 | 566 | on-demand |
+| All | `skill-body:console-icon` | `bundled-context/skills/console-icon/SKILL.md` | 2,898 | 725 | on-demand |
 | All | `skill-body:design-build` | `bundled-context/skills/design-build/SKILL.md` | 4,928 | 1,232 | on-demand |
 | All | `skill-body:design-system-init` | `bundled-context/skills/design-system-init/SKILL.md` | 18,126 | 4,532 | on-demand |
 | All | `skill-body:pal-fix` | `bundled-context/skills/pal-fix/SKILL.md` | 4,262 | 1,066 | on-demand |

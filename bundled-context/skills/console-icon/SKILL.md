@@ -19,32 +19,49 @@ text — no HTML. This is not `desktopBindings` (a separate, rarely used binding
 If `pal.json` already has a `desktopImage` that is a valid 48×48 image, keep it unless the user
 asked for a new icon.
 
-## 1. Design the mark
+The user decides what the icon looks like. Never pick a design for them and push it.
 
-- One dominant symbol from the pal's name and purpose (tracker → checklist, scheduling →
-  calendar, inventory → box, invoices → document with a currency mark). Avoid generic gears/stars.
-- Colors: use the primary/accent tokens from `DESIGN_SYSTEM.md` or `styles/styles.css` when
-  present. Otherwise use a deep neutral or blue (`#1f3a5f`) with white.
-- Rounded-square tile background, symbol in a contrasting color, ~6px inner padding.
-- No text, no tiny detail, no thin strokes (≥ 3px at 48px), no gradients or shadows.
+## 1. Ask
 
-Write it as an SVG with `viewBox="0 0 48 48"` and `width="48" height="48"` to
-`assets/console-icon.svg` (source, not pushed). If your harness has an image generator and the
-user wants a raster mark, you may use it instead — pass that PNG to `palsync icon` only if it is
-already exactly 48×48; otherwise redraw it as SVG.
+Ask one question before drawing. Offer three distinct concepts drawn from the pal's name, purpose
+and data, plus two open choices:
 
-## 2. Rasterize and register
+> Which console icon? A: <concept> · B: <concept> · C: <concept> · D: describe your own (symbol,
+> colors, style) · E: use your own image (logo or any PNG/JPG/SVG — give the path)
+
+Make the concepts genuinely different (a literal object, an action/status mark, initials or a
+monogram). Say each in a few concrete words ("clipboard with a checkmark, white on navy"). Also ask
+for the label if `consoleSettings.desktopLabel` is empty (suggest the pal's display name).
+
+## 2. Draw candidates
+
+For A–D, write one SVG per candidate to `assets/icon-<letter>.svg` (`viewBox="0 0 48 48"`):
+
+- One dominant symbol; rounded-square tile background unless the user wants otherwise.
+- Colors: the user's, else the primary/accent tokens in `DESIGN_SYSTEM.md` or
+  `styles/styles.css`, else a deep navy (`#1f3a5f`) with white.
+- Legible at 48px: no small text (initials only, ≤ 2 letters), strokes ≥ 3px, no fine detail,
+  gradients or shadows.
+
+For E, use the user's file as the candidate as-is; it is scaled to fit and centered.
+
+## 3. Preview and iterate
 
 ```bash
-palsync icon assets/console-icon.svg --label "Project Tracker"
+palsync icon --preview assets/icon-a.svg assets/icon-b.svg assets/icon-c.svg
 ```
 
-This renders a transparent 48×48 PNG to `images/48x48.png`, verifies its size, adds one `Image`
-entry (no duplicates), and sets `consoleSettings.desktopImage`/`desktopLabel` while preserving
-other `consoleSettings` keys. Re-running is safe. Use `palsync icon` with no source to register an
-existing `images/48x48.png`. Do not hand-edit these fields.
+This writes `assets/console-icon-preview.png` (each candidate enlarged and at actual 48px size)
+and registers nothing. Show it to the user (view the image yourself and give them the path) and
+ask which one to use or what to change. Revise and preview again until they choose.
 
-## 3. Verify
+## 4. Register the chosen icon
 
-Look at `images/48x48.png` once. Then `pal_push` — the image and `consoleSettings` ship with the
-normal push.
+```bash
+palsync icon assets/icon-b.svg --label "Project Tracker"
+```
+
+Any SVG/PNG/JPG is fitted to an exact 48×48 PNG at `images/48x48.png`. The command adds one
+`Image` entry (no duplicates) and sets `consoleSettings.desktopImage`/`desktopLabel`, preserving
+other `consoleSettings` keys. Re-running is safe. Do not hand-edit these fields. Then `pal_push`;
+the image and `consoleSettings` ship with the normal push.
