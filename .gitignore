@@ -84,3 +84,5 @@ gui/build-info.json
 /.palsync/pi-usage.jsonl
 /.palsync/tool-evidence.jsonl
 # end palsync transient artifacts
+/dev-notes/
+/dev-notes/
