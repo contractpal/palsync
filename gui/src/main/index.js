@@ -36,6 +36,7 @@ const versionCheck = require("./versionCheck");
 const dependencyCheck = require("./dependencyCheck");
 const appState = require("./appState");
 const palsyncSettings = require("./palsyncSettings");
+const validationSwitch = require("palsync/src/core/validationSwitch");
 const browserConfig = require("./browserConfig");
 const browserLaunch = require("./browserLaunch");
 const testWorkflow = require("./testWorkflow");
@@ -100,6 +101,13 @@ ipcMain.handle("app:getInfo", () => {
 
 ipcMain.handle("settings:describe", () => palsyncSettings.describe());
 ipcMain.handle("settings:update", (event, { key, value }) => palsyncSettings.update(key, value));
+
+// Per-pal push-validation switch (title-bar slider). Same store pal_push reads on every push.
+ipcMain.handle("validation:get", (event, palGuid) => ({ enabled: !validationSwitch.isOff(palGuid) }));
+ipcMain.handle("validation:set", (event, { palGuid, enabled }) => {
+    const saved = validationSwitch.setOff(palGuid, !enabled);
+    return { ok: saved, enabled: !validationSwitch.isOff(palGuid) };
+});
 
 ipcMain.handle("deps:check", () => dependencyCheck.checkAll());
 ipcMain.handle("deps:installChromium", async () => {

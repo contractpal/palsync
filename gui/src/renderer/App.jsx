@@ -6,6 +6,7 @@ import AboutModal from "./components/AboutModal.jsx";
 import SettingsModal from "./components/SettingsModal.jsx";
 import BrowsersSettingsModal from "./components/BrowsersSettingsModal.jsx";
 import ClipboardButton from "./components/ClipboardButton.jsx";
+import ValidationToggle from "./components/ValidationToggle.jsx";
 
 export default function App() {
     const [workspace, setWorkspace] = useState(null);
@@ -63,6 +64,7 @@ export default function App() {
                 </span>
                 {workspace && (
                     <div style={{ display: "flex", gap: 8 }}>
+                        <ValidationToggle pal={activePal} />
                         <ClipboardButton pal={activePal} />
                         <button className="btn" onClick={leaveWorkspace}>
                             ← Workspaces

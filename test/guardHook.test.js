@@ -84,3 +84,24 @@ test("8. a malformed event never blocks, and a missing cwd throws so the adapter
     }
     assert.throws(() => evaluate({ tool_name: "Edit", tool_input: { file_path: ".palsync.json" } }), /no cwd/);
 });
+
+test("9. writes under .resources/ are denied for every write tool, however spelled", () => {
+    for (const tool of ["Edit", "Write", "MultiEdit"]) {
+        for (const target of [".resources/H1-Core/workflows/a.js", "./.resources/index.json",
+            path.join(WS, ".resources", "H1-Core", "pages", "x.html"),
+            path.join(WS, "pages", "..", ".resources", "H1-Core", "x.js")]) {
+            const result = evaluate(edit(target, tool));
+            assert.equal(result.decision.blocked, true, tool + " " + target);
+            assert.match(result.output.hookSpecificOutput.permissionDecisionReason, /same path in this pal/);
+        }
+    }
+    const notebook = evaluate({ cwd: WS, tool_name: "NotebookEdit", tool_input: { notebook_path: ".resources/H1-Core/n.ipynb" } });
+    assert.equal(notebook.decision.blocked, true);
+});
+
+test("10. reads of .resources/ and look-alike paths stay allowed", () => {
+    assert.equal(evaluate({ cwd: WS, tool_name: "Read", tool_input: { file_path: ".resources/H1-Core/a.js" } }).decision.blocked, false);
+    for (const target of ["resources/a.js", ".resources-notes.md", "pages/.resources/a.html", "workflows/lib/a.js"]) {
+        assert.equal(evaluate(edit(target)).decision.blocked, false, target);
+    }
+});

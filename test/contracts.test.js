@@ -1347,3 +1347,93 @@ test("missingFragment — name= with .html extension leads with the corrected ex
     assert.match(findings[0].message, /<c:fragment name="navbar"\/>/);
     fs.rmSync(dir, { recursive: true, force: true });
 });
+
+// ---- .resources/ (pal chain) context --------------------------------------------------------
+// Chain pals are read-only reference code: their workflows/fragments count toward "is it set /
+// routed / shipped", but they are never linted themselves, and a local file at the same path wins.
+
+const CHAIN_PAGE = '<html xmlns:c="contractpal"><body><c:fragment name="${assessmentMessage}"/></body></html>';
+const CHAIN_FRAG = "<c:ignore xmlns:c=\"contractpal\"><p>x</p></c:ignore>";
+
+test("resources — a payload key set by a chain pal's workflow satisfies fragmentBinding", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": CHAIN_PAGE,
+        "workflows/console.js": "function run(controller) {}",
+        ".resources/H1-Core/workflows/lib/tx_report.js": "page.set('assessmentMessage', 'common/shared/messageDiv');",
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "fragmentBinding").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("resources — still an error when neither the pal nor its chain sets the key", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": CHAIN_PAGE,
+        "workflows/console.js": "function run(controller) {}",
+        ".resources/H1-Core/workflows/lib/other.js": "page.set('somethingElse', 'x');",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "fragmentBinding");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].file, "pages/console.html");
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("resources — chain workflows are never linted themselves", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": "<html xmlns:c=\"contractpal\"><body><p>hi</p></body></html>",
+        "workflows/console.js": "function run(controller) {}",
+        ".resources/H1-Core/pages/bad.html": '<html xmlns:c="contractpal"><body><c:fragment name="${nope}"/></body></html>',
+        ".resources/H1-Core/workflows/lib/bad.js": "ajax.setHtml('x');",
+    });
+    const findings = lintContracts(dir);
+    assert.ok(!findings.some(f => String(f.file).startsWith(".resources")), JSON.stringify(findings));
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("resources — a static fragment and an action case shipped by the chain resolve", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="common/shared/messageDiv"/>' +
+            '<c:a action="chainAction">go</c:a></body></html>',
+        "workflows/console.js": "function run(controller) {}",
+        ".resources/H1-Core/fragments/common/shared/messageDiv.html": CHAIN_FRAG,
+        ".resources/H1-Core/workflows/lib/router.js": "switch (action) { case 'chainAction': break; }",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "missingFragment" || f.rule === "actionRouted");
+    assert.deepStrictEqual(findings, []);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("resources — a chain pal's default: does not soften an unrouted local action", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": '<html xmlns:c="contractpal"><body><c:a action="mine">go</c:a></body></html>',
+        "workflows/console.js": "function run(controller) {}",
+        ".resources/H1-Core/workflows/lib/router.js": "switch (action) { case 'other': break; default: break; }",
+    });
+    const findings = lintContracts(dir).filter(f => /action/i.test(f.rule) && f.file === "pages/console.html");
+    assert.ok(findings.length >= 1);
+    assert.ok(findings.every(f => f.severity === "error"), JSON.stringify(findings));
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("resources — a local file at the same path shadows the chain copy", () => {
+    const dir = tmpWorkspace({
+        "pages/console.html": CHAIN_PAGE,
+        "workflows/lib/tx_report.js": "// local override, sets nothing",
+        ".resources/H1-Core/workflows/lib/tx_report.js": "page.set('assessmentMessage', 'x');",
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "fragmentBinding").length, 1);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("resources — impact snapshot reads chain files into the same lists", () => {
+    const { buildImpactSnapshot } = require("../src/core/validate/snapshot");
+    const dir = tmpWorkspace({
+        "workflows/console.js": "function run() {}",
+        ".resources/H1-Core/workflows/lib/a.js": "page.set('k', 1);",
+        ".resources/H1-Core/fragments/f.html": CHAIN_FRAG,
+    });
+    const snap = buildImpactSnapshot(dir);
+    assert.deepStrictEqual(snap.resourceWorkflows.map(f => f.fullRel), [".resources/H1-Core/workflows/lib/a.js"]);
+    assert.deepStrictEqual(snap.resourceMarkup.map(f => f.fullRel), [".resources/H1-Core/fragments/f.html"]);
+    assert.ok(!snap.allFiles.some(f => f.startsWith(".resources")));
+    fs.rmSync(dir, { recursive: true, force: true });
+});

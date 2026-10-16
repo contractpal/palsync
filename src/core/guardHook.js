@@ -28,6 +28,13 @@ const REASON = "Blocked: .palsync.json is PalSync's own push-gate record (server
     "while still saving, so the per-file lint silently checks nothing. Let PalSync maintain it: use " +
     "pal_pull to refresh it, and pal_push to update it.";
 
+const RESOURCES_DIR = ".resources";
+const RESOURCES_REASON = "Blocked: .resources/ holds read-only copies of the pals in this pal's chain " +
+    "(modules, resource pals, system pals). It is rewritten on every refresh, never pushed, and not part " +
+    "of the pal you are editing, so a change there is lost and fixes nothing. Make the change in this " +
+    "pal instead: a file at the same path in this pal takes precedence over the chain pal's copy. If the " +
+    "chain pal itself is wrong, tell the user.";
+
 function isObject(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
 
 // True when `target` is the record file at the root of `workspace`. Resolved on both sides so
@@ -39,6 +46,14 @@ function targetsRecord(workspace, target) {
     return resolved === path.join(path.resolve(workspace), RECORD_FILE);
 }
 
+// True when `target` is .resources/ itself or anything beneath it at the root of `workspace`.
+function targetsResources(workspace, target) {
+    if (typeof target !== "string" || !target) return false;
+    const base = path.join(path.resolve(workspace), RESOURCES_DIR);
+    const resolved = path.resolve(workspace, target);
+    return resolved === base || resolved.startsWith(base + path.sep);
+}
+
 function evaluate({ mode, cwd, event }) {
     const workspace = cwd || (event && event.cwd);
     if (!workspace) throw new Error("hook event has no cwd");
@@ -46,8 +61,12 @@ function evaluate({ mode, cwd, event }) {
     const toolInput = event && isObject(event.tool_input) ? event.tool_input : {};
     // `file_path` is the field Edit/Write/MultiEdit use; `notebook_path` is NotebookEdit's.
     const target = typeof toolInput.file_path === "string" ? toolInput.file_path : toolInput.notebook_path;
-    const blocked = WRITE_TOOLS.has(toolName) && targetsRecord(workspace, target);
-    const decision = { blocked, reason: blocked ? REASON : null, tool: toolName || null, target: target || null };
+    const isWrite = WRITE_TOOLS.has(toolName);
+    const hitsRecord = isWrite && targetsRecord(workspace, target);
+    const hitsResources = isWrite && targetsResources(workspace, target);
+    const blocked = hitsRecord || hitsResources;
+    const reason = hitsRecord ? REASON : hitsResources ? RESOURCES_REASON : null;
+    const decision = { blocked, reason, tool: toolName || null, target: target || null };
     return { decision, output: mode === "claude" ? claudePreToolUseOutput(decision) : decision };
 }
 
@@ -62,4 +81,7 @@ function claudePreToolUseOutput(decision) {
     };
 }
 
-module.exports = { evaluate, claudePreToolUseOutput, targetsRecord, RECORD_FILE, WRITE_TOOLS, REASON };
+module.exports = {
+    evaluate, claudePreToolUseOutput, targetsRecord, targetsResources,
+    RECORD_FILE, RESOURCES_DIR, WRITE_TOOLS, REASON, RESOURCES_REASON,
+};

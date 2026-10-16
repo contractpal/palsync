@@ -37,6 +37,7 @@ const { routeItems } = require("../core/piHelpers");
 const { openUrl } = require("../platform/openUrl");
 const { run: runAst, envelopeProjection: astEnvelopeProjection } = require("../core/palAst");
 const { fetchAndExtract } = require("../core/resources");
+const validationSwitch = require("../core/validationSwitch");
 const {
     createWorkHistoryRun,
     writeArtifactFile,
@@ -2051,7 +2052,10 @@ const TOOLS = [
             // last acquire/release) instead of paying for push()'s own full account-walk resolve
             // on every single push — see push.js's header comment on `resolved`.
             const cachedResolved = ctx.lifecycle && ctx.lifecycle.lockState && ctx.lifecycle.lockState.resolved;
-            const res = await push(ctx.session, ctx.record, ctx.workspaceDir, { force: !!force, overrideLock, skipValidation: !!skipValidation, commitMessage, resolved: cachedResolved });
+            // The developer can switch validation off per pal (Chip's title-bar slider). Read on every
+            // push so the change applies mid-session. This is a human setting, never an agent argument.
+            const validationOff = validationSwitch.isOff(ctx.record.palGuid);
+            const res = await push(ctx.session, ctx.record, ctx.workspaceDir, { force: !!force, overrideLock, skipValidation: !!skipValidation || validationOff, commitMessage, resolved: cachedResolved });
             // Pre-push lint refusal: errors found, push not attempted.
             if (res.refused === "validation") {
                 const source = Object.assign({ ok: false, cacheHits: null, cacheMisses: null }, res.lint);
@@ -2070,7 +2074,9 @@ const TOOLS = [
                     ? "\n\n⚠ Code warnings (fix or explicitly checkpoint):\n" + formatLint(res.lint, { context: "validate" })
                     : "";
                 const skippedBlock = res.skippedValidation
-                    ? "\n\n⚠ You pushed past " + res.lint.errors + " validation ERROR(s) with skipValidation — the pal may not compile/render in PalBuilder:\n" + formatLint(res.lint, { context: "validate" })
+                    ? (validationOff
+                        ? "\n\n⚠ Push validation is switched OFF for this pal by the developer, so this push went past " + res.lint.errors + " validation ERROR(s). The server is the authority: report any server errors below, and tell the developer these were not fixed:\n"
+                        : "\n\n⚠ You pushed past " + res.lint.errors + " validation ERROR(s) with skipValidation — the pal may not compile/render in PalBuilder:\n") + formatLint(res.lint, { context: "validate" })
                     : "";
                 const webBlock = res.webRegistered
                     ? "\n\n🌐 Web workflow registered: \"" + res.webRegistered + "\". Run pal_pull to sync pal.json."

@@ -153,9 +153,9 @@ function checkListNameContract(markupFiles, listNames, findings) {
 // Check 2 — ajax-target must resolve to a real id=.
 // ---------------------------------------------------------------------------------------------
 
-function checkAjaxTargetExists(markupFiles, findings) {
+function checkAjaxTargetExists(markupFiles, findings, chainMarkupFiles = []) {
     const ids = new Set();
-    for (const { src } of markupFiles) scanTags(src, tag => { const v = attr(tag, "id"); if (v != null) ids.add(v); });
+    for (const { src } of markupFiles.concat(chainMarkupFiles)) scanTags(src, tag => { const v = attr(tag, "id"); if (v != null) ids.add(v); });
 
     const idsList = ids.size ? [...ids].sort().join(", ") : "(no element in this workspace has an id= attribute)";
     for (const { rel, src } of markupFiles) {
@@ -580,8 +580,13 @@ function checkFragmentBinding(markupFiles, workflowFiles, findings) {
 
 // Static c:fragment names are extensionless paths into the shipped fragments/ tree. Dynamic
 // names are handled by checkFragmentBinding because their target is supplied through payload.
-function checkStaticFragmentExists(markupFiles, findings) {
+function checkStaticFragmentExists(markupFiles, findings, chainMarkupFiles = []) {
     const shipped = new Set(markupFiles.map(({ rel }) => rel.replace(/\.(?:html?|xhtml)$/i, "")));
+    // A fragment shipped by a chain pal (.resources/<slug>/fragments/...) resolves like a local one.
+    for (const { rel } of chainMarkupFiles) {
+        const within = /^\.resources\/[^/]+\/(.*)$/.exec(rel);
+        if (within) shipped.add(within[1].replace(/\.(?:html?|xhtml)$/i, ""));
+    }
     for (const { rel, src } of markupFiles) {
         scanTags(src, (tag, pos) => {
             if (tag.name.toLowerCase() !== "c:fragment") return;
@@ -918,20 +923,33 @@ function lintFileContracts(rel, src) {
     return findings;
 }
 
+// Chain-pal files from .resources/ that the pal does not override. A file at the same pal-relative
+// path (e.g. fragments/common/x.html) is shadowed by the local one: local wins. The chain structure
+// is not modelled locally yet, so path equality is the only precedence rule.
+function unshadowedResources(resourceFiles, localFiles) {
+    const local = new Set(localFiles.map(f => f.rel));
+    return (resourceFiles || []).filter(f => !local.has(f.rel)).map(f => ({ rel: f.fullRel, src: f.content }));
+}
+
 function lintContracts(snapshotOrDir) {
     const snapshot = typeof snapshotOrDir === "string" ? buildSnapshot(snapshotOrDir) : snapshotOrDir;
     const findings = [];
     const markupFiles = snapshot.markup.map(f => ({ rel: f.rel, src: f.content }));
     const workflowFiles = snapshot.workflows.map(f => ({ rel: f.rel, src: f.content }));
     const stylesheetFiles = snapshot.stylesheets.map(f => ({ rel: f.rel, src: f.content }));
+    // Read-only chain context: counted as "what exists / is set / is routed", never linted itself.
+    const resourceMarkupFiles = unshadowedResources(snapshot.resourceMarkup, snapshot.markup);
+    const contextWorkflowFiles = workflowFiles.concat(unshadowedResources(snapshot.resourceWorkflows, snapshot.workflows));
 
-    const listNames = collectListNames(workflowFiles);
+    const listNames = collectListNames(contextWorkflowFiles);
     checkListNameContract(markupFiles, listNames, findings);
     checkReservedElNames(markupFiles, findings);
 
-    checkAjaxTargetExists(markupFiles, findings);
+    checkAjaxTargetExists(markupFiles, findings, resourceMarkupFiles);
 
-    const actions = collectRoutedActions(workflowFiles);
+    const actions = collectRoutedActions(contextWorkflowFiles);
+    // workflowFiles (local only) feeds just the `default:` fallback test: a chain pal's catch-all
+    // does not handle this pal's actions, so it must not soften the unrouted-action finding.
     checkActionRouted(markupFiles, workflowFiles, actions, findings);
     checkStructuralClasses(markupFiles, findings);
 
@@ -948,11 +966,11 @@ function lintContracts(snapshotOrDir) {
         checkPageResponseSource(rel, src, findings);
     }
 
-    checkParamDropped(markupFiles, workflowFiles, findings);
+    checkParamDropped(markupFiles, contextWorkflowFiles, findings);
 
-    checkFragmentBinding(markupFiles, workflowFiles, findings);
+    checkFragmentBinding(markupFiles, contextWorkflowFiles, findings);
 
-    checkStaticFragmentExists(markupFiles, findings);
+    checkStaticFragmentExists(markupFiles, findings, resourceMarkupFiles);
 
     checkReferenceStylesheetNotShipped(snapshot, markupFiles, stylesheetFiles, findings);
 

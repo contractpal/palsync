@@ -79,6 +79,13 @@ it's a module.
 - **`.resources/` is never part of the pal being edited.** It is not pull-managed, not pushed, and
   gets wiped and rewritten on every refresh — never edit files there, and never expect local
   changes under `.resources/` to survive.
+- **Don't write under `.resources/`**: the Edit/Write guard hook refuses it. To change behavior, put a file at the same path in the current pal — the
+  local file takes precedence over the chain pal's copy.
+- **Validation sees the chain.** `pal_validate` and the push gate count `.resources/` workflows and
+  fragments when checking what exists, is set, or is routed (payload keys, list names, action cases,
+  static fragments, ajax-target ids), so a variable set by a chain pal's workflow is not reported as
+  missing. Chain files are never linted themselves, and a local file at the same path shadows the
+  chain copy.
 - Refresh on demand with the `pal_resources` MCP tool if a chain pal may have changed server-side
   (e.g. CloudPiston Resource was updated) or the chain itself changed (a module was attached or
   detached) — mid-session, `.resources/` can otherwise go stale.

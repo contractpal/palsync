@@ -52,7 +52,7 @@ test("legacy snapshot keeps its shape and reads normal markup", () => {
         const snapshot = buildSnapshot(dir);
         assert.deepStrictEqual(Object.keys(snapshot), [
             "workspaceDir", "markup", "workflows", "stylesheets", "datasets",
-            "palJson", "contentHashByRel", "allFiles",
+            "palJson", "contentHashByRel", "allFiles", "resourceWorkflows", "resourceMarkup",
         ]);
         assert.deepStrictEqual(snapshot.markup, [
             { rel: "pages/home.html", content: "<main>home</main>" },

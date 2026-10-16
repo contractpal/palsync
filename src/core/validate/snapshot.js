@@ -27,6 +27,54 @@ function sha256(content) {
     return crypto.createHash("sha256").update(content).digest("hex");
 }
 
+// Chain pals extracted to <workspace>/.resources/<slug>/ (see core/resources.js) are read-only
+// reference code: never pushed, so never linted, but a pal's own code legitimately depends on what
+// they set, route and ship. Their workflows and markup go in separate lists so "what exists" checks
+// can see them while per-file checks stay on the pal's own files. Symlinks are skipped and
+// unreadable files ignored: this is advisory context, never a reason to fail.
+const RESOURCES_DIR = ".resources";
+
+function byName(a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; }
+
+function readResourceFiles(workspaceDir) {
+    const out = { resourceWorkflows: [], resourceMarkup: [] };
+    const root = path.join(workspaceDir, RESOURCES_DIR);
+    let slugs;
+    try { slugs = fs.readdirSync(root, { withFileTypes: true }); }
+    catch (e) { return out; }
+
+    function walk(abs, within, slug) {
+        let entries;
+        try { entries = fs.readdirSync(abs, { withFileTypes: true }); }
+        catch (e) { return; }
+        for (const entry of entries.sort(byName)) {
+            if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.isSymbolicLink()) continue;
+            const childAbs = path.join(abs, entry.name);
+            const childWithin = within + "/" + entry.name;
+            if (entry.isDirectory()) { walk(childAbs, childWithin, slug); continue; }
+            if (!entry.isFile()) continue;
+            const ext = path.extname(entry.name).toLowerCase();
+            const isWorkflow = childWithin.startsWith("workflows/") && ext === ".js";
+            const isMarkup = (childWithin.startsWith("pages/") || childWithin.startsWith("fragments/")) && MARKUP_EXT.has(ext);
+            if (!isWorkflow && !isMarkup) continue;
+            const content = readUtf8(childAbs);
+            if (content == null) continue;
+            // rel: the file's path inside its own pal (what a local file would collide with).
+            // fullRel: the workspace path, for messages.
+            const item = { rel: childWithin, fullRel: RESOURCES_DIR + "/" + slug + "/" + childWithin, slug, content };
+            (isWorkflow ? out.resourceWorkflows : out.resourceMarkup).push(item);
+        }
+    }
+
+    for (const slug of slugs.sort(byName)) {
+        if (!slug.isDirectory() || slug.isSymbolicLink()) continue;
+        for (const folder of ["workflows", "pages", "fragments"]) {
+            walk(path.join(root, slug.name, folder), folder, slug.name);
+        }
+    }
+    return out;
+}
+
 // One immutable view of every validator input. Consumers must not return to disk: doing so can
 // both double validation cost and mix file versions when an editor writes during validation.
 function buildSnapshot(workspaceDir) {
@@ -44,6 +92,7 @@ function buildSnapshot(workspaceDir) {
         contentHashByRel: {},
         allFiles: found.map(file => file.rel),
     };
+    Object.assign(snapshot, readResourceFiles(workspaceDir));
     const stylesheetIdentities = new Set();
 
     for (const file of found) {
@@ -107,6 +156,8 @@ function emptySnapshot(workspaceDir) {
         contentHashByRel: {},
         allFiles: [],
         skippedInputs: [],
+        resourceWorkflows: [],
+        resourceMarkup: [],
     };
 }
 
@@ -380,6 +431,7 @@ function buildImpactSnapshot(workspaceDir, fsOps = fs) {
     walk(realRoot, "", [], canonicalRoot);
 
     const snapshot = emptySnapshot(workspaceDir);
+    Object.assign(snapshot, readResourceFiles(workspaceDir));
     const stylesheetCandidates = [];
 
     found.sort((a, b) => cmpText(a.rel, b.rel));

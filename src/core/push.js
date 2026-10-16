@@ -377,6 +377,11 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
 
     // 4) refresh the stored marker (the save advanced it). Scoped single getPalList first;
     //    full account walk only as fallback (e.g. pal moved groups mid-session).
+    // A push that went past validation errors (the developer's validation slider, or the CLI's
+    // --skip-validation) must NOT become the new baseline: the gate only lints files that changed
+    // since the last push, so recording a broken file as "already pushed" would hide its errors the
+    // moment validation is switched back on. Leaving the baseline alone keeps those files "changed".
+    const skippedValidation = !!skipValidation && lint.errors > 0;
     let pushedPaths = null;
     if (success) {
         const after = (await refreshResolvedPal(session, lk.resolved))
@@ -385,8 +390,10 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
         // The pushed files now == server — refresh the baseline CONTENT snapshot so the NEXT
         // push's new-errors gate diffs against this state (incl. any legacy errors the agent
         // legitimately pushed past with skipValidation, which then become "pre-existing").
-        pushedPaths = [...manifestPaths(pal)];
-        baseline.snapshot(workspaceDir, pushedPaths);
+        if (!skippedValidation) {
+            pushedPaths = [...manifestPaths(pal)];
+            baseline.snapshot(workspaceDir, pushedPaths);
+        }
     }
 
 
@@ -399,7 +406,7 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
     // of a bare "unknown" — the cold test showed an opaque message cost real diagnosis time.
     return { pushed: success, refused: success ? undefined : "save-rejected",
              forced: !!force, filesPushed: injected.length, strayCreatable, validation,
-             newMarker: record.lastModifiedDate, skipped, lint, skippedValidation: skipValidation && lint.errors > 0,
+             newMarker: record.lastModifiedDate, skipped, lint, skippedValidation,
              serverPaths: pushedPaths, webRegistered, consoleRegistered, prunedFolders,
              sourceControlEnabled, commitMessage: finalCommitMessage };
 }
