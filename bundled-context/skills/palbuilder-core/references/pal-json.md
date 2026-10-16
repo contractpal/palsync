@@ -37,7 +37,8 @@ It is JSON, not workflow JS — normal object/array literals are fine here.
   "attachments":    [ ...binary attachments... ],
   "automatedScripts":     [ ... ],
   "mobileConfigurations": [ ... ],
-  "desktopBindings":      [ ...console home-screen tile entries, see below... ],
+  "desktopBindings":      [ ...desktop binding entries, see below... ],
+  "consoleSettings":      { "desktopImage": "48x48.png", "desktopLabel": "..." },
   "folders":        [ ...folder registrations... ],
   "trashCan":       [ ... ],
   "releaseNotes":   [ ... ],
@@ -84,7 +85,7 @@ https://secure.cloudpiston.com/cpal/cp-api/transaction/misc.html#wizards (see
 | `dataviews.entry` | `{ "string":"directory", "Dataview": { "name":"directory", ... } }` | `pal.getDataView("directory")` |
 | `data.entry` | `{ "string":"siteConfig", "Data": { "name":"siteConfig", "values": { "entry": [...] } } }` | `pal.getData("siteConfig")` |
 | `datalists.entry` | `{ "string":"offices", "DataList": { "name":"offices", "cols": {...}, "recs": {...} } }` | `pal.getDataList("offices")` |
-| `desktopBindings` | `{ "string":"equipment", "DesktopBinding": { "name":"Equipment", "icon":"bi-box-seam" } }` | Console home-screen tile |
+| `desktopBindings` | `{ "string":"equipment", "DesktopBinding": { "name":"Equipment", "icon":"bi-box-seam" } }` | Desktop binding (not the console icon) |
 
 ### Dataset field-object shape
 
@@ -164,19 +165,30 @@ constructs a view in workflow code without a manifest entry.
 | `mobileAccessType`, `groupAccessOnly` | Access-control flags |
 | `loginPage`, `mobileLoginPage` | Path to the login page (default / mobile-specific) |
 
-**There is no `layout` field for a console pal's home-screen tile label or icon.** A pal works
-in the console with none of these set — `consoleWorkflow` alone makes it reachable. Don't invent
-one (`consoleTemplate`, `consoleDesktopLabel`, `consoleDesktopImage`, etc. are not real fields);
-if a spec asks for a tile, see `desktopBindings` below. The tile is nonblocking — if the spec
-doesn't explicitly ask for one, skip it and move on rather than searching for a field name that
-doesn't exist; `pal_validate` names the real section if you do need it.
+**There is no `layout` field for a console pal's desktop label or icon.** A pal works in the
+console with none set — `consoleWorkflow` alone makes it reachable. `consoleTemplate`,
+`consoleDesktopLabel`, `consoleDesktopImage` are not real fields. The console icon and label are
+the top-level `consoleSettings` object below; load the `console-icon` skill to set them.
 
 ---
 
-## `desktopBindings` — console home-screen tile (rarely needed)
+## `consoleSettings` — console desktop icon and label
 
-Registers an optional tile a pal shows on the console home screen. **Most pals don't have one and
-don't need one** — omit this section unless the spec explicitly asks for a tile.
+Top-level object (server class `ConsoleSettings`), serialized as `<consoleSettings>`:
+
+```json
+"consoleSettings": { "desktopImage": "48x48.png", "desktopLabel": "Project Tracker" }
+```
+
+`desktopImage` names a registered `Image` entry that must be exactly 48×48; `desktopLabel` is plain
+text (no HTML). Preserve any other keys a pull brings in. Use the `console-icon` skill
+(`palsync icon`) rather than editing these by hand.
+
+## `desktopBindings` — desktop bindings (rarely needed)
+
+A separate mechanism from `consoleSettings`: `DesktopBinding` entries with features/resources.
+**Most pals don't have one and don't need one** — omit this section unless the spec explicitly
+asks for a desktop binding. It does not set the console icon or label.
 
 ```json
 "desktopBindings": [
@@ -185,8 +197,8 @@ don't need one** — omit this section unless the spec explicitly asks for a til
 ```
 
 Same `{ "string", "<Type>" }` wrapper as every other section. `DesktopBinding` has exactly two
-fields worth setting: `name` (tile label) and `icon`. There is no `DesktopLabel`/`DesktopImage`/
-`consoleLabel`/`consoleImage` — those are guesses, not real fields.
+fields worth setting: `name` and `icon`. `DesktopLabel`/`DesktopImage`/`consoleLabel`/`consoleImage`
+are not `DesktopBinding` fields — the console icon/label are `consoleSettings.desktopImage`/`desktopLabel`.
 
 ---
 

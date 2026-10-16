@@ -150,10 +150,10 @@ const DESKTOP_BINDING_ALIASES = {
     desktopimage: "icon", consoleimage: "icon", image: "icon",
 };
 
-// Same guessed tile-field names, but seen directly under `layout` (an agent that hasn't found
-// desktopBindings yet reaches for a plausible-looking layout key instead). No real name/icon
-// value exists at this level to alias TO — the whole desktopBindings entry is the correct
-// pointer — so this maps to null and the message below tells the agent to go there instead.
+// Same guessed console icon/label names, but seen directly under `layout`. They are not layout
+// fields: the console icon/label are the top-level `consoleSettings.desktopImage/desktopLabel`
+// (ConsoleSettings.java). No alias target exists at this level, so these map to null and the
+// message below points at consoleSettings instead.
 const LAYOUT_ALIASES = {
     consoledesktopimage: null, consoledesktoplabel: null,
     desktopimage: null, desktoplabel: null, consoleimage: null, consolelabel: null,
@@ -331,17 +331,15 @@ function checkUnknownKeys(manifest) {
                 severity: (suggestion || isTileGuess) ? "error" : "warn",
                 rule: "unknownPalJsonKey",
                 message: isTileGuess
-                    ? "pal.json layout.\"" + key + "\" is not a field — there is no layout field for a " +
-                      "console pal's home-screen tile label/icon. That lives in the top-level " +
-                      "desktopBindings section instead: [{ \"string\": \"<name>\", \"DesktopBinding\": " +
-                      "{ \"name\": \"...\", \"icon\": \"...\" } }]. The tile is optional — a console pal " +
-                      "works via layout.consoleWorkflow alone; skip it if the spec doesn't ask for one."
+                    ? "pal.json layout.\"" + key + "\" is not a field — the console icon and label are " +
+                      "the top-level consoleSettings.desktopImage (a 48x48 image registered in images) " +
+                      "and consoleSettings.desktopLabel (plain text), not layout fields. See the " +
+                      "console-icon skill or run `palsync icon`."
                     : suggestion
                     ? "pal.json layout.\"" + key + "\" is not a PalBuilder manifest field — the server " +
                       "ignores it silently and your intended change never happens. Did you mean \"" +
-                      suggestion + "\"? Note: there is no layout field for a console pal's desktop " +
-                      "tile label/icon — that's the separate, rarely-needed `desktopBindings` section " +
-                      "(name/icon per binding), not a `layout` key."
+                      suggestion + "\"? Note: the console icon/label are the top-level " +
+                      "consoleSettings.desktopImage/desktopLabel (see `palsync icon`), not `layout` keys."
                     : "pal.json layout.\"" + key + "\" is not in palsync's known field list — verify it " +
                       "against a real pal export before relying on it; it may silently no-op.",
             });
@@ -373,8 +371,8 @@ function checkUnknownKeys(manifest) {
                     message: suggestion
                         ? "pal.json desktopBindings[].DesktopBinding.\"" + key + "\" is not a real field " +
                           "— the server ignores it silently. Did you mean \"" + suggestion + "\"? A " +
-                          "DesktopBinding has only name/icon/features/resources — there is no separate " +
-                          "label/image field name."
+                          "DesktopBinding has only name/icon/features/resources. The console " +
+                          "desktop icon/label are the top-level consoleSettings.desktopImage/desktopLabel."
                         : "pal.json desktopBindings[].DesktopBinding.\"" + key + "\" is not in palsync's " +
                           "known field list (name/icon/features/resources) — verify it against a real " +
                           "pal export before relying on it.",

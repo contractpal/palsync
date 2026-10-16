@@ -23,14 +23,15 @@ if (argv.includes("--version") || argv.includes("-v")) {
 // Subcommands: `palsync push|pull|status` — headless sync that needs NO MCP server and NO agent
 // (the recovery path when a session ends before a push, and a plain terminal workflow). They
 // skip the launcher preflight entirely: no Claude/Codex required, just .palsync.json + keychain.
-const SUBCOMMANDS = ["push", "pull", "merge", "status", "test", "preview", "open", "fetch", "screenshot", "validate", "doctor", "sync-datasets", "seo-audit", "exercise", "stats", "usage", "cost", "ctx", "review", "completion", "hook", "hooks", "regression", "spec-lint", "settings", "verify", "task", "checkpoint", "session-summary"];
+const SUBCOMMANDS = ["push", "pull", "merge", "status", "test", "preview", "open", "fetch", "screenshot", "validate", "doctor", "sync-datasets", "seo-audit", "exercise", "stats", "usage", "cost", "ctx", "review", "completion", "hook", "hooks", "regression", "spec-lint", "settings", "verify", "task", "checkpoint", "session-summary", "icon"];
 // Normalize underscores so `palsync sync_datasets` runs sync-datasets instead of falling through.
 // In the test-07 run that fall-through opened the interactive launcher inside an agent's shell,
 // which hung on a prompt — and the agent's `pkill -f palsync` to unstick it killed the session's
 // own MCP server.
 const subcmd = argv[0] && !argv[0].startsWith("-") ? argv[0].replace(/_/g, "-") : undefined;
 if (SUBCOMMANDS.includes(subcmd)) {
-    require("../src/cli/syncCommands").run(subcmd, argv.slice(1))
+    const handler = subcmd === "icon" ? require("../src/cli/iconCommand") : require("../src/cli/syncCommands");
+    handler.run(subcmd, argv.slice(1))
         .then(code => process.exit(code))
         .catch(err => {
             process.stderr.write("palsync " + argv[0] + " failed: " + (err && err.message ? err.message : err) + "\n");
