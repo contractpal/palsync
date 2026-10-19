@@ -535,7 +535,9 @@ function checkStaticFragmentExists(markupFiles, findings, chainMarkupFiles = [])
             if (tag.name.toLowerCase() !== "c:fragment") return;
             const name = attr(tag, "name");
             if (name == null || name.includes("${")) return;
-            const target = "fragments/" + String(name).replace(/^\/+|\/+$/g, "");
+            // A querystring (name="core/alert?showSuccess=true") passes parameters; it isn't part of the path.
+            const path = String(name).split("?")[0];
+            const target = "fragments/" + path.replace(/^\/+|\/+$/g, "");
             if (shipped.has(target)) return;
             const file = /\.(?:html?|xhtml)$/i.test(target) ? target : target + ".html";
             findings.push({

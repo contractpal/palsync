@@ -1327,6 +1327,29 @@ test("c:fragment name may include the file extension", () => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("c:fragment name ignores a querystring when resolving the shipped fragment", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({}),
+        "pages/console.html": '<html xmlns:c="contractpal"><body>' +
+            '<c:fragment name="core/alert?showSuccess=true&amp;message=You can close this window."/>' +
+            '<c:fragment name="core/alert.html?x=1"/></body></html>',
+        "fragments/core/alert.html": "<c:ignore xmlns:c=\"contractpal\">x</c:ignore>",
+    });
+    assert.deepStrictEqual(lintContracts(dir).filter(f => f.rule === "missingFragment"), []);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("missingFragment — a querystring is not part of the reported fragment path", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({}),
+        "pages/console.html": '<html xmlns:c="contractpal"><body><c:fragment name="core/alert?a=1"/></body></html>',
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "missingFragment");
+    assert.strictEqual(findings.length, 1);
+    assert.match(findings[0].message, /fragments\/core\/alert\.html, but/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("missingFragment — a name with an extension that is not shipped names the file it looked for", () => {
     const dir = tmpWorkspace({
         "pal.json": basePalJson({}),

@@ -177,7 +177,8 @@ function buildStructuralImpact(snapshot, record) {
                 return;
             }
 
-            const normalizedValue = value.replace(/^\/+|\/+$/g, "");
+            // Drop any querystring (name="core/alert?showSuccess=true"): it's parameters, not path.
+            const normalizedValue = value.split("?")[0].replace(/^\/+|\/+$/g, "");
             const identity = "fragments/" + normalizedValue;
             if (normalizedValue === "") {
                 candidates.push(candidateRecord("invalid-static-name", source, identity));
