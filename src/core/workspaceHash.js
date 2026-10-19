@@ -73,4 +73,4 @@ function hashPaths(dir, relPaths) {
     return out;
 }
 
-module.exports = { hashWorkspace, hashWorkspaceFiles, hashPaths, IN_SCOPE, MANIFEST_FILE };
+module.exports = { hashWorkspace, hashWorkspaceFiles, hashPaths, listScopedFiles, IN_SCOPE, MANIFEST_FILE };

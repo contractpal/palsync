@@ -350,6 +350,37 @@
     }
   },
   {
+    "name": "pal_diff",
+    "title": "Compare pal files",
+    "description": "Read-only compare of tracked files with the server (default), a pre-pull snapshot, or the last-pull baseline; path shows one file's line changes. Never writes or locks.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "against": {
+          "type": "string",
+          "enum": [
+            "server",
+            "snapshot",
+            "baseline"
+          ]
+        },
+        "snapshot": {
+          "description": "Snapshot folder name (default newest).",
+          "type": "string"
+        },
+        "path": {
+          "description": "Workspace-relative file for line changes.",
+          "type": "string"
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
     "name": "pal_exercise",
     "title": "Exercise pal behavior",
     "description": "Exercise last-pushed actions end-to-end and assert results. Read local markup first; do not discover fields or selectors by retries. Steps stop at the first failure. WEB steps use action+params; console/transaction opens its first screen with initial and reaches later screens by clicking rendered link text (step action/page is rejected there, never ignored). Scope duplicate controls with within and unique {{runId}}. waitFor waits a bounded time for the step's existing expect/absent to become true by polling visible text only (never replaying the mutation). Use after create/edit/delete.",
@@ -674,11 +705,14 @@
   {
     "name": "pal_pull",
     "title": "Pull pal changes",
-    "description": "Pull (sync) the pal from the server. New un-pushed local files are preserved. Refuses if it would overwrite locally-modified server files (use force to override).",
+    "description": "Pull (sync) the pal from the server. New un-pushed local files are preserved. Refuses if it would overwrite locally-modified files or no pull baseline exists to check (force overrides; snapshot copies files to .palsync/snapshots first). Counts only, no per-file diff.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "force": {
+          "type": "boolean"
+        },
+        "snapshot": {
           "type": "boolean"
         }
       }

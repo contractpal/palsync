@@ -185,6 +185,22 @@ async function driftPrompt(info) {
         });
         return clack.isCancel(v) ? "abort" : v;
     }
+    if (info.phase === "no-baseline") {
+        clack.log.warn(
+            "This workspace has files but no recorded pull baseline, so palsync can't tell whether they differ from the server.\n" +
+            "Pulling now would overwrite them with no way to see what changed."
+        );
+        const v = await clack.select({
+            message: "No pull baseline for " + (info.palName || "this pal") + " — what do you want to do?",
+            options: [
+                { value: "snapshot", label: "Copy the current files to .palsync/snapshots/, then pull (recommended)" },
+                { value: "skip", label: "Skip the pull — work on the local state as-is" },
+                { value: "overwrite", label: "Pull anyway — no copy" },
+                { value: "abort", label: "Quit palsync" }
+            ]
+        });
+        return clack.isCancel(v) ? "abort" : v;
+    }
     clack.log.warn(
         "This workspace has UN-PUSHED local changes (the last session likely ended before a push):\n" +
         describeDiff(info.diff) +

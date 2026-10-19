@@ -134,6 +134,7 @@ The agent calls these for you — you never run them by hand:
 | `pal_regression` | Compare the approved `baseline/baseline.json` regression snapshot; never captures it. |
 | `pal_spec_lint` | Lint a `SPEC.md` for the spec-to-ship workflow. |
 | `pal_status` | Server drift + un-pushed local changes + lock holder. |
+| `pal_diff` | Read-only compare of your tracked files with the server (default), a pre-pull snapshot (`pal_pull` with `snapshot:true` makes one), or the last-pull baseline. `path` adds line changes for one file. Never writes the workspace or takes the lock. |
 | `pal_lock` / `pal_unlock` | Acquire / release the pal lock. Auto-reclaims your own stale lock; never breaks another user's. |
 
 ## Headless CLI (no MCP server, no agent)

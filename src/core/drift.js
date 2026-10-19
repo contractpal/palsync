@@ -14,4 +14,15 @@ function serverAdvanced(storedMarker, liveMarker) {
     return b > a;
 }
 
-module.exports = { parseTs, serverAdvanced };
+// Record a new marker on the sync record, but never overwrite a known one with nothing. An absent
+// marker is dropped by JSON.stringify, and serverAdvanced treats an unknown stored marker as "no
+// drift" — so one unguarded assignment of undefined silently disables the push drift gate. Keeping
+// the older marker errs the safe way: the next push sees the server as newer and asks for a pull.
+// Returns true when the marker was updated.
+function adoptMarker(record, marker) {
+    if (marker == null || String(marker) === "") return false;
+    record.lastModifiedDate = marker;
+    return true;
+}
+
+module.exports = { parseTs, serverAdvanced, adoptMarker };

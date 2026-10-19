@@ -26,6 +26,7 @@ const os = require("os");
 const path = require("path");
 const { pull, listTrackedFiles, mergePreservedEntries, CREATABLE_FOLDERS } = require("./pull");
 const baseline = require("./baseline");
+const { adoptMarker } = require("./drift");
 const { resolveServerPalByGuid } = require("./resolve");
 const { buildPersistedObject, serializeManifest } = require("./manifestPersist");
 const { writeIfChanged } = require("./atomicWrite");
@@ -148,7 +149,7 @@ async function mergeWorkspace(session, guid, record, workspaceDir) {
 
         // The workspace has now incorporated THEIRS. The new ancestor is the server state, and the
         // drift marker advances to the server's marker (so a follow-up push isn't drift-blocked).
-        record.lastModifiedDate = resolved.lastModifiedDate;
+        adoptMarker(record, resolved.lastModifiedDate);
         baseline.snapshot(workspaceDir, serverPaths);
 
         return {

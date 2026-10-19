@@ -386,7 +386,7 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
     if (success) {
         const after = (await refreshResolvedPal(session, lk.resolved))
             || (await resolveServerPalByGuid(session, record.palGuid));
-        record.lastModifiedDate = after ? after.lastModifiedDate : liveMarker;
+        drift.adoptMarker(record, after ? after.lastModifiedDate : liveMarker);
         // The pushed files now == server — refresh the baseline CONTENT snapshot so the NEXT
         // push's new-errors gate diffs against this state (incl. any legacy errors the agent
         // legitimately pushed past with skipValidation, which then become "pre-existing").

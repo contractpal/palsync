@@ -16,6 +16,7 @@ const path = require("path");
 const { CloudPistonAPIManager } = require("../../lib/apiManager");
 const { resolveServerPalByGuid } = require("./resolve");
 const { push } = require("./push");
+const { adoptMarker } = require("./drift");
 
 // The EXACT phrase a caller must pass as confirmRecreate to allow a destructive recreate of the
 // given datasets. Names are sorted + comma-joined so the phrase is deterministic. Designed to be
@@ -165,7 +166,7 @@ async function syncDatasets(session, record, workspaceDir, { datasets, recreate 
     // a stale marker. (Without this, a second sync always fails "drift".)
     if (ok) {
         const after = await resolveServerPalByGuid(session, record.palGuid);
-        if (after) record.lastModifiedDate = after.lastModifiedDate;
+        if (after) adoptMarker(record, after.lastModifiedDate);
     }
 
     return {

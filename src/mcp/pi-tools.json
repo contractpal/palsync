@@ -20,6 +20,45 @@
     ]
   },
   {
+    "name": "pal_diff",
+    "title": "Compare pal files",
+    "description": "Read-only compare of tracked files with the server (default), a pre-pull snapshot, or the last-pull baseline; path shows one file's line changes. Never writes or locks.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "against": {
+          "type": "string",
+          "enum": [
+            "server",
+            "snapshot",
+            "baseline"
+          ]
+        },
+        "snapshot": {
+          "description": "Snapshot folder name (default newest).",
+          "type": "string"
+        },
+        "path": {
+          "description": "Workspace-relative file for line changes.",
+          "type": "string"
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    },
+    "groups": [
+      "sync",
+      "project"
+    ],
+    "keywords": [
+      "diff",
+      "compare"
+    ]
+  },
+  {
     "name": "pal_validate",
     "title": "Validate pal code",
     "description": "Offline-check the whole workspace for restricted workflow JS, c:/XHTML markup, and cross-file contract violations. Returns each finding's location, severity, and fix. Run before finishing. pal_push gates changed files and narrow workspace contracts only.",
@@ -1232,11 +1271,14 @@
   {
     "name": "pal_pull",
     "title": "Pull pal changes",
-    "description": "Pull (sync) the pal from the server. New un-pushed local files are preserved. Refuses if it would overwrite locally-modified server files (use force to override).",
+    "description": "Pull (sync) the pal from the server. New un-pushed local files are preserved. Refuses if it would overwrite locally-modified files or no pull baseline exists to check (force overrides; snapshot copies files to .palsync/snapshots first). Counts only, no per-file diff.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "force": {
+          "type": "boolean"
+        },
+        "snapshot": {
           "type": "boolean"
         }
       }

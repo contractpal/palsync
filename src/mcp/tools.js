@@ -278,6 +278,10 @@ const drift = require("../core/drift");
 const { resolveServerPalByGuid } = require("../core/resolve");
 const { hashWorkspace, hashPaths } = require("../core/workspaceHash");
 const { diffWorkspace, describeDiff } = require("../core/localDrift");
+const { snapshotWorkspace } = require("../core/snapshot");
+const { compareTrees, listSnapshots } = require("../core/diff");
+const baselineStore = require("../core/baseline");
+const { listScopedFiles } = require("../core/workspaceHash");
 
 // The pal record QUERY_DATASET needs (internal id + real profileId). The lock lifecycle already
 // resolved it at session start, so reuse that instead of walking the whole account per query.
@@ -918,21 +922,102 @@ const TOOLS = [
             else lockMsg = "held by this palsync session";
             // Both directions: server-vs-last-pull (above) AND disk-vs-last-pull (below).
             const d = diffWorkspace(ctx.record, ctx.workspaceDir);
-            const localMsg = (d.dirty || d.added.length)
-                ? "Local: UN-PUSHED changes on disk —\n" + describeDiff(d)
-                : "Local: no un-pushed changes.";
+            // noBaseline = the record holds no per-file hashes at all, so there is nothing to compare
+            // the disk against: that is "unknown", never "clean".
+            const localKnown = !d.noBaseline;
+            const storedKnown = ctx.record.lastModifiedDate != null;
+            const localMsg = d.noBaseline
+                ? "Local: UNKNOWN — this workspace has no recorded pull baseline, so un-pushed edits cannot be detected. Do not read this as \"no changes\". pal_pull will ask before overwriting; pal_status never compares file contents with the server."
+                : (d.dirty || d.added.length)
+                    ? "Local: UN-PUSHED changes on disk —\n" + describeDiff(d)
+                    : "Local: no un-pushed changes.";
             const driftMsg = !canVerify
                 ? "CANNOT VERIFY against server — no server marker available. Do not treat this as in sync; retry pal_status, and tell the user if it persists (pal_push still runs its own drift check).\n"
-                : (serverNewer ? "Server IS NEWER than your last pull — run pal_pull before pushing.\n" : "In sync with your last pull.\n");
+                : !storedKnown
+                    ? "CANNOT VERIFY — no pull marker is recorded for this workspace, so there is no way to tell whether the server moved since your last pull. Do not treat this as in sync.\n"
+                    : (serverNewer ? "Server IS NEWER than your last pull — run pal_pull before pushing.\n" : "In sync with your last pull.\n");
             const message =
                 "Pal: " + ctx.record.palName + " (" + ctx.record.palGuid + ")\n" +
                 driftMsg +
-                "  your marker  : " + ctx.record.lastModifiedDate + "\n" +
+                "  your marker  : " + (storedKnown ? ctx.record.lastModifiedDate : "(none recorded)") + "\n" +
                 "  server marker: " + (canVerify ? live.lastModifiedDate : "(unknown)") + "\n" +
                 localMsg + "\n" +
                 "Lock: " + lockMsg;
-            return { message, serverNewer, canVerify, storedMarker: ctx.record.lastModifiedDate, liveMarker: canVerify ? live.lastModifiedDate : null,
-                     localChanges: { dirty: d.dirty, changed: d.changed, added: d.added, deleted: d.deleted }, lock: st };
+            return { message, serverNewer, canVerify, storedMarker: storedKnown ? ctx.record.lastModifiedDate : null, liveMarker: canVerify ? live.lastModifiedDate : null,
+                     localChanges: { known: localKnown, dirty: d.dirty, changed: d.changed, added: d.added, deleted: d.deleted }, lock: st };
+        }
+    },
+    {
+        name: "pal_diff",
+        description: "Read-only compare of tracked files with the server (default), a pre-pull snapshot, or the last-pull baseline; path shows one file's line changes. Never writes or locks.",
+        // Authenticated but lockless, like dataset reads: it only needs a session (server mode), and
+        // — being how you DECIDE whether to pull — it must stay outside the stale-start gate.
+        needsLock: false,
+        inputShape: {
+            against: z.enum(["server", "snapshot", "baseline"]).optional(),
+            snapshot: z.string().optional().describe("Snapshot folder name (default newest)."),
+            path: z.string().optional().describe("Workspace-relative file for line changes.")
+        },
+        async run(ctx, { against = "server", snapshot, path: file } = {}) {
+            const ws = ctx.workspaceDir;
+            let refDir, label, textOnly = false, tmp = null, marker = null;
+            try {
+                if (against === "snapshot") {
+                    const names = listSnapshots(ws);
+                    const name = snapshot || names[0];
+                    if (!name || names.indexOf(name) === -1) {
+                        return { ok: false, message: snapshot ? "No snapshot named " + snapshot + " (have: " + (names.join(", ") || "none") + ")."
+                            : "No snapshot exists. pal_pull with snapshot:true makes one before pulling." };
+                    }
+                    refDir = pathMod.join(ws, ".palsync", "snapshots", name);
+                    label = "snapshot " + name;
+                } else if (against === "baseline") {
+                    if (!baselineStore.exists(ws)) {
+                        return { ok: false, message: "No last-pull baseline is stored for this workspace, so there is nothing to compare against. Use against:\"server\", or pal_pull once to record one." };
+                    }
+                    refDir = pathMod.join(ws, baselineStore.BASELINE_DIR);
+                    label = "the last-pull baseline";
+                    textOnly = true;
+                } else {
+                    const live = await resolvePalForRead(ctx, { requireMarker: true });
+                    if (!live) return { ok: false, message: "Could not resolve this pal on the server, so it cannot be compared." };
+                    tmp = fs.mkdtempSync(pathMod.join(require("os").tmpdir(), "palsync-diff-"));
+                    const res = await pull(ctx.session, ctx.record.palGuid, tmp, { baseline: null, resolved: live });
+                    marker = res.resolved.lastModifiedDate || null;
+                    refDir = tmp;
+                    label = "the server" + (marker ? " (marker " + marker + ")" : "");
+                }
+                const cmp = compareTrees(ws, refDir, { textOnly, file: file ? file.replace(/\\/g, "/") : null });
+                const total = cmp.changed.length + cmp.localOnly.length + cmp.referenceOnly.length;
+                const list = (title, arr) => arr.length ? "\n" + title + " (" + arr.length + "): " + arr.slice(0, 25).join(", ") + (arr.length > 25 ? ", … +" + (arr.length - 25) + " more" : "") : "";
+                let message = total === 0
+                    ? "No differences: all " + cmp.identical + " tracked files match " + label + "."
+                    : cmp.identical + " tracked files match " + label + "; " + total + " differ." +
+                      list("Differ", cmp.changed) + list("Only on disk", cmp.localOnly) + list("Only in " + (against === "server" ? "the server" : "the reference"), cmp.referenceOnly);
+                if (textOnly) message += "\n(Text files and pal.json only" + (cmp.skippedBinary ? "; " + cmp.skippedBinary + " binary files not compared" : "") + ".)";
+                const fd = cmp.fileDiff;
+                if (fd) {
+                    if (fd.binary) message += "\n" + fd.rel + ": binary file — compared by bytes only.";
+                    else if (fd.note) message += "\n" + fd.rel + ": " + fd.note + ".";
+                    else if (fd.tooLarge) message += "\n" + fd.rel + ": too large for a line diff.";
+                    else if (!fd.hunks.length) message += "\n" + fd.rel + ": identical.";
+                    else {
+                        const lines = [];
+                        for (const h of fd.hunks.slice(0, 12)) {
+                            lines.push("@@ line " + h.line + " @@");
+                            for (const l of h.ref.slice(0, 8)) lines.push("- " + l.slice(0, 200));
+                            for (const l of h.local.slice(0, 8)) lines.push("+ " + l.slice(0, 200));
+                        }
+                        message += "\n" + fd.rel + " ('-' = " + (against === "server" ? "server" : "reference") + ", '+' = on disk)" +
+                            (fd.hunks.length > 12 ? " — first 12 of " + fd.hunks.length + " hunks" : "") + ":\n" + lines.join("\n");
+                    }
+                }
+                return { ok: true, against, reference: label, serverMarker: marker, identical: cmp.identical,
+                    changed: cmp.changed.slice(0, 200), localOnly: cmp.localOnly.slice(0, 200), referenceOnly: cmp.referenceOnly.slice(0, 200),
+                    total, skippedBinary: cmp.skippedBinary, message };
+            } finally {
+                if (tmp) { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) { /* best-effort scratch cleanup */ } }
+            }
         }
     },
     {
@@ -1995,12 +2080,27 @@ const TOOLS = [
     },
     {
         name: "pal_pull",
-        description: "Pull (sync) the pal from the server. New un-pushed local files are preserved. Refuses if it would overwrite locally-modified server files (use force to override).",
-        inputShape: { force: z.boolean().optional() },
-        async run(ctx, { force = false } = {}) {
+        description: "Pull (sync) the pal from the server. New un-pushed local files are preserved. Refuses if it would overwrite locally-modified files or no pull baseline exists to check (force overrides; snapshot copies files to .palsync/snapshots first). Counts only, no per-file diff.",
+        inputShape: {
+            force: z.boolean().optional(),
+            snapshot: z.boolean().optional()
+        },
+        async run(ctx, { force = false, snapshot = false } = {}) {
             // Reverse drift guard, per-file: changed/deleted server-tracked files (and pure
             // pal.json mutations) block the pull; NEW local files don't — sync preserves them.
             const d = diffWorkspace(ctx.record, ctx.workspaceDir);
+            // No baseline + files already on disk: the guard below has nothing to compare against
+            // and would let the pull overwrite anything. That is unknown, not clean — ask first.
+            if (d.noBaseline && !force && !snapshot && listScopedFiles(ctx.workspaceDir).length) {
+                return { pulled: false, refused: "no-baseline",
+                    message: "REFUSED: this workspace has no recorded pull baseline, so palsync cannot tell whether the files on disk differ from the server — a pull would overwrite them with no way to see or undo it.\n" +
+                        "Ask the user which they want:\n" +
+                        "  - pal_pull with snapshot:true — copy the current files to .palsync/snapshots/ first, then pull (recommended; keeps a copy to compare against).\n" +
+                        "  - pal_pull with force:true — pull without a copy.\n" +
+                        "  - neither — leave the workspace untouched." };
+            }
+            let snap = null;
+            if (snapshot && !(d.dirty && !force)) snap = snapshotWorkspace(ctx.workspaceDir, "pre-pull");
             if (d.dirty && !force) {
                 return { pulled: false, refused: "local-changes", changed: d.changed, deleted: d.deleted, added: d.added,
                     message: "REFUSED: un-pushed local changes would be lost by this pull.\n" + describeDiff(d) +
@@ -2009,12 +2109,14 @@ const TOOLS = [
             }
             const cachedResolved = ctx.lifecycle && ctx.lifecycle.lockState && ctx.lifecycle.lockState.resolved;
             const { resolved, written, removed, preserved, serverPaths } = await pull(ctx.session, ctx.record.palGuid, ctx.workspaceDir, { baseline: ctx.record.fileHashes || null, resolved: cachedResolved });
-            ctx.record.lastModifiedDate = resolved.lastModifiedDate;
+            drift.adoptMarker(ctx.record, resolved.lastModifiedDate);
             refreshBaseline(ctx.record, ctx.workspaceDir, serverPaths);
             ctx.record.pulledAt = nowIso();
             await ctx.persist();
             return { pulled: true, files: written.base64.length, dataFiles: written.json.length, marker: resolved.lastModifiedDate,
+                snapshot: snap,
                 message: "Pulled " + ctx.record.palName + ": " + written.base64.length + " code files + " + written.json.length + " data/schema files. marker=" + resolved.lastModifiedDate +
+                    (snap ? "\nSnapshot of the previous " + snap.files + " files: " + snap.dir + " — pal_diff with against:\"snapshot\" shows what this pull changed." : "") +
                     (removed.length ? "\nRemoved (deleted on server): " + removed.join(", ") : "") +
                     (preserved.length ? "\nPreserved local work:\n" + preserved.map(p => "   - " + p.rel + " — " + p.note).join("\n") : "") };
         }
@@ -2285,6 +2387,7 @@ const TOOL_HINTS = {
     pal_resources: ["Refresh chain resources", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
     pal_ast: ["Search and rewrite code structure", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
     pal_status: ["Report pal status", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_diff: ["Compare pal files", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_validate: ["Validate pal code", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_testing: ["Toggle automated testing", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_test: ["Compile workflow on server", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],

@@ -27,7 +27,8 @@ const registerPi = require("../mcp/registerPi");
 const { registerGemini } = require("../mcp/registerGemini");
 const { registerCursor } = require("../mcp/registerCursor");
 const { registerCopilot } = require("../mcp/registerCopilot");
-const { hashWorkspace, hashPaths } = require("../core/workspaceHash");
+const { hashWorkspace, hashPaths, listScopedFiles } = require("../core/workspaceHash");
+const { snapshotWorkspace } = require("../core/snapshot");
 const { diffWorkspace, describeDiff } = require("../core/localDrift");
 const { mergeWorkspace } = require("../core/merge");
 const { identityRefusal } = require("./workspacePath");
@@ -106,6 +107,33 @@ async function resolveLocalDrift({ session, existing, workspaceDir, palName, dif
     }
 }
 
+// A record with no per-file baseline (no fileHashes, no localHash) can't tell us whether the files
+// on disk differ from the server, so diffWorkspace reports it as clean. The setup pull would then
+// overwrite them with no way to see or undo it — unknown is not clean. Same contract as
+// resolveLocalDrift: "pull" | "skip", throws when headless or aborted. "snapshot" copies the
+// tracked files to .palsync/snapshots/ first, then pulls.
+async function resolveNoBaseline({ workspaceDir, palName, onDrift, log }) {
+    if (!onDrift) {
+        throw new Error(
+            "Workspace " + workspaceDir + " has files but no recorded pull baseline, so palsync can't tell whether they " +
+            "differ from the server.\nRefusing to overwrite them in a non-interactive setup. Back them up or remove " +
+            "the folder, then re-run."
+        );
+    }
+    const action = await onDrift({ phase: "no-baseline", palName, workspaceDir });
+    if (!action || action === "abort") {
+        throw new Error("Cancelled — workspace left untouched in " + workspaceDir + ".");
+    }
+    if (action === "skip") return "skip";
+    if (action === "snapshot") {
+        const snap = snapshotWorkspace(workspaceDir, "pre-pull");
+        log("snapshot of " + snap.files + " files saved to " + snap.dir);
+        return "pull";
+    }
+    if (action === "overwrite") return "pull";
+    throw new Error("Unknown drift action: " + action);
+}
+
 // The five steps a checklist-style caller (the GUI's checkout wizards) would want to show, in
 // the order setup() actually performs them. Purely descriptive — setup() itself doesn't consume
 // this list, it just calls onStep with one of these ids at each boundary.
@@ -180,6 +208,9 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
         if (diff.dirty) {
             log("un-pushed local changes detected in " + workspaceDir);
             mode = await resolveLocalDrift({ session, existing, workspaceDir, palName: sel.pal.name, diff, onDrift, log });
+        } else if (diff.noBaseline && listScopedFiles(workspaceDir).length) {
+            log("no pull baseline recorded for " + workspaceDir + " — can't tell what differs from the server");
+            mode = await resolveNoBaseline({ workspaceDir, palName: sel.pal.name, onDrift, log });
         }
     }
 
