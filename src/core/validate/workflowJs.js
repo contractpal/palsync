@@ -187,13 +187,14 @@ function collectScopeDeclarations(node, scope) {
     }
 }
 
-function scanImplicitGlobals(rel, node, scope, findings) {
+function scanImplicitGlobals(rel, node, scope, findings, declaredGlobals) {
     if (!node || typeof node.type !== "string") return;
 
     if (node.type === "Program") {
         const childScope = createScope(scope);
+        for (const name of declaredGlobals || []) childScope.names.add(name);
         for (const stmt of node.body || []) collectScopeDeclarations(stmt, childScope);
-        for (const stmt of node.body || []) scanImplicitGlobals(rel, stmt, childScope, findings);
+        for (const stmt of node.body || []) scanImplicitGlobals(rel, stmt, childScope, findings, declaredGlobals);
         return;
     }
 
@@ -419,8 +420,70 @@ function checkFindRecordSelectColumns(rel, ast, findings) {
     });
 }
 
+// Library-aware globals. Evidence: the server validates the WHOLE workflow with libraries
+// inlined (com/nxlight/framework/scripting/javascript/WorkflowValidator.java ~line 27: "range of
+// main workflow part (main workflow in whole workflow with included libraries)"), and
+// JavascriptParser.java ~405-500 collects global vars into the symbol table in a declaration
+// pass before bodies are checked ("Variable X not declared" at ~731/~846 resolves against it),
+// so a library may assign a host-declared global and declaration order does not matter.
+const INCLUDE_RE = /^[ \t]*\/\/[ \t]*@include\([ \t]*["']([^"']+)["'][ \t]*\)/gm;
+
+function topLevelNames(source) {
+    let ast;
+    try { ast = acorn.parse(source, { ecmaVersion: "latest", allowReturnOutsideFunction: true }); }
+    catch (e) { return []; }
+    const scope = createScope(null);
+    for (const stmt of ast.body || []) collectScopeDeclarations(stmt, scope);
+    return [...scope.names];
+}
+
+// files: [{ rel, content }] (workflows only). Returns Map<rel, Set<name>> for every file that is
+// included by some host; the set is the union of top-level names across each including host's
+// unit (host + everything it transitively includes). Files never included are absent.
+function computeDeclaredGlobals(files) {
+    const byRel = new Map(files.map(f => [f.rel, f]));
+    const includes = new Map();
+    const names = new Map();
+    for (const f of files) {
+        const inc = [];
+        INCLUDE_RE.lastIndex = 0;
+        let m;
+        while ((m = INCLUDE_RE.exec(f.content))) {
+            const target = "workflows/" + m[1] + ".js";
+            if (byRel.has(target)) inc.push(target);
+        }
+        includes.set(f.rel, inc);
+        names.set(f.rel, inc.length || /@include\(/.test(f.content) ? topLevelNames(f.content) : null);
+    }
+    const out = new Map();
+    for (const [host, inc] of includes) {
+        if (!inc.length) continue;
+        const unit = new Set([host]);
+        const queue = [...inc];
+        while (queue.length) {
+            const rel = queue.pop();
+            if (unit.has(rel)) continue;
+            unit.add(rel);
+            queue.push(...includes.get(rel));
+        }
+        const union = new Set();
+        for (const rel of unit) {
+            if (names.get(rel) === null) names.set(rel, topLevelNames(byRel.get(rel).content));
+            for (const n of names.get(rel)) union.add(n);
+        }
+        for (const rel of unit) {
+            if (rel === host) continue;
+            if (!out.has(rel)) out.set(rel, new Set());
+            for (const n of union) out.get(rel).add(n);
+        }
+    }
+    return out;
+}
+
 // Lint one workflow file's source. rel is the display path (e.g. "workflows/main.js").
-function lintWorkflowJs(rel, source) {
+// opts.declaredGlobals — optional Set/array of names already declared by the unit this file is
+// included into; treated as declared in the root scope for implicitGlobal.
+function lintWorkflowJs(rel, source, opts) {
     const findings = [];
     let ast;
     try {
@@ -436,7 +499,7 @@ function lintWorkflowJs(rel, source) {
         }];
     }
 
-    scanImplicitGlobals(rel, ast, null, findings);
+    scanImplicitGlobals(rel, ast, null, findings, opts && opts.declaredGlobals);
 
     walk(ast, null, null, (node, parent, key) => {
         switch (node.type) {
@@ -512,4 +575,4 @@ function lintWorkflowJs(rel, source) {
     return findings;
 }
 
-module.exports = { lintWorkflowJs, RULES };
+module.exports = { lintWorkflowJs, computeDeclaredGlobals, RULES };

@@ -13,7 +13,7 @@
 // each finding as a full sentence with file:line, an ERROR/WARNING word, and the fix.
 const fs = require("fs");
 const path = require("path");
-const { lintWorkflowJs } = require("./workflowJs");
+const { lintWorkflowJs, computeDeclaredGlobals } = require("./workflowJs");
 const { lintMarkup } = require("./markup");
 const { lintDatasetDef, lintPalDatasets } = require("./datasetDef");
 const { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryShape, checkEntryFilenames,
@@ -40,6 +40,18 @@ function hasDesignSystem(workspaceDir) {
         fs.existsSync(path.join(workspaceDir, "Styles", "design-system.css"));
 }
 
+// cachedLint deps so a host edit that changes the declared globals invalidates a library's result.
+function globalsDeps(rel, declaredGlobals) {
+    return declaredGlobals
+        ? [{ path: "workflow-globals#" + rel, content: [...declaredGlobals].sort().join(",") }]
+        : [];
+}
+
+// Declared-globals map for the CURRENT on-disk workflows (used by the push gate).
+function workspaceDeclaredGlobals(workspaceDir) {
+    return computeDeclaredGlobals(buildSnapshot(workspaceDir).workflows);
+}
+
 // Lint a workspace. Returns { findings, errors, warnings, filesChecked, scope }.
 //   opts.only — optional Set of POSIX rel paths; when given, ONLY those files are linted (used
 //   by the pre-push gate to check just the files THIS push changes, so a pal with pre-existing
@@ -54,14 +66,16 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
     let filesChecked = 0;
     const inScope = (rel) => !only || only.has(rel);
 
-    // workflows/*.js (restricted engine)
+    // workflows/*.js (restricted engine). Libraries see their hosts' globals (see workflowJs.js).
+    const globalsMap = computeDeclaredGlobals(snapshot.workflows);
     for (const f of snapshot.workflows) {
         if (!f.rel.endsWith(".js") || !inScope(f.rel)) continue;
         const src = f.content;
+        const declaredGlobals = globalsMap.get(f.rel);
         filesChecked++;
         findings.push(...cachedLint(workspaceDir,
-            { rel: f.rel, content: src, mode: "workspace-workflow" },
-            () => lintWorkflowJs(f.rel, src)));
+            { rel: f.rel, content: src, mode: "workspace-workflow", deps: globalsDeps(f.rel, declaredGlobals) },
+            () => lintWorkflowJs(f.rel, src, { declaredGlobals })));
     }
 
     // pages/** and fragments/** (markup)
@@ -192,8 +206,8 @@ function formatValidation(result, { context = "validate" } = {}) {
 // Lint a single file's CONTENT (not read from disk), dispatching by its rel path. Used by the
 // pre-push gate to lint a baseline version vs the current version. Must mirror the folder
 // dispatch in validateWorkspace and the isLintable set in core/baseline.
-function lintContent(rel, content, { designSystemPresent } = {}) {
-    if (rel.startsWith("workflows/") && rel.endsWith(".js")) return [...lintWorkflowJs(rel, content), ...lintWorkflowContracts(rel, content)];
+function lintContent(rel, content, { designSystemPresent, declaredGlobals } = {}) {
+    if (rel.startsWith("workflows/") && rel.endsWith(".js")) return [...lintWorkflowJs(rel, content, { declaredGlobals }), ...lintWorkflowContracts(rel, content)];
     if ((rel.startsWith("pages/") || rel.startsWith("fragments/")) && MARKUP_EXT.has(path.extname(rel).toLowerCase())) {
         return [...lintMarkup(rel, content, { designSystemPresent }), ...lintFileContracts(rel, content)];
     }
@@ -218,4 +232,5 @@ function lintContent(rel, content, { designSystemPresent } = {}) {
     return [];
 }
 
-module.exports = { validateWorkspace, formatValidation, lintContent, hasDesignSystem };
+module.exports = { validateWorkspace, formatValidation, lintContent, hasDesignSystem,
+    workspaceDeclaredGlobals, globalsDeps };

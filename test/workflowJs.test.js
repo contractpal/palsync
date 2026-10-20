@@ -5,7 +5,7 @@ const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
-const { lintWorkflowJs } = require("../src/core/validate/workflowJs");
+const { lintWorkflowJs, computeDeclaredGlobals } = require("../src/core/validate/workflowJs");
 
 test("lintWorkflowJs: core restricted-JavaScript rules are directly covered", () => {
     const cases = [
@@ -276,4 +276,41 @@ test("lintWorkflowJs: handler with only one frag assignment does not trigger fra
         "}"
     ].join("\n");
     assert.equal(lintWorkflowJs("workflows/main.js", src).filter(f => f.rule === "fragClobber").length, 0);
+});
+
+function libImplicit(files, rel) {
+    const f = files.find(x => x.rel === rel);
+    const declaredGlobals = computeDeclaredGlobals(files).get(rel);
+    return lintWorkflowJs(rel, f.content, { declaredGlobals }).filter(x => x.rule === "implicitGlobal");
+}
+
+const HOST = { rel: "workflows/console.js", content: [
+    "//@include(\"libs/console/history\");",
+    "//@include(\"libs/console/other\");",
+    "var notice;",
+    "function run(controller) { return controller; }"
+].join("\n") };
+const OTHER = { rel: "workflows/libs/console/other.js", content: "var shared;\nfunction g() { return 1; }" };
+
+test("lintWorkflowJs: library may assign a global declared by its host", () => {
+    const lib = { rel: "workflows/libs/console/history.js", content: "function f() { notice = \"x\"; }" };
+    assert.equal(libImplicit([HOST, OTHER, lib], lib.rel).length, 0);
+});
+
+test("lintWorkflowJs: library assigning a name declared nowhere in the unit is still an error", () => {
+    const lib = { rel: "workflows/libs/console/history.js", content: "function f() { notice = \"x\"; nope = 1; }" };
+    const found = libImplicit([HOST, OTHER, lib], lib.rel);
+    assert.equal(found.length, 1);
+    assert.match(found[0].message, /nope/);
+});
+
+test("lintWorkflowJs: standalone (never included) file keeps implicitGlobal behavior", () => {
+    const lone = { rel: "workflows/libs/lone.js", content: "function f() { notice = \"x\"; }" };
+    assert.equal(computeDeclaredGlobals([HOST, OTHER, lone]).has(lone.rel), false);
+    assert.equal(libImplicit([HOST, OTHER, lone], lone.rel).length, 1);
+});
+
+test("lintWorkflowJs: global declared in a sibling library of the same host counts", () => {
+    const lib = { rel: "workflows/libs/console/history.js", content: "function f() { shared = 1; }" };
+    assert.equal(libImplicit([HOST, OTHER, lib], lib.rel).length, 0);
 });
