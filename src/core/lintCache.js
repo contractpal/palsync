@@ -13,7 +13,7 @@ const WORKSPACE_RULE_VERSIONS = Object.freeze({
     "workspace-markup": 3,
     "workspace-dataset": 1,
     // Bump whenever contracts.js or palJson.js gains or changes a rule.
-    "workspace-contracts": 4
+    "workspace-contracts": 5
 });
 
 function pushGateRulesVersion(versions = WORKSPACE_RULE_VERSIONS) {

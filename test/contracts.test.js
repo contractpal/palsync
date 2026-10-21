@@ -1395,3 +1395,35 @@ test("resources — impact snapshot reads chain files into the same lists", () =
     assert.ok(!snap.allFiles.some(f => f.startsWith(".resources")));
     fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("paramDropped follows handler calls into @include libraries", () => {
+    const host = (include) => [
+        include ? "//@include(\"libs/console/history\");" : "",
+        "function run(controller) {",
+        "    switch (controller.getAction()) {",
+        "        case 'showForm':",
+        "            showHistory();",
+        "            break;",
+        "    }",
+        "}",
+    ].join("\n");
+    const lib = [
+        "function showHistory() {",
+        "    var id = requestId();",
+        "}",
+        "function requestId() {",
+        "    return getRequest().getData().get('equipmentId');",
+        "}",
+    ].join("\n");
+    const fragment = "<c:ignore xmlns:c=\"contractpal\"><c:a action=\"showForm?equipmentId=${r.id}\">Edit</c:a></c:ignore>";
+    for (const [include, expected] of [[true, 0], [false, 1]]) {
+        const dir = tmpWorkspace({
+            "workflows/console.js": host(include),
+            "workflows/libs/console/history.js": lib,
+            "fragments/list.html": fragment,
+        });
+        const findings = lintContracts(dir).filter(f => f.rule === "paramDropped");
+        assert.strictEqual(findings.length, expected, "include=" + include);
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});

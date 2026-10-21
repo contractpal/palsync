@@ -437,13 +437,11 @@ function topLevelNames(source) {
     return [...scope.names];
 }
 
-// files: [{ rel, content }] (workflows only). Returns Map<rel, Set<name>> for every file that is
-// included by some host; the set is the union of top-level names across each including host's
-// unit (host + everything it transitively includes). Files never included are absent.
-function computeDeclaredGlobals(files) {
+// files: [{ rel, content }] (workflows only). Returns Map<rel, Set<rel>>: each file's compile unit,
+// i.e. the file plus everything it transitively @includes (the server inlines them before compiling).
+function includeUnits(files) {
     const byRel = new Map(files.map(f => [f.rel, f]));
     const includes = new Map();
-    const names = new Map();
     for (const f of files) {
         const inc = [];
         INCLUDE_RE.lastIndex = 0;
@@ -453,22 +451,34 @@ function computeDeclaredGlobals(files) {
             if (byRel.has(target)) inc.push(target);
         }
         includes.set(f.rel, inc);
-        names.set(f.rel, inc.length || /@include\(/.test(f.content) ? topLevelNames(f.content) : null);
     }
-    const out = new Map();
-    for (const [host, inc] of includes) {
-        if (!inc.length) continue;
+    const units = new Map();
+    for (const host of includes.keys()) {
         const unit = new Set([host]);
-        const queue = [...inc];
+        const queue = [...includes.get(host)];
         while (queue.length) {
             const rel = queue.pop();
             if (unit.has(rel)) continue;
             unit.add(rel);
             queue.push(...includes.get(rel));
         }
+        units.set(host, unit);
+    }
+    return units;
+}
+
+// files: [{ rel, content }] (workflows only). Returns Map<rel, Set<name>> for every file that is
+// included by some host; the set is the union of top-level names across each including host's
+// unit (host + everything it transitively includes). Files never included are absent.
+function computeDeclaredGlobals(files) {
+    const byRel = new Map(files.map(f => [f.rel, f]));
+    const names = new Map();
+    const out = new Map();
+    for (const [host, unit] of includeUnits(files)) {
+        if (unit.size === 1) continue;
         const union = new Set();
         for (const rel of unit) {
-            if (names.get(rel) === null) names.set(rel, topLevelNames(byRel.get(rel).content));
+            if (!names.has(rel)) names.set(rel, topLevelNames(byRel.get(rel).content));
             for (const n of names.get(rel)) union.add(n);
         }
         for (const rel of unit) {
@@ -575,4 +585,4 @@ function lintWorkflowJs(rel, source, opts) {
     return findings;
 }
 
-module.exports = { lintWorkflowJs, computeDeclaredGlobals, RULES };
+module.exports = { lintWorkflowJs, computeDeclaredGlobals, includeUnits, RULES };
