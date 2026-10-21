@@ -17,7 +17,7 @@ const { lintWorkflowJs, computeDeclaredGlobals } = require("./workflowJs");
 const { lintMarkup } = require("./markup");
 const { lintDatasetDef, lintPalDatasets } = require("./datasetDef");
 const { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryShape, checkEntryFilenames,
-    checkFolderRegistrations, checkPrefixedManifestFilenames, checkRoles, lineForFinding } = require("./palJson");
+    checkPalTypes, checkFolderRegistrations, checkPrefixedManifestFilenames, checkRoles, lineForFinding } = require("./palJson");
 const { lintContracts, lintFileContracts, lintWorkflowContracts } = require("./contracts");
 const { buildSnapshot } = require("./snapshot");
 const { cachedLint } = require("../lintCache");
@@ -219,6 +219,7 @@ function lintContent(rel, content, { designSystemPresent, declaredGlobals } = {}
                 ...lintPalDatasets(rel, manifest),
                 ...checkEntryShape(manifest),
                 ...checkEntryFilenames(manifest),
+                ...checkPalTypes(manifest),
                 ...checkPrefixedManifestFilenames(manifest),
                 ...checkUnknownKeys(manifest),
                 ...checkDataStructures(manifest),
