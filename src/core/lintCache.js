@@ -9,11 +9,11 @@ const CACHE_FORMAT_VERSION = 2;
 // rule implementations based on file type.
 const RULES_VERSION = 1;
 const WORKSPACE_RULE_VERSIONS = Object.freeze({
-    "workspace-workflow": 1,
+    "workspace-workflow": 2,
     "workspace-markup": 3,
     "workspace-dataset": 1,
     // Bump whenever contracts.js or palJson.js gains or changes a rule.
-    "workspace-contracts": 4
+    "workspace-contracts": 5
 });
 
 function pushGateRulesVersion(versions = WORKSPACE_RULE_VERSIONS) {

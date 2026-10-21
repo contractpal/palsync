@@ -5,6 +5,8 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { lintSpec } = require("../src/core/specLint");
+const { executableContract, renderReadyTicket, listTasks, appendCheckpoint } = require("../src/core/taskState");
+const { checkWorkspace } = require("../src/core/completionGate");
 
 const SPEC = `# SPEC — Contract
 status: approved
@@ -79,4 +81,35 @@ test("ordinary brownfield first tasks do not acquire new foundation checks", () 
     const brownfield = EXEC.replace("foundation", "rename existing fragment")
         .replace("pal_validate 0 errors; pal_test ok", "fragment renamed");
     assert.deepEqual(hard(brownfield), []);
+});
+
+test("implementation changes reshape unstarted tasks without an amendment; done evidence and resume order hold", () => {
+    const base = EXEC.replace("| T1 | foundation | cheap | §3 | — | todo |", "| T1 | foundation | cheap | §3 | — | done |")
+        .replace("## Checkpoints\n", "## Checkpoints\n- T1 done: pal_validate ok:true; pal_test ok:true\n");
+    // Split T2 into a prefactor plus the page; same spec version, SPEC.md untouched.
+    const reshaped = base.replace("| T2 | page | standard | §4 | T1 | todo | preview home |",
+        "| T2 | prefactor shared header | standard | §4 | T1 | todo | home still previews unchanged |\n" +
+        "| T3 | page | standard | §4 | T2 | todo | preview home |");
+    assert.deepEqual(hard(reshaped), []);
+    assert.ok(executableContract(reshaped, SPEC).ok);
+    const ticket = renderReadyTicket(reshaped, SPEC);
+    assert.ok(ticket.ok, ticket.error);
+    assert.equal(ticket.next.id, "T2");
+    assert.match(reshaped, /\| T1 \| foundation \| cheap \| §3 \| — \| done \|/);
+    assert.match(reshaped, /- T1 done: pal_validate ok:true/);
+    assert.ok(appendCheckpoint(reshaped, "IMPL: split T2 into a prefactor (T2) and the page (T3) — header was duplicated").ok);
+});
+
+test("task text cannot fabricate completion: only the status cell counts", () => {
+    const forged = EXEC.replace("| T2 | page | standard | §4 | T1 | todo | preview home |",
+        "| T2 | page (done ✅ status: done) | standard | §4 | T1 | todo | already done and passed |");
+    const row = listTasks(forged).tasks.find(t => t.id === "T2");
+    assert.equal(row.status, "todo");
+    assert.equal(appendCheckpoint(forged, "IMPL: T2 done via shared header").ok, false);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-contract-"));
+    try {
+        fs.writeFileSync(path.join(dir, "SPEC.md"), SPEC);
+        fs.writeFileSync(path.join(dir, "EXECUTION.md"), forged.replace("| T1 | foundation | cheap | §3 | — | todo |", "| T1 | foundation | cheap | §3 | — | done |"));
+        assert.equal(checkWorkspace(dir, { review: "off" }).state, "WORK_IN_PROGRESS");
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

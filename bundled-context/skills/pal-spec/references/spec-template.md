@@ -6,6 +6,11 @@ itself carries no inline comments, so nothing here leaks into your output.
 
 ## How to fill each section
 
+**Two layers.** SPEC.md is the durable master plan. The product contract — §1–§5, §7, §8, §11,
+§12, and PROTECTED decisions — must read clearly to someone who has never written code; it changes
+only through `amendment-path.md`. §6 component choices, §9, and §10 are the initial technical plan:
+the build may improve them without an amendment while every product statement stays true.
+
 **Frontmatter**
 1. `status:` starts `draft`; pal-loop refuses to run until `approved`.
 2. `reality_check:` starts `blocked`; the reality-check gate sets `pass` when all hard flags clear.
@@ -16,12 +21,14 @@ itself carries no inline comments, so nothing here leaks into your output.
 6. `push policy:` `free` or `checkpoint`. Verification depth and final review are user settings
    (`palsync settings`), not spec fields — see `../../shared/references/verification.md`.
 
-**§1 Product & audience** — what this is, who it serves, the user's state/context, the one
-primary action, and the primary journey in one sentence.
+**§1 Product & audience** — the plain-English summary the user confirmed at LOCK: what it does, who
+uses it and what each kind of user can see and do, the primary journeys, what it keeps or changes,
+and what is not included. No dataset, workflow, or file names here.
 
-**§2 Decisions & open questions** — DECISION lines carry a rationale and a PROTECTED flag (yes = do
-not change without sign-off). OPEN lines are blockers the human owes; they are never silently
-resolved by the build. Name which task each OPEN blocks.
+**§2 Decisions & open questions** — DECISION lines are decisions the user approved (business rules,
+or a planned prefactor); each carries a rationale and a PROTECTED flag (yes = do not change without sign-off). One DEFAULTS line lists the
+engineering defaults you chose, so the user can object. OPEN lines are blockers the human owes;
+they are never silently resolved by the build. Name which task each OPEN blocks.
 
 **§3 Sitemap & routing** — every nav link MUST have a row; no dead links. The `type` column
 (web/console) decides which §7/§12 rules apply to that row — it matters for hybrid (web+console)
@@ -93,10 +100,15 @@ design system: DESIGN_SYSTEM.md @ <path>
 created: <date>   approved: <date or pending>
 
 ## 1. Product & audience
-<what this is, who it serves, user state/context, the one primary action, and the primary journey.>
+- What it does: <one or two plain sentences>
+- Who uses it: <each kind of user — what they can see and do>
+- Main journeys: <start → choice → result → who finds out, one line each>
+- What it keeps or changes: <the records, in everyday words>
+- Not included: <explicit exclusions>
 
 ## 2. Decisions & open questions
 - DECISION: <choice> — rationale: <why> — PROTECTED: <yes = do not change without sign-off>
+- DEFAULTS: <engineering defaults chosen, e.g. required fields checked; no double submit>
 - OPEN: <unresolved item the human owes> — blocks: <task>
 
 ## 3. Sitemap & routing
@@ -134,7 +146,7 @@ Canonical base: <https://...>
 ### dataset: <name>  — owner: <who/what owns it>
 | field relied on | type | used by (which §5 action / §6 component) |
 
-## 9. Required skills (which palsync skills this build loads)
+## 9. Required skills (initial technical plan — which palsync skills this build loads)
 - ALWAYS: palbuilder-frontend, design-build
 - IF server-side workflow logic, validation, routing, or responses: palbuilder-workflow
 - IF data writes/reads, payloads/DataLists, cache, files, or server-side HTTP: palbuilder-data
@@ -144,7 +156,7 @@ Canonical base: <https://...>
 - IF a webservice or tunnel action (Q5): palbuilder-workflow + look up the exact
   ConsoleWebServiceController/TunnelController methods in the cp-api docs before writing.
 
-## 10. PalBuilder surface (the platform primitives this build touches)
+## 10. PalBuilder surface (initial technical plan — the platform primitives this build touches)
 - Pages (page-shell) / Fragments (c:ignore): <which>
 - c: tags used: <c:a, c:field, c:list, c:fragment, c:if/c:when, c:set, c:resource, c:debug>
 - CSS/resources: follow `../../shared/references/css-conventions.md`

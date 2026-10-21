@@ -35,6 +35,11 @@ rules rather than copying them here.
 - `frontier` = the first composition page; routing; anything where the spec gives direction not
   structure; spec changes.
 
+**Living plan** — tasks and approach may change as the build learns (split, reorder, or add
+unstarted tasks; take a simpler route) without an amendment, within the limits in
+`amendment-path.md` → "What needs an amendment". The task CLI re-validates the table on every
+status change.
+
 **Contract version** — `spec version` must equal SPEC.md's approved version. After an approved amendment,
 reconcile candidate tasks before updating it; a mismatch safely prevents task selection/start.
 

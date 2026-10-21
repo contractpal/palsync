@@ -11,7 +11,7 @@ const { Pal } = require("../../lib/pal");
 const { CloudPistonAPIManager } = require("../../lib/apiManager");
 const { resolveServerPalByGuid, refreshResolvedPal, timestampText } = require("./resolve");
 const { manifestPaths } = require("./pull");
-const { validateWorkspace, lintContent, hasDesignSystem } = require("./validate");
+const { validateWorkspace, lintContent, hasDesignSystem, workspaceDeclaredGlobals, globalsDeps } = require("./validate");
 const { cachedLint } = require("./lintCache");
 const { WORKSPACE_GATE_RULES, WORKSPACE_WARNING_RULES } = require("./validate/registry");
 const { diffWorkspace } = require("./localDrift");
@@ -145,6 +145,9 @@ function gateLint(record, workspaceDir) {
                  findings, filesChecked: 0, scope: "new-errors" };
     }
     const addedSet = new Set(d.added);
+    // Libraries are linted against their hosts' CURRENT declarations (host + library may both
+    // be edited in this push); the baseline lint of a library uses the same set.
+    const globalsMap = workspaceDeclaredGlobals(workspaceDir);
     const haveBaselineContent = baseline.exists(workspaceDir);
     const findings = [];
     for (const rel of changed) {
@@ -152,8 +155,8 @@ function gateLint(record, workspaceDir) {
         try {
             const content = fs.readFileSync(path.join(workspaceDir, ...rel.split("/")), "utf8");
             current = cachedLint(workspaceDir,
-                { rel, content, mode: "push-gate", deps: designSystemDep },
-                () => lintContent(rel, content, { designSystemPresent }));
+                { rel, content, mode: "push-gate", deps: designSystemDep.concat(globalsDeps(rel, globalsMap.get(rel))) },
+                () => lintContent(rel, content, { designSystemPresent, declaredGlobals: globalsMap.get(rel) }));
         }
         catch (e) { continue; }
         // warnings never block but always surface
@@ -166,8 +169,8 @@ function gateLint(record, workspaceDir) {
 
         // MODIFIED with a baseline: block only on the net-new errors per rule.
         const baseCount = errorsByRule(cachedLint(workspaceDir,
-            { rel, content: baseContent, mode: "push-gate", deps: designSystemDep },
-            () => lintContent(rel, baseContent, { designSystemPresent })));
+            { rel, content: baseContent, mode: "push-gate", deps: designSystemDep.concat(globalsDeps(rel, globalsMap.get(rel))) },
+            () => lintContent(rel, baseContent, { designSystemPresent, declaredGlobals: globalsMap.get(rel) })));
         const curCount = errorsByRule(curErr);
         for (const rule of Object.keys(curCount)) {
             const introduced = curCount[rule] - (baseCount[rule] || 0);

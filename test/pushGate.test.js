@@ -306,3 +306,21 @@ test("lintContent emits every rule the registry gates as per-file", () => {
         assert.ok(lintContent(rel, content).some(f => f.rule === rule), rule + " must be emitted by lintContent");
     }
 });
+
+test("gateLint lints a new library against its host's current globals", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": "var notice;\nfunction run(controller) { return controller; }\n"
+    });
+    const record = { fileHashes: hashWorkspaceFiles(dir).files };
+    baseline.snapshot(dir, Object.keys(record.fileHashes));
+    fs.mkdirSync(path.join(dir, "workflows", "libs"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "workflows", "libs", "hist.js"),
+        "function f() { notice = 'x'; nope = 1; }\n");
+    fs.writeFileSync(path.join(dir, "workflows", "console.js"),
+        "//@include(\"libs/hist\");\nvar notice;\nfunction run(controller) { return controller; }\n");
+    const lint = gateLint(record, dir);
+    const implicit = lint.findings.filter(f => f.rule === "implicitGlobal");
+    assert.equal(implicit.length, 1);
+    assert.match(implicit[0].message, /nope/);
+    fs.rmSync(dir, { recursive: true, force: true });
+});

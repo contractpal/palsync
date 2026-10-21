@@ -499,6 +499,44 @@ function checkEntryFilenames(manifest) {
     return findings;
 }
 
+// palType is an exact server constant. Vendored source defines PalFile.java PAL_TYPE_* (lines
+// 21-28), Fragment.java PAL_TYPE_* (15-20) and AutomatedScript.PAL_TYPE_GRINDER. Live eval
+// 2026-10-21: hand-written Page palType "console" / "CONSOLE" passed local lint and pal_test, then
+// the page rendered "Console Error"; changing it to "palTypeConsole" fixed rendering. A missing
+// palType is common in real manifests and stays allowed.
+const PAL_TYPES = new Set([
+    "palTypeWeb", "palTypeConsole", "palTypeTransaction", "palTypeLogin", "palTypeLoginBoth",
+    "palTypeMobileLogin", "palTypeCommon", "palTypeRobots", "palTypeChart", "palTypeDocument",
+    "palTypeExport", "palTypeStore", "palTypeServiceRequest", "palTypeHead", "palTypeGrinder",
+]);
+
+function checkPalTypes(manifest) {
+    const findings = [];
+    for (const section of Object.keys(manifest)) {
+        const value = manifest[section];
+        if (!isObject(value) || value.entry == null) continue;
+        const entries = Array.isArray(value.entry) ? value.entry : [value.entry];
+        for (let i = 0; i < entries.length; i++) {
+            const entry = entries[i];
+            if (!isObject(entry)) continue;
+            for (const typeName of Object.keys(entry)) {
+                const body = entry[typeName];
+                if (!isObject(body) || typeof body.palType !== "string" || body.palType === "") continue;
+                if (PAL_TYPES.has(body.palType)) continue;
+                findings.push({
+                    file: "pal.json", line: 1, column: 0, severity: "error", rule: "invalidPalType",
+                    message: "pal.json " + section + ".entry[" + i + "]." + typeName + ".palType \"" +
+                        body.palType + "\" is not a PalBuilder palType — it pushes but fails at " +
+                        "runtime (a page with palType \"console\" renders \"Console Error\"). Use " +
+                        "\"palTypeWeb\" or \"palTypeConsole\" (exact case). Other platform values: " +
+                        [...PAL_TYPES].slice(2).join(", ") + ".",
+                });
+            }
+        }
+    }
+    return findings;
+}
+
 // styles/scripts filename path-prefix contract (owner live observation 2026-08: PalBuilder
 // showed Styles -> styles -> styles.css and Scripts -> scripts -> tx-main.js — one redundant
 // nested folder per prefixed filename). Unlike workflows/fragments (name-registry resolution,
@@ -949,6 +987,7 @@ function lintPalJson(snapshotOrDir) {
 
     findings.push(...checkEntryShape(manifest));
     findings.push(...checkEntryFilenames(manifest));
+    findings.push(...checkPalTypes(manifest));
     findings.push(...checkPrefixedManifestFilenames(manifest));
     findings.push(...checkUnknownKeys(manifest));
     findings.push(...checkDataStructures(manifest));
@@ -964,5 +1003,5 @@ function lintPalJson(snapshotOrDir) {
 }
 
 module.exports = { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryShape, checkEntryFilenames,
-    checkPrefixedManifestFilenames, checkFolderRegistrations, checkRoles, lineForFinding, listFilesRecursive,
+    checkPalTypes, checkPrefixedManifestFilenames, checkFolderRegistrations, checkRoles, lineForFinding, listFilesRecursive,
     analyzeMarkupRegistration };

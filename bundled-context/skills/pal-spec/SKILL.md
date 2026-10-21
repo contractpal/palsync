@@ -1,6 +1,6 @@
 ---
 name: pal-spec
-description: "Load to plan a new pal or significant change and produce SPEC.md + EXECUTION.md. Not for small fixes or visual-system setup."
+description: "Load to plan a new pal or significant change and produce SPEC.md + EXECUTION.md. Not for bug fixes, small enhancements, or visual-system setup."
 ---
 
 # pal-spec — interview → SPEC.md + EXECUTION.md
@@ -10,7 +10,7 @@ correctly; a vague spec makes every model guess. The output is a **gated chain**
 a gate:
 
 ```
-MINE → INTERVIEW → LOCK ASSUMPTIONS → SPEC.md draft → EXECUTION.md draft → JOINT REALITY CHECK → jointly approved
+MINE → INTERVIEW → LOCK SUMMARY → SPEC.md draft → EXECUTION.md draft → JOINT REALITY CHECK → jointly approved
                         gate                                                gate                         gate
 ```
 
@@ -51,6 +51,9 @@ The spec is re-read on every build task, so every word costs tokens repeatedly.
 
 ## 2. Run the interview
 
+Talk like a product engineer, not a form. Most users do not write code: ask what the Pal must do
+and decide the engineering yourself from the palbuilder-* skills.
+
 **Existing pal:** do NOT re-interview the whole pal, and do not map it up front. Inspect the
 surface the change actually touches — `pal.json` for the inventory, the pages/fragments/workflows
 and datasets the change names, and `pal_impact` on any existing page or fragment other files
@@ -67,59 +70,68 @@ prefactor when the friction is speculative. Most changes need none.
 
 **Step 1 — Mine before you ask.** Turn what already exists (the pulled workspace, any live
 site/doc the user points at, DESIGN_SYSTEM.md, the first description) into PROPOSED answers.
-Confirming a proposal costs seconds; an open question costs minutes. Record where each fact
-came from.
+Confirming a proposal costs seconds; an open question costs minutes. Never ask for something
+the user already said. Record where each fact came from.
 
-**Step 2 — Ask in batches of 3–4** (skip what mining answered):
+**Step 2 — Propose, then ask about decisions.** Open with a plausible version of the product
+(users, main journey, screens) and invite corrections. Then ask, in batches of 3–4, only what
+mining did not answer:
 
-- **Product & audience** — Q1 What is this (one sentence)? Q2 Who for? Q3 The ONE primary
-  action? Q4 What state is the user in (rushed, careful, comparing, approving, anxious)?
-  Q5 Web (public), console (logged-in), or both? If both, get the page split now.
-- **Primary journey** — Q6 For the main screen, what is the entry point → first decision →
-  primary action → feedback → next step? What friction must the UI remove?
-- **Integration surface** *(most pals: none — skip)* — Q7 Does anything OTHER than a browser
-  call this pal? **webservice** (`workflowType: 12`) = external REST/SOAP caller; **tunnel**
-  (`workflowType: 15`) = pal-to-pal / cross-cloud. If either: which caller, which action(s),
-  request/response shape. Non-page-serving — no sitemap row; capture as §5 behavior, list the
-  workflow + type in §9/§10.
-- **Scope & structure** — Q8 Pages/screens? (propose a sitemap; tag each row web or console)
-  Q9 Explicitly OUT of scope?
-- **Copy** — Q10 Per page: draft H1/subhead/CTA/section copy YOURSELF from mined material,
-  present it, get it corrected — page by page. Q11 Claims/stats/pricing that must be exact?
-  (ask; never invent; record source)
-- **Behavior** *(console/app pals, any page with logic, any Q7 action)* — Q12 Per action:
-  trigger, INPUT, VALIDATION, STATE change (which dataset/field), OUTPUT, and the fewest high-level test seams that prove it (`pal_exercise` flow, `pal_test`, or exact expect). Q13 **[FULL]**
-  Edge & error cases: empty, invalid, not-found, duplicate, auth-fail. *(LITE: note as deferred.)*
-- **Data** — Q14 Entities, fields, exact PalBuilder types? (propose schemas; confirm — types
-  come from `references/palbuilder-types.md`)
-- **Design handoff** — Q15 DESIGN_SYSTEM.md + COMPONENTS.md present? No → run
-  design-system-init, then return here. Yes → per page, propose a layout skeleton: section
-  order + which named component fills each slot + hierarchy/primary action/progressive disclosure
-  notes. Confirm every new-pal page shell follows `../shared/references/css-conventions.md`; `pb-charts.js` is optional when charts are used. Use the approved inline SVG icon guidance in
-  `../design-system-init/references/component-library.md`. No colors/fonts. Do not
-  retrofit `styles.css` into an existing pal that lacks it. Also ask now whether to use
-  CloudPiston Resource (`../palbuilder-core/references/pal-chain.md`) for the UI elements it
-  already covers — modals, toasts, inline alerts, form validation, paging, image upload — before
-  designing bespoke versions of any of them. Always ask on a new pal; don't assume.
-- **SEO** *(usually web; a publicly indexed console landing/login page can qualify; never a
-  webservice/tunnel action)* — Q16 Domain? Per §3 page: publicly indexable? Target phrase for
-  each page that is (propose from approved copy).
-- **Constraints & ops** — Q17 Push policy: free or checkpoint? Q18 What must the agent NEVER
-  touch? Non-negotiable decisions to protect, with rationale? (Verification depth and final
-  review are user settings, not spec fields — see
-  `../shared/references/verification.md`.)
+- **Purpose & people** — What is it, in one sentence? Who uses it, and what can each kind of
+  user see and do? Throwaway prototype or real users (sets `mode:`)? Public web, logged-in
+  console, or both (get the page split)?
+- **Journeys** — For each main task: where the user starts, what they enter or choose, what
+  happens next, who finds out. Propose the sitemap (each row web or console) and confirm it.
+- **Business rules** — Raise only what applies: record states and who moves them; who may see,
+  change, cancel, or undo whose records; conflicts and limits; destructive actions; privacy; what
+  users see when something fails.
+- **Information** — What the Pal records or changes, which existing data it uses, anything
+  private. Translate the answers into §8 schemas yourself (`references/palbuilder-types.md`).
+- **Words & facts** — Draft each page's H1/subhead/CTA/section copy yourself from mined
+  material, present it, get it corrected. Ask for exact claims, stats, prices; never invent.
+- **Scope** — What is explicitly out? What must never be touched? Any decision to protect?
+- **Integration** *(most pals: none — skip)* — Does anything other than a browser call this
+  Pal (another system → webservice `workflowType: 12`; another pal/cloud → tunnel
+  `workflowType: 15`)? Which caller, what it sends, what it gets back. No sitemap row; capture
+  as §5 behavior, list workflow + type in §9/§10.
+- **Public pages** *(web only)* — Domain? Which pages should search engines find?
 
-**Step 3 — LOCK ASSUMPTIONS (gate).** Before writing, list every assumption and open question
-in one block and ask the user to correct it now:
+**Ask about business policy; decide engineering defaults.** Decide, and list under §2 DEFAULTS:
+required-field validation, clear error states, duplicate-submit protection, enforcing the access
+rules the user stated, `confirm` on destructive actions, push policy `free` (deploy stays
+human-only), and every type, workflow, file, skill, primitive, and test seam. Ask: anything that
+changes what a user sees, can do, or is told — e.g. overlapping requests, cancelling after
+approval, who sees whose data. A business rule you cannot mine is an OPEN question, never a guess.
+
+**Design handoff** *(engineering — resolve it yourself, show the user only the page flow)* —
+DESIGN_SYSTEM.md + COMPONENTS.md present? No → run design-system-init, then return here. Yes →
+per page, propose a layout skeleton: section order + which named component fills each slot +
+hierarchy/primary action/progressive disclosure notes. Every new-pal page shell follows
+`../shared/references/css-conventions.md`; `pb-charts.js` is optional when charts are used. Use
+the approved inline SVG icon guidance in `../design-system-init/references/component-library.md`.
+No colors/fonts. Do not retrofit `styles.css` into an existing pal that lacks it. On a new pal,
+always ask whether to use CloudPiston Resource (`../palbuilder-core/references/pal-chain.md`)
+for what it already covers — modals, toasts, inline alerts, form validation, paging, image
+upload — before designing bespoke versions; don't assume. Verification depth and final review
+are user settings, not spec fields (`../shared/references/verification.md`).
+
+**Step 3 — LOCK (gate).** Before writing, give a plain-English summary the user can correct
+without reading any technical file. No dataset, workflow, or file names:
 ```
-ASSUMPTIONS (correct me now or I build on these):
-1. Console pal, single profile, no multi-tenant.
-2. "Submit" creates a new record; never edits.
-OPEN QUESTIONS (I will not invent answers):
-- Exact Pro-tier price — needs a real number.
+HERE'S WHAT I'LL BUILD — correct anything that's wrong:
+1. What it does: employees request time off; managers approve or decline.
+2. Who uses it: employees submit and track their own requests; managers decide on them.
+3. How it works: employee picks dates + reason → request is Pending → manager approves or
+   declines → employee sees the result on their list.
+4. What it keeps: each request's employee, dates, reason, status, and who decided.
+5. Already decided (say if wrong): required fields are checked; a double-click can't submit
+   twice; only managers can approve or decline.
+6. I need your answer on: Can two requests overlap? Can an approved request be cancelled?
+   Do managers see only their team's requests, or everyone's?
 ```
 
-**LOCK done when:** the user has confirmed assumptions, open questions, and every proposed behavior seam.
+**LOCK done when:** the user has confirmed the summary and answered or deferred each question
+(deferred ones stay OPEN in §2 and block the tasks they affect).
 
 **Step 4 — Write SPEC.md.** Read `references/spec-template.md` now and follow it. Set
 `status: draft`. Walk the user through copy and behavior; apply corrections.
@@ -140,8 +152,9 @@ The **first task is always a standalone foundation task**. Give it its own row, 
    user journey, hierarchy, grouping, target sizing, and progressive disclosure are explicit enough
    for a build agent to implement.
 3. Write results into §13. Any hard flag → both artifacts remain draft/unapproved.
-   All clear → set `status: approved`, `reality_check: pass`, and confirm EXECUTION.md's `spec version`
-   matches SPEC.md. The pair is then jointly approved.
+   All clear → if the check changed anything the user confirmed at LOCK, tell them in plain words
+   and get a yes. Then set `status: approved`, `reality_check: pass`, and confirm EXECUTION.md's
+   `spec version` matches SPEC.md. The pair is then jointly approved.
 
 The foundation task must reach `ok:true`, `diagnosticCount:0` from both `pal_validate` and `pal_test` on that hand-built shell. Every task
 that adapts the shell, fragments, or workflow depends on this foundation task (datasets are leaves
@@ -149,12 +162,13 @@ and may be created before or alongside it). Existing pals that lack `styles.css`
 
 ---
 
-## Amendments — controlled spec changes mid-build
+## Changes after approval
 
-An approved spec is the contract, but reality can contradict it after the build starts
-(a type that won't create, a missing consumed field). The invariant: **the agent never silently self-amends.**
-IF the build needs something SPEC.md doesn't say THEN follow `references/amendment-path.md` —
-propose, wait for approval, apply, re-gate. Never edit SPEC.md silently.
+SPEC.md holds what the user approved; EXECUTION.md holds how it gets built. A change that keeps
+every approved product statement and PROTECTED decision true is an implementation change: update
+EXECUTION.md, no amendment. A change to what users can do, see, or are told — or to a data
+contract or acceptance criterion — is a product change: `references/amendment-path.md` (propose,
+human approves, apply, re-gate). **The agent never silently self-amends SPEC.md.**
 
 ## What this skill does NOT do
 - Build anything — **pal-loop** executes EXECUTION.md.
@@ -162,4 +176,4 @@ propose, wait for approval, apply, re-gate. Never edit SPEC.md silently.
   layout only.
 - Re-teach platform rules — the palbuilder-* skills, design-build, and palbuilder-seo own those;
   the spec REFERENCES them via §9/§10.
-- Fix bugs — **pal-fix** handles small corrections without this ceremony.
+- Fix bugs or make small enhancements — **pal-fix** handles those without this ceremony.

@@ -11,6 +11,7 @@
 // Ground-truthed against real bug corpora in /Users/apple/PalBuilder/test-0{1,2,4,5}-*.
 const { buildSnapshot } = require("./snapshot");
 const { lineAt, scanTags, attr, hasAttr } = require("./markupFacts");
+const { includeUnits } = require("./workflowJs");
 
 const RESERVED_EL_WORDS = new Set(["eq", "ne", "gt", "lt", "ge", "le", "and", "or", "not", "empty", "true", "false", "null", "div", "mod", "instanceof"]);
 
@@ -429,12 +430,16 @@ function checkParamDropped(markupFiles, workflowFiles, findings) {
     const byAction = new Map();
     for (const u of uses) { if (!byAction.has(u.action)) byAction.set(u.action, []); byAction.get(u.action).push(u); }
 
+    // A handler may call functions in the libraries its workflow @includes, so search the whole unit.
+    const srcByRel = new Map(workflowFiles.map(f => [f.rel, f.src]));
+    const units = includeUnits(workflowFiles.map(f => ({ rel: f.rel, content: f.src })));
     for (const [action, occurrences] of byAction) {
         let anyRead = false;
-        for (const { src } of workflowFiles) {
+        for (const { rel, src } of workflowFiles) {
             const block = extractCaseBlock(src, action);
             if (!block) continue;
-            const bodies = extractFunctionBodies(src);
+            const bodies = {};
+            for (const unitRel of units.get(rel)) Object.assign(bodies, extractFunctionBodies(srcByRel.get(unitRel)));
             if (reachableHasRequestRead(block.text, bodies)) { anyRead = true; break; }
         }
         if (anyRead) continue;
