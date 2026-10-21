@@ -7,10 +7,13 @@ description: "Execute or resume approved SPEC.md + EXECUTION.md tasks faithfully
 
 ## Core authority
 
-Execute the approved **SPEC.md** faithfully. SPEC.md is authoritative: never silently
-redesign, expand scope, invent requirements, or amend it. A genuine ambiguity or
-spec conflict is a blocker or an amendment-path event, not permission to guess.
-Durable task and build state lives in **EXECUTION.md**, not only in model context.
+Execute the approved **SPEC.md** faithfully. Its product contract is authoritative: never
+silently change what it promises, expand scope, invent requirements, or amend it. A genuine
+ambiguity or product conflict is a blocker or an amendment-path event, not permission to guess.
+How it gets built is yours to improve: a simpler route that keeps every approved product
+statement true is an implementation change recorded in **EXECUTION.md** — no amendment
+(`../pal-spec/references/amendment-path.md` → "What needs an amendment").
+Durable task and build state lives in EXECUTION.md, not only in model context.
 
 `pal-loop` orchestrates foundational `palbuilder-*` skills; it does not replace or
 summarize them. Do not substitute generic programming or web knowledge for a
@@ -82,7 +85,8 @@ rubric score: follow `../design-system-init/references/vision-routing.md` or rec
 
 Read [references/execute.md](references/execute.md) now. Make the smallest
 spec-traceable change, reuse existing code and platform primitives before adding
-anything, and touch only task-named files (plus cleanup made necessary by the change).
+anything, and touch only the files the change needs (plus a focused prefactor when the
+existing structure fights the change — see execute.md).
 Follow the owning PalBuilder skills for platform syntax and semantics. Run `pal_impact`
 before editing an existing page or fragment other files reference (silent for new
 files). Run free `pal_ast` `mode:"search"` whenever a touched class, attribute, or

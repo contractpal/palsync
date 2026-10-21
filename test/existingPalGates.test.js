@@ -176,3 +176,25 @@ test("code-care wording stays pinned: prefactor question, advisory code health, 
     assert.match(palReview, /## Rules[\s\S]*I'd have done it differently/);
     assert.match(routing, /leave the code you touch no worse/i);
 });
+test("planning separates product authority from implementation; small enhancements stay lightweight", () => {
+    const amendment = fs.readFileSync(path.join(SKILLS, "pal-spec", "references", "amendment-path.md"), "utf8");
+    const execute = fs.readFileSync(path.join(SKILLS, "pal-loop", "references", "execute.md"), "utf8");
+    assert.match(palSpec, /Ask about business policy; decide engineering defaults/);
+    assert.match(palSpec, /HERE'S WHAT I'LL BUILD[\s\S]*I need your answer on/, "LOCK is a plain-English summary");
+    assert.match(palSpec, /No dataset, workflow, or file names/);
+    assert.match(specTemplate, /product contract[\s\S]*§12[\s\S]*initial technical plan/i);
+    assert.match(amendment, /Product change → amendment[\s\S]*Implementation change → no amendment, no version bump/);
+    assert.match(amendment, /Never rewrite a `done` row[\s\S]*never make a\s+success condition weaker/);
+    assert.match(amendment, /Unsure which kind → treat it as product/);
+    assert.match(palLoop, /implementation change recorded in \*\*EXECUTION\.md\*\* — no amendment/);
+    assert.match(palLoop, /Never silently edit SPEC\.md/, "the amendment invariant survives");
+    assert.match(palFix, /## The enhancement loop/);
+    assert.match(palFix, /new page or screen, a new dataset or schema change[\s\S]*permission or security redesign/);
+    assert.match(routing, /small, bounded enhancement → `pal-fix`/);
+    assert.match(execute, /Prefactor when the structure fights the change[\s\S]*Never refactor unrelated code/);
+    assert.match(execute, /reread your diff[\s\S]*not a separate review/);
+    assert.match(routing, /Comments say \*why\*, not \*what\*[\s\S]*1–2 lines/, "one comment rule, always on");
+    for (const [label, text] of [["pal-loop", palLoop], ["pal-fix", palFix], ["pal-spec", palSpec], ["execute", execute]]) {
+        assert.doesNotMatch(text, /Comments say/, label + " must not duplicate the comment rule");
+    }
+});

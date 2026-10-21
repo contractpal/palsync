@@ -6,7 +6,7 @@ You are editing a **CloudPiston pal**, a proprietary server-side Java/JavaScript
 
 Load every skill the task touches.
 
-- New pal or significant change → `pal-spec`; bug/small correction → `pal-fix`. In an existing pal, inspect the area you are about to touch just in time — there is no mapping phase.
+- New pal or significant change → `pal-spec`; bug fix or small, bounded enhancement → `pal-fix`. In an existing pal, inspect the area you are about to touch just in time — there is no mapping phase.
 - Existing `SPEC.md` / `EXECUTION.md` work → `pal-loop`; independent finished-build review → `pal-review`.
 - Markup/browser UI → `palbuilder-frontend`; workflow code → `palbuilder-workflow`; data/datasets → `palbuilder-data`.
 - Visible UI also requires `design-build`; if no real design system exists, load `design-system-init` first.
@@ -29,7 +29,9 @@ These are routing-level reminders; details and examples live in the owning skill
 
 ## Work narrowly
 
-Make the smallest change that satisfies the request, and leave the code you touch no worse: reuse existing Pal code and platform capabilities before adding abstractions; never fork a near-duplicate of an existing fragment, function, or class. Do not reformat or improve unrelated code. If the touched area needs restructuring to fit the change, say so (or add a prefactor task in `pal-spec`) instead of working around it. Genuine ambiguity is a reason to ask, not to guess.
+Make the smallest change that satisfies the request, and leave the code you touch no worse: reuse existing Pal code and platform capabilities before adding abstractions; never fork a near-duplicate of an existing fragment, function, or class. Do not reformat or improve unrelated code. If the touched area fights the change, do a small behavior-preserving refactor first instead of working around it. Business-rule ambiguity is a reason to ask, not to guess.
+
+Comments say *why*, not *what*: a non-obvious rule, invariant, security or data-integrity concern, or PalBuilder workaround, in 1–2 lines (≤120 chars). Prefer a clearer name over a comment. Never narrate code, your edits, or change history. When you change code, update or delete comments it made wrong.
 
 ## Verify claims
 

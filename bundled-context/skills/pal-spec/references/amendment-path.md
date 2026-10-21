@@ -7,6 +7,19 @@ field that doesn't exist, a behavior the platform can't express). The spec must 
 
 The invariant: **propose → human approve → re-gate → continue. The agent never silently self-amends.**
 
+## What needs an amendment
+
+**Product change → amendment.** Anything that would make an approved product statement false:
+who can do or see what, a business rule or PROTECTED decision, §4 copy, a §8 data contract, an
+added or removed feature, destructive or security behavior, a §11 constraint, a §12 criterion.
+
+**Implementation change → no amendment, no version bump.** Every product statement stays true:
+reuse existing code, a simpler supported primitive, different internal boundaries, a different §6
+component for the same flow, a §9/§10 entry that proved wrong, splitting/merging/reordering/adding
+unstarted tasks. Edit EXECUTION.md (never SPEC.md) and record one checkpoint line
+`IMPL: <what changed> — <why>`. Never rewrite a `done` row or its evidence, and never make a
+success condition weaker than the §12 criterion it proves. Unsure which kind → treat it as product.
+
 1. **Propose (pal-loop).** pal-loop never edits SPEC.md to fix a problem. It STOPS the affected task,
    sets it `blocked`, and writes an **amendment proposal** in EXECUTION.md Blockers: which SPEC.md §
    is wrong, the exact build-time fact that forces it (paste the tool output / name the platform
