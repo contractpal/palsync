@@ -305,7 +305,9 @@ async function pull(session, guid, targetDir, { baseline = null, resolved: pre =
     const freshMarker = timestampText(serverPal && serverPal.lastModifiedDate);
     const freshResolved = freshMarker ? Object.assign({}, resolved, { lastModifiedDate: freshMarker }) : resolved;
 
-    return { resolved: freshResolved, serverPal, pal, written, removed, preserved, serverPaths };
+    // A repository pal arrives as structure only (its files are empty placeholders until fetched) —
+    // callers surface that to the agent. ComposerResult.repositoryPal = palRecord.isRepository().
+    return { resolved: freshResolved, serverPal, pal, written, removed, preserved, serverPaths, repositoryPal: palResp.repositoryPal === true };
 }
 
 module.exports = { pull, expandPalFiles, clearContent, saveLocal, manifestPaths, listTrackedFiles, pruneEmptySubdirs, planSync, mergePreservedEntries, ALL_FOLDERS, CREATABLE_FOLDERS };

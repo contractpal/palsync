@@ -174,7 +174,8 @@ async function driftPrompt(info) {
             return clack.isCancel(v) ? "abort" : v;
         }
         clack.log.warn("The push was refused (" + (r.refused || "unknown") + ")" +
-            (r.holder ? " — the pal is locked by " + r.holder : "") + ".");
+            (r.holder ? " — the pal is locked by " + r.holder : "") + "." +
+            (r.refused === "repository-no-baseline" && r.reason ? "\n" + r.reason : ""));
         const v = await clack.select({
             message: "Couldn't push your local changes — what now?",
             options: [

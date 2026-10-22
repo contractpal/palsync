@@ -36,7 +36,8 @@ const { onDemandSyncSections } = require("../launcher/contextInject");
 const { routeItems } = require("../core/piHelpers");
 const { openUrl } = require("../platform/openUrl");
 const { run: runAst, envelopeProjection: astEnvelopeProjection } = require("../core/palAst");
-const { fetchAndExtract } = require("../core/resources");
+const { fetchAndExtract, fetchResourceFile } = require("../core/resources");
+const { fetchRepoFiles } = require("../core/repoFetch");
 const validationSwitch = require("../core/validationSwitch");
 const {
     createWorkHistoryRun,
@@ -359,6 +360,14 @@ function refreshBaseline(record, workspaceDir, serverPaths) {
 }
 
 function nowIso() { return new Date().toISOString(); }
+
+// Shown after a pal_pull of a repository pal: its files are NOT empty, they were just not downloaded.
+const REPOSITORY_PULL_NOTE =
+    "REPOSITORY PAL: only its structure came down. Its files are EMPTY PLACEHOLDERS (0 bytes) until fetched — " +
+    "not empty on the server, just not downloaded; pal.json lists them all. Do not treat an empty file as empty content, " +
+    "and never rewrite one from scratch. To read or edit a file, fetch it first with pal_repo_fetch (one file needs no " +
+    "approval; several need the developer's instruction). Push sends only the files you edited, added or deleted. " +
+    "Details: palbuilder-core/references/repository-pal.md.";
 
 // A user may stop CHIP's automated testing mid-session (for example, when the pal's routes
 // require a real application login that the agent cannot complete). Keep the switch at the MCP
@@ -1838,14 +1847,30 @@ const TOOLS = [
     },
     {
         name: "pal_resources",
-        description: "Refresh .resources/: read-only copies of every pal in this pal's chain (modules, resource pals, system pals such as CloudPiston Resource), one pulled-pal-shaped folder each. Runs at session start; call again only if a chain pal or the chain itself changed. Never edit .resources/ — it is rewritten on every refresh.",
-        inputShape: {},
-        async run(ctx) {
+        description: "Refresh .resources/: read-only copies of the pals this pal reaches (its chain, modules, and the resource pals visible to every pal such as CloudPiston Resource), one pulled-pal-shaped folder each. Runs at session start; call again only if one of them or the chain itself changed. Never edit .resources/ — it is rewritten on every refresh. Only workflows are guaranteed to arrive with content: other files may be EMPTY placeholders until read, so check first — a file that already has content is not fetched. To get content, pass pal: an ordinary pal is fetched WHOLE with one GetPal (type + file optional, just to name what you need); a repository, shadow or system pal needs pal + type + file and returns that ONE file. Nothing else in .resources/ is touched.",
+        inputShape: {
+            pal: z.string().optional().describe("Chain pal folder name under .resources/ (or its guid) to fetch content for."),
+            type: z.string().optional().describe("With file: attachment|document|email|fragment|image|page|script|style|wizard (folder names like fragments also accepted)."),
+            file: z.string().optional().describe("With type: file name exactly as listed in that pal's folder, including any subfolder (e.g. contacts/list.html).")
+        },
+        async run(ctx, { pal, type, file } = {}) {
             // "Runs automatically at session start" made this one of the very first calls of a
             // session — reusing the cached resolve (see resolvePalForRead) instead of its own
             // fresh full-account walk matters a lot here.
             const resolved = await resolvePalForRead(ctx);
             if (!resolved) return { ok: false, message: "Could not resolve this pal on the server." };
+            if (pal || type || file) {
+                const one = await fetchResourceFile(ctx.session, resolved, ctx.workspaceDir, { pal, type, file });
+                return Object.assign(one, {
+                    message: !one.ok ? "Could not read the file: " + one.reason
+                        : one.mode === "already-present"
+                            ? (one.note || one.path + " already has its content (" + one.bytes + " bytes) — nothing to fetch; read it from .resources/.")
+                        : one.mode === "full-pal"
+                            ? "Fetched " + one.pal + " in full with one GetPal: " + one.files + " file(s) now have real content under .resources/" + one.pal + "/" +
+                              (one.path ? " (including " + one.path + ")" : "")
+                            : "Wrote " + one.bytes + " byte(s) to " + one.path + (one.bytes === 0 ? " (the file is genuinely empty on the server)" : "")
+                });
+            }
             const res = await fetchAndExtract(ctx.session, resolved, ctx.workspaceDir);
             if (!res.ok) return Object.assign(res, { message: "Chain fetch did not complete: " + res.reason });
             return Object.assign(res, {
@@ -1853,6 +1878,31 @@ const TOOLS = [
                     ? "Extracted " + res.entries.length + " chain resource(s) to .resources/:\n" +
                       res.entries.map(e => "   - " + e.slug + (e.name ? " (" + e.name + ")" : "") + (e.module ? " [module]" : "") + " — " + e.files + " file(s)").join("\n")
                     : "No chain resources found for this pal."
+            });
+        }
+    },
+    {
+        name: "pal_repo_fetch",
+        description: "Download file content from THIS workspace's repository pal, which was pulled as structure only (its files are empty until fetched, and can be large images or Word attachments). One file per call needs no approval. More than one needs askedUser:true, attesting the developer asked for exactly those files — ask them how many and which; never fetch 'all'. Per-call file/byte limits come from .palsync.json repoFetch. A name not in pal.json is refused.",
+        needsLock: false,
+        inputShape: {
+            type: z.string().optional().describe("Single file: attachment|document|email|fragment|image|page|script|style|wizard|workflow (folder names like attachments also accepted)."),
+            file: z.string().optional().describe("Single file: name exactly as listed in pal.json, including any subfolder."),
+            files: z.array(z.object({ type: z.string(), file: z.string() })).optional().describe("Several files (requires askedUser:true)."),
+            askedUser: z.boolean().optional().describe("Required for more than one file: the developer asked for exactly this batch.")
+        },
+        async run(ctx, { type, file, files, askedUser } = {}) {
+            const requested = Array.isArray(files) && files.length ? files : (type || file ? [{ type, file }] : []);
+            const resolved = await resolvePalForRead(ctx);
+            if (!resolved) return { ok: false, message: "Could not resolve this pal on the server." };
+            const res = await fetchRepoFiles(ctx.session, resolved, ctx.workspaceDir, ctx.record, { files: requested, askedUser: !!askedUser });
+            if (res.fetched > 0) await ctx.persist();
+            if (!res.ok) return Object.assign(res, { message: (res.refused === "interview-needed" ? "" : "REFUSED (" + res.refused + "): ") + res.reason });
+            const line = r => "   - " + r.path + " — " + r.status +
+                (r.bytes != null ? " (" + r.bytes + " bytes)" : "") + (r.reason ? ": " + r.reason : "");
+            return Object.assign(res, {
+                message: "Fetched " + res.fetched + " file(s), " + res.bytes + " bytes.\n" + res.results.map(line).join("\n") +
+                    (res.results.some(r => r.status === "budget") ? "\nStopped at the per-call byte budget; ask the developer before fetching the rest." : "")
             });
         }
     },
@@ -2108,17 +2158,18 @@ const TOOLS = [
                         (d.legacy ? "" : " (New local files are preserved either way.)") };
             }
             const cachedResolved = ctx.lifecycle && ctx.lifecycle.lockState && ctx.lifecycle.lockState.resolved;
-            const { resolved, written, removed, preserved, serverPaths } = await pull(ctx.session, ctx.record.palGuid, ctx.workspaceDir, { baseline: ctx.record.fileHashes || null, resolved: cachedResolved });
+            const { resolved, written, removed, preserved, serverPaths, repositoryPal } = await pull(ctx.session, ctx.record.palGuid, ctx.workspaceDir, { baseline: ctx.record.fileHashes || null, resolved: cachedResolved });
             drift.adoptMarker(ctx.record, resolved.lastModifiedDate);
             refreshBaseline(ctx.record, ctx.workspaceDir, serverPaths);
             ctx.record.pulledAt = nowIso();
             await ctx.persist();
             return { pulled: true, files: written.base64.length, dataFiles: written.json.length, marker: resolved.lastModifiedDate,
-                snapshot: snap,
+                snapshot: snap, repositoryPal: repositoryPal || undefined,
                 message: "Pulled " + ctx.record.palName + ": " + written.base64.length + " code files + " + written.json.length + " data/schema files. marker=" + resolved.lastModifiedDate +
                     (snap ? "\nSnapshot of the previous " + snap.files + " files: " + snap.dir + " — pal_diff with against:\"snapshot\" shows what this pull changed." : "") +
                     (removed.length ? "\nRemoved (deleted on server): " + removed.join(", ") : "") +
-                    (preserved.length ? "\nPreserved local work:\n" + preserved.map(p => "   - " + p.rel + " — " + p.note).join("\n") : "") };
+                    (preserved.length ? "\nPreserved local work:\n" + preserved.map(p => "   - " + p.rel + " — " + p.note).join("\n") : "") +
+                    (repositoryPal ? "\n\n" + REPOSITORY_PULL_NOTE : "") };
         }
     },
     {
@@ -2227,6 +2278,8 @@ const TOOLS = [
                     marker: ctx.record.lastModifiedDate,
                     sessionId: evidenceSessionId(ctx)
                 });
+                if (res.repositoryItems !== undefined) out.message += "\n\nRepository pal: pushed " + res.repositoryItems + " file change(s) (" + res.filesPushed +
+                    " carrying content). Files you did not edit, including placeholders never downloaded, were left untouched on the server.";
                 if (!out.evidenceRecorded) out.message +=
                     "\n\n⚠ Push succeeded, but eval evidence persistence failed. " +
                     "This successful push will not be recorded by eval telemetry.";
@@ -2239,6 +2292,12 @@ const TOOLS = [
                         "  server marker: " + res.liveMarker + "\n" +
                         "  last edited by: " + res.lastEditUser + " at " + res.lastEditDate + "\n" +
                         "Run pal_pull to reconcile, or pal_push with force:true to overwrite."
+                });
+            }
+            if (res.refused === "repository-no-baseline") {
+                return Object.assign(res, {
+                    message: "REFUSED (repository pal, no baseline): " + res.reason +
+                        "\npalsync still holds the pal lock; run pal_unlock before opening it in PalBuilder."
                 });
             }
             // lock-blocked refusals (gui-lock-self / gui-lock-other / override-disabled / unknown-holder)
@@ -2385,6 +2444,7 @@ const TOOL_HINTS = {
     pal_stats: ["Report PalSync session stats", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_impact: ["Inspect local structural impact", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_resources: ["Refresh chain resources", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
+    pal_repo_fetch: ["Fetch repository file", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
     pal_ast: ["Search and rewrite code structure", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
     pal_status: ["Report pal status", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_diff: ["Compare pal files", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],

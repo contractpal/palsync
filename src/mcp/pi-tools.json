@@ -884,10 +884,23 @@
   {
     "name": "pal_resources",
     "title": "Refresh chain resources",
-    "description": "Refresh .resources/: read-only copies of every pal in this pal's chain (modules, resource pals, system pals such as CloudPiston Resource), one pulled-pal-shaped folder each. Runs at session start; call again only if a chain pal or the chain itself changed. Never edit .resources/ — it is rewritten on every refresh.",
+    "description": "Refresh .resources/: read-only copies of the pals this pal reaches (its chain, modules, and the resource pals visible to every pal such as CloudPiston Resource), one pulled-pal-shaped folder each. Runs at session start; call again only if one of them or the chain itself changed. Never edit .resources/ — it is rewritten on every refresh. Only workflows are guaranteed to arrive with content: other files may be EMPTY placeholders until read, so check first — a file that already has content is not fetched. To get content, pass pal: an ordinary pal is fetched WHOLE with one GetPal (type + file optional, just to name what you need); a repository, shadow or system pal needs pal + type + file and returns that ONE file. Nothing else in .resources/ is touched.",
     "inputSchema": {
       "type": "object",
-      "properties": {}
+      "properties": {
+        "pal": {
+          "description": "Chain pal folder name under .resources/ (or its guid) to fetch content for.",
+          "type": "string"
+        },
+        "type": {
+          "description": "With file: attachment|document|email|fragment|image|page|script|style|wizard (folder names like fragments also accepted).",
+          "type": "string"
+        },
+        "file": {
+          "description": "With type: file name exactly as listed in that pal's folder, including any subfolder (e.g. contacts/list.html).",
+          "type": "string"
+        }
+      }
     },
     "annotations": {
       "readOnlyHint": false,
@@ -904,6 +917,65 @@
       "module",
       "cloudpiston",
       "cpresource"
+    ]
+  },
+  {
+    "name": "pal_repo_fetch",
+    "title": "Fetch repository file",
+    "description": "Download file content from THIS workspace's repository pal, which was pulled as structure only (its files are empty until fetched, and can be large images or Word attachments). One file per call needs no approval. More than one needs askedUser:true, attesting the developer asked for exactly those files — ask them how many and which; never fetch 'all'. Per-call file/byte limits come from .palsync.json repoFetch. A name not in pal.json is refused.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "description": "Single file: attachment|document|email|fragment|image|page|script|style|wizard|workflow (folder names like attachments also accepted).",
+          "type": "string"
+        },
+        "file": {
+          "description": "Single file: name exactly as listed in pal.json, including any subfolder.",
+          "type": "string"
+        },
+        "files": {
+          "description": "Several files (requires askedUser:true).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "file": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "file"
+            ]
+          }
+        },
+        "askedUser": {
+          "description": "Required for more than one file: the developer asked for exactly this batch.",
+          "type": "boolean"
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    },
+    "groups": [
+      "sync",
+      "project"
+    ],
+    "keywords": [
+      "repository",
+      "repo",
+      "fetch",
+      "download",
+      "attachment",
+      "image",
+      "binary"
     ]
   },
   {

@@ -64,6 +64,20 @@ function snapshot(workspaceDir, serverPaths) {
     }
 }
 
+// Add (or refresh) ONE file in the baseline store without touching the rest — snapshot() wipes and
+// rewrites the whole store, which is wrong when a single file just became server-equal (a
+// repository file fetched on demand). No-op for binary folders and missing files.
+function snapshotFile(workspaceDir, rel) {
+    if (!isSnapshottable(rel)) return false;
+    let content;
+    try { content = fs.readFileSync(path.join(workspaceDir, ...rel.split("/"))); }
+    catch (e) { if (e.code === "ENOENT") return false; throw e; }
+    const dest = path.join(workspaceDir, BASELINE_DIR, ...rel.split("/"));
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, content);
+    return true;
+}
+
 // Every rel path currently in the baseline store (POSIX). Used by merge to know the ancestor set.
 function list(workspaceDir) {
     return walkTree(path.join(workspaceDir, BASELINE_DIR), "").map(f => f.rel);
@@ -81,4 +95,4 @@ function exists(workspaceDir) {
     catch (e) { return false; }
 }
 
-module.exports = { snapshot, read, exists, list, isLintable, isTextTracked, TEXT_FOLDERS, BASELINE_DIR };
+module.exports = { snapshot, snapshotFile, read, exists, list, isLintable, isTextTracked, TEXT_FOLDERS, BASELINE_DIR };
