@@ -19,6 +19,7 @@ const { prunePhantomFolderRegistrations } = require("./palFolders");
 const baseline = require("./baseline");
 const lock = require("./lock");
 const drift = require("./drift");
+const { planRepositoryPush, stripUnchangedContent, encodePayloadHeader } = require("./repoPayload");
 
 // Creatable types: a file on disk in these folders with NO pal.json entry is NEVER pushed —
 // the #1 silent failure of the OBE smoke test (22 new pages "pushed OK" but absent). Push now
@@ -279,6 +280,25 @@ function ensureConsoleRegistration(pal) {
     return consoleWf[0].string;
 }
 
+// Repository pals keep each file's content in its own server row, and the server writes those rows
+// only from a Repository-Payload header — the per-file change list. A save WITHOUT it is accepted
+// but updates no row: the edit lands in the pal blob, where the existing row hides it on every
+// later read — a push that reports success and loses the work (reproduced live). So a repository
+// push sends exactly that payload, derived from the baseline diff (see core/repoPayload.js), and
+// there must BE a baseline to diff against: without one nothing can be told apart as an edit, and
+// guessing would mean sending a whole-pal save the server silently half-ignores. Detection is
+// ComposerResult.repositoryPal, already present in the lock's GetPal response.
+function repositoryPushRefusal(getPalResp, record) {
+    if (!getPalResp || getPalResp.repositoryPal !== true) return null;
+    if (record && record.fileHashes && typeof record.fileHashes === "object") return null;
+    return {
+        pushed: false,
+        refused: "repository-no-baseline",
+        reason: "This is a repository pal and there is no record of what it looked like at the last pull, so edits " +
+            "cannot be told apart from untouched files. Nothing was pushed — run pal_pull first, then edit and push."
+    };
+}
+
 function buildSaveTask(pal) {
     return {
         "com.contractpal.palbuilder.PalBuilderRequest": {
@@ -327,6 +347,9 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
     if (!lk.acquired) {
         return { pushed: false, refused: lk.blocked || "no-lock", holder: lk.holder, since: lk.since };
     }
+    const repoRefusal = repositoryPushRefusal(lk.getPalResp, record);
+    if (repoRefusal) return repoRefusal;
+    const isRepositoryPal = !!(lk.getPalResp && lk.getPalResp.repositoryPal === true);
     const id = lk.resolved.id;
     // Prefer the marker off THIS call's own getPalResp (always freshly fetched, every push,
     // even when `resolved` is a cached identity reused across a whole session — see
@@ -373,8 +396,23 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
     const sourceControlEnabled = !!(lk.getPalResp && lk.getPalResp.sourceControlEnabled);
     const finalCommitMessage = (sourceControlEnabled && commitMessage) ? "Chip: " + commitMessage : null;
     const injected = await pal.injectFileContent();
+
+    // A repository pal is saved as precise per-file edits, not a whole-pal replace: the payload names
+    // exactly the files to insert / update / delete, and only those keep their bytes in the request.
+    let repositoryPayload = null;
+    let repositoryPlan = null;
+    if (isRepositoryPal) {
+        // The server's own file list (names only) decides INSERT vs UPDATE for files new to the baseline.
+        const serverRels = lk.getPalResp && lk.getPalResp.pal
+            ? manifestPaths(new Pal(Object.assign(JSON.parse(JSON.stringify(lk.getPalResp.pal)), { id, path: workspaceDir })))
+            : null;
+        repositoryPlan = planRepositoryPush(diffWorkspace(record, workspaceDir), manifestPaths(pal), serverRels);
+        stripUnchangedContent(pal, repositoryPlan.contentRels);
+        repositoryPayload = encodePayloadHeader(repositoryPlan.items);
+        for (const s of repositoryPlan.skipped) skipped.push({ type: "repository", file: s.rel, reason: s.reason });
+    }
     const saveResp = await CloudPistonAPIManager.savePal(session, pal, id,
-        { sourceControlEnabled, commitMessage: finalCommitMessage });
+        { sourceControlEnabled, commitMessage: finalCommitMessage, repositoryPayload });
     const validation = normalizeValidation(saveResp);
     const success = !!(saveResp && saveResp.success);
 
@@ -408,10 +446,11 @@ async function push(session, record, workspaceDir, { force = false, overrideLock
     // server's validation notes so callers can show WHY (e.g. "Tag script is not allowed") instead
     // of a bare "unknown" — the cold test showed an opaque message cost real diagnosis time.
     return { pushed: success, refused: success ? undefined : "save-rejected",
-             forced: !!force, filesPushed: injected.length, strayCreatable, validation,
+             forced: !!force, filesPushed: repositoryPlan ? repositoryPlan.contentRels.size : injected.length,
+             repositoryItems: repositoryPlan ? repositoryPlan.items.length : undefined, strayCreatable, validation,
              newMarker: record.lastModifiedDate, skipped, lint, skippedValidation,
              serverPaths: pushedPaths, webRegistered, consoleRegistered, prunedFolders,
              sourceControlEnabled, commitMessage: finalCommitMessage };
 }
 
-module.exports = { push, buildSaveTask, normalizeValidation, gateLint, guardWorkflows, guardUncreatableTypes, findStrayCreatable, ensureWebRegistration, ensureConsoleRegistration };
+module.exports = { push, repositoryPushRefusal, buildSaveTask, normalizeValidation, gateLint, guardWorkflows, guardUncreatableTypes, findStrayCreatable, ensureWebRegistration, ensureConsoleRegistration };

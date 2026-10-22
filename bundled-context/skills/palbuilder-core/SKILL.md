@@ -59,6 +59,15 @@ Read when:
 - Deciding whether to use CloudPiston Resource on a new pal (always ask) vs an existing one
   (infer from what's already referenced)
 - Working out what `.resources/` is, why it's read-only, and when to refresh it (`pal_resources`)
+- Seeing 0-byte files under `.resources/` and needing to know why, or reading one chain file
+
+### `references/repository-pal.md` — repository pals
+
+Read when:
+
+- `pal_pull` reports a **REPOSITORY PAL**, or you see 0-byte placeholder files in your own workspace
+- You need a repository file's content (`pal_repo_fetch`), or must add, delete or push one
+- A repository shows up as a chain member and you need to know how to treat it
 
 ---
 

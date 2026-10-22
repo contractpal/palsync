@@ -2,8 +2,12 @@
 
 A pal is rarely alone. The platform lets one pal reach into another's code through three
 relationships — **Pal Resources**, **Pal Chains**, and **Pal Modules** — all fetched by the same
-underlying mechanism and shaped identically once retrieved: a list of pals, each with its full
-content (pages, fragments, workflows, scripts, styles, everything `pal-structure.md` describes).
+underlying mechanism and shaped identically once retrieved: a list of pals, each listing every
+file (pages, fragments, workflows, scripts, styles, everything `pal-structure.md` describes).
+**Only workflows are guaranteed to arrive with their content** (the CloudPiston Resource pals are the
+exception and arrive complete); every other file of a chain pal may be just a name with an empty
+placeholder on disk until you read it (see "Empty files in `.resources/`" below). Check the file: if
+it has content, it is already there.
 This reference covers what a chain contains and how to reason about it. For the platform's own
 bundled library that lives inside one specific chain member (CloudPiston Resource's `lib-ui`
 workflow), see `palbuilder-frontend/references/cpresource.md`.
@@ -42,9 +46,12 @@ library; a module can call into its runtime pal's tunnel. Treat the distinction 
 
 ## The CloudPiston Resource system pal
 
-One chain member is special: **CloudPiston Resource**, a system pal available globally to every
-pal on the platform (not something a developer attaches — it's just always in the chain). All of
-its content lives under a root `cloudpiston` folder. It carries:
+**CloudPiston Resource** is not part of any pal chain. It is a normal pal owned by the system
+enterprise and visible to every pal on the platform (not something a developer attaches). There
+are two copies, "(Cloud)" and "(Root)"; the server delivers them in the same `GET_CHAIN` response
+as the pal's own chain, so they land in `.resources/` beside it. A pal chain is a different thing
+from a module, shadow, repository or skin (a repository can be a member of a chain). All of
+CloudPiston Resource's content lives under a root `cloudpiston` folder. It carries:
 
 - **Sample pages** demonstrating various JS/CSS libraries and frameworks for building common pal
   elements.
@@ -75,7 +82,8 @@ pal (`pages/`, `fragments/`, `workflows/`, etc.), so it reads exactly like any o
 it's a module.
 
 - **This happens automatically** at the start of every session — you don't need to ask for it.
-  By the time you're working, `.resources/` already holds everything currently in scope.
+  By the time you're working, `.resources/` lists everything currently in scope: every file's
+  **name** is on disk, but only workflows are guaranteed to carry content.
 - **`.resources/` is never part of the pal being edited.** It is not pull-managed, not pushed, and
   gets wiped and rewritten on every refresh — never edit files there, and never expect local
   changes under `.resources/` to survive.
@@ -89,6 +97,33 @@ it's a module.
 - Refresh on demand with the `pal_resources` MCP tool if a chain pal may have changed server-side
   (e.g. CloudPiston Resource was updated) or the chain itself changed (a module was attached or
   detached) — mid-session, `.resources/` can otherwise go stale.
+
+## Empty files in `.resources/`
+
+A 0-byte page, fragment, script, style, image or attachment under `.resources/` is a **placeholder
+for a file that exists but was not downloaded** — not a file that is empty. The server only ships
+names for those types (PalBuilder loads their content lazily), so you fetch what you need — and how
+depends on the kind of pal:
+
+- **Existence needs no content.** The placeholder is the proof the file exists; a `<c:fragment>`
+  or reference to it validates without reading it.
+- **An ordinary pal — fetch it whole.** Call `pal_resources` with `pal` (the folder name under
+  `.resources/`, or its guid); adding `type` and `file` just names what you're after. One full
+  `GetPal` replaces that pal's placeholders with real content for **every** file, because ordinary
+  pals are small. Type names are singular (`fragment`) or the folder name (`fragments`).
+- **A repository pal — one file at a time.** Repositories can be huge, so name `pal`, `type` and
+  `file`; only that file is written. Never fetch one whole, and ask the developer before fetching
+  many files (see `repository-pal.md`). A shadow pal is read one file at a time as well.
+- **CloudPiston Resource (Cloud and Root), and an enterprise resource pal if the cloud has one,
+  arrive complete** — every file with its content — so there is nothing to fetch: read them straight
+  from `.resources/` (`pal_resources` answers "already present" without a request). A "(Cloud)" copy
+  is not required, so some clouds have only Root. If a file of one of these is ever empty, request
+  just that file with `pal_resources` (one file at a time); never ask for the whole pal, which the
+  server refuses for a system-owned pal.
+- Checks that need content (such as `ajax-target` ids) can't see unfetched files and will say
+  "could not verify" rather than "missing".
+- A pal you cannot open (another enterprise's, for example) refuses the read ("not a development
+  Pal"); work from the names and workflows the chain gave you.
 
 ## `.resources/` is sample code, never documentation
 

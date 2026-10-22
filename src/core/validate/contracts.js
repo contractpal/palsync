@@ -158,11 +158,27 @@ function checkAjaxTargetExists(markupFiles, findings, chainMarkupFiles = []) {
     const ids = new Set();
     for (const { src } of markupFiles.concat(chainMarkupFiles)) scanTags(src, tag => { const v = attr(tag, "id"); if (v != null) ids.add(v); });
 
+    // Chain files that were never fetched are empty here (the chain only ships names for non-
+    // workflow files), so an id they define is invisible. A missing target is then "could not
+    // verify", not "does not exist".
+    const unfetched = chainMarkupFiles.filter(f => f.src === "").length;
+
     const idsList = ids.size ? [...ids].sort().join(", ") : "(no element in this workspace has an id= attribute)";
     for (const { rel, src } of markupFiles) {
         scanTags(src, (tag, pos) => {
             const target = attr(tag, "ajax-target");
-            if (target == null || target === "ignore" || ids.has(target)) return;
+            // A ${...} target is resolved at runtime (payload / request value), so there is nothing
+            // to check statically — and the server does not check it either.
+            if (target == null || target === "ignore" || target.includes("${") || ids.has(target)) return;
+            if (unfetched > 0) {
+                findings.push({
+                    file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "ajaxTargetExists",
+                    message: "ajax-target=\"" + target + "\" — could not verify: no element with id=\"" + target + "\" in this pal, and " +
+                        unfetched + " chain markup file(s) in .resources/ have not been fetched (their ids are unknown), so it may live in one of them. " +
+                        "Advisory only; it never blocks a push."
+                });
+                return;
+            }
             findings.push({
                 file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "ajaxTargetExists",
                 message: "ajax-target=\"" + target + "\" — no element with id=\"" + target + "\" exists in any page or " +

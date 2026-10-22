@@ -248,6 +248,39 @@ test("unknown API methods do not produce contract findings", () => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("ajax-target with a ${...} variable is resolved at runtime — nothing to check, no finding", () => {
+    const dir = tmpWorkspace({
+        "fragments/form.html": '<c:ignore xmlns:c="contractpal"><c:a action="save" ajax-target="${target}">Save</c:a><c:a action="x" ajax-target="row-${row.id}">X</c:a></c:ignore>',
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "ajaxTargetExists").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("ajax-target not found while chain markup is unfetched says it could not verify (still a warning)", () => {
+    const dir = tmpWorkspace({
+        "fragments/form.html": '<c:ignore xmlns:c="contractpal"><c:a action="save" ajax-target="content">Save</c:a></c:ignore>',
+        ".resources/Chain/fragments/shared.html": "",
+        ".resources/Chain/fragments/other.html": "",
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "ajaxTargetExists");
+    assert.strictEqual(findings.length, 1);
+    assert.strictEqual(findings[0].severity, "warn");
+    assert.match(findings[0].message, /could not verify/);
+    assert.match(findings[0].message, /2 chain markup file\(s\)/);
+    assert.doesNotMatch(findings[0].message, /Fix: add id=/, "no false assertion that the element is absent");
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("ajax-target found in a FETCHED chain file produces no finding even beside unfetched ones", () => {
+    const dir = tmpWorkspace({
+        "fragments/form.html": '<c:ignore xmlns:c="contractpal"><c:a action="save" ajax-target="content">Save</c:a></c:ignore>',
+        ".resources/Chain/fragments/shared.html": '<div id="content"></div>',
+        ".resources/Chain/fragments/other.html": "",
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "ajaxTargetExists").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("ajax-target ignore sentinel produces no finding", () => {
     const dir = tmpWorkspace({
         "fragments/form.html": '<c:ignore xmlns:c="contractpal"><c:a action="save" ajax-target="ignore">Save</c:a></c:ignore>',
