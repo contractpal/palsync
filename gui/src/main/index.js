@@ -719,6 +719,17 @@ ipcMain.handle("console:start", async (event, { palId, agentId, cwd, cols, rows 
     if (!agent) return { error: "Unknown agent: " + agentId };
     if (ptyManager.isRunning(palId)) return { ok: true, alreadyRunning: true };
 
+    // On PATH is not the same as runnable: a corrupt/blocked/wrong-architecture claude.exe makes
+    // Windows show "This app can't run on your PC" and the pty just dies with "Access is denied"
+    // and exit code 1. Probe first so the tab can say what's actually wrong.
+    if (dependencyCheck.HEALTH_PROBE_IDS.has(agentId)) {
+        const probe = await dependencyCheck.probeVersion(agent.command);
+        if (!probe.ok) {
+            return { error: agent.label + " is installed but won't run (`" + agent.command + " --version` failed: " +
+                probe.error + "). Reinstall it, or check that antivirus/AppLocker isn't blocking it, then reopen this tab." };
+        }
+    }
+
     const chipSessionId = await ensurePalSessionId(cwd);
     try {
         await agentLaunch.ensureMcpRegistered(agentId, cwd, chipSessionId);

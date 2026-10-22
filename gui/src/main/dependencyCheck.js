@@ -119,4 +119,4 @@ function installChromium(onOutput) {
     });
 }
 
-module.exports = { checkAll, installChromium };
+module.exports = { checkAll, installChromium, probeVersion, HEALTH_PROBE_IDS };
