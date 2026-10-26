@@ -34,6 +34,12 @@ A tunnel has two sides:
 - **Caller** — a workflow in another pal that invokes the tunnel via
   `pal.getTunnel(connectorName)` and `tunnel.submit(action, payload)`
 
+**If the tunnel workflow is in the same pal, the same pal chain, or a resource pal, don't use
+`getTunnel` — no connector is involved.** Open it locally with
+`pal.openTunnel().setWorkflow("<workflow name>")` (see "Calling a tunnel workflow in the same
+pal, chain, or resource pal" below). `getTunnel(connectorName)` is for a *different* pal reached
+through a configured connection.
+
 The `connectorName` is a string that identifies the tunnel relationship — it maps to a
 configured connection between the two pals. Configuration lives outside the workflow (in
 Pal Manager or equivalent); verify with your enterprise setup.
@@ -147,6 +153,33 @@ if the calling workflow should degrade gracefully.
 
 ---
 
+## Calling a tunnel workflow in the same pal, chain, or resource pal
+
+When the type-15 workflow you want to run lives in the **same pal**, in the **same pal chain**,
+or in a **resource pal** the current pal uses, there is no connector to configure. Get a tunnel
+handle with `pal.openTunnel()` and point it at the workflow by name:
+
+```js
+var tunnel = pal.openTunnel().setWorkflow("others/tunnel.js");   // String: the tunnel workflow's name
+```
+
+`setWorkflow(String name)` selects which tunnel workflow runs. Use the workflow's registered
+name as it appears in the pal (the same name you'd see in `pal.json`).
+
+| Situation | How to reach the tunnel |
+|---|---|
+| Tunnel workflow in this pal, this pal's chain, or a resource pal | `pal.openTunnel().setWorkflow(name)` |
+| Tunnel workflow in a different pal / enterprise / cloud | `pal.getTunnel(connectorName)` (configured connection) |
+
+The receiving workflow is written exactly as in "Receiving side" above.
+
+**TO CONFIRM (not in verified sample code):** that the handle returned by
+`setWorkflow(...)` is then used with `submit(action, payload)` and the same `isSuccess()` /
+`getDataList()` / `getError()` response API as `getTunnel`. Confirm before relying on it, and
+do not invent other `openTunnel()` methods.
+
+---
+
 ## Default workflow registration
 
 Registered in `pal.json`'s `layout` block:
@@ -166,6 +199,9 @@ needs multiple tunnel endpoints.
 
 ## Common gotchas
 
+- **Same pal / chain / resource pal → `pal.openTunnel().setWorkflow(name)`, not `getTunnel`.**
+  `getTunnel(connector)` is for a separate pal reached through a configured connection; using it
+  for a local workflow fails on the missing connector.
 - **Tunnels are pal-to-pal, not pal-to-external.** For non-CloudPiston integrations, use a
   regular webservice type (5, 12) with `ServiceRequest`.
 - **`request.getPayload()` on the receiver side, `c.createPayload()` on the caller side.**
