@@ -46,6 +46,10 @@ workflow-JS workarounds (no object literals, no `.forEach`, etc.) that apply thr
   `Packet.addDocument`/`getDocument`/`deleteDocument`, the `fields.Field`/`signatures.Signature`
   manifest shape (differs by content type), click-signature flow, and the `c:document` tag. Read
   when a pal creates, signs, or renders a packet `Document`.
+- **`references/pdf.md`** — rendering a pal page to a PDF (`pal.getPage(name).toPdf(...)`) and
+  returning it as a download response; why `pal.getPage` is valid here. Read when a pal must
+  produce a PDF of one of its own pages. Includes the CSS 2.0-only constraint and layout
+  guidance (page breaks, repeating table headers).
 - **`references/console-system.md`** — `workflowType: 11`. Background jobs — pointer to
   `palbuilder-realtime` which owns this in depth.
 - **`references/webservices.md`** — `workflowType: 5` / `12` / `14`. Webservice endpoints
@@ -143,7 +147,7 @@ still declare and assign each one you use.
 | `request` | `c.getRequest()` | The incoming request |
 | `data` | `request.getData()` | Request `Data` (form fields, querystring) |
 | `action` | `c.getAction()` | The requested action name |
-| `page` | `c.getPage("<name>")` | The page to return; name is always required. Use `c.getPage`, never `pal.getPage` (that returns the design-model page, not a returnable response) |
+| `page` | `c.getPage("<name>")` | The page to return; name is always required. Use `c.getPage`, not `pal.getPage` (that returns the design-model page — valid as e.g. a PDF source, see references/pdf.md, but not a returnable response) |
 | `ajax` | `c.createAjaxResponse(...)` | The ajax response, when applicable |
 | `resp` | any other response | Download, redirect, `exitToWeb` |
 | `payload` | `c.createPayload()` | Main payload attached to the final response |

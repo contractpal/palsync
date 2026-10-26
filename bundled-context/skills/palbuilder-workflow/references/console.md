@@ -48,7 +48,7 @@ app menu); every action after that is an **AJAX fragment request** fired by a `c
 must serve both, or it throws at runtime. Get this exactly right — it's the single most common
 place console workflows fail:
 
-- **Return the page from `c.getPage("<name>")`.** NOT `pal.getPage(...)`. `c.getPage` returns
+- **Return the page from `c.getPage("<name>")`.** NOT `pal.getPage(...)` (that one is valid for other uses such as PDF generation, but isn't returnable as a page). `c.getPage` returns
   the runtime page (a `WorkflowReturn`) you can return from `run()`; `pal.getPage` returns the
   design-model page and is not returnable — it fails validation with `Expected
   WorkflowResponse, found Render` and throws `Invalid return type` at runtime. (This is the

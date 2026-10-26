@@ -36,10 +36,11 @@ page.addPayload(payload);
 return page;
 ```
 
-**Return the page from `c.getPage(name)`, never `pal.getPage(name)`.** They are different
+**Return the page from `c.getPage(name)`, not `pal.getPage(name)`.** They are different
 methods returning different classes: `c.getPage` (the controller) returns the runtime page —
 a `WorkflowReturn` you can `return` from `run()`. `pal.getPage` returns the *design-model*
-page (metadata only, for inspection), which is **not** a returnable response. Returning it
+page (metadata only, e.g. the source for generating a PDF of a page — valid for that, but the
+result must go into a download response), which is **not** a returnable page response. Returning it
 fails validation with `Function run returns unexpected type. Expected WorkflowResponse, found
 Render` and throws `Invalid return type` at runtime. `c.getPage(name)` always requires a
 name — there is no "default" page.
@@ -272,7 +273,7 @@ first branch that fires returns.
   ajax-aware redirect pattern above). Bare `c.redirect(url)` inside an ajax action is
   ignored by the browser.
 - **Return a page via `c.getPage(...)`, not `pal.getPage(...)`.** `pal.getPage` returns the
-  design-model page (a `PalFile`, for metadata/inspection), which is not a returnable
-  response — `return`ing it fails validation (`Expected WorkflowResponse, found Render`) and
+  design-model page (a `PalFile`, for metadata/inspection or as the source for PDF generation),
+  which is not a returnable response — `return`ing it fails validation (`Expected WorkflowResponse, found Render`) and
   throws `Invalid return type` at runtime. The controller's `c.getPage(...)` returns the
   runtime page (a `WorkflowReturn`) that `run()` can return.

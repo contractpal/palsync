@@ -490,7 +490,8 @@ function checkAjaxTransport(rel, src, findings) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Check 9a — page response taken from pal.getPage(...) instead of c.getPage(...).
+// Check 9a — page response taken from pal.getPage(...) instead of c.getPage(...). Only fires when the
+// pal.getPage result is returned; using it for something else (e.g. PDF generation) is valid.
 // pal.getPage returns the DESIGN-MODEL page (a PalFile, metadata only); it is NOT a returnable
 // workflow response. Returning it fails server validation with "Expected WorkflowResponse, found
 // Render" and throws "Invalid return type" at runtime. The controller's c.getPage(...) returns
@@ -503,12 +504,26 @@ function checkPageResponseSource(rel, src, findings) {
     const re = /\bpal\.getPage\s*\(/g;
     let m;
     while ((m = re.exec(src))) {
+        // pal.getPage(name) is a valid design-model call (e.g. the source for PDF generation), so only
+        // flag it when the result is used as the response: `return pal.getPage(...)`, or assigned to a
+        // variable that is later returned.
+        const before = src.slice(0, m.index);
+        let returned = /\breturn\s*$/.test(before);
+        if (!returned) {
+            const assign = /([A-Za-z_$][\w$]*)\s*=\s*$/.exec(before);
+            if (assign) {
+                const name = assign[1].replace(/\$/g, "\\$");
+                returned = new RegExp("\\breturn\\s+" + name + "(?![\\w$])").test(src);
+            }
+        }
+        if (!returned) continue;
         findings.push({
             file: rel, line: lineAt(src, m.index), column: 0, severity: "error", rule: "pageResponseSource",
-            message: "pal.getPage(...) returns the design-model page (metadata only), NOT a returnable response. " +
-                "Returning it fails validation with \"Expected WorkflowResponse, found Render\" and throws " +
-                "\"Invalid return type\" at runtime. Fix: use c.getPage(\"<name>\") — the controller method that " +
-                "returns the runtime page (a WorkflowReturn) run() can return. See " +
+            message: "pal.getPage(...) returns the design-model page (metadata only), which cannot be returned as a " +
+                "response. Returning it fails validation with \"Expected WorkflowResponse, found Render\" and throws " +
+                "\"Invalid return type\" at runtime. To return a page, use c.getPage(\"<name>\") — the controller " +
+                "method that returns the runtime page (a WorkflowReturn). pal.getPage(...) itself is valid for other " +
+                "uses (e.g. generating a PDF of a page, which must then be returned as a download response). See " +
                 "palbuilder-workflow/references/responses.md and console.md (console response pattern)."
         });
     }

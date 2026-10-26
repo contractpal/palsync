@@ -1199,6 +1199,32 @@ test("pbMain and pbSection only apply when the pal contains design-system.css (D
     }
 });
 
+test("pageResponseSource — direct return of pal.getPage(...) is flagged too", () => {
+    const dir = tmpWorkspace({
+        "workflows/console.js": "function run(c) { var pal = c.getPal(); return pal.getPage('x'); }",
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "pageResponseSource").length, 1);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("pageResponseSource — pal.getPage(...) not returned as the response (PDF source) is allowed", () => {
+    const dir = tmpWorkspace({
+        "workflows/report.js": [
+            "var c, pal, page;",
+            "function run(controller) {",
+            "    c = controller; pal = c.getPal();",
+            "    var source = pal.getPage('report');",
+            "    var pdf = source.toPdf('Sample.pdf');",
+            "    var resp = c.createDownloadResponse();",
+            "    resp.setFileContent(pdf);",
+            "    return resp;",
+            "}",
+        ].join("\n"),
+    });
+    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "pageResponseSource").length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("pageResponseSource — c.getPage(...) is the correct source, no finding", () => {
     const dir = tmpWorkspace({
         "workflows/console.js": [
