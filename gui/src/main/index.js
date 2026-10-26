@@ -230,7 +230,16 @@ function createWindow() {
     });
 
     if (isDev) {
-        mainWindow.loadURL("http://localhost:5173");
+        // Electron can start before the vite dev server is listening; retry until it is.
+        const devUrl = "http://localhost:5173";
+        mainWindow.webContents.on("did-fail-load", (_e, code, _desc, url, isMainFrame) => {
+            if (isMainFrame && code === -102 && url.startsWith(devUrl)) {
+                setTimeout(() => {
+                    if (!mainWindow.isDestroyed()) mainWindow.loadURL(devUrl);
+                }, 500);
+            }
+        });
+        mainWindow.loadURL(devUrl);
         mainWindow.webContents.openDevTools({ mode: "detach" });
     } else {
         mainWindow.loadFile(path.join(__dirname, "..", "..", "dist-renderer", "index.html"));

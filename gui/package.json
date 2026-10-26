@@ -1,6 +1,6 @@
 {
   "name": "palsync-gui",
-  "version": "0.25.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Electron GUI wrapper for palsync — workspace/tab manager over real agent-CLI consoles.",
   "main": "src/main/index.js",
@@ -32,7 +32,7 @@
     "@electron/rebuild": "^3.6.1",
     "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^9.2.4",
-    "electron": "^32.0.0",
+    "electron": "^45.0.0",
     "electron-builder": "^25.0.0",
     "patch-package": "^8.0.0",
     "vite": "^5.4.0"
@@ -95,7 +95,7 @@
     }
   },
   "allowScripts": {
-    "electron@32.3.3": true,
+    "electron@45.0.0": true,
     "esbuild@0.21.5": true,
     "node-pty@1.1.0": true,
     "file:../..": false,
