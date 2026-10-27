@@ -707,7 +707,7 @@ ipcMain.handle("pal:listImages", async (event, workspaceDir, kind) => {
 // ---- IPC: clipboard bridge (workspace titlebar button) ----
 
 ipcMain.handle("clipboard:read", async () => {
-    try { return { result: clipboardPanel.readClipboard() }; }
+    try { return { result: await clipboardPanel.readClipboard() }; }
     catch (e) { return { error: e && e.message ? e.message : String(e) }; }
 });
 

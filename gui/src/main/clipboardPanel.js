@@ -19,12 +19,18 @@ const IMAGE_EXT_MIME = {
     ".webp": "image/webp", ".svg": "image/svg+xml", ".bmp": "image/bmp"
 };
 
-function readClipboard() {
-    const image = clipboard.readImage();
-    if (image && !image.isEmpty()) {
-        return { type: "image", dataUri: "data:image/png;base64," + image.toPNG().toString("base64") };
+// Electron 45 replaced the sync clipboard API (readImage/readText) with the promise-based
+// W3C-style one: read() yields ClipboardItems whose getType(mime) resolves to a Blob.
+async function readClipboard() {
+    const items = await clipboard.read();
+    for (const item of items) {
+        if (item.types.includes("image/png")) {
+            const blob = await item.getType("image/png");
+            const buf = Buffer.from(await blob.arrayBuffer());
+            if (buf.length) return { type: "image", dataUri: "data:image/png;base64," + buf.toString("base64") };
+        }
     }
-    const text = clipboard.readText();
+    const text = await clipboard.readText();
     if (text) return { type: "text", text };
     return { type: "empty" };
 }
