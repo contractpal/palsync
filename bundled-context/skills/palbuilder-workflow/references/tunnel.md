@@ -227,3 +227,10 @@ caller side would — POSTing to `tunnelUrl` with Basic auth and the `tunnelActi
 `tunnelWorkflow` headers. It's the one testing surface that returns actual DATA back to the
 agent instead of a validation verdict; an empty 200 response means the workflow threw at
 runtime (the server swallows the error).
+
+The project's **`.tunnel/`** folder is the shared scratch space for the agent and the developer.
+A `payloadFile` given as a bare name is read from `.tunnel/` (an absolute path is used as-is).
+Pass **`outFile`** (a file name only) to save a successful response to `.tunnel/<outFile>` instead
+of printing it: the console shows the saved name, size in bytes, and the top-level JSON keys, and
+you then read or process the file locally. If the user just says "save the output", pick a
+descriptive name yourself. Errors (HTTP failures, empty body, non-JSON body) are shown and never saved.

@@ -68,6 +68,83 @@ function matchTunnelWorkflow(name, tunnels) {
     return tunnels.find(t => String(t).toLowerCase().replace(/\.js$/, "") === bare) || null;
 }
 
+// The project's scratch folder for tunnel work, shared by the agent and the developer: payload
+// files go in, saved responses come out. Created on first save, never by a read.
+const TUNNEL_DIR = ".tunnel";
+
+// Resolve a payloadFile. Absolute paths are used as given. A relative one is looked up in
+// .tunnel first (the common case: "just the file name"); if it isn't there but exists relative
+// to the workspace, that wins so older workspace-relative calls keep working. When neither
+// exists the .tunnel path is returned, so the "could not read" error names the expected spot.
+function resolvePayloadPath(workspaceDir, payloadFile) {
+    if (path.isAbsolute(payloadFile)) return payloadFile;
+    const inTunnel = path.join(workspaceDir, TUNNEL_DIR, payloadFile);
+    if (fs.existsSync(inTunnel)) return inTunnel;
+    const inWorkspace = path.join(workspaceDir, payloadFile);
+    return fs.existsSync(inWorkspace) ? inWorkspace : inTunnel;
+}
+
+// outFile is a bare file name inside .tunnel — never a path, so a response can't be written
+// outside the folder. Returns { ok, name } or { ok:false, reason }.
+function validateOutFileName(outFile) {
+    const name = String(outFile || "").trim();
+    if (!name) return { ok: false, reason: "outFile is empty" };
+    if (/[\\/]/.test(name) || name === "." || name === ".." || /^[a-zA-Z]:/.test(name)) {
+        return { ok: false, reason: "outFile must be a file name only (it is saved in the " + TUNNEL_DIR + " folder), not a path" };
+    }
+    if (/[<>:"|?*\x00-\x1f]/.test(name)) {
+        return { ok: false, reason: "outFile contains characters that are not allowed in a file name" };
+    }
+    return { ok: true, name };
+}
+
+const MAX_KEYS_SHOWN = 40;
+
+// What the console shows instead of the body: the shape of the JSON, one level deep.
+function describeJsonShape(parsed) {
+    if (Array.isArray(parsed)) return { kind: "array", length: parsed.length, topLevelKeys: [] };
+    if (parsed !== null && typeof parsed === "object") return { kind: "object", topLevelKeys: Object.keys(parsed) };
+    return { kind: parsed === null ? "null" : typeof parsed, topLevelKeys: [] };
+}
+
+// Save a successful tunnel response to <workspace>/.tunnel/<outFile>. The body is written exactly
+// as received. Callers must only pass a successful, parsed-JSON response — failures are never saved.
+//   -> { saved:true, name, relPath, path, bytes, shape } | { saved:false, reason }
+function saveTunnelResponse(workspaceDir, outFile, raw, parsed) {
+    const v = validateOutFileName(outFile);
+    if (!v.ok) return { saved: false, reason: v.reason };
+    const dir = path.join(workspaceDir, TUNNEL_DIR);
+    const target = path.join(dir, v.name);
+    try {
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(target, raw, "utf8");
+    } catch (e) {
+        return { saved: false, reason: "could not write " + target + ": " + e.message };
+    }
+    return {
+        saved: true, name: v.name, relPath: TUNNEL_DIR + "/" + v.name, path: target,
+        bytes: Buffer.byteLength(raw, "utf8"), shape: describeJsonShape(parsed)
+    };
+}
+
+// The console line for a saved response: name, size, and the top-level JSON keys.
+function formatSavedSummary(s) {
+    let shape;
+    if (s.shape.kind === "object") {
+        const keys = s.shape.topLevelKeys;
+        shape = keys.length
+            ? "top-level keys (" + keys.length + "): " + keys.slice(0, MAX_KEYS_SHOWN).join(", ") +
+              (keys.length > MAX_KEYS_SHOWN ? ", … +" + (keys.length - MAX_KEYS_SHOWN) + " more" : "")
+            : "empty JSON object";
+    } else if (s.shape.kind === "array") {
+        shape = "top-level JSON array of " + s.shape.length + " item" + (s.shape.length === 1 ? "" : "s") + " (no keys)";
+    } else {
+        shape = "top-level JSON " + s.shape.kind + " (no keys)";
+    }
+    return "Saved response → " + s.relPath + "\n  size: " + s.bytes + " bytes\n  " + shape +
+        "\nReport exactly these three facts (file, size, top-level keys). Do NOT print, quote, or re-read the file contents unless the user asks to see them.";
+}
+
 // One raw call to the tunnel endpoint. Returns { status, text }; throws only on network failure.
 // This hits cptservice/run.do directly (NOT /cpbuilder/), so it bypasses apiManager.js's
 // fetchAPI entirely — chipSessionId is threaded through separately here for the same
@@ -142,4 +219,7 @@ function stripHtml(text) {
     return String(text || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
 }
 
-module.exports = { runTunnelAction, mintTunnelCredentials, callTunnelOnce, listTunnelWorkflows, matchTunnelWorkflow };
+module.exports = {
+    runTunnelAction, mintTunnelCredentials, callTunnelOnce, listTunnelWorkflows, matchTunnelWorkflow,
+    TUNNEL_DIR, resolvePayloadPath, validateOutFileName, saveTunnelResponse, formatSavedSummary
+};

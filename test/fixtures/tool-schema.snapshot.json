@@ -1284,7 +1284,7 @@
   {
     "name": "pal_tunnel_test",
     "title": "Test tunnel workflow",
-    "description": "Call the last-pushed tunnel workflow and return its JSON response. askedUser:true is required and attests that action, workflow, and payload came from the user; never invent them. Credentials stay internal. An empty response indicates a likely runtime exception. Push first.",
+    "description": "Call the last-pushed tunnel workflow and return its JSON response. askedUser:true is required and attests that action, workflow, and payload came from the user; never invent them. Credentials stay internal. An empty response indicates a likely runtime exception. Push first. The .tunnel project folder holds payload files and saved responses.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1298,11 +1298,15 @@
           "additionalProperties": {}
         },
         "payloadFile": {
-          "description": "JSON payload path; alternative to payload.",
+          "description": "JSON payload file; a bare name is read from .tunnel. Alternative to payload.",
           "type": "string"
         },
         "workflow": {
           "description": "Tunnel workflow name; default is the registered tunnel workflow.",
+          "type": "string"
+        },
+        "outFile": {
+          "description": "Save a successful response to .tunnel/<outFile> instead of printing it; report only the saved name, size and top-level keys, never the contents unless the user asks. If the user just says to save it, choose a descriptive name. Errors are never saved.",
           "type": "string"
         },
         "askedUser": {
@@ -1312,7 +1316,7 @@
       }
     },
     "annotations": {
-      "readOnlyHint": true,
+      "readOnlyHint": false,
       "destructiveHint": false,
       "idempotentHint": true
     }

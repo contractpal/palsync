@@ -7,7 +7,7 @@ const { z } = require("zod");
 const { pull } = require("../core/pull");
 const { push } = require("../core/push");
 const { runTest } = require("../core/test");
-const { runTunnelAction, listTunnelWorkflows, matchTunnelWorkflow } = require("../core/tunnel");
+const { runTunnelAction, listTunnelWorkflows, matchTunnelWorkflow, resolvePayloadPath, validateOutFileName, saveTunnelResponse, formatSavedSummary } = require("../core/tunnel");
 const { retrieveServerDebug } = require("../core/debug");
 const { runPreview, fetchPagePath, checkExpect, extractSelector } = require("../core/preview");
 const { runScreenshot } = require("../core/screenshot");
@@ -1113,15 +1113,16 @@ const TOOLS = [
     },
     {
         name: "pal_tunnel_test",
-        description: "Call the last-pushed tunnel workflow and return its JSON response. askedUser:true is required and attests that action, workflow, and payload came from the user; never invent them. Credentials stay internal. An empty response indicates a likely runtime exception. Push first.",
+        description: "Call the last-pushed tunnel workflow and return its JSON response. askedUser:true is required and attests that action, workflow, and payload came from the user; never invent them. Credentials stay internal. An empty response indicates a likely runtime exception. Push first. The .tunnel project folder holds payload files and saved responses.",
         inputShape: {
             action: z.string().optional().describe("Value returned by request.getAction(); omitted means null."),
             payload: z.record(z.string(), z.any()).optional().describe("Top-level payload values; nested objects do not survive the wire."),
-            payloadFile: z.string().optional().describe("JSON payload path; alternative to payload."),
+            payloadFile: z.string().optional().describe("JSON payload file; a bare name is read from .tunnel. Alternative to payload."),
             workflow: z.string().optional().describe("Tunnel workflow name; default is the registered tunnel workflow."),
+            outFile: z.string().optional().describe("Save a successful response to .tunnel/<outFile> instead of printing it; report only the saved name, size and top-level keys, never the contents unless the user asks. If the user just says to save it, choose a descriptive name. Errors are never saved."),
             askedUser: z.boolean().optional().describe("Required: values came from the user, not the agent.")
         },
-        async run(ctx, { action, payload, payloadFile, workflow, askedUser } = {}) {
+        async run(ctx, { action, payload, payloadFile, workflow, outFile, askedUser } = {}) {
             const disabled = testingDisabledResult(ctx, "pal_tunnel_test");
             if (disabled) return disabled;
             // Local enumeration (last-pulled pal.json) — for name matching and for listing options.
@@ -1163,8 +1164,13 @@ const TOOLS = [
             if (payloadFile && payload) {
                 return { ran: false, refused: "payload-conflict", message: "REFUSED: pass payload OR payloadFile, not both." };
             }
+            if (outFile !== undefined) {
+                // Fail before any network call so a bad name doesn't cost a tunnel run.
+                const named = validateOutFileName(outFile);
+                if (!named.ok) return { ran: false, refused: "out-file", message: "REFUSED: " + named.reason + "." };
+            }
             if (payloadFile) {
-                const p = pathMod.isAbsolute(payloadFile) ? payloadFile : pathMod.join(ctx.workspaceDir, payloadFile);
+                const p = resolvePayloadPath(ctx.workspaceDir, payloadFile);
                 let text;
                 try { text = fs.readFileSync(p, "utf8"); }
                 catch (e) { return { ran: false, refused: "payload-file", message: "REFUSED: could not read payload file " + p + ": " + e.message }; }
@@ -1190,9 +1196,22 @@ const TOOLS = [
                         "Check the workflow for a bad method call / null deref on this action, push, and test again."
                 }));
             }
+            if (outFile !== undefined && !res.parseError) {
+                const saved = saveTunnelResponse(ctx.workspaceDir, outFile, res.raw, res.response);
+                if (!saved.saved) {
+                    return withServerDebug(ctx, Object.assign(safe, { savedTo: null,
+                        message: headline + "\n\nNOT SAVED: " + saved.reason + "." }));
+                }
+                // The body stays on disk for local analysis — only its shape goes to the console.
+                delete safe.raw; delete safe.response;
+                return withServerDebug(ctx, Object.assign(safe, {
+                    savedTo: saved.relPath, savedPath: saved.path, savedBytes: saved.bytes, topLevelKeys: saved.shape.topLevelKeys,
+                    message: headline + "\n\n" + formatSavedSummary(saved)
+                }));
+            }
             const shown = res.raw.length > PREVIEW_INLINE_CAP ? res.raw.slice(0, PREVIEW_INLINE_CAP) : res.raw;
             return withServerDebug(ctx, Object.assign(safe, {
-                message: headline +
+                message: (outFile !== undefined ? "NOT SAVED: the response was not valid JSON, so it was treated as an error.\n" : "") + headline +
                     (res.parseError ? "\n⚠ Response was not valid JSON (" + res.parseError + ") — raw body below." : "") +
                     "\n\n--- response " + (res.parseError ? "body" : "JSON") +
                     (res.raw.length > shown.length ? " (first " + PREVIEW_INLINE_CAP + " of " + res.raw.length + " chars)" : "") +
@@ -2451,7 +2470,7 @@ const TOOL_HINTS = {
     pal_validate: ["Validate pal code", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_testing: ["Toggle automated testing", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_test: ["Compile workflow on server", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
-    pal_tunnel_test: ["Test tunnel workflow", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_tunnel_test: ["Test tunnel workflow", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
     pal_debug: ["Read server debug output", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_preview: ["Preview rendered pal", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_fetch: ["Fetch rendered web page", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],

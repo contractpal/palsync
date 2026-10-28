@@ -222,3 +222,97 @@ test("matchTunnelWorkflow: exact, +.js, and case-insensitive sans-extension", ()
     assert.equal(matchTunnelWorkflow("nope", tunnels), null);
     assert.equal(matchTunnelWorkflow(null, tunnels), null);
 });
+test(".tunnel helpers: payload path resolution, outFile validation, saved summary", () => {
+    const { resolvePayloadPath, validateOutFileName, saveTunnelResponse, formatSavedSummary } = loadTunnelWithMint([MINT_OK]);
+    const fs = require("fs"), path = require("path");
+    const dir = tmpWorkspace({ ".tunnel/in.json": "{}", "only-root.json": "{}" });
+    try {
+        assert.equal(resolvePayloadPath(dir, "in.json"), path.join(dir, ".tunnel", "in.json"));
+        // not in .tunnel but present at the workspace root: legacy workspace-relative path still works
+        assert.equal(resolvePayloadPath(dir, "only-root.json"), path.join(dir, "only-root.json"));
+        // missing everywhere: points at .tunnel so the error names the expected location
+        assert.equal(resolvePayloadPath(dir, "nope.json"), path.join(dir, ".tunnel", "nope.json"));
+        const abs = path.join(dir, "elsewhere", "x.json");
+        assert.equal(resolvePayloadPath(dir, abs), abs);
+
+        assert.equal(validateOutFileName("orders.json").ok, true);
+        for (const bad of ["", "  ", "../x.json", "a/b.json", "a\b.json", "..", "C:evil.json", "a?.json"]) {
+            assert.equal(validateOutFileName(bad).ok, false, JSON.stringify(bad));
+        }
+
+        const raw = '{"orders":[1,2],"total":2}';
+        const s = saveTunnelResponse(dir, "orders.json", raw, JSON.parse(raw));
+        assert.equal(s.saved, true);
+        assert.equal(s.relPath, ".tunnel/orders.json");
+        assert.equal(fs.readFileSync(path.join(dir, ".tunnel", "orders.json"), "utf8"), raw);
+        assert.equal(s.bytes, Buffer.byteLength(raw));
+        assert.deepEqual(s.shape.topLevelKeys, ["orders", "total"]);
+        const line = formatSavedSummary(s);
+        assert.match(line, /\.tunnel\/orders\.json/);
+        assert.match(line, new RegExp("size: " + raw.length + " bytes"));
+        assert.match(line, /top-level keys \(2\): orders, total/);
+
+        assert.match(formatSavedSummary(saveTunnelResponse(dir, "a.json", "[1,2,3]", [1, 2, 3])), /array of 3 items/);
+        assert.match(formatSavedSummary(saveTunnelResponse(dir, "e.json", "{}", {})), /empty JSON object/);
+        const many = {}; for (let i = 0; i < 50; i++) many["k" + i] = i;
+        assert.match(formatSavedSummary(saveTunnelResponse(dir, "m.json", JSON.stringify(many), many)), /… \+10 more/);
+        assert.equal(saveTunnelResponse(dir, "../escape.json", "{}", {}).saved, false);
+        assert.equal(fs.existsSync(path.join(dir, "escape.json")), false);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("pal_tunnel_test tool: outFile saves success to .tunnel and shows name/size/keys; failures never save", async () => {
+    loadTunnelWithMint([MINT_OK]);
+    const fs = require("fs"), path = require("path");
+    const { TOOLS } = require("../src/mcp/tools");
+    const tool = TOOLS.find(t => t.name === "pal_tunnel_test");
+    const dir = tmpWorkspace({
+        "pal.json": JSON.stringify({ workflows: { entry: [{ string: "tunnel.js", Workflow: { workflowType: 15 } }] } }),
+        ".tunnel/req.json": '{"sku":"BX-200"}'
+    });
+    const ctx = () => ({ workspaceDir: dir, session: {}, record: { palGuid: "G" } });
+    const realFetch = global.fetch;
+    const sent = [];
+    let next;
+    global.fetch = async (url, opts) => { sent.push(opts.body); return { status: next.status, text: async () => next.text }; };
+    try {
+        // success + bare payloadFile name resolved from .tunnel
+        next = { status: 200, text: '{"availability":"in stock","lowStock":false}' };
+        const ok = await tool.run(ctx(), { askedUser: true, action: "quote", payloadFile: "req.json", outFile: "quote.json" });
+        assert.equal(ok.ran, true);
+        assert.equal(sent[0], '{"sku":"BX-200"}');
+        assert.equal(ok.savedTo, ".tunnel/quote.json");
+        assert.deepEqual(ok.topLevelKeys, ["availability", "lowStock"]);
+        assert.match(ok.message, /\.tunnel\/quote\.json/);
+        assert.match(ok.message, /size: 44 bytes/);
+        assert.match(ok.message, /top-level keys \(2\): availability, lowStock/);
+        assert.ok(!ok.message.includes("in stock"), "body stays on disk, not in the console");
+        assert.equal(fs.readFileSync(path.join(dir, ".tunnel", "quote.json"), "utf8"), next.text);
+
+        // failures: error shown, nothing written
+        for (const [name, resp] of [
+            ["http500.json", { status: 500, text: "<html>boom</html>" }],
+            ["empty.json", { status: 200, text: "" }],
+            ["notjson.json", { status: 200, text: "Exception: bad thing" }]
+        ]) {
+            next = resp;
+            const r = await tool.run(ctx(), { askedUser: true, outFile: name });
+            assert.equal(fs.existsSync(path.join(dir, ".tunnel", name)), false, name);
+            assert.ok(!r.savedTo, name);
+        }
+        const h = await tool.run(ctx(), { askedUser: true, outFile: "x.json" }); // still http 200 "Exception..." -> last `next`
+        assert.match(h.message, /NOT SAVED|Exception/);
+
+        // bad outFile refused before any network call
+        const before = sent.length;
+        const bad = await tool.run(ctx(), { askedUser: true, outFile: "../x.json" });
+        assert.equal(bad.refused, "out-file");
+        assert.equal(sent.length, before);
+
+        // without outFile the body is still printed inline and nothing is written
+        next = { status: 200, text: '{"a":1}' };
+        const inline = await tool.run(ctx(), { askedUser: true });
+        assert.match(inline.message, /"a":1/);
+        assert.deepEqual(fs.readdirSync(path.join(dir, ".tunnel")).sort(), ["quote.json", "req.json"]);
+    } finally { global.fetch = realFetch; fs.rmSync(dir, { recursive: true, force: true }); }
+});
