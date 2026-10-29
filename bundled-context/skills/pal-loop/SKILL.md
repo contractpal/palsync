@@ -113,7 +113,8 @@ check, a compile, or a chat assertion is not a PASS.
 task. Re-read the success condition verbatim before `done` and cite evidence for every
 clause. One completed task gets one commit.
 
-**Fail:** fix and re-verify; do not use force or bypass flags to bury a failure. After
+**Fail:** list every error the failed push or check reported, fix them all in one pass, then
+re-verify once; do not use force or bypass flags to bury a failure. After
 two unsuccessful attempts, use the session-start transition procedure to record
 `blocked`, `needs-human`, or `needs-frontier` with the required evidence. Inspect
 state before replaying an action that might have changed data. If a bad version was
