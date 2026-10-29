@@ -58,7 +58,7 @@ const USAGE = [
     "  palsync regression [capture --revision <marker> --approval <phrase>] [--keep-lock] [--dir <ws>]  Compare or explicitly capture baseline/baseline.json",
     "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Joint SPEC.md + EXECUTION.md mechanical approval gate (offline)",
     "  palsync session-summary [--mode full|lite] [--next <text>] [--dir <ws>] Append the canonical two-line session handoff summary (offline, derived)",
-    "  palsync task list [--ready] [--dir <ws>]                     List EXECUTION.md tasks; --ready prints the ready ticket plus its spec ref sections and \u00A711",
+    "  palsync task list [--ready [--all]] [--dir <ws>]               List EXECUTION.md tasks; --ready prints the ready ticket plus its spec ref sections and \u00A711; --ready --all lists the whole ready frontier, marking parallel-safe tasks",
     "  palsync task <id> <status> [--reason \"<why>\"] [--tried \"<workaround>\"] [--dir <ws>]",
     "                                                               Set one task status; --reason is required for blocked|needs-frontier|needs-human,",
     "                                                               --tried (the automated workaround you attempted) also for blocked|needs-human",
@@ -270,12 +270,13 @@ async function runSettings(argv) {
 
 async function runTaskCommand(cmd, argv) {
     const ts = require("../core/taskState");
-    let dir = process.cwd(); const pos = []; let ready = false; let reason; let tried;
+    let dir = process.cwd(); const pos = []; let ready = false; let all = false; let reason; let tried;
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--dir") dir = argv[++i];
         else if (a.startsWith("--dir=")) dir = a.slice("--dir=".length);
         else if (a === "--ready") ready = true;
+        else if (a === "--all") all = true;
         else if (a === "--reason") { reason = argv[++i]; if (reason === undefined) { console.error("--reason requires a value"); return 1; } }
         else if (a.startsWith("--reason=")) reason = a.slice("--reason=".length);
         else if (a === "--tried") { tried = argv[++i]; if (tried === undefined) { console.error("--tried requires a value"); return 1; } }
@@ -297,6 +298,13 @@ async function runTaskCommand(cmd, argv) {
     }
     // cmd === "task"
     if (pos.length === 0 || pos[0] === "list") {
+        if (ready && all) {
+            const f = ts.readyFrontier(text);
+            if (!f.ok) { console.error("task list failed: " + f.error); return 1; }
+            if (!f.tasks.length) { console.log("No ready task \u2014 every todo is blocked by an unfinished dependency, or none remain."); return 1; }
+            for (const t of f.tasks) console.log(t.id + "\t" + (t.parallelSafe ? "parallel-safe" : "serial") + "\t" + (t.depends.length ? "depends:" + t.depends.join(",") : "\u2014") + "\t" + t.task);
+            return 0;
+        }
         if (ready) {
             const specFile = path.join(path.resolve(dir), "SPEC.md");
             let specText;
@@ -331,9 +339,12 @@ async function runTaskCommand(cmd, argv) {
         if (r.unchanged) { console.log(r.id + " already " + pos[1] + " — no change."); return 0; }
         ts.writeExecution(file, r.text);
         console.log(r.id + ": " + r.from + " -> " + r.to);
+        if (r.to === "done" && !require("../core/reviewCheck").hasCurrentEvidence(path.resolve(dir))) {
+            console.error("warning: " + r.id + " marked done with no passing check recorded for the current pushed version");
+        }
         return 0;
     }
-    console.error("Usage: palsync task list [--ready] | palsync task <id> <status> [--reason \"<why>\"] [--tried \"<workaround>\"] | palsync checkpoint \"<line>\"");
+    console.error("Usage: palsync task list [--ready [--all]] | palsync task <id> <status> [--reason \"<why>\"] [--tried \"<workaround>\"] | palsync checkpoint \"<line>\"");
     return 1;
 }
 

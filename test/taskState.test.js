@@ -440,3 +440,27 @@ spec version: 1
     assert.match(rendered.error, /No ready task/);
 });
 
+
+test("readyFrontier lists every ready task and marks the Parallel-safe line", () => {
+    const { readyFrontier } = require("../src/core/taskState");
+    const exec = `# EXECUTION
+## Build plan
+Parallel-safe: T3, T4.  Sequential: T2 → T5, shared pal.json.
+
+## Tasks
+| id | task | tier | spec ref | depends | status | success condition |
+| T1 | scaffold | cheap | §3 | — | done | ok |
+| T2 | page a | cheap | §4 | T1 | todo | ok |
+| T3 | page b | cheap | §4 | T1 | todo | ok |
+| T4 | page c | cheap | §4 | T1 | todo | ok |
+| T5 | final | cheap | §4 | T2 | todo | ok |
+`;
+    const r = readyFrontier(exec);
+    assert.deepEqual(r.tasks.map(t => [t.id, t.parallelSafe]), [["T2", false], ["T3", true], ["T4", true]]);
+});
+
+test("readyFrontier tolerates a missing Parallel-safe line", () => {
+    const { readyFrontier } = require("../src/core/taskState");
+    const r = readyFrontier(EXEC);
+    assert.deepEqual(r.tasks.map(t => [t.id, t.parallelSafe]), [["T2", false]]);
+});

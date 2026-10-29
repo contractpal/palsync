@@ -25,6 +25,14 @@ re-capture. After a single-class/attribute fix, `pal_push`; if its server notes 
 a duplicate `pal_test` and re-check with `pal_screenshot imageless:true`. Apply
 `../../shared/references/console-chrome-exception.md` only with quoted sample evidence.
 
+## Polish
+
+After a visible-UI task passes verification: reuse its desktop + mobile screenshots (if it used
+only `pal_fetch`, take one of each). List concrete issues against `ui-quality.md`, plus any
+console/runtime errors in the result, as a numbered list. None → done. Otherwise fix all in one
+edit, push once, re-screenshot once, then done. One polish iteration per task; touch only the
+task's files; failure path is unchanged.
+
 Branch recovery (from `pal_screenshot`):
 
 - `captured:false` + `category:"targeting"` → you screenshotted the wrong screen. Fix the

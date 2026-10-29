@@ -195,6 +195,18 @@ function checkReview(review, evidenceContext = {}) {
     return result;
 }
 
+// True when any successful evidence row (any tool) exists for the currently pushed version.
+function hasCurrentEvidence(workspaceDir) {
+    const record = readJson(path.join(workspaceDir, PALSYNC_FILE));
+    if (!record) return false;
+    const entries = readToolEvidence(workspaceDir);
+    const tools = new Set(entries.map(e => e.tool));
+    for (const tool of tools) {
+        if (successfulEvidenceCalls(entries, tool, record.palGuid, record.lastModifiedDate, record.localHash) > 0) return true;
+    }
+    return false;
+}
+
 function mtimeMs(file) {
     try { return fs.statSync(file).mtimeMs; }
     catch (e) { return null; }
@@ -420,6 +432,6 @@ function formatReviewBrief(brief) {
 }
 
 module.exports = {
-    successfulExerciseCalls, passRows, reviewVerdict, verdictPass, checkReview, checkWorkspace, formatReviewCheck,
+    successfulExerciseCalls, hasCurrentEvidence, passRows, reviewVerdict, verdictPass, checkReview, checkWorkspace, formatReviewCheck,
     buildReviewBrief, formatReviewBrief, exerciseSummaryLines, responsiveEvidence
 };

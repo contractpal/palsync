@@ -7,14 +7,16 @@ substrate, not a harness feature.
 
 ## 0. Preconditions — check once before delegating
 - **Subagents available?** No → do NOT simulate; run the task inline via the normal task
-  cycle. Delegation is an optimization, never a requirement.
+  cycle.
 - **Per-subagent model selectable?** Yes → map tier→model (cheap→small, standard→mid;
   frontier you handle yourself). No → spawn the default and rely on the task-cycle tier check.
-- **Parallel or serial?** Parallel ONLY for tasks the build plan marked parallel-safe AND that
-  share no files. Anything touching a shared file (a fragment, `pal.json`, a dataset) is
-  serialized. Two subagents that might push at once → `pal_lock` before / `pal_unlock` after,
-  or serialize the pushes. Concurrency on shared files is the #1 way a delegated build
-  corrupts itself — when in doubt, serialize.
+- **Parallel or serial?** Get the frontier with `palsync task list --ready --all`. With 2+
+  `parallel-safe` tasks ready that share no files, dispatch them concurrently as one batch.
+  Anything touching a shared file (a fragment, `pal.json`, a dataset) or not marked
+  parallel-safe is serialized.
+- **Batch model.** Subagents edit local files only and self-check locally; they never push.
+  You review each diff, push ONCE for the batch, then verify and mark each task done
+  individually (§3). A single pusher means no `pal_lock` juggling.
 
 ## 1. Governing principles
 - **The subagent starts blind.** Zero shared context, zero memory of the spec. Everything it
@@ -46,7 +48,7 @@ A brief with an empty slot is invalid. Do not dispatch it.
      literals in workflow JS. Don't touch, reformat, or "improve" anything outside this task's
      files — a genuinely ambiguous decision goes in the return report, not a guess.
 6. **DONE =** — the task's exact success condition (tool output + exact string/state). The
-   subagent self-checks against this before returning.
+   subagent self-checks what it can locally (no push) before returning.
 7. **RETURN CONTRACT** — the subagent returns this and only this, condensed to ~1–2K tokens:
    - files changed (absolute paths)
    - traceability table: spec item | shipped value | match (y/n)
@@ -67,9 +69,9 @@ source only for the ledger's `NO EVIDENCE` criteria or a failed/ambiguous proof.
      human-eyeball gate, never an assumed pass.
    - Changed behavior → one focused `pal_exercise`; do not call `pal_test` first because the
      exercise starts with a fresh server compile.
-2. **Pass** → mark `done`, checkpoint, commit. **Fail or over-claim** → restore the good
-   state: `git checkout` the subagent's local changes. Already pushed? Re-push the restored
-   local to overwrite the server (`pal_pull`/`pal_merge` first if drift-refused) — git fixes
+2. **Pass** → mark `done`, checkpoint, commit. **Fail or over-claim** → restore only that
+   task's files (`git checkout` its local changes) and keep the passing tasks. Already pushed?
+   Re-push the restored local to overwrite the server (`pal_pull`/`pal_merge` first if drift-refused) — git fixes
    only local. Then re-dispatch ONCE with the failure named in the brief, or escalate
    (`needs-frontier`, `blocked`, `needs-human`). Two failed dispatches on one task = stop
    delegating it; do it yourself or block it.

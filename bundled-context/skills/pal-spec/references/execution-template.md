@@ -65,6 +65,7 @@ Dependency order (leaf-first — foundations before things that use them):
 4. Datasets, then the workflows that read them (data before UI).
 5. SEO heads, then final audit.
 Parallel-safe: <tasks with no shared files>.  Sequential: <task → task, why>.
+  Prefer vertical slices touching disjoint files so more tasks are parallel-safe.
 Risks: <e.g. pal_preview never renders console for the agent — pair every console VISUAL task with
   its human-eyeball fallback in case pal_screenshot can't capture (no Chromium / failed auth replay)>.
 [if workflow JS present] verify the workflow compiles via pal_test after push.

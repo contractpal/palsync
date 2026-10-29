@@ -82,6 +82,25 @@ function listTasks(text, { ready = false } = {}) {
     return { ok: true, ready: true, next: { id: next.id, status: next.status, depends: next.depends, tier: next.tier || "", specRef: next.specRef || "", task: next.task || "", successCondition: next.successCondition || "" } };
 }
 
+// Ids named on the build plan's "Parallel-safe:" line (execution-template.md), up to "Sequential:".
+// Matches only ids that exist in the task table; a missing line yields an empty set.
+function parallelSafeIds(text, rows) {
+    const m = /^[ \t>*_-]*Parallel-safe:(.*)$/im.exec(text);
+    if (!m) return new Set();
+    const seg = m[1].split(/\bSequential:/i)[0];
+    const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new Set(rows.filter(r => r.id && new RegExp("(^|[^A-Za-z0-9_-])" + esc(r.id) + "(?![A-Za-z0-9_-])", "i").test(seg)).map(r => r.id));
+}
+
+// Full executable frontier: every todo whose depends are all done, each flagged parallelSafe.
+function readyFrontier(text) {
+    const p = parseTasks(text);
+    if (!p.ok) return p;
+    const safe = parallelSafeIds(text, p.rows);
+    const tasks = findReadyTasks(p.rows).map(r => ({ id: r.id, status: r.status, depends: r.depends, task: r.task || "", parallelSafe: safe.has(r.id) }));
+    return { ok: true, tasks };
+}
+
 function executableContract(execText, specText) {
     if (specText == null || typeof specText !== "string" || String(specText).trim() === "") {
         return { ok: false, error: "SPEC.md is missing or empty — cannot continue. Ensure SPEC.md exists in the workspace.", kind: "missingSpec" };
@@ -379,7 +398,7 @@ function buildSessionSummary(text, { mode, next } = {}) {
 function readExecution(file) { return fs.readFileSync(file, "utf8"); }
 function writeExecution(file, text) { fs.writeFileSync(file, text, "utf8"); }
 
-module.exports = { STATUSES, BLOCKED_STATUSES, TRIED_STATUSES, MAX_BLOCKER_REASON, parseTasks, listTasks, executableContract, renderReadyTicket, setStatus,
+module.exports = { STATUSES, BLOCKED_STATUSES, TRIED_STATUSES, MAX_BLOCKER_REASON, parseTasks, listTasks, readyFrontier, executableContract, renderReadyTicket, setStatus,
     setStatusWithReason, proposeAmendment, appendCheckpoint, blockerReasons, terminalReasonState, normalizeBlockerReason,
     replaceCell, readExecution, writeExecution,
     parseModeFromExecution, deriveSessionNumber, deriveStatusCounts, findReadyTasks, inferNextState, formatSessionSummary, buildSessionSummary };

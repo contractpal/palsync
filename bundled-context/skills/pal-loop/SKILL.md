@@ -112,6 +112,10 @@ check, a compile, or a chat assertion is not a PASS.
 task. Re-read the success condition verbatim before `done` and cite evidence for every
 clause. One completed task gets one commit.
 
+**Polish (visible UI tasks):** once verification passes, run one polish pass per
+`references/verify-mechanics.md` (Polish) before `done`. Visual/UX only; never change approved
+SPEC copy or behavior.
+
 **Fail:** list every error the failed push or check reported, fix them all in one pass, then
 re-verify once; do not use force or bypass flags to bury a failure. After
 two unsuccessful attempts, use the session-start transition procedure to record
@@ -126,8 +130,10 @@ server drift requires it); git alone does not restore the server.
 defect and blocks; in `lite`, verify the required floor and happy-path criterion for
 each primary action without manufacturing full-mode rigor.
 
-Select the next ready, independent task. There is **no review pause between tasks** and no
-per-task regression sweep: step 5 already proved what changed.
+Run `palsync task list --ready --all`. With subagents and 2+ `parallel-safe` tasks, run them as
+a batch per `references/delegation.md`; otherwise take the next single ready task. There is
+**no review pause between tasks** and no per-task regression sweep: step 5 already proved what
+changed.
 
 End the session when the user asks, when only terminally blocked tasks remain, when context
 has degraded, or when the work is complete. Finish the current task, leave none

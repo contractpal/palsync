@@ -466,3 +466,55 @@ test("hooks requires check or repair and is registered in USAGE and SUBCOMMANDS"
     assert.match(errs.join("\n"), /Usage: palsync hooks check\|repair/);
     assert.match(errs.join("\n"), /--dir requires a value/);
 });
+
+test("task done warns once when no passing evidence exists for the current pushed version", async () => {
+    const path = require("node:path");
+    const exec = `## Tasks
+| id | task | status |
+| T1 | Build | in_progress |
+| T2 | Ship | in_progress |
+`;
+    const ws = tmpWorkspace({
+        "EXECUTION.md": exec,
+        ".palsync.json": JSON.stringify({ palGuid: "g1", lastModifiedDate: "m1", localHash: "h1" })
+    });
+    const oldLog = console.log, oldError = console.error; const errors = [];
+    console.log = () => {}; console.error = value => errors.push(String(value));
+    try {
+        assert.equal(await run("task", ["T1", "done", "--dir", ws]), 0);
+        assert.deepEqual(errors, ["warning: T1 marked done with no passing check recorded for the current pushed version"]);
+        errors.length = 0;
+        const row = (tool, hash) => JSON.stringify({ schema: "palsync/tool-evidence/1", tool, palGuid: "g1", sourceDigest: hash, successful: true });
+        fs.mkdirSync(path.join(ws, ".palsync"), { recursive: true });
+        fs.writeFileSync(path.join(ws, ".palsync", "tool-evidence.jsonl"), row("pal_screenshot", "old") + "\n");
+        assert.equal(await run("task", ["T2", "done", "--dir", ws]), 0);
+        assert.equal(errors.length, 1, "stale-version evidence does not count");
+        errors.length = 0;
+        fs.writeFileSync(path.join(ws, "EXECUTION.md"), exec);
+        fs.appendFileSync(path.join(ws, ".palsync", "tool-evidence.jsonl"), row("pal_screenshot", "h1") + "\n");
+        assert.equal(await run("task", ["T2", "done", "--dir", ws]), 0);
+        assert.deepEqual(errors, []);
+    } finally {
+        console.log = oldLog; console.error = oldError;
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
+
+test("task list --ready --all prints the frontier with parallel-safe marks", async () => {
+    const ws = tmpWorkspace({ "EXECUTION.md": `Parallel-safe: T2.  Sequential: T3.
+## Tasks
+| id | task | status |
+| T1 | Base | done |
+| T2 | A | todo |
+| T3 | B | todo |
+` });
+    const oldLog = console.log; const logs = [];
+    console.log = (...a) => logs.push(a.join(" "));
+    try {
+        assert.equal(await run("task", ["list", "--ready", "--all", "--dir", ws]), 0);
+        assert.deepEqual(logs, ["T2\tparallel-safe\t\u2014\tA", "T3\tserial\t\u2014\tB"]);
+    } finally {
+        console.log = oldLog;
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
+});
