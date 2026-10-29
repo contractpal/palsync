@@ -16,7 +16,7 @@ description: "Load for any chart, graph, or data visualization in a pal: choosin
 | Interactive chart in a browser page (tooltips, hover, live update) | **Chart.js** (preferred, newer), **d3**, or **dimple** (older, d3-based), via `c:resource` | Registered per `palbuilder-frontend/references/c-tags.md` (`chartjs`, `d3`; `dimple` is used by the demo pal). Client-only: they need JavaScript, so not for PDF/email. |
 | Static chart on a page or in a PDF, fully custom look | **Inline SVG** built from workflow data | Works client and server, and in PDF with no image step. See rule below. |
 | Standard pie/bar/line/area/scatter built server-side from a DataList, for a page, PDF, or email | **`ChartTool`** (`c.getChartTool()`) | Add with `page.addChartToPage` / `email.addChart`; render with `<c:chart>`. See `references/charttool.md`. |
-| Tiny inline trend / sparkline | Inline SVG | Pattern already in `design-system-init/references/component-library.md`. |
+| Tiny inline trend / sparkline | Inline SVG | Hand-write a small `<svg>` polyline; no library needed. |
 
 Pick **ChartTool** for standard chart types that must work in page, PDF and email alike. Pick
 **inline SVG** when you need a custom design `ChartTool` can't give you. Pick **Chart.js** (or
