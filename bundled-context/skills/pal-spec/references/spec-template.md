@@ -94,7 +94,7 @@ spec version: 1
 mode: full | lite
 pal: <pal name> (<web | console | web+console>) @ <cloud url>
 push policy: free | checkpoint
-brand: <user-supplied logo/colors, or none>
+look & feel: <user's references/screenshots, brand (logo, colors), stated preferences — verbatim, or none>
 created: <date>   approved: <date or pending>
 
 ## 1. Product & audience

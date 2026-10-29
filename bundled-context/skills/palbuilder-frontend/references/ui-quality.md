@@ -1,7 +1,7 @@
 # UI quality bar
 
 Apply this to any visible page, fragment, or console view. Check each item against the rendered
-result (`pal_screenshot`, desktop and 375px), not just the markup.
+result (`pal_screenshot`, desktop and mobile), not just the markup.
 
 ## Hierarchy and layout
 
@@ -45,6 +45,6 @@ result (`pal_screenshot`, desktop and 375px), not just the markup.
 
 ## Responsive
 
-- At 375px width the page has no horizontal scroll, content stays inside the gutter (16px), and
+- At the 390px mobile capture width the page has no horizontal scroll, content stays inside the gutter (16px), and
   action bars wrap.
 - Use flexible layout (grid or flex, `min-width: 0`) instead of fixed heights and widths.

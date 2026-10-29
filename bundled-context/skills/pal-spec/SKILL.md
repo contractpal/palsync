@@ -18,8 +18,9 @@ MINE → INTERVIEW → LOCK SUMMARY → SPEC.md draft → EXECUTION.md draft →
 - **REAL CONTENT ONLY.** Every copy field gets real approved words; every dataset field a real
   type; every workflow real behavior. Unknowns go in §2 Decisions & open questions — never
   `TBD`, never "placeholder", never "decide later" inline.
-- **VISUAL DESIGN IS THE BUILDER'S JOB.** No palettes, fonts, or aesthetic direction in the
-  spec beyond user-supplied brand constraints (logo, colors), recorded in one line. The spec
+- **USER TASTE IS RECORDED, NOT INVENTED.** Capture what the user supplies — reference sites or
+  screenshots, brand (logo, colors), and stated preferences — verbatim in the `look & feel`
+  header; invent no palettes, fonts, or aesthetic direction beyond it. The spec
   carries per-page composition and UX flow (§6): primary path, hierarchy, and progressive
   disclosure; the builder styles against `palbuilder-frontend/references/ui-quality.md`. Every
   frontend spec follows `../shared/references/css-conventions.md` unless the project is a non-UI service-only pal.
@@ -106,7 +107,7 @@ approval, who sees whose data. A business rule you cannot mine is an OPEN questi
 **Page layout** *(engineering — resolve it yourself, show the user only the page flow)* —
 per page, propose a layout skeleton: section order + hierarchy/primary action/progressive
 disclosure notes. Every new-pal page shell follows `../shared/references/css-conventions.md`.
-Prefer inline SVG icons. No colors/fonts beyond user-supplied brand constraints. Do not retrofit `styles.css` into an existing pal that lacks it. On a new pal,
+Prefer inline SVG icons. No colors/fonts beyond the spec's `look & feel` line. Do not retrofit `styles.css` into an existing pal that lacks it. On a new pal,
 always ask whether to use CloudPiston Resource (`../palbuilder-core/references/pal-chain.md`)
 for what it already covers — modals, toasts, inline alerts, form validation, paging, image
 upload — before designing bespoke versions; don't assume. Verification depth and final review

@@ -119,7 +119,7 @@ Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per 
   if testable, plus anti-slop fingerprints:
   gradient-blob hero, pill-everything uniform radius, and serif-on-cream-with-sage. Read
   `../shared/references/anti-slop.md` for the full list. Report each issue with screenshot + fix.
-  Apply the complete ship gate in `../shared/references/visual-rubric.md`; every score cites visible evidence.
+  Check the render against `../palbuilder-frontend/references/ui-quality.md`; every finding cites visible evidence.
 - **`captured:false` / no screenshot tool / no vision:** do NOT guess from HTML — emit a
   `needs-human` eyeball gate naming each screen and what to confirm.
   (Full rule: `references/console-render-verification.md`.)

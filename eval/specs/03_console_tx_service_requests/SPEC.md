@@ -7,7 +7,7 @@ run mode: auto — the build agent runs all tasks end-to-end with NO human inter
 pal: service_requests (console + transaction) @ <WORKSPACE — set by evaluator before run>
 push policy: free
 review cadence: end
-brand: none supplied — any evaluator-supplied reference images are the primary design authority; none ship with this test.
+look & feel: none supplied — any evaluator-supplied reference images are the primary design authority; none ship with this test.
 created: 2026-07-01   approved: 2026-07-06
 realigned: 2026-07-14 (v2.1 — §9 skill names only)
 

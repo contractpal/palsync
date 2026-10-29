@@ -191,15 +191,20 @@ test("pruneSkills removes retired/owned skills, keeps user skills", async () => 
     await ci.inject(ws, { palName: "Demo", agent: "claude" });
     const skillsDir = path.join(ws, ".claude/skills");
     // simulate a retired skill from an older inject + a user-authored skill
-    fs.mkdirSync(path.join(skillsDir, "design-core"), { recursive: true });
-    fs.writeFileSync(path.join(skillsDir, "design-core/SKILL.md"), "old");
+    const retired = ["design-core", "design-build", "design-system-init"];
+    for (const name of retired) {
+        fs.mkdirSync(path.join(skillsDir, name), { recursive: true });
+        fs.writeFileSync(path.join(skillsDir, name, "SKILL.md"), "old");
+    }
     fs.mkdirSync(path.join(skillsDir, "my-team-skill"), { recursive: true });
     fs.writeFileSync(path.join(skillsDir, "my-team-skill/SKILL.md"), "mine");
 
     const keep = (await ci.bundledSkills()).map(s => s.name);
     const removed = await ci.pruneSkills(ws, ".claude", keep);
-    assert.ok(removed.includes("design-core"), "retired palsync skill is pruned");
-    assert.ok(!fs.existsSync(path.join(skillsDir, "design-core")), "design-core dir removed");
+    for (const name of retired) {
+        assert.ok(removed.includes(name), name + " is pruned");
+        assert.ok(!fs.existsSync(path.join(skillsDir, name)), name + " dir removed");
+    }
     assert.ok(fs.existsSync(path.join(skillsDir, "my-team-skill")), "user skill is preserved");
     assert.ok(fs.existsSync(path.join(skillsDir, "palbuilder-frontend")), "kept skill survives");
     assert.ok(fs.existsSync(path.join(skillsDir, "shared/references/exercise-authoring.md")),

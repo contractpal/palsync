@@ -147,6 +147,11 @@ inline `style=`; a value used more than once becomes a CSS custom property. Put 
 to related ones and never add a near-duplicate of an existing class. For any visible UI work, read
 `references/ui-quality.md` and check the render against it.
 
+**Layout choice (new screens).** User-provided references or the spec's `look & feel` are the
+design authority. Otherwise, before markup, name one well-known product pattern for this screen
+type (e.g. list + detail panel, board, dense table, wizard) and why it fits the user's main task;
+then compare the render against that choice. Skip for small edits to an established design.
+
 ## Browser JavaScript boundary
 
 Browser files under `scripts/*.js` are modern browser JavaScript; workflow `.js` is a different,

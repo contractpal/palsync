@@ -259,7 +259,7 @@ Every skill is injected on every setup — they cost no context until the agent 
 JS, data access, background jobs, WebSockets, email, and SEO done right.
 
 **UI quality:** `palbuilder-frontend` carries a short CSS-reuse rule and an on-demand
-`references/ui-quality.md` bar (hierarchy, states, contrast, 375px mobile) for visible UI work.
+`references/ui-quality.md` bar (hierarchy, states, contrast, 390px mobile) for visible UI work.
 
 **Spec-to-ship (autonomous builds):**
 

@@ -77,8 +77,8 @@ real typed manifest wrapper; never guess or flatten the `{ "string", "<Type>": {
 shape. SPEC §8a datasets are CREATE definitions: follow `palbuilder-data` plus the
 manifest/schema guidance and sync them after creation. SPEC §8b datasets are CONSUMED
 dependencies: never create or alter them. Before the first UI markup or CSS, read
-`palbuilder-frontend/references/ui-quality.md`. At T-final, apply the "no zeroes" rule of
-`../shared/references/visual-rubric.md`. No vision means no rubric score: record a `HUMAN GATE`.
+`palbuilder-frontend/references/ui-quality.md`. At T-final, cite concrete screenshot findings
+against it. No vision means no visual verdict: record a `HUMAN GATE`.
 
 ### 4. Execute
 

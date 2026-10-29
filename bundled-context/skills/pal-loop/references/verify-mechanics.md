@@ -27,11 +27,13 @@ a duplicate `pal_test` and re-check with `pal_screenshot imageless:true`. Apply
 
 ## Polish
 
-After a visible-UI task passes verification: reuse its desktop + mobile screenshots (if it used
-only `pal_fetch`, take one of each). List concrete issues against `ui-quality.md`, plus any
-console/runtime errors in the result, as a numbered list. None → done. Otherwise fix all in one
-edit, push once, re-screenshot once, then done. One polish iteration per task; touch only the
-task's files; failure path is unchanged.
+After a visible-UI task passes verification, critique only the screenshots verification already
+took; polish never adds captures. A new page or layout change verifies at desktop + mobile, so
+its polish covers both; a small styling edit polishes against its single capture. List concrete
+issues against `ui-quality.md` and the chosen layout reference, plus any console/runtime errors
+in the result, as a numbered list. None → done. Otherwise fix all in one edit, push once,
+re-screenshot once, then done. One polish iteration per task; touch only the task's files;
+failure path is unchanged.
 
 Branch recovery (from `pal_screenshot`):
 
