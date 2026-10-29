@@ -5,14 +5,13 @@ deterministically: placeholders (TBD/decide-later), dead §3 links, §8a primary
 indexability against `palbuilder-types.md`, §5 dataset references, and the §12 floor (plus the
 REGRESSION criterion when a regression baseline sits beside the spec). It returns HARD_FLAG / FLAG / NOTE
 findings — clear every HARD_FLAG before approving. The items below that the linter CANNOT judge
-remain yours to do by hand: **capability→primitive mapping (Platform realism #5), component
-existence in COMPONENTS.md (Consistency #5), consumed-field verification against the live dataset
+remain yours to do by hand: **capability→primitive mapping (Platform realism #5), consumed-field verification against the live dataset
 (Consistency #4), and scope honesty (Scope realism).** The rest of this file is the reference the
 linter encodes; use it to understand a finding or to check what the tool doesn't.
 
 Runs once per spec, after both SPEC.md and EXECUTION.md exist. Re-read them **as if you didn't
 write them** — no tool validates a markdown spec's judgment, so this is a structured review pass. Parts are
-file-checkable (read COMPONENTS.md / DESIGN_SYSTEM.md); platform checks run against what the
+file-checkable (read the spec files); platform checks run against what the
 palbuilder-* skills attest. Strongest form: a **separate session** reviewing with fresh context;
 minimum, a deliberate second pass here. Write the results into **§13 Reality check** as PASS lines
 and FLAGs.
@@ -25,16 +24,15 @@ and FLAGs.
 4. Every §8b CONSUMED dataset lists the exact fields relied on, and each named field is verified to
    exist in the live dataset (read it / confirm with the owner) — an undeclared or unverified
    consumed field is a **HARD FLAG** (the most common silent build break).
-5. Every component named in §6 exists in COMPONENTS.md (read it; flag any that don't).
-6. [FULL] every §5 behavior has a matching §12 criterion; [LITE] every primary action has a
+5. [FULL] every §5 behavior has a matching §12 criterion; [LITE] every primary action has a
    happy-path criterion. Console screens have a pal_screenshot VISUAL line plus its human-eyeball
    fallback.
-7. [regression baseline present] §12 GLOBAL FLOOR includes the REGRESSION criterion (baseline still
+6. [regression baseline present] §12 GLOBAL FLOOR includes the REGRESSION criterion (baseline still
    passes, untouched UI didn't shift) — missing it when `baseline/baseline.json` exists is a **HARD FLAG**.
-8. Every acceptance criterion names a real tool, a checkable string/state, or an explicit
+7. Every acceptance criterion names a real tool, a checkable string/state, or an explicit
    human-eyeball gate (console fallback only — not the default).
-9. [visually-significant, web or console] §12 includes at least one VISUAL criterion verifiable via
-   pal_screenshot — the hero/key screen renders per DESIGN_SYSTEM.md with no anti-slop fingerprints.
+8. [visually-significant, web or console] §12 includes at least one VISUAL criterion verifiable via
+   pal_screenshot — the hero/key screen renders per `ui-quality.md` with no anti-slop fingerprints.
    Console auth replay (`captured:true`) is a capability, not a guarantee, so every console VISUAL
    line still needs its human-eyeball fallback paired with it (see ../../pal-review/references/console-render-verification.md).
 

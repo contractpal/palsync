@@ -8,7 +8,7 @@ responsive visual-quality criteria, CRUD/marketing §6 gained archetype-specific
 `pal_screenshot` gained `designAudit`.
 Scores before this epoch are not directly comparable; record `ux-v2` in new row notes.
 
-The scenarios themselves (`eval/specs/01…05`, `DESIGN_SYSTEM.md`, `COMPONENTS.md`) are frozen at
+The scenarios themselves (`eval/specs/01…05`) are frozen at
 their recorded version/approval date.
 Do not edit spec content — a changed spec invalidates every prior row it would compare against.
 
@@ -98,14 +98,11 @@ domain-skill rebuild. See the sequencing note at the bottom.
 
 Unchanged from the bundle README, restated for completeness:
 
-1. Preflight the shared contracts: `diff -q eval/specs/DESIGN_SYSTEM.md eval/runs/DESIGN_SYSTEM.md`
-   and `diff -q eval/specs/COMPONENTS.md eval/runs/COMPONENTS.md` must both be clean. Any mismatch
-   invalidates the run.
-2. Set the workspace/cloud URL in the spec's `pal:` header line (replace the `<WORKSPACE — set by evaluator before run>` placeholder). Do this in a working copy — do not commit URLs into `eval/specs`.
-3. Copy the scenario's `SPEC.md` + `EXECUTION.md` into the palsync workspace alongside `DESIGN_SYSTEM.md` and `COMPONENTS.md` from `eval/specs/`.
-4. Launch palsync in the chosen harness on the chosen model.
-5. **Auto / full mode. ZERO mid-run intervention.** No hints, no answering questions, no nudging past a stuck point. If the agent stops to ask in auto mode, that is a hard-rule violation (count it, §4e) — you still do not answer.
-6. When the agent finishes, evaluate against the spec's §12 using `eval/scoring.md`. This is the post-hoc human evaluation — done once, at the end, never during.
+1. Set the workspace/cloud URL in the spec's `pal:` header line (replace the `<WORKSPACE — set by evaluator before run>` placeholder). Do this in a working copy — do not commit URLs into `eval/specs`.
+2. Copy the scenario's `SPEC.md` + `EXECUTION.md` into the palsync workspace.
+3. Launch palsync in the chosen harness on the chosen model.
+4. **Auto / full mode. ZERO mid-run intervention.** No hints, no answering questions, no nudging past a stuck point. If the agent stops to ask in auto mode, that is a hard-rule violation (count it, §4e) — you still do not answer.
+5. When the agent finishes, evaluate against the spec's §12 using `eval/scoring.md`. This is the post-hoc human evaluation — done once, at the end, never during.
 
 ### Impact experiment recording
 
@@ -190,7 +187,7 @@ subset of the mcp count, tracked separately because it is the single best cheap 
 many times the agent had to go around the loop.
 
 **(e) Hard-rule violations observed** — count each occurrence of:
-- edited a spec / `DESIGN_SYSTEM.md` / `COMPONENTS.md`;
+- edited a spec;
 - skipped verification (pushed without pal_validate / pal_test, or declared done without the §12 checks);
 - invented copy (UI text, labels, error messages not in the spec);
 - stopped to ask a question despite auto mode.

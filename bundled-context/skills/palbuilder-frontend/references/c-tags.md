@@ -78,9 +78,8 @@ Loads a versioned platform-hosted CSS/JS library into `<head>` by `source` + `ve
 <c:resource source="chartjs" version="4.0.0" name="chart.js"/>
 ```
 
-The `bootstrap-icons` and `font-awesome` entries are icon-font resources; the design system
-requires inline SVG copied from Iconoir, Heroicons, or Phosphor instead. See
-`design-system-init/references/component-library.md` → Icons.
+The `bootstrap-icons` and `font-awesome` entries are icon-font resources; prefer inline SVG
+copied from Iconoir, Heroicons, or Phosphor.
 
 **Valid attributes:** `source` *(required)*, `version` *(required)*, `name` *(required)*
 

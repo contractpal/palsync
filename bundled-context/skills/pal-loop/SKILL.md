@@ -64,7 +64,7 @@ Mark the selected task `in_progress` through the task CLI, immediately.
 
 Load exactly the SPEC §9 skills needed for this task, just in time:
 
-- frontend task → `palbuilder-frontend` and `design-build`
+- frontend task → `palbuilder-frontend` (includes `references/ui-quality.md`)
 - workflow task → `palbuilder-workflow`
 - data task → `palbuilder-data`
 - any other platform surface → its corresponding owning `palbuilder-*` skill
@@ -76,10 +76,9 @@ unless the needed entry type was not covered. Every created Pal object must use 
 real typed manifest wrapper; never guess or flatten the `{ "string", "<Type>": {...} }`
 shape. SPEC §8a datasets are CREATE definitions: follow `palbuilder-data` plus the
 manifest/schema guidance and sync them after creation. SPEC §8b datasets are CONSUMED
-dependencies: never create or alter them. Before the first UI markup or CSS, load
-`design-build` and checkpoint its six-line design brief; its signature idea must make the
-Pal non-generic. At T-final, apply its existing "no zeroes" rubric rule. No vision means no
-rubric score: follow `../design-system-init/references/vision-routing.md` or record a `HUMAN GATE`.
+dependencies: never create or alter them. Before the first UI markup or CSS, read
+`palbuilder-frontend/references/ui-quality.md`. At T-final, apply the "no zeroes" rule of
+`../shared/references/visual-rubric.md`. No vision means no rubric score: record a `HUMAN GATE`.
 
 ### 4. Execute
 

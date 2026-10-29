@@ -225,12 +225,6 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
             const headings = select("h1,h2,h3,h4,h5,h6").filter(visible);
             const h1s = headings.filter(el => el.tagName === "H1");
             if (h1s.length !== 1) add("error", "pageHeading", "Expected exactly one visible H1; found " + h1s.length + ".", h1s);
-            if (h1s.length) {
-                const fontPx = parseFloat(window.getComputedStyle(h1s[0]).fontSize) || 0;
-                const limit = kind === "web" ? 80 : 48;
-                if (fontPx > limit) add("warning", "oversizedHeading", "H1 is " + Math.round(fontPx) + "px on a " + kind + " screen; it exceeds the " + limit + "px archetype guardrail.", h1s);
-            }
-
             const mainCount = select("main,[role='main']").filter(visible).length;
             if (mainCount !== 1) add("warning", "mainLandmark", "Expected one visible main landmark; found " + mainCount + ".");
 
@@ -262,35 +256,9 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
             });
             if (undersized.length) add("warning", "targetSize", "Non-inline action targets should contain at least a 24x24 CSS-pixel area.", undersized);
 
-            const actionWords = /^(add|create|save|cancel|edit|delete|remove|check out|check in|submit|send|email|book|get started|try again)\b/i;
-            const bareActions = select("a[href]").filter(el => {
-                if (!visible(el) || !actionWords.test(String(el.textContent || "").trim())) return false;
-                const cs = window.getComputedStyle(el), r = el.getBoundingClientRect();
-                const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
-                const border = (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.borderRightWidth) || 0);
-                const transparent = cs.backgroundColor === "rgba(0, 0, 0, 0)" || cs.backgroundColor === "transparent";
-                return cs.display === "inline" && pad < 12 && border === 0 && transparent && r.height < 32;
-            });
-            if (bareActions.length) add("warning", "bareActionLink", "Action links render like body links; apply the documented button/action hierarchy.", bareActions);
-
-            // Evidence: the 2026-07-30 aggregate session insights — shipped pals carried default-UA
-            // underlined links past a PASS review. That is aggregate session evidence, not a live
-            // server rejection, so this ships advisory ("warning") per the designClassRequired
-            // precedent. Inline prose links keep the underline on purpose, so they are exempt the
-            // same way targetSize exempts inlineTextLink above.
-            const unstyledLinks = select("a[href]").filter(el => {
-                if (!visible(el)) return false;
-                const cs = window.getComputedStyle(el);
-                if (!String(cs.textDecorationLine || "").includes("underline")) return false;
-                if (Array.from(el.classList || []).some(c => c.startsWith("pb-"))) return false;
-                const inlineProseLink = cs.display === "inline" && !!el.closest("p,li,dd,figcaption");
-                return !inlineProseLink;
-            });
-            if (unstyledLinks.length) add("warning", "unstyledLink", "Links show the default browser underline with no pb-* class; apply the documented link/action styling.", unstyledLinks);
-
-            // Same 2026-07-30 aggregate session evidence, same advisory reasoning: form controls do
-            // not inherit font-family, so a control left unstyled renders in the UA font while the
-            // rest of the pal uses the design font. Body font is read here (this evaluate); the
+            // Evidence: 2026-07-30 aggregate session insights. Advisory: form controls do not
+            // inherit font-family, so a control left unstyled renders in the UA font while the
+            // rest of the pal uses the page font. Body font is read here (this evaluate); the
             // style-status pass's bodyComputed belongs to a different evaluate and is out of scope.
             const normalizeFont = (value) => String(value || "").toLowerCase().replace(/["']/g, "").replace(/\s+/g, "");
             const bodyFont = body ? normalizeFont(window.getComputedStyle(body).fontFamily) : "";
@@ -301,12 +269,6 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
             if (mismatchedControlFonts.length) add("warning", "unstyledControlTypography", "Interactive controls render in a different font than the page body; set font-family (or font: inherit) on controls.", mismatchedControlFonts);
 
             const actionCells = select("td[data-label='Actions']").filter(visible);
-            const ungroupedRowActions = actionCells.filter(cell => {
-                const actions = Array.from(cell.querySelectorAll("a[href],button,[role='button']")).filter(visible);
-                return actions.length >= 2 && !cell.querySelector(".pb-row-actions");
-            });
-            if (ungroupedRowActions.length) add("error", "rowActionGroup", "Rows with multiple actions must use .pb-row-actions so controls have intentional spacing, wrapping, destructive separation, and mobile reflow.", ungroupedRowActions);
-
             const conflictingRowActions = actionCells.filter(cell => {
                 const labels = Array.from(cell.querySelectorAll("a[href],button,[role='button']"))
                     .filter(visible).map(el => String(el.textContent || "").replace(/\s+/g, " ").trim().toLowerCase());
@@ -324,7 +286,7 @@ async function inspectDesignQuality(pg, { kind = "web", viewportName = "desktop"
             const badTables = select("table").filter(el => visible(el) && !el.querySelector("th"));
             if (badTables.length) add("error", "tableHeaders", "Data tables need semantic header cells.", badTables);
 
-            const regions = select("main,#body,.pb-section,section").filter(visible);
+            const regions = select("main,#body,section").filter(visible);
             let largestVerticalGap = 0;
             for (const region of regions) {
                 const children = Array.from(region.children).filter(visible).map(el => el.getBoundingClientRect()).sort((a, b) => a.top - b.top);

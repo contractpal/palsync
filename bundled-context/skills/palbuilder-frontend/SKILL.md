@@ -140,6 +140,13 @@ prefer external `scripts/*.js` or safe string construction, and read `platform-f
 - Read **`references/browser-js.md`** only when browser-JS module architecture, initialization,
   workflow-emitted browser code, or post-AJAX widget initialization is relevant.
 
+## CSS rule
+
+One shared stylesheet per pal (`styles/styles.css`). Reuse an existing class before adding one; no
+inline `style=`; a value used more than once becomes a CSS custom property. Put a new class next
+to related ones and never add a near-duplicate of an existing class. For any visible UI work, read
+`references/ui-quality.md` and check the render against it.
+
 ## Browser JavaScript boundary
 
 Browser files under `scripts/*.js` are modern browser JavaScript; workflow `.js` is a different,

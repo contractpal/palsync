@@ -272,9 +272,9 @@ test("every injected flavor routes sync details through pal_context", async () =
         assert.match(doc, /`section:"sync-workflow"`,\s+`section:"creating-files"`,\s+or\s+`section:"datasets"`/,
             "callout must name the loadable sections");
         assert.ok(doc.includes("detailed sync, file, and dataset rules"), "callout identifies the on-demand contract's coverage");
-        assert.match(doc, /Visible UI also requires `design-build`; if no real design system exists, load `design-system-init` first/,
+        assert.match(doc, /Visible UI → `palbuilder-frontend` \(CSS rule \+ `references\/ui-quality\.md`\)/,
             "the UI skill route is stated once, in the contract");
-        assert.equal(doc.split("design-system-init").length - 1, 1, "the UI skill route is not repeated in the sync section");
+        assert.equal(doc.split("ui-quality.md").length - 1, 1, "the UI skill route is not repeated in the sync section");
         assert.match(doc, /offer to push it — local-only changes are not a shipped Pal/);
         assert.match(doc, /Verify in proportion to the change/);
         assert.match(doc, /PalSync: Standard checks · Final review: Ask/,

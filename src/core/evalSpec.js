@@ -1,6 +1,6 @@
 "use strict";
-// Eval-harness specs: benchmark scenarios under eval/specs/<key>/ (SPEC.md + EXECUTION.md), plus
-// two files shared across all specs (DESIGN_SYSTEM.md, COMPONENTS.md). `--eval` in bin/palsync.js
+// Eval-harness specs: benchmark scenarios under eval/specs/<key>/ (SPEC.md + EXECUTION.md).
+// `--eval` in bin/palsync.js
 // picks one of these, forces the launcher's create-new-pal flow with the name prefilled, and
 // injectSpec() drops the spec's docs into the workspace root once the pal/workspace exist.
 const fs = require("fs");
@@ -11,7 +11,6 @@ const { hashWorkspaceFiles, IN_SCOPE } = require("./workspaceHash");
 
 const SPECS_DIR = path.join(__dirname, "..", "..", "eval", "specs");
 const IMPACT_DIR = path.join(__dirname, "..", "..", "eval", "impact");
-const SHARED_FILES = ["DESIGN_SYSTEM.md", "COMPONENTS.md"];
 const IMPACT_VARIANTS = ["off", "on"];
 const IMPACT_SCHEMA = "palsync/impact-eval-spec/1";
 const BASELINE_SCHEMA = "palsync/impact-baseline/1";
@@ -373,13 +372,9 @@ function injectSpec(workspaceDir, spec, { fillValue } = {}) {
 
     let specContent = fs.readFileSync(path.join(spec.dir, "SPEC.md"), "utf8");
     specContent = specContent.replace(/<WORKSPACE[^>]*>/, fillValue);
-    specContent = specContent.replace("../DESIGN_SYSTEM.md", "./DESIGN_SYSTEM.md").replace("../COMPONENTS.md", "./COMPONENTS.md");
     writeIfAbsent("SPEC.md", specContent);
 
     writeIfAbsent("EXECUTION.md", fs.readFileSync(path.join(spec.dir, "EXECUTION.md"), "utf8"));
-    for (const name of SHARED_FILES) {
-        writeIfAbsent(name, fs.readFileSync(path.join(SPECS_DIR, name), "utf8"));
-    }
 
     return { written, skipped };
 }

@@ -10,12 +10,6 @@ const { hashWorkspaceFiles } = require("../src/core/workspaceHash");
 const baseline = require("../src/core/baseline");
 const { tmpWorkspace } = require("./helpers");
 
-// design-system.css is what switches pb-* validation on, and shipping it is itself a blocking error.
-// These tests care about the advisory pb-* warnings, so that one error is expected and nothing else.
-function assertOnlyShippedCatalogError(lint) {
-    assert.deepEqual(lint.findings.filter(f => f.severity === "error").map(f => f.rule), ["referenceStylesheetShipped"]);
-}
-
 test("gateLint surfaces but does not block current workspace-level list/DataList contract warnings", () => {
     const dir = tmpWorkspace({
         "workflows/console.js": [
@@ -209,70 +203,6 @@ test("gateLint still blocks a pre-existing cross-file contract error in current 
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("gateLint warns on a bare text input added to a design-system workspace", () => {
-    const dir = tmpWorkspace({ "styles/design-system.css": ".pb-btn {}" });
-    const record = { fileHashes: hashWorkspaceFiles(dir).files };
-    baseline.snapshot(dir, Object.keys(record.fileHashes));
-
-    fs.mkdirSync(path.join(dir, "fragments"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "fragments", "form.html"),
-        '<c:ignore xmlns:c="contractpal"><input type="text" /></c:ignore>');
-
-    const lint = gateLint(record, dir);
-    assertOnlyShippedCatalogError(lint);
-    assert.ok(lint.findings.some(f => f.rule === "designClassRequired" && f.severity === "warn"));
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("gateLint permits the same bare text input without a design system", () => {
-    const dir = tmpWorkspace();
-    const record = { fileHashes: {} };
-
-    fs.mkdirSync(path.join(dir, "fragments"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "fragments", "form.html"),
-        '<c:ignore xmlns:c="contractpal"><input type="text" /></c:ignore>');
-
-    const lint = gateLint(record, dir);
-    assert.equal(lint.errors, 0);
-    assert.equal(lint.findings.some(f => f.rule === "designClassRequired"), false);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("gateLint surfaces a baseline design-class warning in a modified file", () => {
-    const original = '<c:ignore xmlns:c="contractpal"><input type="text" /></c:ignore>';
-    const dir = tmpWorkspace({
-        "styles/design-system.css": ".pb-btn {}",
-        "fragments/form.html": original,
-    });
-    const record = { fileHashes: hashWorkspaceFiles(dir).files };
-    baseline.snapshot(dir, Object.keys(record.fileHashes));
-
-    fs.writeFileSync(path.join(dir, "fragments", "form.html"),
-        original.replace("</c:ignore>", "<p>Clean edit</p></c:ignore>"));
-
-    const lint = gateLint(record, dir);
-    assertOnlyShippedCatalogError(lint);
-    assert.ok(lint.findings.some(f => f.rule === "designClassRequired" && f.severity === "warn"));
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("gateLint surfaces the pbUndefinedClass warning without blocking", () => {
-    const dir = tmpWorkspace({
-        "styles/design-system.css": ".pb-btn {}",
-        "styles/styles.css": ".pb-btn {}",
-        "fragments/screen.html": '<c:ignore xmlns:c="contractpal"><div class="pb-invented">Screen</div></c:ignore>',
-    });
-    const record = { fileHashes: {} };
-
-    const lint = gateLint(record, dir);
-    const byRule = new Map(lint.findings.map(f => [f.rule, f]));
-    assertOnlyShippedCatalogError(lint);
-    for (const rule of ["pbUndefinedClass"]) {
-        assert.equal(byRule.get(rule)?.severity, "warn", "expected advisory " + rule + " finding");
-    }
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
 test("gateLint blocks a static c:fragment that points at a fragment that is not shipped", () => {
     const dir = tmpWorkspace({
         "pages/console.html": '<c:ignore xmlns:c="contractpal"><c:fragment name="something"/></c:ignore>',
@@ -298,7 +228,6 @@ test("lintContent emits every rule the registry gates as per-file", () => {
     const cases = [
         ["fragments/a.html", frag('<c:a action="">x</c:a>'), "emptyAction"],
         ["fragments/a.html", frag('<c:set name="eq" value="1"/>'), "reservedElWord"],
-        ["fragments/a.html", frag('<script src="gsap.min.js"></script>'), "staleVendor"],
         ["workflows/a.js", "function run(c) { return pal.getPage('x'); }", "pageResponseSource"],
         ["workflows/a.js", "function run(c) { return c.createAjaxResponse(); }", "ajaxTransport"],
     ];

@@ -36,7 +36,7 @@ to a human. Every skill that touches console verification points here instead of
      **A non-null `renderError` is a hard FAIL — never `done`.** Read the fault, fix it, push, and
      screenshot again. `pal_test` passing does NOT clear this; only a clean render does.
    - If `renderError` is null, judge the image against the §12 VISUAL criterion (renders per
-     DESIGN_SYSTEM.md, no anti-slop fingerprints) exactly like a web render, and mark the task `done`
+     the spec and `ui-quality.md`, no anti-slop fingerprints) exactly like a web render, and mark the task `done`
      on that real evidence.
 3. **`captured:false, category:"targeting"`** → the browser rendered a DIFFERENT screen than you
    asked for. This is a FAIL, not a blocker: the reason names the requested action/paramKeys and the

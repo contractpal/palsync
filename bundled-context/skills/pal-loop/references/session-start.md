@@ -40,4 +40,4 @@ failure is a `HUMAN GATE: <exact failure>` entry, not a silent self-review.
 ## Just-in-time skill loading (§9 manifest)
 
 Load exactly the skills SPEC.md §9 lists, when the first task requiring one starts — not all
-before coding. `palbuilder-frontend` and `design-build` still load before the first UI task.
+before coding. `palbuilder-frontend` (with `ui-quality.md`) still loads before the first UI task.

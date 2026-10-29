@@ -1,7 +1,7 @@
 "use strict";
 // pal_spec_lint core: automate the MECHANICAL half of pal-spec's reality check (references/
-// reality-check.md). It does NOT replace judgment — capability→primitive mapping, component-
-// exists-in-COMPONENTS.md, and scope honesty stay manual. It catches the deterministic defects:
+// reality-check.md). It does NOT replace judgment — capability→primitive mapping
+// and scope honesty stay manual. It catches the deterministic defects:
 // placeholders, dead links, §8a key/type/size/indexability, §5 dataset references, §12 floor.
 //
 // Severity: HARD_FLAG (keeps the spec draft per the gate) | FLAG (soft, ship as a caveat) | NOTE.
@@ -366,10 +366,10 @@ function formatSpecLint(result) {
     const { findings, counts, baselinePresent } = result;
     const head = (counts.HARD_FLAG > 0 ? "SPEC LINT: HARD FLAGS PRESENT" : findings.length ? "SPEC LINT: soft findings only" : "SPEC LINT: clean") +
         " — " + counts.HARD_FLAG + " HARD_FLAG, " + counts.FLAG + " FLAG, " + counts.NOTE + " NOTE" + (baselinePresent ? " (regression baseline present)" : "") + ".";
-    if (!findings.length) return head + "\nThe mechanical checks pass. Still do the JUDGMENT items in reality-check.md by hand (capability->primitive, components in COMPONENTS.md, scope honesty).";
+    if (!findings.length) return head + "\nThe mechanical checks pass. Still do the JUDGMENT items in reality-check.md by hand (capability->primitive, scope honesty).";
     const lines = [head, "", "HARD_FLAG keeps the spec draft (reality_check: blocked); FLAG/NOTE can ship as recorded caveats."];
     for (const f of findings) lines.push("   [" + f.severity + "] " + f.section + (f.line ? " (line " + f.line + ")" : "") + ": " + f.summary + "\n      fix: " + f.fix);
-    lines.push("", "These are the MECHANICAL checks only — the judgment items in reality-check.md (capability->primitive mapping, component existence in COMPONENTS.md, scope honesty) are still yours to do.");
+    lines.push("", "These are the MECHANICAL checks only — the judgment items in reality-check.md (capability->primitive mapping, scope honesty) are still yours to do.");
     return lines.join("\n");
 }
 

@@ -28,8 +28,8 @@ substrate, not a harness feature.
 A brief with an empty slot is invalid. Do not dispatch it.
 
 1. **TASK** — the single task id + one-line goal. Nothing beyond it.
-2. **MANDATORY READS (absolute paths, in order)** — SPEC.md; DESIGN_SYSTEM.md + COMPONENTS.md;
-   then the sibling file(s) to clone from. Read before writing anything.
+2. **MANDATORY READS (absolute paths, in order)** — SPEC.md; `palbuilder-frontend/references/ui-quality.md`
+   (UI tasks); then the sibling file(s) to clone from. Read before writing anything.
 3. **COPY IS LAW** — approved copy from SPEC.md §4, quoted verbatim or pointed at by exact
    section. Ships verbatim: no paraphrase, no "improvement."
 4. **CLONE TARGET** — the exact existing file whose markup/structure to copy. Point, don't

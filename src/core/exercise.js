@@ -641,7 +641,7 @@ async function findWithinCandidates(scope, clickText) {
             const matches = all.filter(el => el.children.length === 0 && norm(el.textContent) === text);
             if (matches.length < 2) return [];
             const rows = matches.map(el => {
-                let row = el.closest("tr, li, [data-pb-row], .row, .card");
+                let row = el.closest("tr, li, .row, .card");
                 return row || el.parentElement;
             });
             const rowTexts = rows.map(r => norm(r.textContent));

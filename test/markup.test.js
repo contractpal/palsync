@@ -7,39 +7,6 @@ const { validateWorkspace } = require("../src/core/validate");
 const { lintMarkup } = require("../src/core/validate/markup");
 const { tmpWorkspace } = require("./helpers");
 
-test("design-system workspaces advise on missing core-control pb-* classes", () => {
-    const dir = tmpWorkspace({
-        "styles/design-system.css": ".pb-btn {}",
-        "pages/index.html": "<html><body><button>Save</button><input type=\"text\" /></body></html>"
-    });
-    const findings = validateWorkspace(dir).findings.filter(f => f.rule === "designClassRequired");
-    assert.equal(findings.length, 2);
-    assert.ok(findings.every(f => f.severity === "warn"));
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("non-text input types are exempt from the pb-input requirement", () => {
-    const dir = tmpWorkspace({
-        "styles/design-system.css": ".pb-btn {}",
-        "pages/index.html": "<html><body>" +
-            "<input type=\"checkbox\" name=\"notify\" />" +
-            "<input type=\"range\" name=\"threshold\" />" +
-            "<input type=\"hidden\" name=\"id\" />" +
-            "<input type=\"submit\" value=\"Go\" />" +
-            "</body></html>"
-    });
-    assert.equal(validateWorkspace(dir).findings.filter(f => f.rule === "designClassRequired").length, 0);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("core-control classes remain the old clean behavior without a design system", () => {
-    const dir = tmpWorkspace({
-        "pages/index.html": "<html><body><button>Save</button></body></html>"
-    });
-    assert.equal(validateWorkspace(dir).findings.filter(f => f.rule === "designClassRequired").length, 0);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
 test("c:debug is ignored by the deployed runtime and never produces a finding", () => {
     const dir = tmpWorkspace({
         "pages/index.html": "<html><body><c:debug /></body></html>"

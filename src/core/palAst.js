@@ -28,7 +28,7 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { IN_SCOPE, MANIFEST_FILE } = require("./workspaceHash");
-const { lintContent, hasDesignSystem } = require("./validate");
+const { lintContent } = require("./validate");
 
 const AST_SCHEMA = "palsync/ast/1";
 const LANG_EXT = {
@@ -866,7 +866,6 @@ function run({ workspaceDir }, rawArgs = {}) {
                 newBytes: f.newBytes,
             });
         }
-        const designSystemPresent = hasDesignSystem(workspaceDir);
         const findings = [];
         for (const rel of changeSet.files.map((f) => f.rel)) {
             let content = "";
@@ -875,8 +874,7 @@ function run({ workspaceDir }, rawArgs = {}) {
             } catch (e) {
                 continue;
             }
-            const linted =
-                lintContent(rel, content, { designSystemPresent }) || [];
+            const linted = lintContent(rel, content) || [];
             const cappedFindings = cap(linted, FINDINGS_CAP, "findings");
             findings.push(
                 ...cappedFindings.items.map((item) => ({

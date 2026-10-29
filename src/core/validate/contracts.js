@@ -530,27 +530,6 @@ function checkPageResponseSource(rel, src, findings) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Check 10a — lingering GSAP vendor <script src> after the design-system-v2 drop-GSAP migration
-// (scripts/pb-motion.js replaces it: data-animate/data-ticker/data-typewriter/data-tilt/
-// data-spotlight). A pal's own markup should never reference a gsap bundle.
-// ---------------------------------------------------------------------------------------------
-
-function checkStaleVendor(rel, src, findings) {
-    scanTags(src, (tag, pos) => {
-        if (tag.name.toLowerCase() !== "script") return;
-        const srcAttr = attr(tag, "src");
-        if (!srcAttr || !/gsap/i.test(srcAttr)) return;
-        findings.push({
-            file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "staleVendor",
-            message: "<script src=\"" + srcAttr + "\"> references a GSAP vendor file — GSAP was dropped in favor of " +
-                "scripts/pb-motion.js (data-animate/data-ticker/data-typewriter/data-tilt/data-spotlight). Remove the " +
-                "GSAP script tag and any GSAP calls; use the pb-motion.js data attributes instead. See " +
-                "design-system-init/references/marketing-library.md section 15 (Motion Recipes)."
-        });
-    });
-}
-
-// ---------------------------------------------------------------------------------------------
 // Check 10 — static <c:fragment name="..."> must resolve to a shipped fragment.
 // ---------------------------------------------------------------------------------------------
 
@@ -586,117 +565,17 @@ function checkStaticFragmentExists(markupFiles, findings, chainMarkupFiles = [])
 }
 
 // ---------------------------------------------------------------------------------------------
-// Check 11 — low-noise pb-* quality hints. These activate when markup uses the pb-* vocabulary,
-// regardless of which pal-owned stylesheet defines the selected recipes. The canonical
-// design-system.css is a reference catalog, not a runtime asset.
-// They are warnings: rendered designAudit + screenshot review is the authority, while these catch
-// the exact weak-model failure mode (browser-default controls/actions) before the first push.
+// Check 11 — mutually exclusive row actions ("Check out" / "Check in") must not render together.
+// Evidence: live equipment-checkout state-action eval. Warning only.
 // ---------------------------------------------------------------------------------------------
 
-function checkPbQualityHints(stylesheetFiles, markupFiles, findings) {
-    if (!workspaceHasDesignSystem(stylesheetFiles)) return;
-    const usedInMarkup = markupFiles.some(({ src }) => /class\s*=\s*["'][^"']*\bpb-/.test(src));
-    if (!usedInMarkup) return;
-
-    const actionWords = /^(add|create|save|cancel|edit|delete|remove|check out|check in|submit|send|email|book|get started|try again)\b/i;
-
-    // Resolve the vocabulary from the pal's real stylesheets instead of hard-coding a second
-    // component list here. This catches the common weak-model move of inventing a plausible
-    // modifier (for example `.pb-btn-sm`) that silently renders as if the class were absent.
-    const definedPbClasses = new Set();
-    for (const f of stylesheetFiles) {
-            const css = f.src;
-            const re = /\.((?:pb-)[A-Za-z0-9_-]+)/g;
-            let m;
-            while ((m = re.exec(css))) definedPbClasses.add(m[1]);
-    }
-
+function checkConflictingStateActions(markupFiles, findings) {
     for (const { rel, src } of markupFiles) {
-        let fieldGroups = 0;
-        const undefinedReported = new Set();
-        scanTags(src, (tag, pos) => {
-            const name = tag.name.toLowerCase();
-            const cls = attr(tag, "class") || "";
-            if (/(^|\s)pb-field-group(?:\s|$)/.test(cls)) fieldGroups++;
-
-            const type = String(attr(tag, "type") || "").toLowerCase();
-            const textControl = name === "textarea" || name === "select" || name === "c:select" ||
-                ((name === "input" || name === "c:field") && !["hidden", "button", "submit", "reset", "image", "checkbox", "radio", "option"].includes(type));
-            // A class containing an EL expression (e.g. class="${nameClass}" resolved by c:set)
-            // can't be traced statically — skip rather than false-positive (deepseek 2026-07-18
-            // run, finding #2: c:set test= resolving to "pb-input" / "pb-input is-error").
-            if (textControl && !/\bpb-(?:input|select|textarea)\b/.test(cls) && !cls.includes("${")) {
-                const expected = (name === "select" || name === "c:select") ? "pb-select" : name === "textarea" ? "pb-textarea" : "pb-input";
-                findings.push({
-                    file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "pbControlClass",
-                    message: "<" + tag.name + "> uses the canonical pb-* design system but has no ." + expected +
-                        " class, so it can render like a browser-default control. Add class=\"" + expected +
-                        "\" inside a .pb-field-group with a visible label; see component-library.md Fields."
-                });
-            }
-
-            if (name === "h1" && !/\bpb-(?:title|hero-title)\b/.test(cls)) {
-                findings.push({
-                    file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "pbHeadingClass",
-                    message: "This H1 bypasses the archetype type scale. Use .pb-title for product/CRUD screens or .pb-hero-title inside a marketing hero."
-                });
-            }
-
-            if (name === "table" && !/\bpb-table\b/.test(cls)) {
-                findings.push({
-                    file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "pbTableClass",
-                    message: "This table bypasses the responsive data-table recipe. Add .pb-table inside .pb-table-wrap and data-label on each td."
-                });
-            }
-
-            if (name === "c:a" && attr(tag, "action") != null && !/\bpb-btn\b/.test(cls)) {
-                const close = /<\/c:a\s*>/i.exec(src.slice(tag.end, tag.end + 500));
-                const body = close ? src.slice(tag.end, tag.end + close.index).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : "";
-                if (actionWords.test(body)) {
-                    findings.push({
-                        file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "pbActionAffordance",
-                        message: "Action \"" + body.slice(0, 60) + "\" has no .pb-btn variant and can render as an undifferentiated text link. Use primary/secondary/ghost/danger per action hierarchy; destructive actions come last and stay visually separate."
-                    });
-                }
-            }
-
-            if (name === "a" && /^#/.test(attr(tag, "href") || "")) {
-                const close = /<\/a\s*>/i.exec(src.slice(tag.end, tag.end + 200));
-                const body = close ? src.slice(tag.end, tag.end + close.index).replace(/<[^>]+>/g, " ").trim() : "";
-                if (/skip.+content/i.test(body) && !/\bpb-skip-link\b/.test(cls)) {
-                    findings.push({
-                        file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "pbSkipLink",
-                        message: "Skip link has no .pb-skip-link class and will be visible at rest. Add the class so it appears only on keyboard focus."
-                    });
-                }
-            }
-
-            for (const token of cls.split(/\s+/).filter(Boolean)) {
-                if (!definedPbClasses.size || !/^pb-[A-Za-z0-9_-]+$/.test(token) || definedPbClasses.has(token) || undefinedReported.has(token)) continue;
-                undefinedReported.add(token);
-                findings.push({
-                    file: rel, line: lineAt(src, pos), column: 0, severity: "warn", rule: "pbUndefinedClass",
-                    message: "." + token + " is used in markup but no workspace stylesheet defines it. Invented pb-* names do nothing at render time; use the exact class from component-library.md/design-system.css or define an approved PAL OVERRIDES component."
-                });
-            }
-        });
-
-        // Table actions are a composition contract, not just a button-color contract. Without
-        // `.pb-row-actions`, several otherwise styled buttons touch, drift, and overflow during
-        // the shipped mobile table collapse. Also catch mutually exclusive state transitions
-        // rendered at the same time (the exact equipment-checkout failure this rule generalizes).
         const actionCellRe = /<td\b[^>]*data-label\s*=\s*["']Actions["'][^>]*>[\s\S]*?<\/td\s*>/gi;
         let cell;
         while ((cell = actionCellRe.exec(src))) {
             const body = cell[0];
             const links = [...body.matchAll(/<c:a\b[^>]*>[\s\S]*?<\/c:a\s*>/gi)];
-            if (links.length >= 2 && !/\bpb-row-actions\b/.test(body)) {
-                findings.push({
-                    file: rel, line: lineAt(src, cell.index), column: 0, severity: "warn", rule: "pbRowActionGroup",
-                    message: "This Actions cell renders " + links.length + " action links without a .pb-row-actions wrapper. Wrap the links in <div class=\"pb-row-actions\"> so spacing, wrapping, destructive separation, and mobile reflow use the shipped component recipe."
-                });
-            }
-
             const labels = links.map(m => m[0].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().toLowerCase());
             const hasCheckout = labels.includes("check out");
             const hasCheckin = labels.includes("check in");
@@ -713,54 +592,6 @@ function checkPbQualityHints(stylesheetFiles, markupFiles, findings) {
                 });
             }
         }
-
-        if (fieldGroups >= 2 && !/\bpb-(?:stack|form-grid)\b/.test(src)) {
-            findings.push({
-                file: rel, line: 1, column: 0, severity: "warn", rule: "pbFormRhythm",
-                message: "This fragment has " + fieldGroups + " .pb-field-group blocks but no .pb-stack or .pb-form-grid wrapper. Related fields will have no reliable vertical rhythm; wrap them and use .pb-form-card for a bounded operational form."
-            });
-        }
-    }
-}
-
-// Owner-approved policy gate (Sam, 2026-07-18): not a server rejection; blocks because shipping
-// the reference catalog defeats selective component adoption and bloats every rendered page.
-// design-system.css is deliberately bundled as a recipe catalog for agents to consult. Loading or
-// registering the whole file bloats small pals and couples them to dozens of unused components.
-// Runtime CSS belongs in styles.css and contains only the tokens/base/component rules the pal uses.
-function checkReferenceStylesheetNotShipped(snapshot, markupFiles, stylesheetFiles, findings) {
-    for (const stylesheet of stylesheetFiles) {
-        if (!/(^|\/)design-system\.css$/i.test(stylesheet.rel)) continue;
-        findings.push({
-            file: stylesheet.rel, line: 1, column: 0, severity: "error",
-            rule: "referenceStylesheetShipped",
-            message: "design-system.css is reference material, not a pal runtime asset. Remove it from the pal and copy only the tokens, base rules, and component recipes this pal actually uses into styles/styles.css (or Styles/styles.css)."
-        });
-    }
-
-    for (const { rel, src } of markupFiles) {
-        const re = /(?:href|src)\s*=\s*["'][^"']*design-system\.css(?:[?#][^"']*)?["']/ig;
-        let m;
-        while ((m = re.exec(src))) {
-            findings.push({
-                file: rel, line: lineAt(src, m.index), column: 0, severity: "error",
-                rule: "referenceStylesheetShipped",
-                message: "This page loads design-system.css, which is a reference catalog only. Link styles.css instead; it must contain the selected rules needed by this pal."
-            });
-        }
-    }
-
-    const manifest = snapshot.palJson.parsed;
-    const entries = manifest && manifest.styles && Array.isArray(manifest.styles.entry)
-        ? manifest.styles.entry : [];
-    for (const entry of entries) {
-        const names = [entry && entry.string, entry && entry.Style && entry.Style.filename];
-        if (!names.some(name => /(^|\/)design-system\.css$/i.test(String(name || "")))) continue;
-        findings.push({
-            file: "pal.json", line: 1, column: 0, severity: "error",
-            rule: "referenceStylesheetShipped",
-            message: "pal.json registers design-system.css. Remove that Style entry and register styles.css containing only the selected rules the pal uses."
-        });
     }
 }
 
@@ -788,13 +619,12 @@ function declaredFontFamilies(value) {
 }
 
 // Evidence: the 2026-07-16 equipment_checkout-cc-haiku-fe2ebbb-01 run declared Satoshi at
-// styles/styles.css:26 without an import and silently fell back. The sanctioned loader is the
-// line-1 Fontshare import documented at design-system-init/references/design-system.css:1-7.
+// styles/styles.css:26 without an import and silently fell back.
 function checkFontDeclaredNotLoaded(stylesheetFiles, findings) {
     for (const { rel, src } of stylesheetFiles) {
         const uncommented = src.replace(/\/\*[\s\S]*?\*\//g, comment => comment.replace(/[^\n]/g, " "));
         const imports = (uncommented.match(/@import\s+[^;]+;/gi) || []).join(" ").toLowerCase().replace(/[^a-z0-9]/g, "");
-        const declaration = /(?:font-family|--ds-font-[\w-]+)\s*:\s*([^;}]+)/gi;
+        const declaration = /font-family\s*:\s*([^;}]+)/gi;
         const reported = new Set();
         let m;
         while ((m = declaration.exec(uncommented))) {
@@ -804,90 +634,10 @@ function checkFontDeclaredNotLoaded(stylesheetFiles, findings) {
                 findings.push({
                     file: rel, line: lineAt(uncommented, m.index), column: 0, severity: "warn",
                     rule: "fontDeclaredNotLoaded",
-                    message: "Font family \"" + family.raw + "\" is declared but no @import in this stylesheet loads it. Add the matching line-1 Fontshare import or use the system font stack."
+                    message: "Font family \"" + family.raw + "\" is declared but no @import in this stylesheet loads it. Add the matching @import or use the system font stack."
                 });
             }
         }
-    }
-}
-
-// Evidence: the 2026-07-16 pi equipment-checkout eval shipped pb-motion.js and pb-ui.js with no
-// consuming attributes. This is already prohibited by design-system-init/SKILL.md:19,304,359 and
-// design-build/SKILL.md:168; this advisory automates that existing invariant.
-function checkScriptWithoutConsumer(snapshot, markupFiles, findings) {
-    const manifest = snapshot.palJson.raw || "";
-    const markup = markupFiles.map(f => f.src).join("\n");
-    const scripts = [
-        { name: "pb-motion.js", consumer: /\b(?:data-animate|data-ticker|data-typewriter|data-tilt|data-spotlight)\s*=/i },
-        { name: "pb-ui.js", consumer: /\bdata-pb-theme-toggle(?:\s*=|\b)/i }
-    ];
-    for (const script of scripts) {
-        const escaped = script.name.replace(".", "\\.");
-        const linked = markupFiles.find(f => f.rel.startsWith("pages/") && new RegExp("(?:src|href)\\s*=\\s*['\"][^'\"]*" + escaped, "i").test(f.src));
-        const registered = new RegExp(escaped, "i").test(manifest);
-        if ((!registered && !linked) || script.consumer.test(markup)) continue;
-        findings.push({
-            file: registered ? "pal.json" : linked.rel,
-            line: registered ? 1 : lineAt(linked.src, linked.src.search(new RegExp(escaped, "i"))),
-            column: 0, severity: "warn", rule: "scriptWithoutConsumer",
-            message: script.name + " is registered or linked but no markup uses its consuming attribute. Remove the unused script from pal.json/page links, or add the intended documented behavior."
-        });
-    }
-}
-
-// A pal-owned stylesheet must consume the design-system catalog, not quietly replace its
-// control recipes with bespoke selectors or raw palette values.
-// The ONE signal that turns on pb-* validation: the pal itself contains design-system.css. A
-// DESIGN_SYSTEM.md notes file in the folder says nothing about the pal's markup and does not count.
-function workspaceHasDesignSystem(stylesheetFiles) {
-    return stylesheetFiles.some(f => /^(?:styles|Styles)\/design-system\.css$/.test(f.rel));
-}
-
-function checkDesignSystemBypass(stylesheetFiles, findings) {
-    if (!workspaceHasDesignSystem(stylesheetFiles)) return;
-    for (const f of stylesheetFiles) {
-            if (/(^|\/)(?:design-system|spacing|styles)\.css$/i.test(f.rel)) continue;
-            const css = f.src;
-            const coreSelector = /(?:^|[}\s])(?:button|input\s*\[|select\b|textarea\b|\.pb-(?:btn|input|select|textarea|table))[^{}]*\{/im.test(css);
-            const controlBlock = /(?:button|input\s*\[|select\b|textarea\b|\.pb-(?:btn|input|select|textarea|table))[^{}]*\{[^}]*#[0-9a-f]{3,8}\b/i.test(css);
-            if (coreSelector || controlBlock) {
-                findings.push({
-                    file: f.rel, line: 1, column: 0, severity: "warn", rule: "designSystemBypass",
-                    message: f.rel + " redefines core control styling alongside the workspace design system. spacing.css and styles.css are exempt convention files; other stylesheets must prefer selected component recipes and semantic tokens from design-build. Remove bespoke control selectors/raw hex palette values or record an explicit override in the design brief."
-                });
-            }
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Structural design-system contracts.
-// ---------------------------------------------------------------------------------------------
-
-function checkStructuralClasses(stylesheetFiles, markupFiles, findings) {
-    if (!workspaceHasDesignSystem(stylesheetFiles)) return;
-    for (const { rel, src } of markupFiles) {
-        if (rel.startsWith("pages/")) {
-            let hasPbMain = false;
-            scanTags(src, tag => {
-                const classes = attr(tag, "class");
-                if (classes && classes.split(/\s+/).includes("pb-main")) hasPbMain = true;
-            });
-            if (!hasPbMain) findings.push({
-                file: rel, line: 1, column: 0, severity: "warn", rule: "pbMain",
-                message: "Page shell is missing pb-main; the shell must own the pb-main content region."
-            });
-            continue;
-        }
-
-        let hasPbSection = false;
-        scanTags(src, tag => {
-            const classes = attr(tag, "class");
-            if (classes && classes.split(/\s+/).includes("pb-section")) hasPbSection = true;
-        });
-        if (!hasPbSection) findings.push({
-            file: rel, line: 1, column: 0, severity: "warn", rule: "pbSection",
-            message: "Fragment root is missing pb-section; every fragment root must include class pb-section."
-        });
     }
 }
 
@@ -909,7 +659,6 @@ function lintFileContracts(rel, src) {
         checkHrefAction(tag, rel, src, pos, findings);
         checkFormTag(tag, rel, src, pos, findings);
     });
-    checkStaleVendor(rel, src, findings);
     return findings;
 }
 
@@ -947,7 +696,6 @@ function lintContracts(snapshotOrDir) {
     // workflowFiles (local only) feeds just the `default:` fallback test: a chain pal's catch-all
     // does not handle this pal's actions, so it must not soften the unrouted-action finding.
     checkActionRouted(markupFiles, workflowFiles, actions, findings);
-    checkStructuralClasses(stylesheetFiles, markupFiles, findings);
 
     for (const { rel, src } of markupFiles) {
         findings.push(...lintFileContracts(rel, src));
@@ -962,15 +710,9 @@ function lintContracts(snapshotOrDir) {
 
     checkStaticFragmentExists(markupFiles, findings, resourceMarkupFiles);
 
-    checkReferenceStylesheetNotShipped(snapshot, markupFiles, stylesheetFiles, findings);
-
     checkFontDeclaredNotLoaded(stylesheetFiles, findings);
 
-    checkScriptWithoutConsumer(snapshot, markupFiles, findings);
-
-    checkDesignSystemBypass(stylesheetFiles, findings);
-
-    checkPbQualityHints(stylesheetFiles, markupFiles, findings);
+    checkConflictingStateActions(markupFiles, findings);
 
     findings.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
     return findings;

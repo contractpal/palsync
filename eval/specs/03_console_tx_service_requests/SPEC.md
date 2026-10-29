@@ -7,7 +7,7 @@ run mode: auto — the build agent runs all tasks end-to-end with NO human inter
 pal: service_requests (console + transaction) @ <WORKSPACE — set by evaluator before run>
 push policy: free
 review cadence: end
-design system: ../DESIGN_SYSTEM.md (components: ../COMPONENTS.md) — any evaluator-supplied reference images are the primary design authority and outrank the stub; none ship with this test.
+brand: none supplied — any evaluator-supplied reference images are the primary design authority; none ship with this test.
 created: 2026-07-01   approved: 2026-07-06
 realigned: 2026-07-14 (v2.1 — §9 skill names only)
 
@@ -142,7 +142,7 @@ Indexes: status.
 None.
 
 ## 9. Required skills (which palsync skills this build loads)
-- ALWAYS: palbuilder-frontend, design-build
+- ALWAYS: palbuilder-frontend
 - IF server-side workflow logic, validation, routing, or responses: palbuilder-workflow
 - IF data writes/reads, payloads/DataLists, cache, files, or server-side HTTP: palbuilder-data
 - Transaction workflows/API: palbuilder-workflow/references/transaction.md + cp-api docs
@@ -177,7 +177,7 @@ GLOBAL FLOOR:
 
 CONSOLE + TRANSACTION pages:
 - [ ] VISUAL (Request list): H1 `Service requests`, Status filter, StatusBadge values per
-      DESIGN_SYSTEM, no emoji.
+      `ui-quality.md`, no emoji.
 - [ ] VISUAL (Customer completion): H1 `Confirm your service request`, request description,
       resolution note field, and submit button render on tx.html.
 - [ ] VISUAL QUALITY: desktop + mobile captures of console and transaction surfaces have loaded CSS
@@ -197,7 +197,7 @@ HAPPY-PATH [LITE]:
 
 ## 13. Reality check
 - PASS: serviceRequests has requestId primary key; index on String status; size only on String;
-  §6 components exist in COMPONENTS.md; no dead links; pal_test compile verification for both
+  no dead links; pal_test compile verification for both
   workflows is explicit in EXECUTION.md; transaction workflowType 2 is covered by
   palbuilder-workflow transaction guidance.
 - CAVEAT (accepted): transaction API behavior requires live platform verification. The spec requires

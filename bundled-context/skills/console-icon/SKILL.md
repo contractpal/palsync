@@ -38,7 +38,7 @@ for the label if `consoleSettings.desktopLabel` is empty (suggest the pal's disp
 For A–D, write one SVG per candidate to `assets/icon-<letter>.svg` (`viewBox="0 0 48 48"`):
 
 - One dominant symbol; rounded-square tile background unless the user wants otherwise.
-- Colors: the user's, else the primary/accent tokens in `DESIGN_SYSTEM.md` or
+- Colors: the user's, else the primary/accent colors in
   `styles/styles.css`, else a deep navy (`#1f3a5f`) with white.
 - Legible at 48px: no small text (initials only, ≤ 2 letters), strokes ≥ 3px, no fine detail,
   gradients or shadows.

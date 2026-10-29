@@ -1,11 +1,8 @@
 # Shared UI acceptance
 
 - [ ] `styles/styles.css` is present, registered, linked once, human-readable, and contains only
-      dependency-complete tokens, base rules, and component recipes used by current markup.
-- [ ] `spacing.css`, `pb-ui.js`, and `pb-motion.js` exist only with real consumers and each is
-      registered/loaded once; unused utilities, presets, themes, components, and scripts are absent.
+      rules used by current markup; repeated values are CSS custom properties.
 - [ ] No undefined classes: each page/fragment `class=` resolves to runtime CSS or a recorded local style.
-- [ ] Typography uses the recorded system/Fontshare policy; icons are inline SVG from one approved family;
-      scripted motion uses only `pb-motion.js` data attributes.
-- [ ] Explicit component measurements/tokens recorded in local design authority (`DESIGN_SYSTEM.md`, `COMPONENTS.md`, etc.) match consumer CSS unless a deliberate exception is documented.
+- [ ] Icons are inline SVG from one family; each behavior script loads once.
+- [ ] The render meets `../../palbuilder-frontend/references/ui-quality.md`.
 - [ ] Direction was checked against [anti-slop fingerprints](anti-slop.md).

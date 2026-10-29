@@ -10,14 +10,13 @@ the end against §12; the agent's desktop render-inspect-revise and functional/i
 self-checks remain mandatory during the build; mobile capture belongs to final review.
 
 ## Build plan
-Before the first UI task, load `design-build` and checkpoint its six-line design brief; use approved inline SVG icons from `component-library.md` → Icons; validation rules include `designClassRequired`, `missingFragment`,
-`emptyAction`, `pbMain`, and `pbSection` (page shell owns `pb-main`; fragment root is `pb-section`).
+Before the first UI task, read `palbuilder-frontend/references/ui-quality.md`; prefer inline SVG icons; validation rules include `missingFragment` and
+`emptyAction`.
 Dependency order (leaf-first — foundations before things that use them):
 1. Create and sync partnerCatalog dataset.
 2. Foundation as a standalone first step: use bash `cp` (never read-then-write) to copy the
    console templates from `palbuilder-workflow/references/templates/` (`console-workflow.js` and
-   `console-page.html`) plus shell/styles and only behavior scripts with real consumers
-   from `design-system-init/references/`; replace `{{PAL_NAME}}`, author readable
+   `console-page.html`) plus shell/styles; replace `{{PAL_NAME}}`, author readable
    `styles/styles.css`, and register the four runtime entries in `pal.json`, then adapt.
 3. Build dashboard read + bridgeDashboard fragment.
 4. Build syncCatalog provider tunnel request and local row upsert.

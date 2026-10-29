@@ -9,7 +9,7 @@ Load every skill the task touches.
 - New pal or significant change → `pal-spec`; bug fix or small, bounded enhancement → `pal-fix`. In an existing pal, inspect the area you are about to touch just in time — there is no mapping phase.
 - Existing `SPEC.md` / `EXECUTION.md` work → `pal-loop`; independent finished-build review → `pal-review`.
 - Markup/browser UI → `palbuilder-frontend`; workflow code → `palbuilder-workflow`; data/datasets → `palbuilder-data`.
-- Visible UI also requires `design-build`; if no real design system exists, load `design-system-init` first.
+- Visible UI → `palbuilder-frontend` (CSS rule + `references/ui-quality.md`).
 - "Test console/web/transaction" → `shared/references/test-requests.md`.
 - Manifest/structure/restricted workflow-JS questions → `palbuilder-core`. Load other matching `palbuilder-*` skills when relevant.
 - A "REPOSITORY PAL" note, or 0-byte files in a repository pal or under `.resources/` → `palbuilder-core/references/repository-pal.md`: those are not-downloaded placeholders, never empty content.

@@ -116,7 +116,7 @@ function buildText(findings) {
 
 // gateLint baseline-diffs ERRORS but surfaces every WARNING on a changed file, which is right for a
 // once-per-push report and wrong for a channel that fires on every keystroke-level write: an inherited
-// "fragment root is missing pb-section" would repeat after each edit until the agent learns to ignore
+// "bareAmpersand" warning would repeat after each edit until the agent learns to ignore
 // the whole channel. So warnings are diffed the same way errors are -- by rule, against the baseline
 // copy of this file. A file with no baseline (newly added) keeps all of its warnings: nothing there is
 // inherited. Errors pass through untouched; gateLint has already scoped them to the net-new ones.
@@ -128,10 +128,10 @@ function dropInheritedWarnings(workspace, rel, findings) {
     try { baseContent = baseline.exists(workspace) ? baseline.read(workspace, rel) : null; }
     catch (e) { baseContent = null; }
     if (baseContent == null) return findings;
-    const { lintContent, hasDesignSystem } = require("./validate");
+    const { lintContent } = require("./validate");
     let inherited;
     try {
-        inherited = new Set(lintContent(rel, baseContent, { designSystemPresent: hasDesignSystem(workspace) })
+        inherited = new Set(lintContent(rel, baseContent)
             .filter(f => f.severity !== "error").map(f => f.rule));
     } catch (e) { return findings; }
     return findings.filter(f => f.severity === "error" || !inherited.has(f.rule));

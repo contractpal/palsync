@@ -9,7 +9,6 @@ const SKILLS = path.join(__dirname, "..", "bundled-context", "skills");
 const palFix = fs.readFileSync(path.join(SKILLS, "pal-fix", "SKILL.md"), "utf8");
 const palLoop = fs.readFileSync(path.join(SKILLS, "pal-loop", "SKILL.md"), "utf8");
 const palReview = fs.readFileSync(path.join(SKILLS, "pal-review", "SKILL.md"), "utf8");
-const designBuild = fs.readFileSync(path.join(SKILLS, "design-build", "SKILL.md"), "utf8");
 const workflow = fs.readFileSync(path.join(SKILLS, "palbuilder-workflow", "SKILL.md"), "utf8");
 const consoleWorkflow = fs.readFileSync(path.join(SKILLS, "palbuilder-workflow", "references", "console.md"), "utf8");
 const es3 = fs.readFileSync(path.join(SKILLS, "palbuilder-core", "references", "es3-cheatsheet.md"), "utf8");
@@ -56,11 +55,9 @@ test("CRUD gates route scoped record exercises and fresh re-review", () => {
         assert.match(text, /\{\{runId\}\}/, "write verification must use unique run data");
         assert.match(text, /within/, "duplicate row actions must be scoped to the intended record");
     }
-    for (const skill of [designBuild, palReview]) {
-        assert.match(skill, /pb-row-actions/, "visual build/review must require the shipped row-action group");
-        assert.match(skill, /mutually exclusive|only actions valid|only the action valid/i,
-            "visual build/review must reject conflicting state transitions");
-    }
+    assert.match(palReview, /shared wrapper/, "visual review must require a shared row-action wrapper");
+    assert.match(palReview, /mutually exclusive|only actions valid|only the action valid/i,
+        "visual review must reject conflicting state transitions");
     assert.match(palLoop, /no review pause between tasks/i, "review never runs between tasks");
     assert.match(handoff, /independent re-review that policy asked for/i,
         "review fixes must return to a fresh independent reviewer");
@@ -85,10 +82,8 @@ test("platform dialect guidance covers the equipment-checkout failure modes", ()
     assert.match(exerciseAuthoring, /tr:has\(\[data-label="Name"\]:has-text/);
     assert.match(exerciseAuthoring, /not rendered by the default fragment/);
     assert.match(exerciseAuthoring, /\| Delete \| — \| unique deleted value \|/);
-    for (const skill of [designBuild, palReview]) {
-        assert.match(skill, /platform.*chrome/is);
-        assert.match(skill, /outside `#cp-root`/);
-    }
+    assert.match(palReview, /platform.*chrome/is);
+    assert.match(palReview, /outside `#cp-root`/);
     assert.match(palLoop, /references\/verify-mechanics\.md/, "pal-loop must load screenshot verification on demand");
     assert.match(verifyLadder, /console-chrome-exception\.md/);
 
@@ -138,10 +133,6 @@ test("active instructions do not duplicate push validation, compile, or render p
     }
     assert.match(delegation, /exercise starts with a fresh server compile/);
     assert.match(verificationPolicy, /do not call `pal_test` first/);
-    assert.match(designBuild, /Verification breadth comes from[\s\S]*shared\/references\/verification\.md/);
-    assert.match(designBuild, /Render only the viewport\(s\) the active[\s\S]*verification policy calls for/);
-    assert.doesNotMatch(designBuild, /render desktop and mobile|Both screenshots were inspected/i,
-        "design-build must not turn Standard into a two-viewport suite");
 });
 
 test("pal-loop loads verification mechanics at Verify and policy from one place", () => {

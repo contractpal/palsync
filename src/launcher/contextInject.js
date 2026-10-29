@@ -41,7 +41,7 @@ function stampComment() {
 }
 
 // Skill dir names palsync has shipped but later renamed/removed. Pruned from a workspace if present
-// so a re-inject drops them (e.g. design-core → design-system-init + design-build). User-added skills
+// so a re-inject drops them (e.g. design-core → palbuilder-frontend). User-added skills
 // (names palsync never owned) are never touched.
 const RETIRED_SKILLS = [
     "design-core",
@@ -52,7 +52,9 @@ const RETIRED_SKILLS = [
     "pal-restraint",
     "palbuilder-backend",
     "seo-core",
-    "pal-init"
+    "pal-init",
+    "design-system-init",
+    "design-build"
 ];
 
 // Every skill in the bundle loads every session — the bundle dir IS the inventory, discovered at

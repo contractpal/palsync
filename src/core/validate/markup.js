@@ -80,7 +80,6 @@ function lintMarkup(rel, src, opts) {
     // fragment on Major League Coatings). opts.nonParseable = Set of "fragments/<file>" rels.
     const nonParseable = (opts && opts.nonParseable) || null;
     const skipScriptChecks = !!(nonParseable && nonParseable.has(rel));
-    const designSystemPresent = !!(opts && opts.designSystemPresent);
     const findings = [];
     const lineAt = lineIndexer(src);
     const isFragment = looksLikeFragment(rel, src);
@@ -125,30 +124,6 @@ function lintMarkup(rel, src, opts) {
 
     function checkTag(tag, lt) {
         const lname = tag.name.toLowerCase();
-
-        if (designSystemPresent) {
-            const requiredClass = {
-                button: "pb-btn",
-                input: "pb-input",
-                select: "pb-select",
-                textarea: "pb-textarea",
-                table: "pb-table"
-            }[lname];
-            // pb-input is the text-field recipe. Checkbox/radio/toggle/range/file/color and the
-            // button-like or hidden input types carry their own recipes (or none) — the component
-            // library ships them without pb-input, so requiring it here would be a false error.
-            const nonInputClass = lname === "input" && [
-                "hidden", "checkbox", "radio", "range", "submit", "button", "reset", "image", "file", "color"
-            ].includes((tag.attrs.find(a => a.name.toLowerCase() === "type")?.value || "").toLowerCase());
-            // Owner reversal (Sam, 2026-07-18): this is valid markup with no server rejection.
-            // Keep the design-system consistency check advisory until live rejection evidence exists.
-            if (requiredClass && !nonInputClass && !new RegExp("(^|\\s)" + requiredClass + "(?:\\s|$)").test(
-                tag.attrs.find(a => a.name.toLowerCase() === "class")?.value || "")) {
-                add(lt, "warn", "designClassRequired",
-                    "<" + tag.name + "> is missing the recommended ." + requiredClass + " class while a workspace design system is present. " +
-                    "Add class=\"" + requiredClass + "\" and use the corresponding component recipe from component-library.md, or verify the intentional exception.");
-            }
-        }
 
         // (1) HTML void element must self-close — UNLESS it is immediately closed with an
         // explicit paired end-tag (<source ...></source>), which is balanced XML and accepted

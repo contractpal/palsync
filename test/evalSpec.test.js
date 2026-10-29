@@ -38,26 +38,17 @@ test("resolveSpec keeps exact, numeric, and suggested-name standard resolution",
     }
 });
 
-test("injectSpec writes all 4 files flat, fills the placeholder, and rewrites relative paths", () => {
+test("injectSpec writes both files flat and fills the placeholder", () => {
     const ws = tmpWorkspace();
     const spec = resolveSpec("01_crud_equipment_checkout");
     const r = injectSpec(ws, spec, { fillValue: "https://x.test (pal: foo)" });
-    assert.deepEqual(r.written.sort(), ["COMPONENTS.md", "DESIGN_SYSTEM.md", "EXECUTION.md", "SPEC.md"]);
-    for (const f of ["SPEC.md", "EXECUTION.md", "DESIGN_SYSTEM.md", "COMPONENTS.md"]) {
+    assert.deepEqual(r.written.sort(), ["EXECUTION.md", "SPEC.md"]);
+    for (const f of ["SPEC.md", "EXECUTION.md"]) {
         assert.ok(fs.existsSync(path.join(ws, f)), f + " should exist at workspace root");
     }
     const specContent = fs.readFileSync(path.join(ws, "SPEC.md"), "utf8");
     assert.ok(!specContent.includes("<WORKSPACE"), "placeholder should be replaced");
     assert.ok(specContent.includes("https://x.test (pal: foo)"), "fillValue should be present");
-    assert.ok(specContent.includes("./DESIGN_SYSTEM.md"), "relative design system path should be rewritten to ./");
-    assert.ok(!specContent.includes("../DESIGN_SYSTEM.md"), "should not contain the old ../ reference");
-    const design = fs.readFileSync(path.join(ws, "DESIGN_SYSTEM.md"), "utf8");
-    const components = fs.readFileSync(path.join(ws, "COMPONENTS.md"), "utf8");
-    assert.match(design, /Visual\s+quality is a scored requirement/);
-    assert.match(design, /desktop and mobile screenshots/);
-    assert.match(design, /designAudit\.errors/);
-    assert.match(components, /pb-form-card/);
-    assert.match(components, /pb-outcome-list/);
     fs.rmSync(ws, { recursive: true, force: true });
 });
 

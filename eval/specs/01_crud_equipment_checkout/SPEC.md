@@ -7,7 +7,7 @@ run mode: auto — the build agent runs all tasks end-to-end with NO human inter
 pal: equipment_checkout (console) @ <WORKSPACE — set by evaluator before run>
 push policy: free
 review cadence: end
-design system: ../DESIGN_SYSTEM.md (components: ../COMPONENTS.md) — any evaluator-supplied reference images are the primary design authority and outrank the stub; none ship with this test.
+brand: none supplied — any evaluator-supplied reference images are the primary design authority; none ship with this test.
 created: 2026-07-01   approved: 2026-07-10
 realigned: 2026-07-14 (v2.1 — §9 skill names only)
 
@@ -133,7 +133,7 @@ Indexes: status.
 None.
 
 ## 9. Required skills (which palsync skills this build loads)
-- ALWAYS: palbuilder-frontend, design-build
+- ALWAYS: palbuilder-frontend
 - IF server-side workflow logic, validation, routing, or responses: palbuilder-workflow
 - IF data writes/reads, payloads/DataLists, cache, files, or server-side HTTP: palbuilder-data
 
@@ -196,8 +196,7 @@ HAPPY-PATH [LITE]:
 - PASS: no placeholders except evaluator-owned workspace header; all §3 rows route to §5 actions;
   equipment in §8a has `equipmentId` primary key; all §8a types are verified stored strings from
   references/palbuilder-types.md; size is only on String fields; status is indexable; every §5
-  capability maps to §10 primitives (workflowType 7 + DataSet + fragments); every §6 component
-  exists in COMPONENTS.md; workflow compile verification is explicit in EXECUTION.md.
+  capability maps to §10 primitives (workflowType 7 + DataSet + fragments); workflow compile verification is explicit in EXECUTION.md.
 
 ## 14. Amendment log (append-only; empty until the first approved amendment)
 (empty)

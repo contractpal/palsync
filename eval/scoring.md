@@ -116,7 +116,7 @@ Run: date __________ · model __________ · orch __________ · palbuilder ______
 **Console + transaction pages**
 | # | Check | Criterion | Evidence |
 |---|---|---|---|
-| C1 | [ ] | VISUAL (Request list): H1 `Service requests`, Status filter, StatusBadge values per DESIGN_SYSTEM, no emoji | |
+| C1 | [ ] | VISUAL (Request list): H1 `Service requests`, Status filter, StatusBadge values per `ui-quality.md`, no emoji | |
 | C2 | [ ] | VISUAL (Customer completion): H1 `Confirm your service request`, request description, resolution note field, and submit button render on tx.html | |
 | C3 | [ ] | VISUAL QUALITY: desktop + mobile console/transaction captures, loaded CSS, designAudit errors 0; rubric average >=1.5 with focal point/spacing/responsive =2, no 0, evidence | |
 | C4 | [ ] | Data effects: every write is confirmed by a follow-up read in requestList/requestDetail | |

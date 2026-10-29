@@ -9,8 +9,6 @@ protocol is [`../run.md`](../run.md); scoring is [`../scoring.md`](../scoring.md
 
 ```
 eval/runs/
-  DESIGN_SYSTEM.md      # shared — specs reference ../DESIGN_SYSTEM.md
-  COMPONENTS.md         # shared
   01_crud_frontier/     SPEC.md  EXECUTION.md  (+ pulled pal files after --setup)
   01_crud_cheap/        ...
   02_dirstruct_frontier/  02_dirstruct_cheap/

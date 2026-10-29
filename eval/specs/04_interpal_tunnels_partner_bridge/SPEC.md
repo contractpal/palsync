@@ -7,7 +7,7 @@ run mode: auto — the build agent runs all tasks end-to-end with NO human inter
 pal: partner_bridge (console) @ <WORKSPACE — set by evaluator before run>
 push policy: free
 review cadence: end
-design system: ../DESIGN_SYSTEM.md (components: ../COMPONENTS.md) — any evaluator-supplied reference images are the primary design authority and outrank the stub; none ship with this test.
+brand: none supplied — any evaluator-supplied reference images are the primary design authority; none ship with this test.
 created: 2026-07-06   approved: 2026-07-06
 realigned: 2026-07-14 (v2.1 — §9 skill names only)
 
@@ -125,7 +125,7 @@ Indexes: sku; availability.
 None. The provider fixture is a separate pal API, not a dataset in this workspace.
 
 ## 9. Required skills (which palsync skills this build loads)
-- ALWAYS: palbuilder-frontend, design-build
+- ALWAYS: palbuilder-frontend
 - IF server-side workflow logic, validation, routing, or responses: palbuilder-workflow
 - IF data writes/reads, payloads/DataLists, cache, files, or server-side HTTP: palbuilder-data
 - IF a webservice or tunnel action: palbuilder-workflow + cp-api docs for exact controller methods
@@ -185,7 +185,7 @@ PROVIDE/REQUEST API CHECKS:
 ## 13. Reality check
 - PASS: partnerCatalog has primary key and indexable String fields; workflow types 7/12/15 are
   covered by palbuilder-workflow; ServiceRequest/JsonParser are covered by palbuilder-data;
-  §6 components exist in COMPONENTS.md; no dead links; pal_test and pal_tunnel_test verification are
+  no dead links; pal_test and pal_tunnel_test verification are
   explicit in EXECUTION.md.
 - CAVEAT (accepted): the provider fixture is external to this repo and must be created/available
   before the run. This is intentional for inter-pal communication; §5 defines the fixture contract

@@ -258,9 +258,8 @@ Every skill is injected on every setup — they cost no context until the agent 
 `palbuilder-data`, `palbuilder-realtime`, `palbuilder-email`, `palbuilder-seo` — markup, workflow
 JS, data access, background jobs, WebSockets, email, and SEO done right.
 
-**Design:** `design-system-init` (interview + reference images → `DESIGN_SYSTEM.md` +
-`COMPONENTS.md`) and `design-build` (enforce that system while building UI, with a
-render-and-critique review gate).
+**UI quality:** `palbuilder-frontend` carries a short CSS-reuse rule and an on-demand
+`references/ui-quality.md` bar (hierarchy, states, contrast, 375px mobile) for visible UI work.
 
 **Spec-to-ship (autonomous builds):**
 

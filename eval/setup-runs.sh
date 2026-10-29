@@ -3,8 +3,7 @@
 #
 # Two phases:
 #   STAGE  (always, local, no creds): create eval/runs/<folder>/ for each row in eval/runs.map,
-#          copy the matching frozen SPEC.md + EXECUTION.md into it, and place the shared
-#          DESIGN_SYSTEM.md + COMPONENTS.md at eval/runs/ (the specs reference ../DESIGN_SYSTEM.md).
+#          copy the matching frozen SPEC.md + EXECUTION.md into it.
 #   SETUP  (only with --setup AND CloudPiston creds): run `palsync setup --pal <name> --dir <folder>`
 #          per row — pulls the empty pal + injects skills + writes .palsync.json. Requires you to
 #          have already created each empty pal in PalBuilder (see eval/runs.map).
@@ -54,9 +53,7 @@ if [ "$DO_RESET" -eq 1 ]; then
   find "$RUNS" -mindepth 1 -maxdepth 1 ! -name README.md -exec rm -rf {} +
 fi
 
-# shared design files live once at eval/runs/ so every spec's ../DESIGN_SYSTEM.md resolves.
 mkdir -p "$RUNS"
-cp "$SPECS/DESIGN_SYSTEM.md" "$SPECS/COMPONENTS.md" "$RUNS/"
 
 echo "== STAGE =="
 while read -r folder pal url _rest; do

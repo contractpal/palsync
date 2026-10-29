@@ -237,7 +237,7 @@ test("rendered design-audit findings ride beside the screenshot as external UI e
         warnings: 1,
         pass: false,
         findings: [
-            { severity: "error", rule: "horizontalOverflow", message: "Page is 48px wider than the viewport.", count: 1, samples: ["table.pb-table"] },
+            { severity: "error", rule: "horizontalOverflow", message: "Page is 48px wider than the viewport.", count: 1, samples: ["table.data-table"] },
             { severity: "warning", rule: "bareActionLink", message: "Action links render like body links.", count: 3, samples: ["a (Edit)"] },
         ]
     };

@@ -167,31 +167,6 @@ test("reserved EL words cannot be c:list ids, c:set names, or c:fragment names",
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("custom control CSS alongside the design system is a bypass warning", () => {
-    const dir = tmpWorkspace({
-        "styles/design-system.css": ".pb-btn {}",
-        "styles/design-system.css": ".pb-btn { color: var(--primary); }",
-        "styles/custom.css": "button { background: #123456; }"
-    });
-    const findings = lintContracts(dir).filter(f => f.rule === "designSystemBypass");
-    assert.equal(findings.length, 1);
-    assert.equal(findings[0].severity, "warn");
-    assert.match(findings[0].message, /spacing\.css and styles\.css are exempt/);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("design-system convention files are exempt from bypass warnings", () => {
-    const dir = tmpWorkspace({
-        "styles/design-system.css": ".pb-btn {}",
-        "styles/design-system.css": ".pb-btn { color: var(--primary); }",
-        "styles/spacing.css": "input[type=text] { padding: #123; }",
-        "styles/styles.css": "button { background: #123456; }",
-        "styles/other.css": ".feature { color: #123456; }"
-    });
-    assert.deepStrictEqual(lintContracts(dir).filter(f => f.rule === "designSystemBypass"), []);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
 test("clean EL attributes and text produce no EL syntax findings", () => {
     const dir = tmpWorkspace({
         "fragments/row.html": "<c:ignore xmlns:c=\"contractpal\"><p class=\"${active}\">${name}</p></c:ignore>",
@@ -547,40 +522,6 @@ test("crawler file createAjaxResponse intercepts do not need isAjax()", () => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("staleVendor — <script src> referencing gsap warns, names the rule", () => {
-    const dir = tmpWorkspace({
-        "pages/console.html": [
-            "<html xmlns:c=\"contractpal\">",
-            "  <head>",
-            "    <script type=\"module\" src=\"../Scripts/vendor/gsap.min.js\"></script>",
-            "  </head>",
-            "  <body></body>",
-            "</html>",
-        ].join("\n"),
-    });
-    const findings = lintContracts(dir).filter(f => f.rule === "staleVendor");
-    assert.strictEqual(findings.length, 1);
-    assert.strictEqual(findings[0].severity, "warn");
-    assert.match(findings[0].message, /pb-motion\.js/);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("staleVendor — page shell with only pb-motion.js script produces no finding", () => {
-    const dir = tmpWorkspace({
-        "pages/console.html": [
-            "<html xmlns:c=\"contractpal\">",
-            "  <head>",
-            "    <script type=\"module\" src=\"../Scripts/pb-ui.js\"></script>",
-            "    <script type=\"module\" src=\"../Scripts/pb-motion.js\"></script>",
-            "  </head>",
-            "  <body></body>",
-            "</html>",
-        ].join("\n"),
-    });
-    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "staleVendor").length, 0);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
 // Modeled on test-01-crud-mimo / c-tags.md's documented examples — must produce ZERO
 // contract findings of any severity (a fully clean, well-formed pal).
 test("clean fixture (modeled on the passing reference pal) — zero contract findings", () => {
@@ -638,22 +579,22 @@ test("clean fixture (modeled on the passing reference pal) — zero contract fin
             "    return list();",
             "}",
         ].join("\n"),
-        "styles/styles.css": ".pb-main {} .pb-section {} .pb-btn {} .pb-btn-primary {} .pb-input {} .pb-field-group {}",
+        "styles/styles.css": ".app-main {} .app-section {} .app-btn {} .app-btn-primary {} .app-input {} .app-field-group {}",
         "pages/console.html": [
             "<html xmlns:c=\"contractpal\">",
             "  <body>",
-            "    <div id=\"body\" class=\"pb-main\"><c:fragment name=\"${frag}\" /></div>",
+            "    <div id=\"body\" class=\"app-main\"><c:fragment name=\"${frag}\" /></div>",
             "  </body>",
             "</html>",
         ].join("\n"),
         "fragments/equipmentList.html": [
             "<c:ignore xmlns:c=\"contractpal\">",
-            "  <div class=\"pb-section\"><c:a action=\"showForm\" ajax-target=\"body\" class=\"pb-btn pb-btn-primary\">Add</c:a>",
+            "  <div class=\"app-section\"><c:a action=\"showForm\" ajax-target=\"body\" class=\"app-btn app-btn-primary\">Add</c:a>",
             "  <c:choose>",
             "    <c:when test=\"${!empty equipment}\">",
             "      <c:list name=\"equipment\" id=\"r\">",
             "        <p>${r.name}</p>",
-            "        <c:a action=\"showForm?equipmentId=${r.equipmentId}\" ajax-target=\"body\" class=\"pb-btn\">Edit</c:a>",
+            "        <c:a action=\"showForm?equipmentId=${r.equipmentId}\" ajax-target=\"body\" class=\"app-btn\">Edit</c:a>",
             "      </c:list>",
             "    </c:when>",
             "    <c:otherwise><p>No equipment yet.</p></c:otherwise>",
@@ -662,8 +603,8 @@ test("clean fixture (modeled on the passing reference pal) — zero contract fin
         ].join("\n"),
         "fragments/equipmentForm.html": [
             "<c:ignore xmlns:c=\"contractpal\">",
-            "  <div class=\"pb-section\"><label class=\"pb-field-group\">Name<input type=\"text\" name=\"name\" value=\"${name}\" class=\"pb-input\" /></label>",
-            "  <c:a action=\"saveEquipment\" ajax-target=\"body\" class=\"pb-btn pb-btn-primary\">Save</c:a></div>",
+            "  <div class=\"app-section\"><label class=\"app-field-group\">Name<input type=\"text\" name=\"name\" value=\"${name}\" class=\"app-input\" /></label>",
+            "  <c:a action=\"saveEquipment\" ajax-target=\"body\" class=\"app-btn app-btn-primary\">Save</c:a></div>",
             "</c:ignore>",
         ].join("\n"),
     });
@@ -752,60 +693,30 @@ test("destructiveConfirm — unrelated action produces no finding", () => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("selective pb-* styles warn on browser-default controls, headings, tables, actions, form rhythm, visible skip link, and invented classes", () => {
+test("row actions warn when mutually exclusive state actions render together", () => {
     const dir = tmpWorkspace({
-        "styles/design-system.css": ".pb-btn {}",
-        "styles/styles.css": ":root { --ds-space-1: 4px; } .pb-btn {}",
-        "fragments/screen.html": [
-            '<c:ignore xmlns:c="contractpal">',
-            '  <a href="#main">Skip to content</a>',
-            '  <h1>Equipment</h1>',
-            '  <div class="pb-field-group"><label>Name<c:field type="text" name="name" /></label></div>',
-            '  <div class="pb-field-group"><label>Notes<textarea name="notes"></textarea></label></div>',
-            '  <table><tr><th>Name</th></tr></table>',
-            '  <c:a action="saveEquipment" class="pb-btn pb-btn-sm">Save</c:a>',
-            '  <c:a action="cancel">Cancel</c:a>',
-            '</c:ignore>',
-        ].join("\n"),
-    });
-    const rules = new Set(lintContracts(dir).map(f => f.rule));
-    for (const rule of ["pbControlClass", "pbHeadingClass", "pbTableClass", "pbActionAffordance", "pbFormRhythm", "pbSkipLink", "pbUndefinedClass"]) {
-        assert.ok(rules.has(rule), "expected " + rule + " warning");
-    }
-    assert.ok(lintContracts(dir).filter(f => /^pb/.test(f.rule)).every(f => f.severity === "warn"));
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("selective pb-* workspace warns when row actions are ungrouped or conflicting", () => {
-    const dir = tmpWorkspace({
-        "styles/design-system.css": ".pb-btn {}",
-        "styles/styles.css": [
-            ".pb-table {}", ".pb-btn {}", ".pb-btn-secondary {}", ".pb-btn-danger {}", ".pb-row-actions {}"
-        ].join("\n"),
         "fragments/list.html": [
             '<c:ignore xmlns:c="contractpal">',
-            '  <table class="pb-table"><tbody><tr><td data-label="Actions">',
-            '    <c:a action="showCheckout?id=${row.id}" class="pb-btn pb-btn-secondary">Check out</c:a>',
-            '    <c:a action="checkin?id=${row.id}" class="pb-btn pb-btn-secondary">Check in</c:a>',
-            '    <c:a action="delete?id=${row.id}" confirm="Delete?" class="pb-btn pb-btn-danger">Delete</c:a>',
+            '  <table><tbody><tr><td data-label="Actions">',
+            '    <c:a action="showCheckout?id=${row.id}">Check out</c:a>',
+            '    <c:a action="checkin?id=${row.id}">Check in</c:a>',
+            '    <c:a action="delete?id=${row.id}" confirm="Delete?">Delete</c:a>',
             '  </td></tr></tbody></table>',
             '</c:ignore>',
         ].join("\n"),
     });
     const rules = new Set(lintContracts(dir).map(f => f.rule));
-    assert.ok(rules.has("pbRowActionGroup"));
     assert.ok(rules.has("pbConflictingStateActions"));
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("mutually exclusive c:div test= wrappers suppress pbConflictingStateActions", () => {
     const dir = tmpWorkspace({
-        "styles/styles.css": [".pb-table {}", ".pb-btn {}", ".pb-btn-secondary {}", ".pb-row-actions {}"].join("\n"),
         "fragments/list.html": [
             '<c:ignore xmlns:c="contractpal">',
-            '  <table class="pb-table"><tbody><tr><td data-label="Actions"><div class="pb-row-actions">',
-            '    <c:div test="${row.status eq \'available\'}"><c:a action="showCheckout?id=${row.id}" class="pb-btn pb-btn-secondary">Check out</c:a></c:div>',
-            '    <c:div test="${row.status eq \'checkedOut\'}"><c:a action="checkin?id=${row.id}" class="pb-btn pb-btn-secondary">Check in</c:a></c:div>',
+            '  <table><tbody><tr><td data-label="Actions"><div>',
+            '    <c:div test="${row.status eq \'available\'}"><c:a action="showCheckout?id=${row.id}">Check out</c:a></c:div>',
+            '    <c:div test="${row.status eq \'checkedOut\'}"><c:a action="checkin?id=${row.id}">Check in</c:a></c:div>',
             '  </div></td></tr></tbody></table>',
             '</c:ignore>',
         ].join("\n"),
@@ -814,77 +725,20 @@ test("mutually exclusive c:div test= wrappers suppress pbConflictingStateActions
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("pbControlClass skips controls whose class is an EL expression", () => {
+test("status-conditional row actions produce no row-action warnings", () => {
     const dir = tmpWorkspace({
-        "styles/styles.css": ".pb-input {}\n.pb-field-group {}",
-        "fragments/form.html": [
-            '<c:ignore xmlns:c="contractpal">',
-            '  <div class="pb-field-group"><c:field name="assignee" class="${assigneeClass}"/></div>',
-            '</c:ignore>',
-        ].join("\n"),
-    });
-    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "pbControlClass").length, 0);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("selective grouped and status-conditional row actions produce no row-action warnings", () => {
-    const dir = tmpWorkspace({
-        "styles/styles.css": [
-            ".pb-table {}", ".pb-btn {}", ".pb-btn-secondary {}", ".pb-btn-danger {}", ".pb-row-actions {}"
-        ].join("\n"),
         "fragments/list.html": [
             '<c:ignore xmlns:c="contractpal">',
-            '  <table class="pb-table"><tbody><tr><td data-label="Actions"><div class="pb-row-actions">',
-            '    <c:a action="showCheckout?id=${row.id}" test="${row.status eq \'available\'}" class="pb-btn pb-btn-secondary">Check out</c:a>',
-            '    <c:a action="checkin?id=${row.id}" test="${row.status eq \'checkedOut\'}" class="pb-btn pb-btn-secondary">Check in</c:a>',
-            '    <c:a action="delete?id=${row.id}" confirm="Delete?" class="pb-btn pb-btn-danger">Delete</c:a>',
+            '  <table><tbody><tr><td data-label="Actions"><div>',
+            '    <c:a action="showCheckout?id=${row.id}" test="${row.status eq \'available\'}">Check out</c:a>',
+            '    <c:a action="checkin?id=${row.id}" test="${row.status eq \'checkedOut\'}">Check in</c:a>',
+            '    <c:a action="delete?id=${row.id}" confirm="Delete?">Delete</c:a>',
             '  </div></td></tr></tbody></table>',
             '</c:ignore>',
         ].join("\n"),
     });
-    const findings = lintContracts(dir).filter(f => ["pbRowActionGroup", "pbConflictingStateActions", "pbUndefinedClass"].includes(f.rule));
+    const findings = lintContracts(dir).filter(f => f.rule === "pbConflictingStateActions");
     assert.deepStrictEqual(findings, []);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("selected pb-* recipes in styles.css produce no design-hint warnings", () => {
-    const dir = tmpWorkspace({
-        "styles/styles.css": [
-            ".pb-skip-link {}", ".pb-section {}", ".pb-title {}", ".pb-card {}", ".pb-form-card {}",
-            ".pb-stack {}", ".pb-field-group {}", ".pb-input {}", ".pb-textarea {}", ".pb-btn {}",
-            ".pb-btn-primary {}", ".pb-table-wrap {}", ".pb-table {}"
-        ].join("\n"),
-        "fragments/screen.html": [
-            '<c:ignore xmlns:c="contractpal">',
-            '  <a href="#main" class="pb-skip-link">Skip to content</a>',
-            '  <div class="pb-section"><h1 class="pb-title">Equipment</h1>',
-            '  <div class="pb-card pb-form-card"><div class="pb-stack">',
-            '    <div class="pb-field-group"><label>Name<c:field type="text" name="name" class="pb-input" /></label></div>',
-            '    <div class="pb-field-group"><label>Notes<textarea name="notes" class="pb-textarea"></textarea></label></div>',
-            '    <c:a action="saveEquipment" class="pb-btn pb-btn-primary">Save</c:a>',
-            '  </div></div>',
-            '  <div class="pb-table-wrap"><table class="pb-table"><tr><th>Name</th></tr></table></div></div>',
-            '</c:ignore>',
-        ].join("\n"),
-    });
-    assert.deepStrictEqual(lintContracts(dir).filter(f => /^pb/.test(f.rule)), []);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("design-system.css is rejected as a runtime file, page link, or manifest style", () => {
-    const dir = tmpWorkspace({
-        "styles/design-system.css": ".pb-card {}",
-        "pages/console.html": '<html><head><link rel="STYLESHEET" href="../Styles/design-system.css" /></head><body></body></html>',
-        "pal.json": basePalJson({ styles: { entry: [
-            { string: "design-system.css", Style: { filename: "design-system.css" } }
-        ] } }),
-    });
-    const findings = lintContracts(dir).filter(f => f.rule === "referenceStylesheetShipped");
-    assert.strictEqual(findings.length, 3);
-    assert.ok(findings.every(f => f.severity === "error"));
-    assert.ok(findings.some(f => f.file === "styles/design-system.css"));
-    assert.ok(findings.some(f => f.file === "pages/console.html"));
-    assert.ok(findings.some(f => f.file === "pal.json"));
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -1153,50 +1007,13 @@ test("pageResponseSource — pal.getPage(...) as a page response is a hard error
 
 test("empty c:a action is an error; dynamic actions remain unchecked", () => {
     const dir = tmpWorkspace({
-        "fragments/actions.html": '<c:ignore xmlns:c="contractpal"><div class="pb-section"><c:a action="">Cancel</c:a><c:a action="${nextAction}">Next</c:a></div></c:ignore>',
+        "fragments/actions.html": '<c:ignore xmlns:c="contractpal"><div class="app-section"><c:a action="">Cancel</c:a><c:a action="${nextAction}">Next</c:a></div></c:ignore>',
     });
     const findings = lintContracts(dir).filter(f => f.rule === "emptyAction");
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].severity, "error");
     assert.match(findings[0].message, /never routes at runtime/);
     fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("fragment root missing pb-section warns; compliant root passes", () => {
-    const missing = tmpWorkspace({ "styles/design-system.css": ".pb-section {}", "fragments/list.html": '<c:ignore xmlns:c="contractpal"><div class="pb-card">List</div></c:ignore>' });
-    const compliant = tmpWorkspace({ "styles/design-system.css": ".pb-section {}", "fragments/list.html": '<c:ignore xmlns:c="contractpal"><section class="pb-section console-chrome">List</section></c:ignore>' });
-    const findings = lintContracts(missing).filter(f => f.rule === "pbSection");
-    assert.strictEqual(findings.length, 1);
-    assert.strictEqual(findings[0].severity, "warn");
-    assert.strictEqual(lintContracts(compliant).filter(f => f.rule === "pbSection").length, 0);
-    fs.rmSync(missing, { recursive: true, force: true });
-    fs.rmSync(compliant, { recursive: true, force: true });
-});
-
-test("page shell missing pb-main warns; compliant shell passes", () => {
-    const missing = tmpWorkspace({ "styles/design-system.css": ".pb-main {}", "pages/console.html": '<html><body><main id="body"></main></body></html>' });
-    const compliant = tmpWorkspace({ "styles/design-system.css": ".pb-main {}", "pages/console.html": '<html><body><main id="body" class="pb-main console-chrome"></main></body></html>' });
-    const findings = lintContracts(missing).filter(f => f.rule === "pbMain");
-    assert.strictEqual(findings.length, 1);
-    assert.strictEqual(findings[0].severity, "warn");
-    assert.strictEqual(lintContracts(compliant).filter(f => f.rule === "pbMain").length, 0);
-    fs.rmSync(missing, { recursive: true, force: true });
-    fs.rmSync(compliant, { recursive: true, force: true });
-});
-
-test("pbMain and pbSection only apply when the pal contains design-system.css (DESIGN_SYSTEM.md alone does not count)", () => {
-    for (const marker of [null, "DESIGN_SYSTEM.md", "styles/design-system.css"]) {
-        const files = {
-            "pages/console.html": '<html><body><main id="body"></main></body></html>',
-            "fragments/list.html": '<c:ignore xmlns:c="contractpal"><div>List</div></c:ignore>',
-        };
-        if (marker) files[marker] = ".pb-section {}";
-        const dir = tmpWorkspace(files);
-        const rules = lintContracts(dir).map(f => f.rule);
-        assert.strictEqual(rules.includes("pbMain"), marker === "styles/design-system.css", "pbMain with marker=" + marker);
-        assert.strictEqual(rules.includes("pbSection"), marker === "styles/design-system.css", "pbSection with marker=" + marker);
-        fs.rmSync(dir, { recursive: true, force: true });
-    }
 });
 
 test("pageResponseSource — direct return of pal.getPage(...) is flagged too", () => {
@@ -1243,13 +1060,13 @@ test("pageResponseSource — c.getPage(...) is the correct source, no finding", 
 
 test("fontDeclaredNotLoaded warns for an unimported web font and accepts system/imported fonts", () => {
     const missing = tmpWorkspace({
-        "styles/styles.css": ':root { --ds-font-ui: "Satoshi", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }'
+        "styles/styles.css": ':root { font-family: "Satoshi", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }'
     });
     const loaded = tmpWorkspace({
-        "styles/styles.css": '@import url("https://api.fontshare.com/v2/css?f[]=satoshi@400,700&display=swap");\n:root { --ds-font-ui: "Satoshi", system-ui, sans-serif; }'
+        "styles/styles.css": '@import url("https://api.fontshare.com/v2/css?f[]=satoshi@400,700&display=swap");\n:root { font-family: "Satoshi", system-ui, sans-serif; }'
     });
     const system = tmpWorkspace({
-        "styles/styles.css": ':root { --ds-font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }'
+        "styles/styles.css": ':root { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }'
     });
     const findings = lintContracts(missing).filter(f => f.rule === "fontDeclaredNotLoaded");
     assert.strictEqual(findings.length, 1);
@@ -1260,28 +1077,6 @@ test("fontDeclaredNotLoaded warns for an unimported web font and accepts system/
     fs.rmSync(missing, { recursive: true, force: true });
     fs.rmSync(loaded, { recursive: true, force: true });
     fs.rmSync(system, { recursive: true, force: true });
-});
-
-test("scriptWithoutConsumer warns for registered pb-motion without a consumer", () => {
-    const dir = tmpWorkspace({
-        "pal.json": basePalJson({ scripts: { entry: [{ string: "pb-motion.js" }] } }),
-        "pages/console.html": '<html><body><main class="pb-main"></main><script src="../scripts/pb-motion.js"></script></body></html>'
-    });
-    const findings = lintContracts(dir).filter(f => f.rule === "scriptWithoutConsumer");
-    assert.strictEqual(findings.length, 1);
-    assert.strictEqual(findings[0].severity, "warn");
-    assert.strictEqual(findings[0].file, "pal.json");
-    assert.strictEqual(lintContracts(dir).filter(f => f.severity === "error" && f.rule === "scriptWithoutConsumer").length, 0);
-    fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("scriptWithoutConsumer accepts pb-motion with data-animate markup", () => {
-    const dir = tmpWorkspace({
-        "pal.json": basePalJson({ scripts: { entry: [{ string: "pb-motion.js" }] } }),
-        "pages/console.html": '<html><body><main class="pb-main"><section data-animate="fade-in"></section></main><script src="../scripts/pb-motion.js"></script></body></html>'
-    });
-    assert.strictEqual(lintContracts(dir).filter(f => f.rule === "scriptWithoutConsumer").length, 0);
-    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 // --- filename-resolution conventions (reports/2026-07-18 equipment_checkout runs) ---------------

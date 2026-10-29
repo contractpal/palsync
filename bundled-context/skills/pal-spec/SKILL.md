@@ -18,11 +18,11 @@ MINE → INTERVIEW → LOCK SUMMARY → SPEC.md draft → EXECUTION.md draft →
 - **REAL CONTENT ONLY.** Every copy field gets real approved words; every dataset field a real
   type; every workflow real behavior. Unknowns go in §2 Decisions & open questions — never
   `TBD`, never "placeholder", never "decide later" inline.
-- **DESIGN IS A HANDOFF, NOT A SECTION.** No palettes, fonts, or aesthetic direction in the
-  spec — those live in `DESIGN_SYSTEM.md` / `COMPONENTS.md` (from **design-system-init**).
-  The spec carries only per-page composition and UX flow (§6): primary path, hierarchy, and
-  progressive disclosure. No DESIGN_SYSTEM.md → stop, run design-system-init first. Every
-  frontend specs follow `../shared/references/css-conventions.md` unless the project is a non-UI service-only pal.
+- **VISUAL DESIGN IS THE BUILDER'S JOB.** No palettes, fonts, or aesthetic direction in the
+  spec beyond user-supplied brand constraints (logo, colors), recorded in one line. The spec
+  carries per-page composition and UX flow (§6): primary path, hierarchy, and progressive
+  disclosure; the builder styles against `palbuilder-frontend/references/ui-quality.md`. Every
+  frontend spec follows `../shared/references/css-conventions.md` unless the project is a non-UI service-only pal.
 - **Never invent facts** — no made-up stats, prices, or testimonials. Record the source of
   every claim; a claim with no source is an open question.
 
@@ -36,7 +36,7 @@ MINE → INTERVIEW → LOCK SUMMARY → SPEC.md draft → EXECUTION.md draft →
 Unsure → ask one question: *"Throwaway prototype, or something for real users?"* Record as `mode:`.
 
 **LITE keeps (non-negotiable):** the one primary action; real copy on primary screen(s); the
-sitemap; the design handoff (a minimal DESIGN_SYSTEM.md must exist); the required-skills +
+sitemap; the required-skills +
 PalBuilder-surface manifest; the global acceptance floor; the REALITY CHECK.
 **LITE relaxes:** behavior is happy-path only (edges listed as "deferred (prototype)");
 acceptance = global floor + one happy-path check per primary action; secondary-page copy may be
@@ -69,7 +69,7 @@ latest `REVIEW.md` has a "Code health" note for the touched files, weigh it here
 prefactor when the friction is speculative. Most changes need none.
 
 **Step 1 — Mine before you ask.** Turn what already exists (the pulled workspace, any live
-site/doc the user points at, DESIGN_SYSTEM.md, the first description) into PROPOSED answers.
+site/doc the user points at, the first description) into PROPOSED answers.
 Confirming a proposal costs seconds; an open question costs minutes. Never ask for something
 the user already said. Record where each fact came from.
 
@@ -103,13 +103,10 @@ human-only), and every type, workflow, file, skill, primitive, and test seam. As
 changes what a user sees, can do, or is told — e.g. overlapping requests, cancelling after
 approval, who sees whose data. A business rule you cannot mine is an OPEN question, never a guess.
 
-**Design handoff** *(engineering — resolve it yourself, show the user only the page flow)* —
-DESIGN_SYSTEM.md + COMPONENTS.md present? No → run design-system-init, then return here. Yes →
-per page, propose a layout skeleton: section order + which named component fills each slot +
-hierarchy/primary action/progressive disclosure notes. Every new-pal page shell follows
-`../shared/references/css-conventions.md`; `pb-charts.js` is optional when charts are used. Use
-the approved inline SVG icon guidance in `../design-system-init/references/component-library.md`.
-No colors/fonts. Do not retrofit `styles.css` into an existing pal that lacks it. On a new pal,
+**Page layout** *(engineering — resolve it yourself, show the user only the page flow)* —
+per page, propose a layout skeleton: section order + hierarchy/primary action/progressive
+disclosure notes. Every new-pal page shell follows `../shared/references/css-conventions.md`.
+Prefer inline SVG icons. No colors/fonts beyond user-supplied brand constraints. Do not retrofit `styles.css` into an existing pal that lacks it. On a new pal,
 always ask whether to use CloudPiston Resource (`../palbuilder-core/references/pal-chain.md`)
 for what it already covers — modals, toasts, inline alerts, form validation, paging, image
 upload — before designing bespoke versions; don't assume. Verification depth and final review
@@ -146,9 +143,9 @@ The **first task is always a standalone foundation task**. Give it its own row, 
    the §12 floor, execution task IDs/statuses/tiers/refs/dependencies/success conditions/version,
    and the brownfield REGRESSION criterion). Clear every `HARD_FLAG`.
 2. Read `references/reality-check.md` and do the judgment half the linter cannot:
-   capability→primitive mapping, §6 components exist in COMPONENTS.md, §8b consumed fields
+   capability→primitive mapping, §8b consumed fields
    verified against the live dataset, scope honesty.
-   For any visually significant page, check §6 against the design-principles reference:
+   For any visually significant page, check §6 against `palbuilder-frontend/references/ui-quality.md`:
    user journey, hierarchy, grouping, target sizing, and progressive disclosure are explicit enough
    for a build agent to implement.
 3. Write results into §13. Any hard flag → both artifacts remain draft/unapproved.
@@ -172,8 +169,7 @@ human approves, apply, re-gate). **The agent never silently self-amends SPEC.md.
 
 ## What this skill does NOT do
 - Build anything — **pal-loop** executes EXECUTION.md.
-- Specify visual design — DESIGN_SYSTEM.md / COMPONENTS.md own that; the spec carries §6
-  layout only.
-- Re-teach platform rules — the palbuilder-* skills, design-build, and palbuilder-seo own those;
+- Specify visual design — the builder owns that; the spec carries §6 layout only.
+- Re-teach platform rules — the palbuilder-* skills and palbuilder-seo own those;
   the spec REFERENCES them via §9/§10.
 - Fix bugs or make small enhancements — **pal-fix** handles those without this ceremony.

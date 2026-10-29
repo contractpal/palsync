@@ -7,7 +7,7 @@ run mode: auto — the build agent runs all tasks end-to-end with NO human inter
 pal: signal_ridge (web) @ <WORKSPACE — set by evaluator before run>
 push policy: free
 review cadence: end
-design system: ../DESIGN_SYSTEM.md (components: ../COMPONENTS.md) — any evaluator-supplied reference images are the primary design authority and outrank the stub; none ship with this test.
+brand: none supplied — any evaluator-supplied reference images are the primary design authority; none ship with this test.
 created: 2026-07-06   approved: 2026-07-10
 realigned: 2026-07-14 (v2.1 — §9 skill names only)
 
@@ -134,7 +134,7 @@ Canonical base: https://signalridge.example
 Omit — no datasets, dataviews, data bundles, or datalists.
 
 ## 9. Required skills (which palsync skills this build loads)
-- ALWAYS: palbuilder-frontend, design-build
+- ALWAYS: palbuilder-frontend
 - IF server-side workflow logic, validation, routing, or responses: palbuilder-workflow
 - IF any §3 page is publicly indexable (§7 non-empty): palbuilder-seo
 
@@ -197,8 +197,7 @@ HAPPY-PATH [LITE]:
 - [ ] Contact CTA: `Email Signal Ridge` uses a mailto link for hello@signalridge.example.
 
 ## 13. Reality check
-- PASS: no data model needed; workflowType 9 web is supported; all §6 components are present in
-  COMPONENTS.md; SEO titles/descriptions are within limits; og:image values are absolute URLs;
+- PASS: no data model needed; workflowType 9 web is supported; SEO titles/descriptions are within limits; og:image values are absolute URLs;
   crawler files map to workflow string responses; pal_test, pal_preview/fetch, and pal_seo_audit
   verification are explicit in EXECUTION.md.
 

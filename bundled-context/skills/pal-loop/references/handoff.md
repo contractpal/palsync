@@ -45,7 +45,7 @@ citing the baseline comparison and the commit.
 - **ask** (default) — say the implementation is complete and offer the review. The user decides.
   Completion is not blocked by declining it.
 - **auto** — dispatch **one** `pal-review` in a fresh session/subagent, at the end, with
-  `palsync review brief` output, SPEC.md, EXECUTION.md, DESIGN_SYSTEM.md/COMPONENTS.md,
+  `palsync review brief` output, SPEC.md, EXECUTION.md,
   `baseline/` (if any), and the pal's identity so it can `pal_fetch`/`pal_screenshot`/`pal_test`
   the real artifacts. Report the verdict.
 

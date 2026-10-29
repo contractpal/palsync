@@ -20,7 +20,7 @@ text only: markup/CSS/JS/responsive/interactive changes need real browser eviden
 ## Screenshots
 
 A clean capture has `renderError:null`, loaded CSS, zero pal-content audit errors, and a pixel
-critique against design-build's archetype rubric. Fix the highest-impact failures, push,
+critique against `palbuilder-frontend/references/ui-quality.md`. Fix the highest-impact failures, push,
 re-capture. After a single-class/attribute fix, `pal_push`; if its server notes are clean, skip
 a duplicate `pal_test` and re-check with `pal_screenshot imageless:true`. Apply
 `../../shared/references/console-chrome-exception.md` only with quoted sample evidence.

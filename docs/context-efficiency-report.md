@@ -48,7 +48,7 @@ provider billing or cache measurement.
 
 Only pure local lint results are cached. Keys include cache-format version, PalSync version,
 `RULES_VERSION`, relative path, operation mode, content hash, and dependency context. Markup keys
-include `parseable:false` and design-system presence; SPEC keys include MAP presence. Cross-file
+include `parseable:false`; SPEC keys include MAP presence. Cross-file
 contracts, `pal.json` workspace checks, baseline comparison, gate decisions, locks, drift, pulls,
 debug, previews, screenshots, tunnels, browser state, and all live server results are recomputed.
 `PALSYNC_NO_CACHE=1` bypasses entries. The push gate's baseline-diff and workspace-rule logic is

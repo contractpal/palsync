@@ -21,7 +21,6 @@ const RULE_REGISTRY = {
     parseError: { severity: "error", category: "workflow", gate: "per-file", evidence: "Acorn parse failure under the validator's documented ES3 grammar." },
 
     bareAmpersand: { severity: "warn", category: "markup", gate: "per-file", evidence: "XHTML entity syntax advisory." },
-    designClassRequired: { severity: "warn", category: "markup", gate: "per-file", evidence: "Owner reversal (Sam, 2026-07-18): valid markup with no server rejection; advisory until live evidence exists." },
     voidNotClosed: { severity: "error", category: "markup", gate: "per-file", evidence: "PalBuilder XHTML save contract documented in c-tags.md." },
     unknownCAttr: { severity: "error", category: "markup", gate: "per-file", evidence: "bundled palbuilder-frontend/references/c-tags.md attribute whitelist." },
     missingRequiredCAttr: { severity: "error", category: "markup", gate: "per-file", evidence: "bundled palbuilder-frontend/references/c-tags.md required attributes." },
@@ -55,14 +54,6 @@ const RULE_REGISTRY = {
     ajaxTargetExists: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Bundled AJAX target contract." },
     destructiveConfirm: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Bundled destructive-action UI policy." },
     fontDeclaredNotLoaded: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Live 2026-07-16 font fallback eval." },
-    scriptWithoutConsumer: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Live 2026-07-16 unused-script eval." },
-    pbControlClass: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Bundled selective design-system contract." },
-    pbHeadingClass: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Bundled selective design-system contract." },
-    pbTableClass: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Bundled selective design-system contract." },
-    pbActionAffordance: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Bundled selective design-system contract." },
-    pbUndefinedClass: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Workspace stylesheet/markup class contract." },
-    pbSection: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Bundled fragment shell contract." },
-    pbMain: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Bundled page shell contract." },
 
     reservedElWord: { severity: "warn", category: "contract", gate: "per-file", evidence: "Evidence incomplete; promote only after a vendored-source citation or live repro." },
     emptyAction: { severity: "error", category: "contract", gate: "per-file", evidence: "Static empty actions cannot route." },
@@ -72,14 +63,8 @@ const RULE_REGISTRY = {
     paramDropped: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Markup/workflow action-parameter advisory." },
     ajaxTransport: { severity: "warn", category: "contract", gate: "per-file", evidence: "Bundled AJAX workflow contract." },
     pageResponseSource: { severity: "error", category: "contract", gate: "per-file", evidence: "Bundled controller page-response API contract." },
-    staleVendor: { severity: "warn", category: "contract", gate: "per-file", evidence: "Known stale external-vendor dependency advisory." },
     missingFragment: { severity: "error", category: "cross-file", gate: "workspace-gate", evidence: "Static fragment names must resolve to shipped markup." },
-    pbSkipLink: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Bundled accessible skip-link recipe." },
-    pbRowActionGroup: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Live equipment-checkout row-action eval." },
     pbConflictingStateActions: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Live equipment-checkout state-action eval." },
-    pbFormRhythm: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Bundled form-layout design guidance." },
-    referenceStylesheetShipped: { severity: "error", category: "cross-file", gate: "workspace-gate", evidence: "Owner-approved policy gate (Sam, 2026-07-18): reference catalog must not ship at runtime." },
-    designSystemBypass: { severity: "warn", category: "cross-file", gate: "workspace-warning", evidence: "Bundled design-system ownership policy." },
 };
 
 function rulesForGate(gate) {

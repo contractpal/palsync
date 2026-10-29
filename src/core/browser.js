@@ -10,7 +10,7 @@ const VIEWPORTS = {
     mobile: { width: 390, height: 844 }
 };
 
-// A 390px-wide desktop context is NOT a mobile context: PalSync's design system gates its larger
+// A 390px-wide desktop context is NOT a mobile context: Pal CSS commonly gates larger
 // touch targets on `@media (pointer: coarse)`, and a narrow mouse context still reports
 // pointer:fine / hover:hover, so mobile review silently audited the desktop rules.
 // LIVE-VERIFIED 2026-09-08 (Playwright Chromium): viewport-only -> {coarse:false, fine:true,

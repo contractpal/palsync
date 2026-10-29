@@ -186,7 +186,7 @@ test("PALSYNC_NO_CACHE bypasses reads and writes", () => {
     }
 });
 
-test("markup dependency fingerprints invalidate parseable and design-system changes", () => {
+test("markup dependency fingerprints invalidate parseable changes", () => {
     const ws = tmpWorkspace({
         "fragments/track.html": "<script>var x = `${value}`;</script>\n",
         "pages/form.html": "<input type=\"text\" />\n",
@@ -199,10 +199,6 @@ test("markup dependency fingerprints invalidate parseable and design-system chan
     fs.writeFileSync(path.join(ws, "pal.json"), JSON.stringify(pal));
     const nonParseable = validateWorkspace(ws);
     assert.ok(!nonParseable.findings.some(f => f.file === "fragments/track.html" && /inline|template/i.test(f.message)));
-    fs.mkdirSync(path.join(ws, "styles"), { recursive: true });
-    fs.writeFileSync(path.join(ws, "styles", "design-system.css"), ".pb-btn {}\n");
-    const designed = validateWorkspace(ws);
-    assert.ok(designed.findings.some(f => f.rule === "designClassRequired" && f.file === "pages/form.html"));
     fs.rmSync(ws, { recursive: true, force: true });
 });
 

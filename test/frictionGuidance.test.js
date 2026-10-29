@@ -19,42 +19,6 @@ function mustMatch(text, pattern, message) {
     assert.match(text, pattern, message);
 }
 
-test("design-system.css stays a reference; pals selectively author styles.css", () => {
-    const init = read("bundled-context/skills/design-system-init/SKILL.md");
-    const build = read("bundled-context/skills/design-build/SKILL.md");
-    const components = read("bundled-context/skills/design-system-init/references/component-library.md");
-    const marketing = read("bundled-context/skills/design-system-init/references/marketing-library.md");
-    const designSpec = read("eval/specs/DESIGN_SYSTEM.md");
-    const componentSpec = read("eval/specs/COMPONENTS.md");
-
-    for (const [label, text] of [["design-system-init", init], ["design-build", build]]) {
-        mustMatch(text, /design-system\.css[^\n]*(?:reference[- ]only|reference file)|(?:reference[- ]only|reference file)[^\n]*design-system\.css/i,
-            label + " must call design-system.css a reference, not a pal asset");
-        mustMatch(text, /styles\/styles\.css/i, label + " must name the pal-owned stylesheet");
-        mustMatch(text, /(?:copy|extract|take|include)[^\n]*(?:only|just)[^\n]*(?:needed|used|required)|(?:only|just)[^\n]*(?:needed|used|required)[^\n]*(?:rules|components|pieces|styles)/i,
-            label + " must require selective extraction of only needed CSS");
-        mustMatch(text, /(?:never|do not|must not)[\s\S]{0,140}(?:copy|register|link|load|ship)[\s\S]{0,140}design-system\.css|design-system\.css[\s\S]{0,140}(?:must not|never|do not)[\s\S]{0,140}(?:copy|register|link|load|ship)/i,
-            label + " must explicitly forbid loading the reference into a pal");
-    }
-
-    for (const [label, text] of [["component library", components], ["marketing library", marketing]]) {
-        mustMatch(text, /references?\/design-system\.css|design-system\.css[^\n]*reference/i,
-            label + " must route CSS lookup to the reference stylesheet");
-        mustMatch(text, /styles\/styles\.css/i, label + " must route selected rules to styles.css");
-        assert.doesNotMatch(text, /(?:ships?|shipped)\s+verbatim|base styling ships in [`\s]*styles\/design-system\.css/i,
-            label + " must not describe the reference stylesheet as shipped pal code");
-    }
-
-    for (const [label, text] of [["DESIGN_SYSTEM benchmark", designSpec], ["COMPONENTS benchmark", componentSpec]]) {
-        mustMatch(text, /styles\/styles\.css/i, label + " must score the authored pal stylesheet");
-        assert.doesNotMatch(text, /(?:load|link|register|ship|copy)[^\n]*styles\/design-system\.css/i,
-            label + " must not direct eval agents to load the reference stylesheet");
-    }
-
-    assert.ok(fs.existsSync(path.join(BUNDLED, "skills", "design-system-init", "references", "design-system.css")),
-        "the full design-system.css must remain available as a skill reference");
-});
-
 test("console workflow guidance distinguishes reserved globals from handler locals", () => {
     const consoleGuide = read("bundled-context/skills/palbuilder-workflow/references/console.md");
     const workflow = read("bundled-context/skills/palbuilder-workflow/SKILL.md");
@@ -182,15 +146,12 @@ test("pal-level manifest guidance no longer dead-ends on data and datalists", ()
 });
 
 test("platform chrome and screenshot auth failures are classified as tool evidence", () => {
-    const build = read("bundled-context/skills/design-build/SKILL.md");
     const loop = read("bundled-context/skills/pal-loop/SKILL.md");
     const review = read("bundled-context/skills/pal-review/SKILL.md");
     const renderRule = read("bundled-context/skills/pal-review/references/console-render-verification.md");
 
-    for (const [label, text] of [["design-build", build], ["pal-review", review]]) {
-        mustMatch(text, /platform(?:-| )chrome|platform-injected/i,
-            label + " must distinguish platform chrome from pal-owned DOM");
-    }
+    mustMatch(review, /platform(?:-| )chrome|platform-injected/i,
+        "pal-review must distinguish platform chrome from pal-owned DOM");
     mustMatch(loop, /references\/verify-mechanics\.md/i,
         "pal-loop must load the screenshot verification owner");
     mustMatch(read("bundled-context/skills/pal-loop/references/verify-mechanics.md"), /console-chrome-exception\.md/i,

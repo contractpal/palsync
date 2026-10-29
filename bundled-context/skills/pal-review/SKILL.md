@@ -27,9 +27,8 @@ never pal-loop's self-report.
 - `SPEC.md` (must be `status: approved`) — the contract: §3 sitemap, §4 copy, §5 behavior,
   §6 layout, §11 constraints, §12 acceptance criteria.
 - `EXECUTION.md` — what was built and in what state.
-- `DESIGN_SYSTEM.md` / `COMPONENTS.md` — what "on-brand / good" means visually.
-- `../design-system-init/references/design-principles.md` —
-  applied UX/hierarchy/grouping/target/simplicity rubric for visually significant screens.
+- `../palbuilder-frontend/references/ui-quality.md` —
+  UX/hierarchy/state/target/responsive bar for visually significant screens.
 - Built artifacts: `pal_fetch` each web page (server-rendered HTML); workflow/fragment files
   on disk.
 
@@ -87,10 +86,10 @@ proof artifact for rendered output or data effects.
   `possible`; omit `possible` unless there are none of the other kind. No extra file reads for
   this beyond the listed spans; no fix tasks.
 
-- Copy on-brand per BRAND_VOICE / DESIGN_SYSTEM intent, not just present?
+- Copy on-brand per BRAND_VOICE and any brand constraints in the spec, not just present?
 - §6 layout matches the composition the spec described?
-- Tokens in `styles/styles.css` match the shipped preset recorded in `DESIGN_SYSTEM.md`, or a
-  documented reference-derived palette. Invented fallback palettes are a finding.
+- Colors and fonts in `styles/styles.css` are coherent and match any brand constraints the spec
+  records.
 - A console pal with no recorded explicit font decision uses the system font stack and has no
   `@import`; otherwise record a visual finding.
 
@@ -108,19 +107,16 @@ Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per 
   visual failure; list each rule and screenshot as evidence. Audit warnings must be fixed or
   individually justified, never silently ignored.
 - Apply platform-chrome exceptions outside `#cp-root` only through `../shared/references/console-chrome-exception.md`; quote the required evidence.
-- Confirm every fragment root has `pb-section` and the page shell owns `pb-main`; review only documented exceptions. `pal_validate` checks this only when the pal contains `styles/design-system.css`, which must not ship, so verify by inspection.
-- IF a shell wrapper class is absent from `styles/design-system.css`, `styles/spacing.css`, and COMPONENTS.md, THEN fail it as undefined.
-- IF `for f in fragments/*; do [ "$(rg -o 'pb-field-group' "$f" | wc -l)" -lt 2 ] || rg -q 'pb-stack|pb-form-grid' "$f" || echo "$f"; done` prints a fragment, THEN fail it. Two or more field groups require `pb-stack` or `pb-form-grid`.
-- IF `for t in $(rg -oN 'class="[^"]*"' fragments/ pages/ | sed -E 's/.*class="//; s/"$//' | tr ' ' '\n' | grep -v '\$' | sort -u); do rg -q "\\.$t\\b" styles/ || echo "$t"; done` prints a class token, THEN fail each printed token as undefined — it appears in markup but no shipped stylesheet defines it, so that element renders unstyled. Usual offenders: Bootstrap muscle-memory names (`btn`, `btn-primary`, `form-control`, `badge`, `alert-danger`) and invented pb-* names (`pb-card-header` — real name `pb-card-head`; `pb-empty-state` — real name `pb-state`). The fix is the exact pb-* class from COMPONENTS.md / the shipped stylesheets; a new-pal override belongs in readable `styles/styles.css`.
-- IF an Actions `td` contains two or more controls without a `.pb-row-actions` wrapper, fail it.
+- IF `for t in $(rg -oN 'class="[^"]*"' fragments/ pages/ | sed -E 's/.*class="//; s/"$//' | tr ' ' '\n' | grep -v '\$' | sort -u); do rg -q "\\.$t\\b" styles/ || echo "$t"; done` prints a class token, THEN fail each printed token as undefined — it appears in markup but no shipped stylesheet defines it, so that element renders unstyled. Usual offenders: Bootstrap muscle-memory names (`btn`, `btn-primary`, `form-control`, `badge`, `alert-danger`). The fix is an existing class from the shipped stylesheets, or a new rule in readable `styles/styles.css`.
+- IF an Actions `td` contains two or more controls without a shared wrapper, fail it.
   Button variants alone do not provide grouping or mobile wrapping. If mutually exclusive state
   transitions (such as Check out and Check in) render together for one row, fail action/state
   clarity and require conditional rendering plus exercises of both states.
 - **`captured:true`:** first check `renderError` — non-null = hard FAIL (compiled but threw at
-  render). Null → judge each screen against DESIGN_SYSTEM.md and a short UX rubric: visual
+  render). Null → judge each screen against `ui-quality.md` and a short UX rubric: visual
   hierarchy, primary journey, Gestalt grouping, Fitts target sizing/proximity, progressive
   disclosure, spacing rhythm, legibility, color meaning/contrast, consistency, responsive behavior
-  if testable, presence/use of the required spacing utility layer, plus anti-slop fingerprints:
+  if testable, plus anti-slop fingerprints:
   gradient-blob hero, pill-everything uniform radius, and serif-on-cream-with-sage. Read
   `../shared/references/anti-slop.md` for the full list. Report each issue with screenshot + fix.
   Apply the complete ship gate in `../shared/references/visual-rubric.md`; every score cites visible evidence.
@@ -185,7 +181,7 @@ gate, and other harnesses invoke the same CLI gate manually.
 ## Rules
 - **Never edit code or the spec.** Findings become fix tasks for pal-loop; a *spec* problem
   (missing/contradictory requirement) is a human blocker, not a self-edit.
-- Judge only against the spec and design system. "I'd have done it differently" is not a
+- Judge only against the spec and `ui-quality.md`. "I'd have done it differently" is not a
   finding; "violates §12 criterion 4" is. (Code-health notes are advisory and are not findings. They
   never become fix tasks and never affect the verdict.)
 - **Evidence classes — PASS requires the matching evidence, or it's fabrication:**

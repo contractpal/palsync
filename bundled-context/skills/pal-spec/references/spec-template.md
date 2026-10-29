@@ -42,11 +42,9 @@ system shall <result, exact msg>) / Effect (dataset+field) / Output (next screen
 cases (empty/invalid/not-found/duplicate/auth-fail → behavior each); LITE lists deferred edge cases
 without specifying them. Omit for pure static pages; mandatory for anything with logic.
 
-**§6 Layout** — composition and UX flow only, NO colors/fonts: sections in order, each naming a
-COMPONENTS.md component, plus the primary path, hierarchy order, target placement, feedback/next
+**§6 Layout** — composition and UX flow only, NO colors/fonts: sections in order, plus the primary path, hierarchy order, target placement, feedback/next
 step, and progressive disclosure notes. Existing pal: new UI MUST match the conventions and design
-reality already in the pal — inspect them and reuse before building; no DESIGN_SYSTEM.md yet →
-run design-system-init in EXTRACT mode against the map. Every UI page follows `../../shared/references/css-conventions.md`. Existing pals are not retrofitted.
+reality already in the pal — inspect them and reuse before building. Every UI page follows `../../shared/references/css-conventions.md`. Existing pals are not retrofitted.
 
 **§7 SEO** — publicly indexable pages only; mark which §3 rows apply (usually `web`-tagged, but a
 `console` row can qualify, e.g. a logged-out landing/login screen). title ≤60ch, meta desc
@@ -96,7 +94,7 @@ spec version: 1
 mode: full | lite
 pal: <pal name> (<web | console | web+console>) @ <cloud url>
 push policy: free | checkpoint
-design system: DESIGN_SYSTEM.md @ <path>
+brand: <user-supplied logo/colors, or none>
 created: <date>   approved: <date or pending>
 
 ## 1. Product & audience
@@ -129,7 +127,6 @@ created: <date>   approved: <date or pending>
 ## 6. Layout (composition only — NO colors/fonts)
 ### <page>
 - Sections in order: <hero> → <grid> → <CTA> → <footer>
-- Each names a COMPONENTS.md component: <hero = Hero/centered, grid = CardRow x3>
 - UX flow: entry point → first decision → primary action placement → feedback → next step
 - Hierarchy/disclosure: <what appears first, what is grouped, what is deferred behind tabs/drawer/etc.>
 
@@ -147,7 +144,7 @@ Canonical base: <https://...>
 | field relied on | type | used by (which §5 action / §6 component) |
 
 ## 9. Required skills (initial technical plan — which palsync skills this build loads)
-- ALWAYS: palbuilder-frontend, design-build
+- ALWAYS: palbuilder-frontend
 - IF server-side workflow logic, validation, routing, or responses: palbuilder-workflow
 - IF data writes/reads, payloads/DataLists, cache, files, or server-side HTTP: palbuilder-data
 - IF background jobs, long-running work, realtime, server push, or progress UI: palbuilder-realtime
@@ -185,7 +182,7 @@ GLOBAL FLOOR (both modes):
 WEB pages add (every §3 row tagged `web`):
 - [ ] pal_preview: rendered page contains the exact H1s from §4
 - [ ] VISUAL (one per visually-significant web-tagged §3 page): the hero/key screen renders per
-      DESIGN_SYSTEM.md with clear hierarchy, grouped controls, usable target sizing, and no
+      `ui-quality.md` with clear hierarchy, grouped controls, usable target sizing, and no
       anti-slop fingerprints (see ../../pal-review/references/console-render-verification.md).
       State the exact thing to see.
 INDEXABLE pages add (every §3 row listed in §7):

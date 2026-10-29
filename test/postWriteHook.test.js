@@ -69,14 +69,14 @@ test("3. findings for other files are not attributed to this write", () => {
 });
 
 test("4b. workspace-scope rules never appear, on any write", () => {
-    // pbSection is gate "workspace-warning": it describes the workspace's current form, so it fires
+    // pbConflictingStateActions is gate "workspace-warning": it describes the workspace's current form, so it fires
     // identically after every edit until fixed elsewhere. Right for one push report, noise per write.
     const dir = workspace({ "fragments/form.html": CLEAN });
     fs.writeFileSync(path.join(dir, "fragments", "form.html"), CLEAN.replace("Before", "After"));
-    assert.equal(edit(dir, "fragments/form.html").result.findings.some(f => f.rule === "pbSection"), false);
+    assert.equal(edit(dir, "fragments/form.html").result.findings.some(f => f.rule === "pbConflictingStateActions"), false);
 
     fs.writeFileSync(path.join(dir, "fragments", "fresh.html"), CLEAN);
-    assert.equal(edit(dir, "fragments/fresh.html").result.findings.some(f => f.rule === "pbSection"), false);
+    assert.equal(edit(dir, "fragments/fresh.html").result.findings.some(f => f.rule === "pbConflictingStateActions"), false);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 

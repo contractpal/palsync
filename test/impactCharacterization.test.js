@@ -14,7 +14,6 @@
 //                             entry[3] is a flat malformed entry → malformedManifestEntry
 //   pal.json fragments      — entry[2] has no Fragment.filename → missingManifestFilename;
 //                             entry[3] filename prefixed "fragments/" → bannedFilenamePrefix
-// pbMain/pbSection are deliberately absent: they only apply to a pal that contains design-system.css.
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("fs");

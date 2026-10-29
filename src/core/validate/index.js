@@ -35,11 +35,6 @@ function nonParseableSet(snapshot) {
     return set;
 }
 
-function hasDesignSystem(workspaceDir) {
-    return fs.existsSync(path.join(workspaceDir, "styles", "design-system.css")) ||
-        fs.existsSync(path.join(workspaceDir, "Styles", "design-system.css"));
-}
-
 // cachedLint deps so a host edit that changes the declared globals invalidates a library's result.
 function globalsDeps(rel, declaredGlobals) {
     return declaredGlobals
@@ -61,8 +56,6 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
     const snapshot = buildSnapshot(workspaceDir);
     const findings = [];
     const nonParseable = nonParseableSet(snapshot);
-    const designSystemPresent = snapshot.allFiles.includes("styles/design-system.css") ||
-        snapshot.allFiles.includes("Styles/design-system.css");
     let filesChecked = 0;
     const inScope = (rel) => !only || only.has(rel);
 
@@ -90,10 +83,9 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
                 content: src,
                 mode: "workspace-markup",
                 deps: [
-                    { path: "pal.json#parseable:" + f.rel, content: String(nonParseable.has(f.rel)) },
-                    { path: "design-system#present", content: String(designSystemPresent) }
+                    { path: "pal.json#parseable:" + f.rel, content: String(nonParseable.has(f.rel)) }
                 ]
-            }, () => lintMarkup(f.rel, src, { nonParseable, designSystemPresent })));
+            }, () => lintMarkup(f.rel, src, { nonParseable })));
         }
     }
 
@@ -129,7 +121,6 @@ function validateWorkspace(workspaceDir, { only = null } = {}) {
             .filter(rel => /^(?:pages|fragments|styles|Styles|scripts|images|emails|attachments|wizards|datasets)\//.test(rel))
             .sort()
             .map(rel => "manifest-path:" + rel))
-        .concat("design-system.css:<" + (designSystemPresent ? "present" : "absent") + ">")
         .join("\n");
     findings.push(...cachedLint(workspaceDir, {
         rel: "<workspace>", content: contractInput, mode: "workspace-contracts"
@@ -206,10 +197,10 @@ function formatValidation(result, { context = "validate" } = {}) {
 // Lint a single file's CONTENT (not read from disk), dispatching by its rel path. Used by the
 // pre-push gate to lint a baseline version vs the current version. Must mirror the folder
 // dispatch in validateWorkspace and the isLintable set in core/baseline.
-function lintContent(rel, content, { designSystemPresent, declaredGlobals } = {}) {
+function lintContent(rel, content, { declaredGlobals } = {}) {
     if (rel.startsWith("workflows/") && rel.endsWith(".js")) return [...lintWorkflowJs(rel, content, { declaredGlobals }), ...lintWorkflowContracts(rel, content)];
     if ((rel.startsWith("pages/") || rel.startsWith("fragments/")) && MARKUP_EXT.has(path.extname(rel).toLowerCase())) {
-        return [...lintMarkup(rel, content, { designSystemPresent }), ...lintFileContracts(rel, content)];
+        return [...lintMarkup(rel, content, {}), ...lintFileContracts(rel, content)];
     }
     if (rel.startsWith("datasets/") && rel.endsWith(".json")) return lintDatasetDef(rel, content);
     if (rel === "pal.json") {
@@ -233,5 +224,5 @@ function lintContent(rel, content, { designSystemPresent, declaredGlobals } = {}
     return [];
 }
 
-module.exports = { validateWorkspace, formatValidation, lintContent, hasDesignSystem,
+module.exports = { validateWorkspace, formatValidation, lintContent,
     workspaceDeclaredGlobals, globalsDeps };

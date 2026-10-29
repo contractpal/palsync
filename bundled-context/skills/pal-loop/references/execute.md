@@ -8,13 +8,13 @@ Read this reference before executing the task's build procedure.
 Foundation task (T1): use bash `cp` to copy the matching pal-type template files and the
 runtime shell/styles plus ONLY the behavior scripts with real consumers in current markup;
 add a script later when a task introduces its consumer. Replace `{{PAL_NAME}}`/`YOUR-DOMAIN`
-placeholders, then adapt; author `styles/styles.css` from selected design-system rules.
+placeholders, then adapt; author `styles/styles.css` per the CSS rule in `palbuilder-frontend`.
 For console pals establish the `run()` skeleton from the copied template.
 
 ## Per-section build mapping
 
 - Copy: **§4**, verbatim — these exact words ship.
-- Layout: **§6** composition, styled via **design-build** (the spec carries no colors/fonts).
+- Layout: **§6** composition, styled per `palbuilder-frontend/references/ui-quality.md` (the spec carries no colors/fonts).
 - SEO head values: **§7** (web only).
 - Schemas: **§8a** (CREATE). **§8b** datasets are CONSUMED, read-only — never create or
   alter one.

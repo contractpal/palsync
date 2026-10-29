@@ -125,8 +125,8 @@ function parseAgentFlag(args) {
 const agentFlag = parseAgentFlag(argv);
 
 // --eval [name]: benchmark-harness mode. Adds a "pick a spec" step before login, forces
-// create-mode, prefills the new-pal name from the spec, and injects SPEC.md/EXECUTION.md/
-// DESIGN_SYSTEM.md/COMPONENTS.md into the workspace after setup. Boolean form (`--eval`)
+// create-mode, prefills the new-pal name from the spec, and injects SPEC.md/EXECUTION.md
+// into the workspace after setup. Boolean form (`--eval`)
 // shows the interactive spec picker; `--eval <key>` / `--eval=<key>` resolves it directly.
 function parseEvalFlag(args) {
     if (!args.includes("--eval") && !args.some(a => a.startsWith("--eval="))) return undefined;

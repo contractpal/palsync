@@ -7,7 +7,7 @@ run mode: auto — the build agent runs all tasks end-to-end with NO human inter
 pal: company_directory (console) @ <WORKSPACE — set by evaluator before run>
 push policy: free
 review cadence: end
-design system: ../DESIGN_SYSTEM.md (components: ../COMPONENTS.md) — any evaluator-supplied reference images are the primary design authority and outrank the stub; none ship with this test.
+brand: none supplied — any evaluator-supplied reference images are the primary design authority; none ship with this test.
 created: 2026-07-01   approved: 2026-07-06
 realigned: 2026-07-14 (v2.1 — §9 skill names only)
 
@@ -120,7 +120,7 @@ Seed rows: Engineering, Sales, Operations, HR.
 None.
 
 ## 9. Required skills (which palsync skills this build loads)
-- ALWAYS: palbuilder-frontend, design-build
+- ALWAYS: palbuilder-frontend
 - IF server-side workflow logic, validation, routing, or responses: palbuilder-workflow
 - IF data writes/reads, payloads/DataLists, cache, files, or server-side HTTP: palbuilder-data
 
@@ -178,7 +178,7 @@ STRUCTURE-CHOICE:
 
 ## 13. Reality check
 - PASS: §8a types are verified stored strings; size only on String; indexed fields are indexable;
-  employees and departments have primary keys; §6 components exist in COMPONENTS.md; no dead links;
+  employees and departments have primary keys; no dead links;
   workflow compile verification is explicit in EXECUTION.md.
 - CAVEAT (accepted, by design): §10 leaves three data primitives unbound, which the usual reality
   check would flag as capability without primitive. This is the measured variable. §10 constrains
