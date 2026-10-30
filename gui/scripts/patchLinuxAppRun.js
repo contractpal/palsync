@@ -62,6 +62,12 @@ function main() {
     fs.writeFileSync(appRunPath, appRun, "utf8");
     console.log("[patchLinuxAppRun] patched AppRun: " + EXPORT_LINE);
 
+    // Newer appimagetool builds refuse to pack an AppDir with any path that isn't world
+    // readable/executable (the extracted tree has 0700 dirs), since other users would get
+    // 'Permission denied' running the AppImage - so normalize modes first.
+    execFileSync("chmod", ["-R", "a+rX", squashfsRoot], { stdio: "inherit" });
+    fs.chmodSync(appRunPath, 0o755);
+
     console.log("[patchLinuxAppRun] repackaging via appimagetool");
     fs.rmSync(appImagePath, { force: true });
     execFileSync("appimagetool", [squashfsRoot, appImagePath], {
