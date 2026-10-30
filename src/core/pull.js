@@ -228,6 +228,8 @@ async function saveLocal(pal, priorRaw) {
 //     proves the server tracked them before (a real server-side delete). New un-pushed local
 //     files are PRESERVED and their pal.json entries carried forward (see planSync /
 //     mergePreservedEntries). Without a baseline (legacy records), behavior is unchanged.
+//   - clean:true makes the 14 folders + pal.json mirror the server exactly: new local files are
+//     deleted too, not preserved.
 //   - Everything else in targetDir is untouched (root-level user files like spec.md, user-
 //     created subdirs like references/, and palsync-managed files .palsync.json / CLAUDE.md /
 //     .claude/ / .mcp.json all survive a pull cleanly).
@@ -236,7 +238,7 @@ async function saveLocal(pal, priorRaw) {
 //   resolved (optional) = a previously-resolved pal (see core/resolve.js) to skip the full
 //     account-walk resolve — callers with a long-lived session (MCP's ctx.lifecycle.lockState)
 //     should pass their cached one through.
-async function pull(session, guid, targetDir, { baseline = null, resolved: pre = null } = {}) {
+async function pull(session, guid, targetDir, { baseline = null, resolved: pre = null, clean = false } = {}) {
     const resolved = pre || await resolveServerPalByGuid(session, guid);
     if (!resolved) {
         throw new Error("GUID " + guid + " not found on " + session.environment.url);
@@ -267,7 +269,8 @@ async function pull(session, guid, targetDir, { baseline = null, resolved: pre =
     // 2) STALE-DELETE vs PRESERVE: decide per local file via the baseline (see planSync).
     const serverSet = manifestPaths(pal);
     const localTracked = await listTrackedFiles(targetDir);
-    const { toDelete, toPreserve } = planSync(localTracked, serverSet, baseline);
+    // clean: no baseline means planSync deletes every local file the server doesn't track.
+    const { toDelete, toPreserve } = planSync(localTracked, serverSet, clean ? null : baseline);
     const removed = [];
     for (const rel of toDelete) {
         await fs.unlink(path.join(targetDir, ...rel.split("/")));

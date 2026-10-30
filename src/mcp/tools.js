@@ -2149,12 +2149,13 @@ const TOOLS = [
     },
     {
         name: "pal_pull",
-        description: "Pull (sync) the pal from the server. New un-pushed local files are preserved. Refuses if it would overwrite locally-modified files or no pull baseline exists to check (force overrides; snapshot copies files to .palsync/snapshots first). Counts only, no per-file diff.",
+        description: "Pull (sync) the pal from the server. New un-pushed local files are preserved. Refuses if it would overwrite locally-modified files or no pull baseline exists to check (force overrides; snapshot copies files to .palsync/snapshots first). clean:true mirrors the server exactly, deleting new local files too (needs force when any exist). Counts only, no per-file diff.",
         inputShape: {
             force: z.boolean().optional(),
-            snapshot: z.boolean().optional()
+            snapshot: z.boolean().optional(),
+            clean: z.boolean().optional()
         },
-        async run(ctx, { force = false, snapshot = false } = {}) {
+        async run(ctx, { force = false, snapshot = false, clean = false } = {}) {
             // Reverse drift guard, per-file: changed/deleted server-tracked files (and pure
             // pal.json mutations) block the pull; NEW local files don't — sync preserves them.
             const d = diffWorkspace(ctx.record, ctx.workspaceDir);
@@ -2170,14 +2171,15 @@ const TOOLS = [
             }
             let snap = null;
             if (snapshot && !(d.dirty && !force)) snap = snapshotWorkspace(ctx.workspaceDir, "pre-pull");
-            if (d.dirty && !force) {
+            const cleanBlocked = clean && !force && !d.dirty && d.added && d.added.length;
+            if ((d.dirty && !force) || cleanBlocked) {
                 return { pulled: false, refused: "local-changes", changed: d.changed, deleted: d.deleted, added: d.added,
                     message: "REFUSED: un-pushed local changes would be lost by this pull.\n" + describeDiff(d) +
                         "\npal_push first; or pal_merge to keep BOTH your changes and the server's where they don't collide; or pal_pull with force:true to discard your local changes." +
-                        (d.legacy ? "" : " (New local files are preserved either way.)") };
+                        (clean ? " (clean:true deletes new local files too.)" : d.legacy ? "" : " (New local files are preserved either way.)") };
             }
             const cachedResolved = ctx.lifecycle && ctx.lifecycle.lockState && ctx.lifecycle.lockState.resolved;
-            const { resolved, written, removed, preserved, serverPaths, repositoryPal } = await pull(ctx.session, ctx.record.palGuid, ctx.workspaceDir, { baseline: ctx.record.fileHashes || null, resolved: cachedResolved });
+            const { resolved, written, removed, preserved, serverPaths, repositoryPal } = await pull(ctx.session, ctx.record.palGuid, ctx.workspaceDir, { baseline: ctx.record.fileHashes || null, resolved: cachedResolved, clean });
             drift.adoptMarker(ctx.record, resolved.lastModifiedDate);
             refreshBaseline(ctx.record, ctx.workspaceDir, serverPaths);
             ctx.record.pulledAt = nowIso();

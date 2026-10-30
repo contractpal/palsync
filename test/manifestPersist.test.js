@@ -707,3 +707,35 @@ test("9 — baseline refresh after first migrated pull does not leave false loca
         fs.rmSync(dir, { recursive: true, force: true });
     }
 });
+
+// ---------------------------------------------------------------------------
+// clean:true — new local-only files are deleted, not preserved
+// ---------------------------------------------------------------------------
+test("clean pull deletes new local-only files that a normal pull preserves", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-mp-clean-"));
+    try {
+        const serverPal = baseServerPal({
+            pages: { entry: [{ string: "index.html", Page: { name: "index", content: b64("<p>hi</p>") } }] }
+        });
+        const resolved = { id: "id-c", guid: "guid-c", lastModifiedDate: "2026-01-01 00:00:00.0" };
+        const session = fakeSession("https://cloud.example");
+        stubPull(serverPal, resolved);
+        await pull(session, "guid-c", dir, { baseline: null });
+
+        const local = path.join(dir, "pages", "local-only.html");
+        fs.writeFileSync(local, "<p>mine</p>");
+        const { hashPaths: hp } = require("../src/core/workspaceHash");
+        const baseline = hp(dir, ["pages/index.html"]);
+
+        stubPull(serverPal, resolved);
+        await pull(session, "guid-c", dir, { baseline });
+        assert.equal(fs.existsSync(local), true, "normal pull preserves new local file");
+
+        stubPull(serverPal, resolved);
+        const res = await pull(session, "guid-c", dir, { baseline, clean: true });
+        assert.equal(fs.existsSync(local), false, "clean pull removes it");
+        assert.deepStrictEqual(res.preserved, []);
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});

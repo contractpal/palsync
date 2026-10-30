@@ -34,6 +34,15 @@ Make the smallest change that satisfies the request, and leave the code you touc
 
 Comments say *why*, not *what*: a non-obvious rule, invariant, security or data-integrity concern, or PalBuilder workaround, in 1–2 lines (≤120 chars). Prefer a clearer name over a comment. Never narrate code, your edits, or change history. When you change code, update or delete comments it made wrong.
 
+## "Get latest"
+
+When the user says "get latest", the developers changed the pal and the server copy must replace what is on disk. It is not a cautious sync.
+
+1. Run `pal_diff` with `against:"baseline"` (if no baseline exists, say so and treat local state as unknown). Changed, deleted, **and new local-only files** all count as unpushed changes.
+2. If there are any, list them and ask whether to delete them. Do nothing else until the user answers. Never run `pal_pull` first: it keeps new local files and does not list them beforehand.
+3. If there are none, or the user says delete them, run `pal_pull` with `clean:true` and `force:true`. That makes the pal folders and `pal.json` match the server exactly, deleting local-only files too. Root-level files such as `spec.md` are not touched.
+4. After the pull, re-read any file before you describe it. Never answer from earlier reads.
+
 ## Verify claims
 
 Use PalSync's deterministic/server/runtime checks for the behavior you changed. Compile/validation success is not runtime/render evidence. Do not claim UI state, saved data, or completed behavior that a tool did not actually observe.

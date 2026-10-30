@@ -1347,7 +1347,7 @@
   {
     "name": "pal_pull",
     "title": "Pull pal changes",
-    "description": "Pull (sync) the pal from the server. New un-pushed local files are preserved. Refuses if it would overwrite locally-modified files or no pull baseline exists to check (force overrides; snapshot copies files to .palsync/snapshots first). Counts only, no per-file diff.",
+    "description": "Pull (sync) the pal from the server. New un-pushed local files are preserved. Refuses if it would overwrite locally-modified files or no pull baseline exists to check (force overrides; snapshot copies files to .palsync/snapshots first). clean:true mirrors the server exactly, deleting new local files too (needs force when any exist). Counts only, no per-file diff.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1355,6 +1355,9 @@
           "type": "boolean"
         },
         "snapshot": {
+          "type": "boolean"
+        },
+        "clean": {
           "type": "boolean"
         }
       }
