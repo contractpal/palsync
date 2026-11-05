@@ -76,8 +76,8 @@ high-blast-radius section plus the user's "must not change" answers.
 (pal_screenshot `captured:true` vs human-eyeball fallback on `captured:false`) is defined once in
 ../../pal-review/references/console-render-verification.md; §12 references it rather than restating it.
 
-**§13 Reality check** — filled by the reality-check gate (references/reality-check.md); the spec
-stays draft while hard flags remain.
+**§13 Reality check** — filled by the reality-check gate (references/reality-check.md) and the
+fresh-context review (references/spec-review.md); the spec stays draft while hard flags remain.
 
 **§14 Amendment log** — append-only, empty until the first approved amendment. pal-loop NEVER edits
 the spec silently; the amendment path is in `amendment-path.md` (this directory). One block per approved

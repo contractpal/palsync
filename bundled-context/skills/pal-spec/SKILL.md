@@ -149,7 +149,9 @@ The **first task is always a standalone foundation task**. Give it its own row, 
    For any visually significant page, check §6 against `palbuilder-frontend/references/ui-quality.md`:
    user journey, hierarchy, grouping, target sizing, and progressive disclosure are explicit enough
    for a build agent to implement.
-3. Write results into §13. Any hard flag → both artifacts remain draft/unapproved.
+3. Read `references/spec-review.md` and run the fresh-context review: one reviewer with only the
+   files, findings fixed or rejected with reasons, user-owned questions asked.
+4. Write results into §13. Any hard flag → both artifacts remain draft/unapproved.
    All clear → if the check changed anything the user confirmed at LOCK, tell them in plain words
    and get a yes. Then set `status: approved`, `reality_check: pass`, and confirm EXECUTION.md's
    `spec version` matches SPEC.md. The pair is then jointly approved.
