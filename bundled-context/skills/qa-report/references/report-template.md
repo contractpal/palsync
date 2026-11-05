@@ -87,7 +87,7 @@ an invented image link.
 | --- | ---: | --- |
 | Tasks attempted | `<n>` | `<EXECUTION/transcript>` |
 | Tasks completed | `<n>` | |
-| Blocked / needs-human / needs-frontier | `<n / n / n>` | |
+| Blocked / needs-human | `<n / n>` | |
 | Skills loaded | `<names>` | `<transcript>` |
 | Extra references loaded | `<names or none>` | |
 | Significant tool failures/retries | `<n>` | `<tool + reason>` |

@@ -51,8 +51,7 @@ mechanics; open it when you need them.
 
 Run `palsync task list --ready`. The returned ticket, its spliced SPEC sections, and
 §11 constraints are the complete task requirement. Surface assumptions; no eligible
-task means enter **Complete** below. A frontier-tier task needing new structure requires
-an available advisor; otherwise mark it `needs-frontier` and move to an independent ready task.
+task means enter **Complete** below.
 
 Before farming a task to a subagent, read
 [references/delegation.md](references/delegation.md). Delegation is optional; the
@@ -119,7 +118,7 @@ SPEC copy or behavior.
 **Fail:** list every error the failed push or check reported, fix them all in one pass, then
 re-verify once; do not use force or bypass flags to bury a failure. After
 two unsuccessful attempts, use the session-start transition procedure to record
-`blocked`, `needs-human`, or `needs-frontier` with the required evidence. Inspect
+`blocked` or `needs-human` with the required evidence. Inspect
 state before replaying an action that might have changed data. If a bad version was
 pushed, restore the known-good local source and re-push it (pull/merge first when
 server drift requires it); git alone does not restore the server.
@@ -138,7 +137,7 @@ changed.
 End the session when the user asks, when only terminally blocked tasks remain, when context
 has degraded, or when the work is complete. Finish the current task, leave none
 `in_progress`, commit, and run `palsync session-summary`.
-Do not auto-continue via the Claude Stop hook or Pi queue. Report what shipped, each blocker and required decision, frontier work,
+Do not auto-continue via the Claude Stop hook or Pi queue. Report what shipped, each blocker and required decision,
 human gates, and next work. Never end a turn with unchecked tasks unless every remaining task
 is terminally blocked; name every blocker explicitly. For a formal QA/eval report, use the
 `qa-report` skill.

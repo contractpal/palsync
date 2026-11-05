@@ -5,11 +5,9 @@ any of them.
 
 ## CLI status-transition procedure
 
-Transitions to `blocked`, `needs-human`, or `needs-frontier` require `--reason "<why>"`;
-`blocked` and `needs-human` also require `--tried "<workaround>"`. Before either `blocked` or
-`needs-human`, retry the failing step once, attempt one alternate path, and record the literal
-failing command and error text in `--tried`; only then set the status. (`needs-frontier` is a
-capability call and needs no `--tried`.)
+Transitions to `blocked` or `needs-human` require `--reason "<why>"`; both also require
+`--tried "<workaround>"`. Before either status, retry the failing step once, attempt one alternate
+path, and record the literal failing command and error text in `--tried`; only then set the status.
 
 ## Git checkpoint mechanics
 

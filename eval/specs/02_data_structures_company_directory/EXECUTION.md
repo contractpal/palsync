@@ -19,7 +19,7 @@ Dependency order (leaf-first — foundations before things that use them):
    console templates from `palbuilder-workflow/references/templates/` (`console-workflow.js` and
    `console-page.html`) plus shell/styles; replace `{{PAL_NAME}}`, author readable
    `styles/styles.css`, and register the four runtime entries in `pal.json`, then adapt.
-4. Build the joined directory read and directoryList fragment. This is frontier because the
+4. Build the joined directory read and directoryList fragment. This is standard tier because the
    read-model choice is the core measured behavior.
 5. Add office filtering.
 6. Add employeeForm + saveEmployee validation/write.
@@ -35,9 +35,9 @@ Checkpoints: after T2 (data structures exist), after T4 (joined list renders), f
 | id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |
 |---|---|---|---|---|---|---|
 | T1 | create employees/departments datasets + department seeds | cheap | §8a, §10 | — | todo | pal_validate 0 errors; pal_sync_datasets provisions both datasets; departments has Engineering/Sales/Operations/HR |
-| T2 | create offices + site settings using selected PalBuilder primitives | frontier | §2, §5 data needs, §10, §11 | — | todo | structures exist with exact office/settings values; offices/settings are not DataSets and are not hard-coded in markup/workflow |
+| T2 | create offices + site settings using selected PalBuilder primitives | standard | §2, §5 data needs, §10, §11 | — | todo | structures exist with exact office/settings values; offices/settings are not DataSets and are not hard-coded in markup/workflow |
 | T3 | foundation shell, styles.css, and run skeleton | cheap | §3, §6, §10 | T1,T2 | todo | Console page shell, navbar, matching templates copied with bash `cp`, shell/styles plus only runtime scripts with real consumers present and registered in pal.json, readable `styles.css`; pal_validate 0; pal_test console workflow VALIDATED |
-| T4 | directoryList with joined department/office read | frontier | §4, §5 list, §6, §12 | T3 | todo | render shows department names and office cities; footer uses support email; source avoids N+1 department loop; pal_test VALIDATED |
+| T4 | directoryList with joined department/office read | standard | §4, §5 list, §6, §12 | T3 | todo | render shows department names and office cities; footer uses support email; source avoids N+1 department loop; pal_test VALIDATED |
 | T5 | office filter | standard | §5 filterByOffice, §12 | T4 | todo | CED filter renders only Cedar City rows; All offices restores full list; pal_test VALIDATED |
 | T6 | employeeForm + saveEmployee validation/write + final visual review | standard | §4, §5 saveEmployee, §8a, §12 | T4 | todo | valid save appears in directory; bad email returns `Enter a valid email address.` and writes no row; desktop/mobile audits have 0 errors; rubric average >=1.5 with focal point/spacing/responsive =2 and no 0 |
 

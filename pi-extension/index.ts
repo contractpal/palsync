@@ -215,7 +215,7 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
         lastCompletionFingerprint = followUp.fingerprint;
         pi.sendUserMessage(followUp.message, { deliverAs: "followUp" });
       }
-      if (gate.state === "BLOCKED_HANDOFF" || gate.state === "FRONTIER_HANDOFF") {
+      if (gate.state === "BLOCKED_HANDOFF") {
         ctx.ui.setStatus("palsync-completion", "PalSync: blocked handoff recorded");
         ctx.ui.notify(gate.message, "warning");
       } else {

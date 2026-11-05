@@ -17,7 +17,7 @@ natural checkpoints.
 **Tasks** — one row per task. `spec ref` = which SPEC.md section(s) this task implements (e.g. §5,
 §8a); every task names at least one, so pal-review and a resuming session can trace a task back to
 its requirement. `success condition` must be behavioral AND tool-checkable. `status` is one of:
-`todo | in_progress | done | blocked | needs-frontier | needs-human`.
+`todo | in_progress | done | blocked | needs-human`.
 
 **Slices and blockers** — make tasks vertical slices (schema + workflow + fragment + verification together where feasible). `depends` names only genuine blockers, not preferred ordering; the executable frontier is every task whose blockers are done. For wide mechanical changes use expand–contract tasks instead of forcing unrelated surfaces into one slice.
 
@@ -31,9 +31,8 @@ rules rather than copying them here.
 
 **Tier marks** — mark honestly:
 - `cheap` = mechanical edits from exact copy; cloning an established page.
-- `standard` = pages/fragments from copy + §6 layout; workflow actions from §5; schemas; SEO.
-- `frontier` = the first composition page; routing; anything where the spec gives direction not
-  structure; spec changes.
+- `standard` = pages/fragments from copy + §6 layout; the first composition page; routing; workflow
+  actions from §5; schemas; SEO; anything where the spec gives direction not structure; spec changes.
 
 **Living plan** — tasks and approach may change as the build learns (split, reorder, or add
 unstarted tasks; take a simpler route) without an amendment, within the limits in
@@ -60,7 +59,7 @@ Dependency order (leaf-first — foundations before things that use them):
    registers the four runtime entries in `pal.json`, and (for console
    pals) establishes the `run()` skeleton from `palbuilder-workflow/references/console.md`, then
    STOPS. Existing pals without `styles.css` are not migrated.
-2. FIRST page/screen — establishes composition (frontier tier).
+2. FIRST page/screen — establishes composition (standard tier).
 3. Remaining pages — CLONE the first's structure (cheap/standard).
 4. Datasets, then the workflows that read them (data before UI).
 5. SEO heads, then final audit.
@@ -74,7 +73,7 @@ Checkpoints: <natural human review points>.
 ## Tasks
 | id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |
 | T1 | copy/adapt shell, styles.css, and workflow foundation | cheap | §3, §6 | — | todo | Page shell and matching templates are copied with bash `cp`, shell/styles plus only runtime scripts with real consumers are present and registered in pal.json, readable `styles/styles.css` and (for console) the documented `run()` skeleton are present; `pal_validate` and `pal_test` both return `ok:true`, `diagnosticCount:0` on the foundation |
-| T2 | first page (composition) | frontier | §4, §6 | T1 | todo | validate 0; push OK; preview "<H1>" |
+| T2 | first page (composition) | standard | §4, §6 | T1 | todo | validate 0; push OK; preview "<H1>" |
 | T3 | <action with logic> | standard | §5 | T1 | todo | `pal_test` VALIDATED; `pal_exercise` runs <create/edit/delete flow>, `expect` finds <exact persisted new value>, and `absent` confirms <exact old/deleted value> is gone |
 | Tn | prefactor: <what> | standard | §2 | — | todo | behaviour unchanged: pal_validate/pal_test ok:true diagnosticCount:0; <pal_exercise or pal_fetch of the existing action/page> still shows <exact current value>; <old duplicate> no longer exists (rg finds 0 hits) |
 

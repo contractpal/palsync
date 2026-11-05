@@ -60,7 +60,7 @@ const USAGE = [
     "  palsync session-summary [--mode full|lite] [--next <text>] [--dir <ws>] Append the canonical two-line session handoff summary (offline, derived)",
     "  palsync task list [--ready [--all]] [--dir <ws>]               List EXECUTION.md tasks; --ready prints the ready ticket plus its spec ref sections and \u00A711; --ready --all lists the whole ready frontier, marking parallel-safe tasks",
     "  palsync task <id> <status> [--reason \"<why>\"] [--tried \"<workaround>\"] [--dir <ws>]",
-    "                                                               Set one task status; --reason is required for blocked|needs-frontier|needs-human,",
+    "                                                               Set one task status; --reason is required for blocked|needs-human,",
     "                                                               --tried (the automated workaround you attempted) also for blocked|needs-human",
     "  palsync checkpoint \"<line>\" [--dir <ws>]                     Append a line to EXECUTION.md's Checkpoints section",
     "  palsync sync-datasets [--datasets a,b] [--recreate] [--keep-lock] [--dir <ws>]",

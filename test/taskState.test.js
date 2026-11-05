@@ -5,7 +5,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert");
 const { parseTasks, listTasks, renderReadyTicket, setStatus, setStatusWithReason, appendCheckpoint, blockerReasons, terminalReasonState, MAX_BLOCKER_REASON } = require("../src/core/taskState");
-const { bodyText, parseSpec } = require("../src/core/specLint");
+const { bodyText, parseSpec, parseFrontmatter, validateExecutionPlan } = require("../src/core/specLint");
 
 // Template shape: NO |---| separator row (matches execution-template.md).
 const EXEC = `# EXECUTION — demo
@@ -17,7 +17,7 @@ Leaf-first.
 ## Tasks
 | id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |
 | T1 | scaffold + shared fragments | cheap | §3, §6 | — | done | pal_validate 0 errors |
-| T2 | first page (composition) | frontier | §4, §6 | T1 | todo | preview "<H1>" |
+| T2 | first page (composition) | standard | §4, §6 | T1 | todo | preview "<H1>" |
 | T3 | second page | standard | §4 | T2 | todo | preview ok |
 
 ## Checkpoints (append-only, one line per completed task)
@@ -47,7 +47,7 @@ test("--ready: first todo whose depends are all done", () => {
 });
 
 test("--ready compares dependency IDs case-insensitively", () => {
-    const r = listTasks(EXEC.replace("| T2 | first page (composition) | frontier | §4, §6 | T1 | todo |", "| T2 | first page (composition) | frontier | §4, §6 | t1 | todo |"), { ready: true });
+    const r = listTasks(EXEC.replace("| T2 | first page (composition) | standard | §4, §6 | T1 | todo |", "| T2 | first page (composition) | standard | §4, §6 | t1 | todo |"), { ready: true });
     assert.equal(r.next.id, "T2");
 });
 
@@ -139,7 +139,7 @@ test("checkpoint with an accurate done count and non-claim prose: accepted", () 
 });
 
 test("blocked-style transitions atomically require and record normalized reasons", () => {
-    for (const status of ["blocked", "needs-human", "needs-frontier"]) {
+    for (const status of ["blocked", "needs-human"]) {
         assert.equal(setStatusWithReason(EXEC, "T2", status).ok, false);
         assert.equal(setStatusWithReason(EXEC, "T2", status, "  \n ", "retried").ok, false);
         const r = setStatusWithReason(EXEC, "T2", status, "Provider offline\nneeds owner action", "retried push twice");
@@ -151,8 +151,8 @@ test("blocked-style transitions atomically require and record normalized reasons
 });
 
 // Track C: the cheapest escape from a hard task is declaring it blocked, so blocked/needs-human
-// must carry durable evidence of the workaround already attempted. needs-frontier is exempt.
-test("blocked and needs-human require --tried; needs-frontier does not", () => {
+// must carry durable evidence of the workaround already attempted.
+test("blocked and needs-human require --tried", () => {
     for (const status of ["blocked", "needs-human"]) {
         const missing = setStatusWithReason(EXEC, "T2", status, "Provider offline");
         assert.equal(missing.ok, false);
@@ -160,10 +160,6 @@ test("blocked and needs-human require --tried; needs-frontier does not", () => {
         assert.equal(setStatusWithReason(EXEC, "T2", status, "Provider offline", "   ").ok, false);
         assert.match(EXEC, /\| T2 .*\| todo \|/); // nothing written on refusal
     }
-    const frontier = setStatusWithReason(EXEC, "T2", "needs-frontier", "Needs new structure");
-    assert.ok(frontier.ok);
-    assert.match(frontier.text, /- BLOCKED T2 \[needs-frontier\]: Needs new structure$/m);
-    assert.equal(terminalReasonState(frontier.text).complete, true);
 });
 
 test("legacy blocker lines without a tried clause still parse and satisfy the terminal state", () => {
@@ -266,7 +262,7 @@ Leaf-first.
 ## Tasks
 | id | task | tier | spec ref | depends | status | success condition (behavioral + tool-checkable) |
 | T1 | scaffold + shared fragments | cheap | \u00A73, \u00A76 | \u2014 | done | pal_validate 0 errors |
-| T2 | first page (composition) | frontier | \u00A74, \u00A76 | T1 | todo | preview "<H1>" contains heading |
+| T2 | first page (composition) | standard | \u00A74, \u00A76 | T1 | todo | preview "<H1>" contains heading |
 | T3 | second page | standard | \u00A74 | T2 | todo | preview ok |
 
 ## Checkpoints (append-only, one line per completed task)
@@ -280,7 +276,7 @@ test("listTasks ready gains full row: tier, specRef, successCondition", () => {
     assert.ok(r.ok);
     assert.equal(r.next.id, "T2");
     assert.equal(r.next.status, "todo");
-    assert.equal(r.next.tier, "frontier");
+    assert.equal(r.next.tier, "standard");
     assert.equal(r.next.specRef, "\u00A74, \u00A76");
     assert.equal(r.next.task, "first page (composition)");
     assert.equal(r.next.successCondition, 'preview "<H1>" contains heading');
@@ -293,7 +289,7 @@ test("ready print contains every ticket field", () => {
     const out = rendered.ticket;
     assert.match(out, /id:\s*T2/);
     assert.match(out, /status:\s*todo/);
-    assert.match(out, /tier:\s*frontier/);
+    assert.match(out, /tier:\s*standard/);
     assert.match(out, /depends:\s*T1/);
     assert.match(out, /spec ref:\s*\u00A74, \u00A76/);
     assert.match(out, /task:\s*first page \(composition\)/);
@@ -463,4 +459,19 @@ test("readyFrontier tolerates a missing Parallel-safe line", () => {
     const { readyFrontier } = require("../src/core/taskState");
     const r = readyFrontier(EXEC);
     assert.deepEqual(r.tasks.map(t => [t.id, t.parallelSafe]), [["T2", false]]);
+});
+
+// Retired `frontier` tier: in-flight EXECUTION.md tables still carry it, and the task CLI
+// re-validates the table on every status change, so lint must accept it as `standard`.
+test("legacy frontier tier lints clean while needs-frontier status is rejected", () => {
+    const spec = parseSpec(SPEC_READY);
+    const lint = execText => validateExecutionPlan(execText, { sections: spec.sections, specFrontmatter: parseFrontmatter(SPEC_READY) });
+    assert.deepEqual(lint(EXEC_READY), []);
+    const legacy = EXEC_READY.replace("| T2 | first page (composition) | standard |", "| T2 | first page (composition) | frontier |");
+    assert.deepEqual(lint(legacy), []);
+    const removedStatus = EXEC_READY.replace("| T2 | first page (composition) | standard | §4, §6 | T1 | todo |", "| T2 | first page (composition) | standard | §4, §6 | T1 | needs-frontier |");
+    const issues = lint(removedStatus);
+    assert.equal(issues.length, 1);
+    assert.match(issues[0].summary, /invalid status "needs-frontier"/);
+    assert.match(issues[0].fix, /Use todo, in_progress, done, blocked, or needs-human\./);
 });

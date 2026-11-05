@@ -152,7 +152,7 @@ test("terminal handoffs require matching machine-readable reasons", () => {
     assert.match(bad.message, /palsync task T1 blocked --reason/);
     fs.rmSync(missing, { recursive: true, force: true });
 
-    for (const [status, state] of [["blocked", "BLOCKED_HANDOFF"], ["needs-human", "BLOCKED_HANDOFF"], ["needs-frontier", "FRONTIER_HANDOFF"]]) {
+    for (const [status, state] of [["blocked", "BLOCKED_HANDOFF"], ["needs-human", "BLOCKED_HANDOFF"]]) {
         const ws = workspace(status, `- BLOCKED T1 [${status}]: owner action required`);
         const gate = completionGate.checkWorkspace(ws);
         assert.equal(gate.state, state);

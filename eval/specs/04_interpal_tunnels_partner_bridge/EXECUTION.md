@@ -36,10 +36,10 @@ Checkpoints: after T3 (dashboard), after T5 (both request methods), final after 
 |---|---|---|---|---|---|---|
 | T1 | create and sync partnerCatalog dataset | cheap | §8a, §10 | — | todo | pal_validate 0 errors; pal_sync_datasets provisions partnerCatalog with sku/availability indexes |
 | T2 | foundation shell, styles.css, and run skeleton | cheap | §3, §6, §10 | T1 | todo | Console page shell, navbar, matching templates copied with bash `cp`, shell/styles plus only runtime scripts with real consumers present and registered in pal.json, readable `styles.css`; pal_validate 0; pal_test console workflow VALIDATED |
-| T3 | bridgeDashboard read/render | frontier | §4, §5 dashboard, §6 | T2 | todo | dashboard renders H1 `Partner bridge`, DetailPanel labels, EmptyState copy; pal_test VALIDATED |
-| T4 | syncCatalog provider tunnel request + upsert | frontier | §5 syncCatalog, §9, §10 | T3 | todo | sync renders `Catalog sync complete.` and rows AX-100/BX-200/CX-300 with source `tunnel` |
+| T3 | bridgeDashboard read/render | standard | §4, §5 dashboard, §6 | T2 | todo | dashboard renders H1 `Partner bridge`, DetailPanel labels, EmptyState copy; pal_test VALIDATED |
+| T4 | syncCatalog provider tunnel request + upsert | standard | §5 syncCatalog, §9, §10 | T3 | todo | sync renders `Catalog sync complete.` and rows AX-100/BX-200/CX-300 with source `tunnel` |
 | T5 | checkProviderHealth provider webservice request | standard | §5 checkProviderHealth, §10 | T3 | todo | health action renders `Provider health check passed.` and stores providerHealth=`ok`; failure path renders `Partner integration failed.` |
-| T6 | local tunnel workflow quoteAvailability | frontier | §5 quoteAvailability, §10, §12 | T1,T4 | todo | pal_tunnel_test quoteAvailability sku=BX-200 returns `availability:` + `lowStock`; pal_test tunnel workflow VALIDATED |
+| T6 | local tunnel workflow quoteAvailability | standard | §5 quoteAvailability, §10, §12 | T1,T4 | todo | pal_tunnel_test quoteAvailability sku=BX-200 returns `availability:` + `lowStock`; pal_test tunnel workflow VALIDATED |
 | T7 | local console webservice workflow bridgeStatus + final visual review | standard | §5 bridgeStatus, §10, §12 | T1,T4 | todo | bridgeStatus returns JSON keys status,lastSyncAt,rowCount with rowCount=3; pal_test webservice VALIDATED; dashboard desktop/mobile audits have 0 errors; rubric average >=1.5 with focal point/spacing/responsive =2 and no 0 |
 
 ## Checkpoints (append-only, one line per completed task)

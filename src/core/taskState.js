@@ -9,12 +9,11 @@
 const fs = require("fs");
 const { parseSpec, parseFrontmatter, validateExecutionPlan, bodyText, resolveSpecRefs, normalizeExecutionTaskId } = require("./specLint");
 
-const STATUSES = ["todo", "in_progress", "done", "blocked", "needs-frontier", "needs-human"];
-const BLOCKED_STATUSES = ["blocked", "needs-frontier", "needs-human"];
+const STATUSES = ["todo", "in_progress", "done", "blocked", "needs-human"];
+const BLOCKED_STATUSES = ["blocked", "needs-human"];
 // A weak model's cheapest escape from a hard task is to declare it blocked. `blocked`/`needs-human`
 // therefore also demand durable evidence of the automated workaround already attempted — recorded
 // on the same Blockers line, so the next session (and the human) can see what was actually tried.
-// `needs-frontier` is exempt: "this needs a stronger model" is a capability call, not a failed attempt.
 const TRIED_STATUSES = ["blocked", "needs-human"];
 const MAX_BLOCKER_REASON = 240;
 
@@ -267,7 +266,7 @@ function blockerReasons(text) {
     const reasons = new Map();
     for (const line of String(text || "").split(/\r?\n/)) {
         // The tried clause is optional: lines written before Track C still parse (tried === "").
-        const match = line.match(/^\s*-\s+BLOCKED\s+(\S+)\s+\[(blocked|needs-human|needs-frontier)\]:\s+(.+?)(?:\s+\|\|\s+tried:\s+(.+))?\s*$/i);
+        const match = line.match(/^\s*-\s+BLOCKED\s+(\S+)\s+\[(blocked|needs-human)\]:\s+(.+?)(?:\s+\|\|\s+tried:\s+(.+))?\s*$/i);
         if (match && normalizeBlockerReason(match[3])) reasons.set(match[1].toLowerCase(), {
             id: match[1], status: match[2].toLowerCase(), reason: normalizeBlockerReason(match[3]),
             tried: normalizeBlockerReason(match[4])
@@ -323,14 +322,13 @@ function deriveSessionNumber(text) {
 }
 
 function deriveStatusCounts(rows) {
-    let done = 0; let blocked = 0; let needsFrontier = 0; let needsHuman = 0;
+    let done = 0; let blocked = 0; let needsHuman = 0;
     for (const r of rows) {
         if (r.status === "done") done++;
         else if (r.status === "blocked") blocked++;
-        else if (r.status === "needs-frontier") needsFrontier++;
         else if (r.status === "needs-human") needsHuman++;
     }
-    return { done, blocked, needsFrontier, needsHuman };
+    return { done, blocked, needsHuman };
 }
 
 function findReadyTasks(rows) {
@@ -359,7 +357,7 @@ function inferNextState(text, explicitNext) {
 function formatSessionSummary({ sessionNumber, date, mode, counts, next }) {
     return "== session " + sessionNumber + " (" + date + "), mode " + mode + ": " +
         counts.done + " done, " + counts.blocked + " blocked, " +
-        counts.needsFrontier + " needs-frontier, " + counts.needsHuman + " needs-human.\n   Next: " + next;
+        counts.needsHuman + " needs-human.\n   Next: " + next;
 }
 
 function buildSessionSummary(text, { mode, next } = {}) {

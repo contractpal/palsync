@@ -322,7 +322,6 @@ EXECUTION.md tasks: 2 total
   in_progress: 0
   done: 1
   blocked: 0
-  needs-frontier: 0
   needs-human: 0
 NO EVIDENCE — open source only for these:
 - SPEC requirements not represented by the tool and task tallies above

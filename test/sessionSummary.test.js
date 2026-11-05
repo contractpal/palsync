@@ -16,10 +16,9 @@ Leaf-first.
 ## Tasks
 | id | task | tier | spec ref | depends | status | success condition |
 | T1 | scaffold | cheap | §3 | — | done | ok |
-| T2 | page | frontier | §4 | T1 | todo | ok |
+| T2 | page | standard | §4 | T1 | todo | ok |
 | T3 | other | standard | §4 | T1 | todo | ok |
 | T4 | blocked one | standard | §4 | T2 | blocked | ok |
-| T5 | frontier one | standard | §4 | T2 | needs-frontier | ok |
 | T6 | human one | standard | §4 | T2 | needs-human | ok |
 
 ## Checkpoints
@@ -27,7 +26,6 @@ Leaf-first.
 
 ## Blockers
 - BLOCKED T4 [blocked]: waiting || tried: retried once
-- BLOCKED T5 [needs-frontier]: needs stronger model
 - BLOCKED T6 [needs-human]: need owner || tried: retried once
 `;
 
@@ -90,7 +88,7 @@ test("session number increments from prior canonical lines", async () => {
     const ws = tmpWorkspace({ "EXECUTION.md": EXEC_SINGLE_READY });
     const ts = require("../src/core/taskState");
     // add an existing session line as if a prior session already ran
-    const withOne = ts.appendCheckpoint(readExec(ws), "== session 1 (2026-01-01), mode full: 1 done, 0 blocked, 0 needs-frontier, 0 needs-human. Next: T2").text;
+    const withOne = ts.appendCheckpoint(readExec(ws), "== session 1 (2026-01-01), mode full: 1 done, 0 blocked, 0 needs-human. Next: T2").text;
     fs.writeFileSync(path.join(ws, "EXECUTION.md"), withOne);
     const sync = require("../src/cli/syncCommands");
     const beforeCalls = [];
@@ -122,12 +120,12 @@ test("derived status counts are exact and mode full|lite both work", async () =>
         const sync = require("../src/cli/syncCommands");
         delete require.cache[require.resolve("../src/cli/syncCommands")];
         const fresh = require("../src/cli/syncCommands");
-        // EXEC_BASE has 1 done, 1 blocked, 1 needs-frontier, 1 needs-human, plus 2 todo -> ready tasks T2 and T3 (both depend on T1 done, so multiple ready)
+        // EXEC_BASE has 1 done, 1 blocked, 1 needs-human, plus 2 todo -> ready tasks T2 and T3 (both depend on T1 done, so multiple ready)
         // Use explicit next to avoid ambiguity, and explicit mode
         const code = await fresh.run("session-summary", ["--mode", mode, "--next", "T2", "--dir", ws]);
         assert.equal(code, 0);
         const after = readExec(ws);
-        assert.match(after, new RegExp("mode " + mode + ": 1 done, 1 blocked, 1 needs-frontier, 1 needs-human"));
+        assert.match(after, new RegExp("mode " + mode + ": 1 done, 1 blocked, 1 needs-human"));
         // No sidecar file must be created
         assert.equal(fs.existsSync(path.join(ws, ".palsync", "session-summary.json")), false);
         fs.rmSync(ws, { recursive: true, force: true });

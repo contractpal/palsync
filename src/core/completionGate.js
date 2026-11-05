@@ -67,9 +67,6 @@ function checkWorkspace(workspaceDir, { review } = {}) {
                 "Terminal task(s) lack reason checkpoints: " + reasonState.missing.map(row => row.id).join(", ") + ". Run: " + commands.join("; "),
                 { missing: reasonState.missing.map(row => row.id) });
         }
-        if (nonDone.some(row => row.status === "needs-frontier")) {
-            return result("FRONTIER_HANDOFF", true, false, "Terminal frontier handoff recorded with reasons.");
-        }
         if (nonDone.every(row => BLOCKED_STATUSES.includes(row.status))) {
             return result("BLOCKED_HANDOFF", true, false, "Terminal blocked/human handoff recorded with reasons.");
         }
@@ -108,7 +105,7 @@ function checkWorkspace(workspaceDir, { review } = {}) {
 
 function formatCompletion(value) {
     const heading = value.state === "COMPLETE" ? "COMPLETE"
-        : value.state === "BLOCKED_HANDOFF" || value.state === "FRONTIER_HANDOFF" ? "BLOCKED HANDOFF"
+        : value.state === "BLOCKED_HANDOFF" ? "BLOCKED HANDOFF"
         : value.state === "WORK_IN_PROGRESS" || value.state === "NOT_APPLICABLE" ? "WORK IN PROGRESS"
         : "FAIL";
     const lines = ["palsync completion check — " + heading, "state: " + value.state, value.message];

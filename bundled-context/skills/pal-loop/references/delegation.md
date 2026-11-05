@@ -8,9 +8,9 @@ substrate, not a harness feature.
 ## 0. Preconditions — check once before delegating
 - **Subagents available?** No → do NOT simulate; run the task inline via the normal task
   cycle.
-- **Per-subagent model selectable?** Yes → map tier→model (cheap→small, standard→mid;
-  frontier you handle yourself). No → spawn the default and rely on the task-cycle tier check.
-- **Parallel or serial?** Get the frontier with `palsync task list --ready --all`. With 2+
+- **Per-subagent model selectable?** Yes → map tier→model (cheap→small, standard→mid/default).
+  No → spawn the default and rely on the task-cycle tier check.
+- **Parallel or serial?** Get the ready set with `palsync task list --ready --all`. With 2+
   `parallel-safe` tasks ready that share no files, dispatch them concurrently as one batch.
   Anything touching a shared file (a fragment, `pal.json`, a dataset) or not marked
   parallel-safe is serialized.
@@ -35,7 +35,8 @@ A brief with an empty slot is invalid. Do not dispatch it.
 3. **COPY IS LAW** — approved copy from SPEC.md §4, quoted verbatim or pointed at by exact
    section. Ships verbatim: no paraphrase, no "improvement."
 4. **CLONE TARGET** — the exact existing file whose markup/structure to copy. Point, don't
-   describe. No clone target usually means the task is frontier — reconsider delegating it.
+   describe. No clone target usually means the task needs new composition — do it yourself
+   rather than delegating.
 5. **HARD RULES** (verbatim, every time):
    - XHTML: all void tags self-closed
    - ASCII only — no named entities except `&amp;` `&lt;` `&gt;` `&quot;` `&apos;`
@@ -73,7 +74,7 @@ source only for the ledger's `NO EVIDENCE` criteria or a failed/ambiguous proof.
    task's files (`git checkout` its local changes) and keep the passing tasks. Already pushed?
    Re-push the restored local to overwrite the server (`pal_pull`/`pal_merge` first if drift-refused) — git fixes
    only local. Then re-dispatch ONCE with the failure named in the brief, or escalate
-   (`needs-frontier`, `blocked`, `needs-human`). Two failed dispatches on one task = stop
+   (`blocked`, `needs-human`). Two failed dispatches on one task = stop
    delegating it; do it yourself or block it.
 3. **Never let a subagent's "done" stand without your tool verification.** Subagents have
    over-claimed in practice — reporting elements absent from the served HTML, marking tasks

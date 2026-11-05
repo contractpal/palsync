@@ -141,8 +141,11 @@ function parseFrontmatter(text) {
     return fields;
 }
 
-const EXECUTION_STATUSES = new Set(["todo", "in_progress", "done", "blocked", "needs-frontier", "needs-human"]);
-const EXECUTION_TIERS = new Set(["cheap", "standard", "frontier"]);
+const EXECUTION_STATUSES = new Set(["todo", "in_progress", "done", "blocked", "needs-human"]);
+const EXECUTION_TIERS = new Set(["cheap", "standard"]);
+// In-flight workspaces still carry `frontier` in their EXECUTION.md tier column, and the task CLI
+// re-validates the table on every status change — accept the retired tier silently as `standard`.
+const LEGACY_TIER_ALIASES = { frontier: "standard" };
 
 // Task IDs are user-facing labels, but comparisons are case-insensitive throughout the execution
 // contract. Keep original spelling for Markdown rewrites and output.
@@ -335,8 +338,9 @@ function validateExecutionPlan(text, { sections, specFrontmatter } = {}) {
         if (!row.id) issues.push({ line: row.line, summary: "Task ID is empty.", fix: "Give every task a unique nonempty ID." });
         else if (ids.has(normalizeExecutionTaskId(row.id))) issues.push({ line: row.line, summary: "Task ID \"" + row.id + "\" is duplicated.", fix: "Give every task a unique ID." });
         else ids.add(normalizeExecutionTaskId(row.id));
-        if (!EXECUTION_STATUSES.has(row.status)) issues.push({ line: row.line, summary: "Task " + row.id + " has invalid status \"" + row.status + "\".", fix: "Use todo, in_progress, done, blocked, needs-frontier, or needs-human." });
-        if (!EXECUTION_TIERS.has(row.tier)) issues.push({ line: row.line, summary: "Task " + row.id + " has invalid tier \"" + row.tier + "\".", fix: "Use cheap, standard, or frontier." });
+        if (!EXECUTION_STATUSES.has(row.status)) issues.push({ line: row.line, summary: "Task " + row.id + " has invalid status \"" + row.status + "\".", fix: "Use todo, in_progress, done, blocked, or needs-human." });
+        const tier = Object.prototype.hasOwnProperty.call(LEGACY_TIER_ALIASES, row.tier) ? LEGACY_TIER_ALIASES[row.tier] : row.tier;
+        if (!EXECUTION_TIERS.has(tier)) issues.push({ line: row.line, summary: "Task " + row.id + " has invalid tier \"" + row.tier + "\".", fix: "Use cheap or standard." });
         if (!row.success || /^[—\-\s]*$/.test(row.success)) issues.push({ line: row.line, summary: "Task " + row.id + " has an empty success condition.", fix: "Add a behavioral, tool-checkable success condition." });
         if (!row.specRefRaw || /^[—\-\s]*$/.test(row.specRefRaw)) issues.push({ line: row.line, summary: "Task " + row.id + " has no spec ref.", fix: "Name at least one SPEC.md section." });
         else {

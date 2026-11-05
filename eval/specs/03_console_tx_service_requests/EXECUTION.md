@@ -35,9 +35,9 @@ Checkpoints: after T3 (console list), after T4 (transaction created), final afte
 |---|---|---|---|---|---|---|
 | T1 | create and sync serviceRequests dataset | cheap | §8a, §10 | — | todo | pal_validate 0 errors; pal_sync_datasets provisions all §8a fields incl. txId and status index |
 | T2 | foundation shell, styles.css, and run skeleton | cheap | §3, §6, §10 | T1 | todo | Console page shell, navbar, matching templates copied with bash `cp`, shell/styles plus only runtime scripts with real consumers present and registered in pal.json, readable `styles.css`; pal_validate 0; pal_test console workflow VALIDATED |
-| T3 | requestList + filterByStatus | frontier | §4, §5 list, §6 | T2 | todo | render shows H1 `Service requests`, EmptyState, status filter; pal_test VALIDATED |
-| T4 | requestForm + createRequest + transaction creation | frontier | §4, §5 createRequest, §9 | T3 | todo | valid submit creates open row and transaction; bad email/empty description show exact messages and write no row/tx |
-| T5 | tx.html + type-2 workflow + completeRequest | frontier | §4, §5 completeRequest, §10 | T4 | todo | tx submit renders `Thank you — your request is marked complete.` and console row becomes completed with note/date; pal_test both workflows VALIDATED |
+| T3 | requestList + filterByStatus | standard | §4, §5 list, §6 | T2 | todo | render shows H1 `Service requests`, EmptyState, status filter; pal_test VALIDATED |
+| T4 | requestForm + createRequest + transaction creation | standard | §4, §5 createRequest, §9 | T3 | todo | valid submit creates open row and transaction; bad email/empty description show exact messages and write no row/tx |
+| T5 | tx.html + type-2 workflow + completeRequest | standard | §4, §5 completeRequest, §10 | T4 | todo | tx submit renders `Thank you — your request is marked complete.` and console row becomes completed with note/date; pal_test both workflows VALIDATED |
 | T6 | requestDetail + cancelRequest + final visual review | standard | §4, §5 viewRequest, §5 cancelRequest, §12 | T4 | todo | detail shows Transaction state; cancel flips row to cancelled and voids/cancels tx; Cancel hidden for non-open; console/transaction desktop/mobile audits have 0 errors; rubric average >=1.5 with focal point/spacing/responsive =2 and no 0 |
 
 ## Checkpoints (append-only, one line per completed task)

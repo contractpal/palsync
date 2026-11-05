@@ -53,7 +53,7 @@ nothing to say, write "none" and explain why.
 5. **What worked well** — for balance and to protect features from being "fixed" away.
 6. **Run mechanics & PalSync efficiency** — evidence-only telemetry for the completed run:
    - PalSync version/commit used, when available.
-   - Tasks attempted / completed / blocked / needs-human / needs-frontier.
+   - Tasks attempted / completed / blocked / needs-human.
    - Skill names actually loaded and extra references actually loaded, especially JIT references
      such as `pal-json.md`, `browser-js.md`, and verification references.
    - Tool friction: failed, duplicate/redundant, retried, or uninformative tool calls.

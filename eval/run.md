@@ -24,6 +24,10 @@ realigned to the post-refactor skill set (pal-restraint/palbuilder-backend retir
 seo-core renamed palbuilder-seo, emptyAction/pbMain/pbSection added to the floor).
 Process metadata only — §12 acceptance criteria unchanged, outcome scores remain comparable.
 
+**Spec revision v2.2 (2026-11-04):** EXECUTION tier `frontier` and status `needs-frontier` removed;
+former frontier tasks are `standard`. Process metadata only — §12 acceptance criteria unchanged,
+outcome scores remain comparable.
+
 ---
 
 ## One-command Haiku recovery run
