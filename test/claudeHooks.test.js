@@ -467,3 +467,22 @@ test("inspectOwnedHooks stays ok when the canonical entry coexists with an extra
         BARE.completion,
     ]);
 });
+
+test("Electron-wrapped hooks (ELECTRON_RUN_AS_NODE prefix) are owned: install replaces and collapses duplicates instead of appending", async () => {
+    const wrap = (adapter, exe) => "ELECTRON_RUN_AS_NODE=1 \"" + exe + "\" \"/old/app/bin/palsync.js\" hook " + adapter + " --mode claude";
+    const entry = (adapter, exe) => ({ type: "command", command: wrap(adapter, exe), shell: "bash", timeout: 10 });
+    const m = hooks.GUARD_MATCHER;
+    const ws = tmpWorkspace({ ".claude/settings.json": JSON.stringify({ hooks: {
+        Stop: [{ hooks: [entry("completion", "/Apps/Chip Pal Builder.exe")] }],
+        PreToolUse: [{ matcher: m, hooks: [entry("guard", "/Apps/Chip Pal Builder.exe"), entry("guard", "/Apps/Chip Pal Builder.exe")] }],
+        PostToolUse: [{ matcher: m, hooks: [entry("post-write", "/Apps/Chip Pal Builder.exe")] }, { matcher: m, hooks: [entry("post-write", "/Apps/Chip Pal Builder.exe")] }],
+    } }) });
+    await hooks.configure(ws, { install: true });
+    await hooks.configure(ws, { install: true });
+    const value = JSON.parse(fs.readFileSync(settingsPath(ws), "utf8"));
+    const count = ev => value.hooks[ev].flatMap(g => g.hooks).length;
+    assert.equal(count("Stop"), 1);
+    assert.equal(count("PreToolUse"), 1);
+    assert.equal(count("PostToolUse"), 1);
+    fs.rmSync(ws, { recursive: true, force: true });
+});

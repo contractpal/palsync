@@ -79,11 +79,20 @@ function tokenizeCommand(command) {
 // (`env`, one-token absolute launchers) and suffixes like `--custom` never match; the executable must
 // be Node, the script token must end in `palsync.js` under either separator, and the adapter must be
 // one of PalSync's generated adapters. Returns the adapter token, or null.
+// Chip Pal Builder (Electron) rewrites its hooks to `ELECTRON_RUN_AS_NODE=1 <app> <script> hook ...`
+// (or the cmd form `set ELECTRON_RUN_AS_NODE=1 && ...`), where <app> is the Electron binary, not
+// Node. That exact env prefix is the marker of the GUI-written form, so with it any executable is
+// accepted; without it the executable must still be Node. Without this, every launch failed to
+// recognize the GUI's own hooks as owned and appended another copy.
+const ELECTRON_ENV_PREFIX = /^(?:set\s+ELECTRON_RUN_AS_NODE=1\s*&&\s*|ELECTRON_RUN_AS_NODE=1\s+)/;
 function parseGeneratedCommand(command) {
-    const tokens = tokenizeCommand(command);
+    let text = String(command);
+    const electron = ELECTRON_ENV_PREFIX.test(text);
+    if (electron) text = text.replace(ELECTRON_ENV_PREFIX, "");
+    const tokens = tokenizeCommand(text);
     if (tokens.length !== 6 || tokens[2] !== "hook" || tokens[4] !== "--mode" || tokens[5] !== "claude") return null;
     const executable = String(tokens[0]).split(/[\\/]/).pop().toLowerCase();
-    if (!new Set(["node", "node.exe", "nodejs", "nodejs.exe"]).has(executable)) return null;
+    if (!electron && !new Set(["node", "node.exe", "nodejs", "nodejs.exe"]).has(executable)) return null;
     if (String(tokens[1]).split(/[\\/]/).pop() !== "palsync.js") return null;
     if (!["completion", "guard", "post-write"].includes(tokens[3])) return null;
     return tokens[3];

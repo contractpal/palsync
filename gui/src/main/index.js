@@ -231,7 +231,7 @@ function createWindow() {
 
     if (isDev) {
         // Electron can start before the vite dev server is listening; retry until it is.
-        const devUrl = "http://localhost:5173";
+        const devUrl = "http://localhost:" + (Number(process.env.PALSYNC_DEV_PORT) || 5273);
         mainWindow.webContents.on("did-fail-load", (_e, code, _desc, url, isMainFrame) => {
             if (isMainFrame && code === -102 && url.startsWith(devUrl)) {
                 setTimeout(() => {
