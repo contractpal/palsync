@@ -14,6 +14,7 @@ const { registerCopilot } = require("palsync/src/mcp/registerCopilot");
 const { registerCodexProject, patchEnv: patchCodexEnv } = require("palsync/src/mcp/registerCodexProject");
 const registerPi = require("palsync/src/mcp/registerPi");
 const { MCP_BIN } = require("palsync/src/mcp/register");
+const { approvePalsyncForClaudeUser } = require("palsync/src/mcp/approveClaudeUser");
 const contextInject = require("palsync/src/launcher/contextInject");
 const policyModule = require("palsync/src/core/policy");
 const palsyncfile = require("palsync/src/core/palsyncfile");
@@ -203,6 +204,12 @@ async function ensureMcpRegistered(agentId, workspaceDir, chipSessionId) {
     await ensureElectronRunAsNode(filePath, reg.configFile, reg.format);
     await ensureChipSessionId(filePath, reg.configFile, chipSessionId, reg.format);
     await ensureElectronRunAsNodeForHooks(workspaceDir);
+    // Claude Code only: pre-approve palsync at USER level so it stops re-prompting per workspace
+    // (project-level approval is gated on a workspace trust Claude Code no longer reliably saves).
+    // Best-effort — a settings problem must never block launching the agent.
+    if (agentId === "claude-code") {
+        try { await approvePalsyncForClaudeUser(); } catch (e) { /* best-effort */ }
+    }
     return Object.assign({ alreadyRegistered }, result);
 }
 

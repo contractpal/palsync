@@ -21,6 +21,7 @@ const { fetchAndExtract } = require("../core/resources");
 const contextInject = require("./contextInject");
 const palsyncfile = require("../core/palsyncfile");
 const { register } = require("../mcp/register");
+const { approvePalsyncForClaudeUser } = require("../mcp/approveClaudeUser");
 const { registerCodexProject } = require("../mcp/registerCodexProject");
 const { registerOpencode } = require("../mcp/registerOpencode");
 const registerPi = require("../mcp/registerPi");
@@ -338,6 +339,11 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
     } else {
         log("registering palsync MCP server (.mcp.json)");
         reg = await register(workspaceDir);
+        try {
+            const approval = await approvePalsyncForClaudeUser();
+            if (approval.changed) log("  approved palsync MCP server in " + approval.filePath + " (stops the per-workspace approval prompt)");
+            else if (approval.skipped) log("  ⚠ could not parse " + approval.filePath + " — left untouched; Claude Code may prompt to approve palsync");
+        } catch (e) { log("  ⚠ could not update Claude Code user settings: " + e.message); }
     }
     onStep({ step: "register", status: "done", ok: reg.error ? false : true });
 
