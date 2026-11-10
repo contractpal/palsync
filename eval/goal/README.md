@@ -69,7 +69,8 @@ scorer picks the oracle from the folder prefix.
 `R7_customer_completion` is scored by hand from the source: the transaction workflow must find
 the row by `txId`, set `status`, `resolutionNote`, and `completedAt`, and show the required copy.
 A fresh test transaction has no `serviceRequests` row, so `pal_exercise` cannot check it.
-Calibration: `goal03_A1` passed 10/10 automatic checks with no oracle change.
+Calibration: `goal03_A1` passed 10/10 with no change. `goal03_B2` showed the new request after
+`Create request` (a valid design), so R4–R6 also accept a `Back to list` variant.
 
 ## Decision rule
 

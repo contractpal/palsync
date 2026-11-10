@@ -72,40 +72,91 @@
       "id": "R4_filter",
       "goal": 4,
       "kind": "exercise",
-      "steps": [
+      "variants": [
         {
-          "click": "New request",
-          "expect": [
-            "Customer email",
-            "Description"
+          "name": "list-after-create",
+          "steps": [
+            {
+              "click": "New request",
+              "expect": [
+                "Customer email",
+                "Description"
+              ]
+            },
+            {
+              "fill": {
+                "customerEmail": "c{{runId}}@example.com",
+                "description": "Filter me {{runId}}"
+              },
+              "click": "Create request",
+              "expect": [
+                "c{{runId}}@example.com"
+              ]
+            },
+            {
+              "fill": {
+                "status": "Cancelled"
+              },
+              "click": "Filter",
+              "absent": [
+                "c{{runId}}@example.com"
+              ]
+            },
+            {
+              "fill": {
+                "status": "Open"
+              },
+              "click": "Filter",
+              "expect": [
+                "c{{runId}}@example.com"
+              ]
+            }
           ]
         },
         {
-          "fill": {
-            "customerEmail": "c{{runId}}@example.com",
-            "description": "Filter me {{runId}}"
-          },
-          "click": "Create request",
-          "expect": [
-            "c{{runId}}@example.com"
-          ]
-        },
-        {
-          "fill": {
-            "status": "Cancelled"
-          },
-          "click": "Filter",
-          "absent": [
-            "c{{runId}}@example.com"
-          ]
-        },
-        {
-          "fill": {
-            "status": "Open"
-          },
-          "click": "Filter",
-          "expect": [
-            "c{{runId}}@example.com"
+          "name": "detail-after-create",
+          "steps": [
+            {
+              "click": "New request",
+              "expect": [
+                "Customer email",
+                "Description"
+              ]
+            },
+            {
+              "fill": {
+                "customerEmail": "c{{runId}}@example.com",
+                "description": "Filter me {{runId}}"
+              },
+              "click": "Create request",
+              "expect": [
+                "c{{runId}}@example.com"
+              ]
+            },
+            {
+              "click": "Back to list",
+              "expect": [
+                "Service requests"
+              ]
+            },
+            {
+              "fill": {
+                "status": "Cancelled"
+              },
+              "click": "Filter",
+              "absent": [
+                "c{{runId}}@example.com"
+              ]
+            },
+            {
+              "fill": {
+                "status": "Open"
+              },
+              "click": "Filter",
+              "expect": [
+                "c{{runId}}@example.com"
+              ]
+            }
           ]
         }
       ]
@@ -114,30 +165,71 @@
       "id": "R5_detail",
       "goal": 5,
       "kind": "exercise",
-      "steps": [
+      "variants": [
         {
-          "click": "New request",
-          "expect": [
-            "Customer email",
-            "Description"
+          "name": "list-after-create",
+          "steps": [
+            {
+              "click": "New request",
+              "expect": [
+                "Customer email",
+                "Description"
+              ]
+            },
+            {
+              "fill": {
+                "customerEmail": "c{{runId}}@example.com",
+                "description": "Detail me {{runId}}"
+              },
+              "click": "Create request",
+              "expect": [
+                "c{{runId}}@example.com"
+              ]
+            },
+            {
+              "click": "View",
+              "within": "tr:has-text(\"c{{runId}}@example.com\")",
+              "expect": [
+                "Detail me {{runId}}",
+                "c{{runId}}@example.com"
+              ]
+            }
           ]
         },
         {
-          "fill": {
-            "customerEmail": "c{{runId}}@example.com",
-            "description": "Detail me {{runId}}"
-          },
-          "click": "Create request",
-          "expect": [
-            "c{{runId}}@example.com"
-          ]
-        },
-        {
-          "click": "View",
-          "within": "tr:has-text(\"c{{runId}}@example.com\")",
-          "expect": [
-            "Detail me {{runId}}",
-            "c{{runId}}@example.com"
+          "name": "detail-after-create",
+          "steps": [
+            {
+              "click": "New request",
+              "expect": [
+                "Customer email",
+                "Description"
+              ]
+            },
+            {
+              "fill": {
+                "customerEmail": "c{{runId}}@example.com",
+                "description": "Detail me {{runId}}"
+              },
+              "click": "Create request",
+              "expect": [
+                "c{{runId}}@example.com"
+              ]
+            },
+            {
+              "click": "Back to list",
+              "expect": [
+                "Service requests"
+              ]
+            },
+            {
+              "click": "View",
+              "within": "tr:has-text(\"c{{runId}}@example.com\")",
+              "expect": [
+                "Detail me {{runId}}",
+                "c{{runId}}@example.com"
+              ]
+            }
           ]
         }
       ]
@@ -146,35 +238,81 @@
       "id": "R6_cancel",
       "goal": 6,
       "kind": "exercise",
-      "steps": [
+      "variants": [
         {
-          "click": "New request",
-          "expect": [
-            "Customer email",
-            "Description"
+          "name": "list-after-create",
+          "steps": [
+            {
+              "click": "New request",
+              "expect": [
+                "Customer email",
+                "Description"
+              ]
+            },
+            {
+              "fill": {
+                "customerEmail": "c{{runId}}@example.com",
+                "description": "Cancel me {{runId}}"
+              },
+              "click": "Create request",
+              "expect": [
+                "c{{runId}}@example.com"
+              ]
+            },
+            {
+              "click": "View",
+              "within": "tr:has-text(\"c{{runId}}@example.com\")"
+            },
+            {
+              "click": "Cancel request",
+              "expect": [
+                "Cancelled"
+              ],
+              "absent": [
+                "Cancel request"
+              ]
+            }
           ]
         },
         {
-          "fill": {
-            "customerEmail": "c{{runId}}@example.com",
-            "description": "Cancel me {{runId}}"
-          },
-          "click": "Create request",
-          "expect": [
-            "c{{runId}}@example.com"
-          ]
-        },
-        {
-          "click": "View",
-          "within": "tr:has-text(\"c{{runId}}@example.com\")"
-        },
-        {
-          "click": "Cancel request",
-          "expect": [
-            "Cancelled"
-          ],
-          "absent": [
-            "Cancel request"
+          "name": "detail-after-create",
+          "steps": [
+            {
+              "click": "New request",
+              "expect": [
+                "Customer email",
+                "Description"
+              ]
+            },
+            {
+              "fill": {
+                "customerEmail": "c{{runId}}@example.com",
+                "description": "Cancel me {{runId}}"
+              },
+              "click": "Create request",
+              "expect": [
+                "c{{runId}}@example.com"
+              ]
+            },
+            {
+              "click": "Back to list",
+              "expect": [
+                "Service requests"
+              ]
+            },
+            {
+              "click": "View",
+              "within": "tr:has-text(\"c{{runId}}@example.com\")"
+            },
+            {
+              "click": "Cancel request",
+              "expect": [
+                "Cancelled"
+              ],
+              "absent": [
+                "Cancel request"
+              ]
+            }
           ]
         }
       ]
