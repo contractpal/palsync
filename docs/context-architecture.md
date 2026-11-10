@@ -34,7 +34,7 @@ basis that could not be reproduced.
 | All | `skill-body:palbuilder-realtime` | `bundled-context/skills/palbuilder-realtime/SKILL.md` | 4,992 | 1,248 | on-demand |
 | All | `skill-body:palbuilder-seo` | `bundled-context/skills/palbuilder-seo/SKILL.md` | 9,624 | 2,406 | on-demand |
 | All | `skill-body:palbuilder-workflow` | `bundled-context/skills/palbuilder-workflow/SKILL.md` | 12,379 | 3,095 | on-demand |
-| All | `skill-body:qa-report` | `bundled-context/skills/qa-report/SKILL.md` | 7,486 | 1,872 | on-demand |
+| All | `skill-body:qa-report` | `bundled-context/skills/qa-report/SKILL.md` | 7,426 | 1,857 | on-demand |
 
 <!-- palsync generated: end -->
 

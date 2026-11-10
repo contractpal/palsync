@@ -26,7 +26,7 @@ const { detectRenderError } = require("./screenshot");
 const { sanitizeUrl, sanitizeResourceUrl, releaseBrowser, waitForRenderablePage } = require("./browser");
 // Target normalization, the authenticated bootstrap, the state oracle and the retry boundary are
 // shared with pal_screenshot — neither tool may interpret a console action differently.
-const { normalizeTarget, openAuthenticatedScreen, attemptWithFreshTest, deriveWebBase, describeTargetMismatch, readMatchText } = require("./browserTarget");
+const { normalizeTarget, openAuthenticatedScreen, attemptWithFreshTest, deriveWebBase, describeTargetMismatch, readMatchText, withBound } = require("./browserTarget");
 
 const MAX_STEPS = 30;
 const LOGIN_FORM_TIMEOUT_MS = 8000;
@@ -143,20 +143,6 @@ function scrubCredentials(text) {
 // One-line, scrubbed message for event evidence.
 function scrubMessage(msg) {
     return scrubCredentials(msg).split("\n")[0].slice(0, EVENT_MESSAGE_CAP);
-}
-
-// Time-bind a single evaluate/aria/screenshot evidence call. A timed-out action must never be
-// followed by an indefinite evidence hang: every evidence call is raced against this per-call
-// bound and resolves to `fallback` (default null) when the page does not answer in time. The
-// underlying Playwright call keeps its own lifecycle; evidence capture and the context close
-// still proceed. Deliberately per-call only — there is NO whole-exercise cutoff.
-function withBound(promise, ms, fallback = null) {
-    let timer = null;
-    return new Promise((resolve) => {
-        const done = (value) => { if (timer) clearTimeout(timer); resolve(value); };
-        timer = setTimeout(() => done(fallback), ms);
-        Promise.resolve(promise).then(done, () => done(fallback));
-    });
 }
 
 // Redact auth-like fill/params values from steps before they are persisted as an artifact.
@@ -1419,4 +1405,4 @@ function formatExercise(res) {
     return lines.join("\n");
 }
 
-module.exports = { runExercise, resolveLoginCredentials, exerciseByFetch, exerciseByBrowser, resolveUploadPath, findUploadTarget, validateSteps, validateInitial, webInitialPath, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, makeRunId, readExerciseOrdinal, takeExerciseOrdinal, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, redactSecretFormsForSuccess, makeFinalSnapshot, BROWSER_EVENTS_CAP, EVIDENCE_TIMEOUT_MS, SETTLE_TIMEOUT_MS, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };
+module.exports = { runExercise, resolveLoginCredentials, exerciseByFetch, exerciseByBrowser, validateSteps, validateInitial, webInitialPath, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, makeRunId, readExerciseOrdinal, takeExerciseOrdinal, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, makeFinalSnapshot, BROWSER_EVENTS_CAP, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };

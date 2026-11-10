@@ -9,8 +9,6 @@
 //
 // The check is silently skipped when pal.json is absent or unparseable — validate also runs
 // on non-workspace directories (temp dirs, partial trees, etc.) and we must not noise on those.
-const fs = require("fs");
-const path = require("path");
 const { findSuggestion } = require("./suggest");
 const { buildSnapshot, isUnsafeTarget } = require("./snapshot");
 const { analyzeFolderRegistrations } = require("../palFolders");
@@ -413,24 +411,6 @@ function checkRoles(manifest) {
         }
     });
     return findings;
-}
-
-function listFilesRecursive(root) {
-    const out = [];
-    function walk(abs, relBase) {
-        let entries;
-        try { entries = fs.readdirSync(abs, { withFileTypes: true }); }
-        catch (e) { if (e.code === "ENOENT") return; throw e; }
-        for (const de of entries) {
-            if (de.name.startsWith(".")) continue;
-            const childAbs = path.join(abs, de.name);
-            const childRel = relBase ? relBase + "/" + de.name : de.name;
-            if (de.isDirectory()) walk(childAbs, childRel);
-            else if (de.isFile()) out.push(childRel);
-        }
-    }
-    walk(root, "");
-    return out;
 }
 
 // Filename-resolution conventions, verified live (reports/2026-07-18 equipment_checkout runs):
@@ -1003,5 +983,5 @@ function lintPalJson(snapshotOrDir) {
 }
 
 module.exports = { lintPalJson, checkUnknownKeys, checkDataStructures, checkEntryShape, checkEntryFilenames,
-    checkPalTypes, checkPrefixedManifestFilenames, checkFolderRegistrations, checkRoles, lineForFinding, listFilesRecursive,
+    checkPalTypes, checkPrefixedManifestFilenames, checkFolderRegistrations, checkRoles, lineForFinding,
     analyzeMarkupRegistration };

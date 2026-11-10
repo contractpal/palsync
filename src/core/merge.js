@@ -24,10 +24,9 @@ const fs = require("fs");
 const fsp = require("fs/promises");
 const os = require("os");
 const path = require("path");
-const { pull, listTrackedFiles, mergePreservedEntries, CREATABLE_FOLDERS } = require("./pull");
+const { pull, listTrackedFiles, mergePreservedEntries } = require("./pull");
 const baseline = require("./baseline");
 const { adoptMarker } = require("./drift");
-const { resolveServerPalByGuid } = require("./resolve");
 const { buildPersistedObject, serializeManifest } = require("./manifestPersist");
 const { writeIfChanged } = require("./atomicWrite");
 

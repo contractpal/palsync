@@ -141,10 +141,6 @@ function ensureAgentOnPath(binName, label, instructions, { onPath = commandOnPat
     return { ok: false, reason: "not-found" };
 }
 
-function ensureCodex(opts) { return ensureAgentOnPath("codex", "Codex", manualCodexInstructions(), opts); }
-function ensureOpencode(opts) { return ensureAgentOnPath("opencode", "OpenCode", manualOpencodeInstructions(), opts); }
-function ensurePi(opts) { return ensureAgentOnPath("pi", "Pi", manualPiInstructions(), opts); }
-
 // Ensure `claude` is available; auto-install on consent. Injectable bits make it testable.
 // Returns { ok, reason }.
 async function ensureClaudeCode({ prompt = askYesNo, installer = installClaudeCode, onPath = commandOnPath } = {}) {
@@ -200,7 +196,7 @@ async function run({ agent = "claude" } = {}) {
 }
 
 module.exports = {
-    run, assertNode, ensureClaudeCode, ensureCodex, ensureOpencode, ensurePi, manualCodexInstructions,
+    run, assertNode, ensureClaudeCode, manualCodexInstructions,
     manualOpencodeInstructions, manualPiInstructions, manualAgentInstructions, detectNodeInstallMethod,
     nodeUpgradeCommand, nodeMessage, manualClaudeInstructions, pathFixGuidance, commandOnPath, MIN_NODE_MAJOR
 };

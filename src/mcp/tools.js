@@ -13,7 +13,7 @@ const { runPreview, fetchPagePath, checkExpect, extractSelector } = require("../
 const { runScreenshot } = require("../core/screenshot");
 const { runExercise, formatExercise, applyRunId, redactStepValues, redactSecretForms } = require("../core/exercise");
 const { mergeWorkspace, formatMerge } = require("../core/merge");
-const { runSeoAudit, formatSeoAudit } = require("../core/seoAudit");
+const { runSeoAudit } = require("../core/seoAudit");
 const { runRegression, captureBaseline, captureApproval } = require("../core/regression");
 const { readGoal, lintGoal, formatGoalLint } = require("../core/goal");
 const { syncDatasets } = require("../core/datasets");
@@ -2290,7 +2290,7 @@ const TOOLS = [
                 // Surface any pre-push WARNINGS even on success (errors can't reach here unless
                 // skipValidation forced past them — say so loudly).
                 const warnBlock = res.lint && res.lint.warnings > 0
-                    ? "\n\n⚠ Code warnings (fix or explicitly checkpoint):\n" + formatLint(res.lint, { context: "validate" })
+                    ? "\n\n⚠ Code warnings (fix each warning or state why it is safe):\n" + formatLint(res.lint, { context: "validate" })
                     : "";
                 const skippedBlock = res.skippedValidation
                     ? (validationOff

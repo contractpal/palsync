@@ -356,11 +356,6 @@ async function downscaleToJpeg(pg, pngBase64, scale = null, quality = 0.42) {
     }
 }
 
-// Validate scalar param values — only string/number/boolean/ null are allowed as query fragments.
-function isScalarParamValue(v) {
-    return typeof v === "string" || typeof v === "number" || typeof v === "boolean";
-}
-
 // Redact exact supplied param values from browser-derived textual metadata before persistence.
 // The page may echo a param value into visible text, which then flows into designAudit samples
 // and renderError messages. Replace literal occurrences of each supplied value.
@@ -683,6 +678,6 @@ async function failedCapture(open, t, requestedState, target, viewportName, imag
 
 module.exports = {
     runScreenshot, detectRenderError, downscaleToJpeg, inspectStyleStatus,
-    inspectDesignQuality, isScalarParamValue, safeObservedState,
+    inspectDesignQuality, safeObservedState,
     redactParamValuesFromText, redactParamValuesFromAudit, redactParamValuesFromRenderError
 };

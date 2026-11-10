@@ -45,8 +45,4 @@ const ALWAYS_ALLOWED = (attr) => attr === "xmlns:c" || attr.startsWith("xmlns");
 const VOID_ELEMENTS = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input",
     "link", "meta", "param", "source", "track", "wbr"]);
 
-// Raw-text elements: their CONTENT is exempt from XHTML escaping rules (verified live — bytes
-// round-trip). Their tags/attributes still follow XHTML rules.
-const RAW_TEXT_ELEMENTS = new Set(["script", "style"]);
-
-module.exports = { WHITELIST, REQUIRED, ALWAYS_ALLOWED, VOID_ELEMENTS, RAW_TEXT_ELEMENTS };
+module.exports = { WHITELIST, REQUIRED, ALWAYS_ALLOWED, VOID_ELEMENTS };

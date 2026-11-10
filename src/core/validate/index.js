@@ -146,7 +146,7 @@ function formatValidation(result, { context = "validate" } = {}) {
     const meaning = errors > 0
         ? "ERROR = this WILL fail to compile or save in PalBuilder; you must fix every error" +
           (context === "pre-push" ? " before pushing. Each finding says exactly how to fix it; a passing pal_test does not clear these." : ".")
-        : "WARNING = likely unsupported / risky; fix each warning or record a checkpoint explaining why it is safe. " +
+        : "WARNING = likely unsupported / risky; fix each warning or state why it is safe. " +
           "No errors, so a push is allowed, but a pal-loop task is not done while warnings are silently ignored.";
     // A rule's remediation is usually repeated verbatim at every location. Print each distinct
     // remediation once while retaining every rule code and file:line occurrence.

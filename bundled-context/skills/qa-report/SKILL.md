@@ -53,7 +53,7 @@ nothing to say, write "none" and explain why.
 5. **What worked well** — for balance and to protect features from being "fixed" away.
 6. **Run mechanics & PalSync efficiency** — evidence-only telemetry for the completed run:
    - PalSync version/commit used, when available.
-   - Tasks attempted / completed / blocked / needs-human.
+   - GOAL.md acceptance checks passed / failed / unverified.
    - Skill names actually loaded and extra references actually loaded, especially JIT references
      such as `pal-json.md`, `browser-js.md`, and verification references.
    - Tool friction: failed, duplicate/redundant, retried, or uninformative tool calls.
@@ -66,8 +66,7 @@ nothing to say, write "none" and explain why.
      guidance was moved too far out of context.
    - Routing/context wins: relevant JIT loading, such as loading `pal-json.md` only when creation
      began or leaving browser-JS detail unloaded for markup-only work.
-   - Whether the pal-loop state machine was followed cleanly: Start → Pick → Prepare → Execute →
-     Verify → Resolve → Continue/Handoff.
+   - Whether the pal-loop goal flow was followed: start → plan → build → push → verify → fix → done.
 7. **Cost & usage** — Read `pal_stats` only after the bounded build/review phase has closed (or label it live/in-progress). Take every number from ONE `pal_stats` read; do not open telemetry files or
    run other reporting commands. Report its MODEL USAGE block with the `source` and quality label
    it prints, and its `build`/`review` phase rows when present — those are bounded PalSync windows,
@@ -77,8 +76,8 @@ nothing to say, write "none" and explain why.
    do not estimate usage, billing, or cache hit rate, and do not record footer figures manually.
 8. **Recommendations for palsync** — numbered, prioritized (P0 / P1 / P2), each naming the
    file or tool it targets.
-9. **Fix tasks** — checkbox list in pal-loop task format (file, change, success condition) so
-   a future `pal-fix` / `pal-loop` run can consume it directly.
+9. **Fix tasks** — checkbox list (file, change, acceptance check) so a future
+   `pal-fix` / `pal-loop` run can consume it directly.
 
 ## Rules
 

@@ -415,5 +415,5 @@ async function attemptWithFreshTest(session, guid, testOpts, attempt, deps = {})
 module.exports = {
     normalizeTarget, buildTargetUrl, observeScreen, verifyState, readMatchText, describeTargetMismatch, isScalar,
     deriveWebBase, resolveTargetUrl, openAuthenticatedScreen, attemptWithFreshTest, STATE_TIMEOUT_MS,
-    authDiagnostics, formatAuthDiagnostics, withPalTestTurn
+    authDiagnostics, formatAuthDiagnostics, withPalTestTurn, withBound
 };

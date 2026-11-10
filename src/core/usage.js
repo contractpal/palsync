@@ -145,14 +145,6 @@ process.once("exit", () => {
     for (const workspaceDir of tallies.keys()) flush(workspaceDir);
 });
 
-// Byte size of a result returned to the agent's context: text content + any image payloads.
-function contentBytes(content) {
-    if (!Array.isArray(content)) return 0;
-    return content.reduce((n, b) => n +
-        (b && b.text ? Buffer.byteLength(b.text, "utf8") : 0) +
-        (b && b.data ? b.data.length : 0), 0);
-}
-
 // Bytes AND estimated model tokens for a result: text ≈ bytes/4, images by pixel dimensions.
 // An estimate (real tokenization varies), but it stops image-heavy byte counts from reading
 // as the top token cost when they aren't.
@@ -524,7 +516,7 @@ function readPiUsage(workspaceDir) {
     return readJsonLines(path.join(workspaceDir, PI_USAGE_FILE), "palsync/pi-usage/1");
 }
 
-module.exports = { recordToolCall, recordContextGeneration, contentBytes, contentStats, injectedContext,
+module.exports = { recordToolCall, recordContextGeneration, contentStats, injectedContext,
     readUsageTally, skillDescription, readSessionCost, recordSessionCost, readPiUsage,
     readRunUsage, captureRunUsage, normalizeRunUsageSnapshot, runUsageDelta, runUsagePhaseTotal,
     initializeUsageTally, bindUsageTallySession,

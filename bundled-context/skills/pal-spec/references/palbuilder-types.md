@@ -1,4 +1,4 @@
-# PalBuilder types & primitives reference (for the pal-spec reality check)
+# PalBuilder types & primitives reference
 
 Purpose: give the planner something concrete to verify dataset field types and primitives
 against, instead of guessing. Only VERIFIED entries belong here. If you can't verify it, it goes
@@ -35,7 +35,7 @@ in "UNVERIFIED — fill from builder" — never promoted to the verified table o
 - Sockets (websockets skill): `pal.getClientSocketManager().createClientSocket(...)`,
   `getClientSocket(id)`, `getSockets()`, `socket.sendMessage(...)`; receiver = workflowType 11.
 
-## VERIFIED — workflow JS language limits (hard constraints on §5 behavior)
+## VERIFIED — workflow JS language limits (hard constraints on workflow code)
 - Restricted ES3-style engine. NO object literals (`{ }` throws), no let/const, no arrow funcs.
 - Validated at COMPILE time in the builder; the headless save returns cached validation, never a
   fresh workflow compile. → any workflow JS needs a builder-compile checkpoint before sign-off.
@@ -50,7 +50,7 @@ build `2026.1.1.140-7295`.
 
 **Two strings per type — do not confuse them:**
 - **Stored type** = the constant value, serialized into the dataset schema / pal.json. This is
-  what a spec §8a "type" column MUST name. (The source warns these are "serialized in all pals
+  what a dataset field's "type" MUST name. (The source warns these are "serialized in all pals
   with datasets — do not change.")
 - **Picker label** = the friendly text the builder dropdown *displays*. For several types it
   differs from the stored string (e.g. stored `Number` shows as `Integer (…)`, stored `String`
@@ -131,11 +131,11 @@ should name these only when modeling keys/ownership explicitly.
 | `Profile id` | Profile id | owner profile |
 | `Profile id auto populate` | Profile id auto populate | owner profile, auto-set |
 
-### Reality-check rule for §8a
-A §8a field type passes iff its string matches a **stored type** above (left column). If the
-spec used a picker label (e.g. `Varchar`, `Integer`, `Datetime`), rewrite it to the stored
-string before passing. A type not in any table above is an unverifiable dependency — flag it.
+### Dataset field-type rule
+A field type is valid iff its string matches a **stored type** above (left column). If the
+definition used a picker label (e.g. `Varchar`, `Integer`, `Datetime`), rewrite it to the stored
+string. A type not in any table above is an unverifiable dependency — flag it.
 
-### Indexability (affects §8a indexes / lookups)
+### Indexability (affects indexes / lookups)
 NOT indexable: `Encrypted`, `Text`, `Medium text`, and all File types. Everything else is.
-An index declared on a non-indexable field fails the reality check.
+An index declared on a non-indexable field is invalid.

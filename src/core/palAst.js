@@ -1031,5 +1031,4 @@ module.exports = {
     LANGS,
     DEFAULT_MAX_RESULTS,
     DEFAULT_MAX_FILES,
-    IN_SCOPE_AS_DEFAULT: IN_SCOPE,
 };

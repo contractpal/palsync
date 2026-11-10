@@ -85,9 +85,9 @@ an invented image link.
 
 | Metric | Result | Evidence / notes |
 | --- | ---: | --- |
-| Tasks attempted | `<n>` | `<EXECUTION/transcript>` |
-| Tasks completed | `<n>` | |
-| Blocked / needs-human | `<n / n>` | |
+| Acceptance checks passed | `<n>` | `<GOAL.md + check output>` |
+| Acceptance checks failed | `<n>` | |
+| Acceptance checks unverified | `<n>` | |
 | Skills loaded | `<names>` | `<transcript>` |
 | Extra references loaded | `<names or none>` | |
 | Significant tool failures/retries | `<n>` | `<tool + reason>` |
@@ -97,7 +97,7 @@ an invented image link.
 
 **Validation/rework:** `<count and cause of significant validation/push/test failures requiring code changes, or not available>`
 
-**State-machine adherence:** `<clean | deviations>` — `<evidence>`
+**Goal-flow adherence:** `<clean | deviations>` — `<evidence>`
 
 **Context-quality note:** `<Did compressed/JIT guidance appear sufficient? Cite evidence; do not speculate.>`
 
@@ -150,5 +150,5 @@ replace it.
 
 ## Fix tasks
 
-- [ ] `<file>` — `<change>` — success condition: `<tool output or check>`
-- [ ] `<file>` — `<change>` — success condition: `<tool output or check>`
+- [ ] `<file>` — `<change>` — acceptance check: `<tool output or check>`
+- [ ] `<file>` — `<change>` — acceptance check: `<tool output or check>`

@@ -29,10 +29,6 @@ function successfulEvidenceCalls(evidence, tool, palGuid, marker, sourceDigest) 
     return successfulEvidenceEntries(evidence, tool, palGuid, marker, sourceDigest).length;
 }
 
-function successfulExerciseCalls(evidence, palGuid, marker, sourceDigest) {
-    return successfulEvidenceCalls(evidence, "pal_exercise", palGuid, marker, sourceDigest);
-}
-
 function passRows(review) {
     const lines = String(review || "").split(/\r?\n/);
     const rows = [];
@@ -76,8 +72,6 @@ function reviewVerdict(review) {
     }
     return "MISSING/UNKNOWN";
 }
-
-function verdictPass(review) { return reviewVerdict(review) === "PASS"; }
 
 const RESPONSIVE_ROUTE_CAP = 10; // brief/check route lines render on every review — cap the block
 
@@ -193,18 +187,6 @@ function checkReview(review, evidenceContext = {}) {
         }
     }
     return result;
-}
-
-// True when any successful evidence row (any tool) exists for the currently pushed version.
-function hasCurrentEvidence(workspaceDir) {
-    const record = readJson(path.join(workspaceDir, PALSYNC_FILE));
-    if (!record) return false;
-    const entries = readToolEvidence(workspaceDir);
-    const tools = new Set(entries.map(e => e.tool));
-    for (const tool of tools) {
-        if (successfulEvidenceCalls(entries, tool, record.palGuid, record.lastModifiedDate, record.localHash) > 0) return true;
-    }
-    return false;
 }
 
 function mtimeMs(file) {
@@ -438,6 +420,6 @@ function formatReviewBrief(brief) {
 }
 
 module.exports = {
-    successfulExerciseCalls, hasCurrentEvidence, passRows, reviewVerdict, verdictPass, checkReview, checkWorkspace, formatReviewCheck,
+    passRows, reviewVerdict, checkReview, checkWorkspace, formatReviewCheck,
     buildReviewBrief, formatReviewBrief, exerciseSummaryLines, responsiveEvidence
 };
