@@ -17,7 +17,6 @@ const { runSeoAudit } = require("../core/seoAudit");
 const { runRegression, captureBaseline, captureApproval } = require("../core/regression");
 const { readGoal, lintGoal, formatGoalLint } = require("../core/goal");
 const { syncDatasets } = require("../core/datasets");
-const { searchTemplates, formatTemplates } = require("../core/templates");
 const { upsertData, deleteData, upsertDataList, deleteDataList } = require("../core/dataObjects");
 const { validateWorkspace, formatValidation: formatLint } = require("../core/validate");
 const { buildImpactSnapshot } = require("../core/validate/snapshot");
@@ -1256,7 +1255,7 @@ const TOOLS = [
     },
     {
         name: "pal_preview",
-        description: "Inspect the last-pushed render. WEB: expect returns found/missing verdicts; summary is the default and full returns capped HTML. CONSOLE/transaction: open:true opens a browser only for human review. Push first.",
+        description: "Inspect the last-pushed render. CONSOLE/transaction: open:true opens a browser only for human review. Push first.",
         inputShape: {
             workflow: z.enum(["console", "web", "transaction"]).optional(),
             detail: z.enum(["summary", "full"]).optional().describe("summary (default) returns metadata and failure context; full includes capped HTML."),
@@ -1371,7 +1370,7 @@ const TOOLS = [
     },
     {
         name: "pal_fetch",
-        description: "Verify one last-pushed WEB page renders. expect returns found/missing verdicts without the body; summary is the default and full returns capped HTML. A successful push does not prove render. path is site-root-relative.",
+        description: "Verify one last-pushed WEB page renders. A successful push does not prove render. path is site-root-relative.",
         inputShape: {
             path: z.string().describe("Site-root-relative page path."),
             detail: z.enum(["summary", "full"]).optional().describe("summary (default) returns metadata and failure context; full includes capped HTML."),
@@ -1461,7 +1460,7 @@ const TOOLS = [
     },
     {
         name: "pal_screenshot",
-        description: "Render the last-pushed pal, detect runtime errors, and return a browser-computed designAudit. Capture desktop and mobile; require zero audit errors and inspect pixels. imageless:true returns only the audit. Missing browser/auth is unavailable, never a pass. workflow/workflowName override auto-detection; console/transaction action+params render that action's state before capture.",
+        description: "Render the last-pushed pal, detect runtime errors, and return a browser-computed designAudit. Capture desktop and mobile; require zero audit errors and inspect pixels. imageless:true returns only the audit. Missing browser/auth is unavailable, never a pass. console/transaction action+params render that action's state before capture.",
         inputShape: {
             page: z.string().optional().describe("WEB page path; default is home."),
             feature: z.string().optional().describe("Work-history feature label."),
@@ -1469,12 +1468,12 @@ const TOOLS = [
             fullPage: z.boolean().optional().describe("Capture the full scroll height."),
             imageless: z.boolean().optional().describe("Return designAudit without image data."),
             workflow: z.enum(["console", "web", "transaction"]).optional().describe("Explicit workflow type — overrides auto-detection."),
-            workflowName: z.string().optional().describe("Registered workflow name (file extension optional)."),
+            workflowName: z.string().optional().describe("Registered workflow name (file extension optional); overrides auto-detection."),
             action: z.string().optional().describe("Console/transaction action, c:a form: name or name?key=value."),
             expect: z.array(z.string()).optional().describe("Visible strings proving the intended screen; without them the capture is state-unverified."),
             params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional().describe("Scalar query parameters appended with the action (reserved keys cp-auth/nxProfileId/cp-workflow/cp-ws-doaction are refused)."),
             initial: exerciseInitialSchema(false).optional().describe("With steps: first screen, as in pal_exercise (replaces page/action/params)."),
-            steps: z.array(exerciseStepSchema(false)).min(1).max(30).optional().describe("pal_exercise steps run before capture, to reach states behind clicks/fills/AJAX (modals, panels, form results). Captures after the last step; its expect (plus expect) proves the screen.")
+            steps: z.array(exerciseStepSchema(false)).min(1).max(30).optional().describe("pal_exercise steps run before capture to reach states behind clicks/AJAX; the last step's expect proves the screen.")
         },
         async run(ctx, { page, feature, viewport, fullPage, imageless, workflow, workflowName, action, params, expect, initial, steps } = {}) {
             // Durable render evidence (.palsync/tool-evidence.jsonl), mirroring pal_exercise at
@@ -1993,7 +1992,7 @@ const TOOLS = [
     },
     {
         name: "pal_ast",
-        description: "Syntax-aware STRUCTURAL search + conservative rewrite over the 14 manifest folders via the pinned ast-grep binary. Matches code SHAPES, not text: exact strings + $VAR/$$$ metavariables only; regex and plain-text search are grep/read territory (refused). lang: html|javascript|css|json. search returns file:line + matched text for whole matched nodes (bare patterns reach element TEXT, never attribute interiors). rewrite returns a dry-run diff; apply:true writes byte-identically, only inside the manifest folders (pal.json/.palsync.json never written; maxFiles overruns and preview drift refused) and lints ONLY the written files, advisory.",
+        description: "Syntax-aware STRUCTURAL search + conservative rewrite over the 14 manifest folders via the pinned ast-grep binary. Matches code SHAPES, not text: regex and plain-text search are grep/read territory (refused). Search returns file:line + matched text for whole matched nodes (bare patterns reach element TEXT, never attribute interiors). A rewrite writes byte-identically when applied, only inside the manifest folders (pal.json/.palsync.json never written; maxFiles overruns refused), and lints ONLY the written files, advisory.",
         needsCtx: false,
         inputShape: {
             mode: z.enum(["search", "rewrite"]).optional().describe("search (default) returns matches; rewrite returns a dry-run diff, written only with apply:true."),
@@ -2277,7 +2276,7 @@ const TOOLS = [
     },
     {
         name: "pal_push",
-        description: "Push local changes after validating changed files and cross-file contracts. Validation errors cannot be bypassed; force:true handles server drift only. Warnings never block. Refuses locks unless the user supplies the exact typed override. Standalone pal_validate checks the whole workspace; this gate does not re-block pre-existing errors in untouched files. When a response reports sourceControlEnabled:true, pass commitMessage (a concise what/why summary, recorded as \"Chip: <message>\") on pushes that complete a piece of work; omit it for exploratory pushes. It is ignored when source control is off.",
+        description: "Push local changes after validating changed files and cross-file contracts. Validation errors cannot be bypassed; force:true handles server drift only. Warnings never block. Refuses locks unless the user supplies the exact typed override. Pre-existing errors in untouched files never block. When a response reports sourceControlEnabled:true, pass commitMessage (a concise what/why summary, recorded as \"Chip: <message>\") on pushes that complete a piece of work; omit it for exploratory pushes. It is ignored when source control is off.",
         // skipValidation is deliberately NOT in inputShape (the MCP layer strips unknown keys, so
         // agents cannot pass it). In the test-06 haiku run the agent read the "call pal_push with
         // skipValidation:true" hint in this tool's refusal message, decided the validator was
@@ -2510,19 +2509,6 @@ const TOOLS = [
             };
         }
     },
-    {
-        name: "pal_search_templates",
-        description: "Search pal-store templates (read-only). Case-insensitive match on name, description, categories, industries; omit search to list all.",
-        needsLock: false,
-        inputShape: {
-            search: z.string().optional().describe("Text to match.")
-        },
-        async run(ctx, { search } = {}) {
-            const result = await searchTemplates(ctx.session, { search });
-            if (!result.ok) return { ok: false, error: result.error, message: result.error };
-            return { ok: true, search: result.search, templates: result.templates, message: formatTemplates(result) };
-        }
-    }
 ];
 
 // MCP clients use these hints for presentation and confirmation UX. They are deliberately
@@ -2558,7 +2544,6 @@ const TOOL_HINTS = {
     // destructive and clients should present a confirmation affordance.
     pal_sync_datasets: ["Synchronize pal datasets", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
     pal_dataset_query: ["Query dataset rows", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
-    pal_search_templates: ["Search pal templates", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_data_set: ["Set pal Data map", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],
     pal_data_delete: ["Delete pal Data map", { readOnlyHint: false, destructiveHint: true, idempotentHint: true }],
     pal_datalist_set: ["Set pal DataList", { readOnlyHint: false, destructiveHint: false, idempotentHint: true }],

@@ -1,5 +1,5 @@
 "use strict";
-// pal_search_templates core: search the pal store's templates via SearchTemplates.do.
+// Pal-store template search via SearchTemplates.do; consumed by the GUI's create-from-template flow.
 //
 // The server answers with a ComposerResult whose `files` map holds one PalFile (an Image) per
 // template. The template's data rides on the PalFile: filename = name, palType = the opaque

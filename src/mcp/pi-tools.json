@@ -258,7 +258,7 @@
   {
     "name": "pal_preview",
     "title": "Preview rendered pal",
-    "description": "Inspect the last-pushed render. WEB: expect returns found/missing verdicts; summary is the default and full returns capped HTML. CONSOLE/transaction: open:true opens a browser only for human review. Push first.",
+    "description": "Inspect the last-pushed render. CONSOLE/transaction: open:true opens a browser only for human review. Push first.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -314,7 +314,7 @@
   {
     "name": "pal_fetch",
     "title": "Fetch rendered web page",
-    "description": "Verify one last-pushed WEB page renders. expect returns found/missing verdicts without the body; summary is the default and full returns capped HTML. A successful push does not prove render. path is site-root-relative.",
+    "description": "Verify one last-pushed WEB page renders. A successful push does not prove render. path is site-root-relative.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -365,7 +365,7 @@
   {
     "name": "pal_screenshot",
     "title": "Capture rendered pal screen",
-    "description": "Render the last-pushed pal, detect runtime errors, and return a browser-computed designAudit. Capture desktop and mobile; require zero audit errors and inspect pixels. imageless:true returns only the audit. Missing browser/auth is unavailable, never a pass. workflow/workflowName override auto-detection; console/transaction action+params render that action's state before capture.",
+    "description": "Render the last-pushed pal, detect runtime errors, and return a browser-computed designAudit. Capture desktop and mobile; require zero audit errors and inspect pixels. imageless:true returns only the audit. Missing browser/auth is unavailable, never a pass. console/transaction action+params render that action's state before capture.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -403,7 +403,7 @@
           ]
         },
         "workflowName": {
-          "description": "Registered workflow name (file extension optional).",
+          "description": "Registered workflow name (file extension optional); overrides auto-detection.",
           "type": "string"
         },
         "action": {
@@ -469,7 +469,7 @@
           }
         },
         "steps": {
-          "description": "pal_exercise steps run before capture, to reach states behind clicks/fills/AJAX (modals, panels, form results). Captures after the last step; its expect (plus expect) proves the screen.",
+          "description": "pal_exercise steps run before capture to reach states behind clicks/AJAX; the last step's expect proves the screen.",
           "minItems": 1,
           "maxItems": 30,
           "type": "array",
@@ -986,7 +986,7 @@
   {
     "name": "pal_ast",
     "title": "Search and rewrite code structure",
-    "description": "Syntax-aware STRUCTURAL search + conservative rewrite over the 14 manifest folders via the pinned ast-grep binary. Matches code SHAPES, not text: exact strings + $VAR/$$$ metavariables only; regex and plain-text search are grep/read territory (refused). lang: html|javascript|css|json. search returns file:line + matched text for whole matched nodes (bare patterns reach element TEXT, never attribute interiors). rewrite returns a dry-run diff; apply:true writes byte-identically, only inside the manifest folders (pal.json/.palsync.json never written; maxFiles overruns and preview drift refused) and lints ONLY the written files, advisory.",
+    "description": "Syntax-aware STRUCTURAL search + conservative rewrite over the 14 manifest folders via the pinned ast-grep binary. Matches code SHAPES, not text: regex and plain-text search are grep/read territory (refused). Search returns file:line + matched text for whole matched nodes (bare patterns reach element TEXT, never attribute interiors). A rewrite writes byte-identically when applied, only inside the manifest folders (pal.json/.palsync.json never written; maxFiles overruns refused), and lints ONLY the written files, advisory.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1395,7 +1395,7 @@
   {
     "name": "pal_push",
     "title": "Push pal changes",
-    "description": "Push local changes after validating changed files and cross-file contracts. Validation errors cannot be bypassed; force:true handles server drift only. Warnings never block. Refuses locks unless the user supplies the exact typed override. Standalone pal_validate checks the whole workspace; this gate does not re-block pre-existing errors in untouched files. When a response reports sourceControlEnabled:true, pass commitMessage (a concise what/why summary, recorded as \"Chip: <message>\") on pushes that complete a piece of work; omit it for exploratory pushes. It is ignored when source control is off.",
+    "description": "Push local changes after validating changed files and cross-file contracts. Validation errors cannot be bypassed; force:true handles server drift only. Warnings never block. Refuses locks unless the user supplies the exact typed override. Pre-existing errors in untouched files never block. When a response reports sourceControlEnabled:true, pass commitMessage (a concise what/why summary, recorded as \"Chip: <message>\") on pushes that complete a piece of work; omit it for exploratory pushes. It is ignored when source control is off.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1599,35 +1599,6 @@
       "dataset",
       "datasets",
       "query"
-    ]
-  },
-  {
-    "name": "pal_search_templates",
-    "title": "Search pal templates",
-    "description": "Search pal-store templates (read-only). Case-insensitive match on name, description, categories, industries; omit search to list all.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "search": {
-          "description": "Text to match.",
-          "type": "string"
-        }
-      }
-    },
-    "annotations": {
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true
-    },
-    "groups": [
-      "project"
-    ],
-    "keywords": [
-      "template",
-      "templates",
-      "store",
-      "gallery",
-      "search"
     ]
   }
 ]
