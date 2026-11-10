@@ -24,8 +24,7 @@ function pushGateRulesVersion(versions = WORKSPACE_RULE_VERSIONS) {
 
 const RULE_VERSIONS = Object.freeze({
     ...WORKSPACE_RULE_VERSIONS,
-    "push-gate": pushGateRulesVersion(),
-    "spec-lint": 1
+    "push-gate": pushGateRulesVersion()
 });
 const MAX_ENTRIES = 500;
 const VERSION = require("../../package.json").version;

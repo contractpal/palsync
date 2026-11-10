@@ -1,17 +1,17 @@
 ---
 name: pal-review
-description: "Load for fresh independent review of a completed build against SPEC.md. Produces verdict/fix tasks; does not edit."
+description: "Load for fresh independent review of a completed build against GOAL.md. Produces a verdict and fixes; does not edit."
 ---
 
-# pal-review — fresh-eyes evaluation against the spec
+# pal-review — fresh-eyes evaluation against the goal
 
 `pal-review` is a thorough **final** review. Run it only when the user requests it or the active
-review setting is Automatic, after implementation is complete — never between tasks.
+review setting is Automatic, after implementation is complete — never mid-build.
 
 Run in a **fresh session or subagent — never the context that wrote the code**. That session
 is biased toward its own output; bias separation is the whole point. Open cold, judge whether
 the build meets the contract. pal-loop ran the *tests* (compile/validate); you run the *eval*
-(correct and good against the spec). Exception: re-run `pal_validate` yourself — fresh run,
+(correct and good against the goal). Exception: re-run `pal_validate` yourself — fresh run,
 never pal-loop's self-report.
 
 ## Inputs (read all, first)
@@ -24,9 +24,8 @@ never pal-loop's self-report.
   (or its exact error) in REVIEW.md; a missing attempt caps the verdict at CHANGES-NEEDED.
 - Run `palsync review brief` first. Treat its EVIDENCE LEDGER as primary evidence; open source
   files only for criteria listed under `NO EVIDENCE` or for a specific failed/ambiguous proof.
-- `SPEC.md` (must be `status: approved`) — the contract: §3 sitemap, §4 copy, §5 behavior,
-  §6 layout, §11 constraints, §12 acceptance criteria.
-- `EXECUTION.md` — what was built and in what state.
+- `GOAL.md` (must be `status: approved`) — the contract: outcome, acceptance checks, fixed
+  contracts, constraints, non-goals, and the builder's `## Notes` and `## Blockers`.
 - `../palbuilder-frontend/references/ui-quality.md` —
   UX/hierarchy/state/target/responsive bar for visually significant screens.
 - Built artifacts: `pal_fetch` each web page (server-rendered HTML); workflow/fragment files
@@ -43,28 +42,27 @@ If fresh-context reviewer dispatch fails, do not silently self-review. Put `BIAS
   element id; (c) each fragment `action=` has a matching workflow case; (d) `test=` EL syntax
   is real (`${...}` with `eq`/`empty`, no `==`). What it canNOT check — that each `${key}` a
   fragment reads is set by the workflow payload on the rendering path — you verify in arm 2.
-- Every §4 copy string **verbatim** in served output — `pal_fetch expect:[strings]`
+- Every `## Fixed contracts` copy string **verbatim** in served output — `pal_fetch expect:[strings]`
   (per-string found/missing verdict, no HTML dump). Real output, not source.
-- Every §3 nav link routes to a real page — no dead links.
-- Every §12 acceptance criterion actually met — the full set, not just the global floor.
-- Check new-pal resource ordering against `../shared/references/css-conventions.md`; existing pals are not retrofitted unless the spec says so.
-- §11 NEVER list not violated; §8b consumed datasets not altered.
-- Every `done` task in EXECUTION.md traces via its `spec ref` to its SPEC.md § and that
-  requirement is satisfied.
+- Every nav link routes to a real page — no dead links.
+- Every acceptance check actually met — the full set. Read each check's script: a script that
+  would pass without the behavior its sentence names is a finding, even if it passed.
+- Check new-pal resource ordering against `../shared/references/css-conventions.md`; existing pals are not retrofitted unless the goal says so.
+- Constraints and non-goals not violated; datasets the pal only consumes not altered.
 
-Output: per-criterion PASS / FAIL with evidence, citing each finding's `spec ref` §. The
+Output: per-criterion PASS / FAIL with evidence, citing each finding's check id or GOAL.md section. The
 evidence cell must name the exact proof artifact (`pal_fetch expect` result, `pal_exercise`
 step, `pal_screenshot captured:true`, or file:line trace); vague "code inspection" is not a
 proof artifact for rendered output or data effects.
 
 ### 2. Quality / behavior (always runs)
-- `pal_test` confirms a workflow *compiles*, not that its logic is correct. For **every** §5
-  action, trace it hop-by-hop with real `file:line` citations: triggering element → action
+- `pal_test` confirms a workflow *compiles*, not that its logic is correct. For **every** write
+  action the build exposes, trace it hop-by-hop with real `file:line` citations: triggering element → action
   routed in the workflow → request params read → record operation → payload keys set →
   fragment EL/`c:list` refs consuming those exact keys. One row per action (table in the
   output template). **Any hop you cannot point at a real line → that action FAILS** —
   compiling-but-wrong and untraceable-but-compiling are the same verdict.
-- Where runnable, ALSO exercise each §5 write action live: `pal_exercise` with the action's
+- Where runnable, ALSO exercise each write action live: `pal_exercise` with the action's
   inputs, `expect` the persisted value, `absent` the pre-edit value (catches duplicate
   insert). A passing exercise is the strongest evidence class for a data-effects criterion;
   a failing one is a finding with the step output as evidence.
@@ -72,23 +70,23 @@ proof artifact for rendered output or data effects.
 - Use unique `{{runId}}` data and assert the complete persisted effect.
 - Most common mistakes: unscoped duplicate-text clicks (scope with `within`) and missing `absent:` after delete.
 - **Code trace is necessary but not sufficient for write-action PASS.** If `pal_exercise` is
-  available and a §5 write action was not exercised, mark that action `NOT VERIFIED` and the
+  available and a write action was not exercised, mark that action `NOT VERIFIED` and the
   verdict `CHANGES-NEEDED` with a fix task to run the exercise. Do not convert a plausible
   file:line trace into a data-effects pass.
 - **Code health (advisory — never changes the verdict).** Start from the review brief's DUPLICATE
   CODE block: for each span, note a shared helper/fragment or say why the repetition is fine. For
-  the files your §5 action trace already opened, note only clear instances of: **duplicated code**
+  the files your action trace already opened, note only clear instances of: **duplicated code**
   (the same logic in two fragments/workflows: extract and share), **scattered edit** (one
   behaviour needing coordinated edits in many files: gather it), **repeated switch** (the same
   `case`/`if` chain on the same value in several places: one shared lookup), **speculative
-  generality** (parameters, hooks, or files no spec item uses: delete), **unclear name** (an
+  generality** (parameters, hooks, or files no goal check needs: delete), **unclear name** (an
   id/function whose name hides what it does: rename). Quote file:line. Rate each `clear` or
   `possible`; omit `possible` unless there are none of the other kind. No extra file reads for
   this beyond the listed spans; no fix tasks.
 
-- Copy on-brand per BRAND_VOICE and any brand constraints in the spec, not just present?
-- §6 layout matches the composition the spec described?
-- Colors and fonts in `styles/styles.css` are coherent and match any brand constraints the spec
+- Copy on-brand per BRAND_VOICE and any brand constraints in the goal, not just present?
+- Layout meets `ui-quality.md`: hierarchy, primary action, grouping, states.
+- Colors and fonts in `styles/styles.css` are coherent and match any brand constraints the goal
   records.
 - A console pal with no recorded explicit font decision uses the system font stack and has no
   `@import`; otherwise record a visual finding.
@@ -96,7 +94,7 @@ proof artifact for rendered output or data effects.
 ### 3. Visual / UX (capability-gated)
 Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per screen.
 - Review owns the responsive pair: capture the final pushed version at both desktop and mobile;
-  pal-loop's per-task mobile capture is intentionally deferred to this final review.
+  this final review may be the first mobile capture of a route.
 - **A PASS verdict requires a clean desktop AND mobile capture for every reviewed route, taken
   BEFORE REVIEW.md is written** — capturing after the review is written makes the review stale and
   fails the check a second time. `palsync review check` enforces this from durable evidence; the
@@ -132,7 +130,7 @@ Try `pal_screenshot` (or the `palsync screenshot` CLI on non-MCP harnesses) per 
 - Then the judgment half it can't do: `pal_screenshot` before/after diff for every
   `captured:true` baseline page — compare against `baseline/screenshots/<page>-<viewport>.png`
   asking "did anything UNTOUCHED shift," not "is it pretty." An untouched page shifting is a
-  finding, same severity as a §12 miss.
+  finding, same severity as a failed acceptance check.
 - `eyeball_only` baseline pages get a `needs-human` regression finding (name the screen, what
   to compare) — never an assumed pass.
 - Cross-check every finding against `known_issues` — an already-listed defect is NOT a new
@@ -146,17 +144,17 @@ chat-only verdicts are invalid.
 ```
 # REVIEW — <project> — <date> — reviewer: fresh session
 verdict: PASS | CHANGES-NEEDED
-§12: <criteria met>/<criteria total>  — acceptance-criteria tally (count only criteria with cited evidence; feeds eval/scores.jsonl)
+checks: <checks met>/<checks total>  — acceptance-check tally (count only checks with cited evidence)
 pal_validate: <quote `ok` and `diagnosticCount` — required; missing fields make the review invalid>
 ## Proof ledger
 | proof id | tool/file evidence | proves |
 ## Conformance
-| criterion (§) | result | evidence (must match the required evidence class) |
-## §5 action trace (one row per spec action — an incomplete row means that action FAILS)
-| action (§5) | trigger (file:line) | routed case (file:line) | params read (file:line) | record op (file:line) | payload keys set (file:line) | fragment refs consuming keys (file:line) | result |
+| check id / GOAL.md section | result | evidence (must match the required evidence class) |
+## Action trace (one row per write action — an incomplete row means that action FAILS)
+| action | trigger (file:line) | routed case (file:line) | params read (file:line) | record op (file:line) | payload keys set (file:line) | fragment refs consuming keys (file:line) | result |
 ## Quality / behavior
-- <finding> — <spec ref> — <why it misses>
-## Code health (advisory — feeds the next pal-spec)
+- <finding> — <check id> — <why it misses>
+## Code health (advisory — feeds the next goal)
 - <smell> — <file:line> — <clear|possible> — <suggested change>   (`none` when empty)
 ## Visual / UX
 - <finding> — <screenshot ref or "eyeball gate: screen X"> — <fix>
@@ -173,16 +171,16 @@ Session stats — call `pal_stats` once if stats are wanted. Collection is autom
 Run every evidence-producing tool before the final REVIEW.md write. Then run `palsync review check`
 from the pal workspace and paste its complete output into REVIEW.md. It reports descriptive,
 source-bound exercise evidence rather than a call count; behavior evidence is required only when
-§5/action-trace/happy-path PASS rows declare testable behavior. Any flag, stale-review failure, or
+action-trace/happy-path PASS rows declare testable behavior. Any flag, stale-review failure, or
 verdict cap forces `CHANGES-NEEDED`; do not write PASS until the check reports `result: PASS`.
 The build session runs `palsync completion check`; configured harness hooks may surface an unmet
 gate, and other harnesses invoke the same CLI gate manually.
 
 ## Rules
-- **Never edit code or the spec.** Findings become fix tasks for pal-loop; a *spec* problem
-  (missing/contradictory requirement) is a human blocker, not a self-edit.
-- Judge only against the spec and `ui-quality.md`. "I'd have done it differently" is not a
-  finding; "violates §12 criterion 4" is. (Code-health notes are advisory and are not findings. They
+- **Never edit code or GOAL.md.** Findings go back to the builder; a *goal* problem
+  (missing/contradictory requirement) is a question for the user, not a self-edit.
+- Judge only against the goal and `ui-quality.md`. "I'd have done it differently" is not a
+  finding; "fails check A4" is. (Code-health notes are advisory and are not findings. They
   never become fix tasks and never affect the verdict.)
 - **Evidence classes — PASS requires the matching evidence, or it's fabrication:**
   rendered-output criteria need `pal_screenshot`/`pal_fetch` evidence taken from a state where
@@ -197,10 +195,10 @@ gate, and other harnesses invoke the same CLI gate manually.
   `pal_fetch expect all found`, `pal_screenshot captured:true renderError:null`). File proofs
   name exact `file:line`. A row with no proof id is not reviewed.
 - **Verdict gating — PASS only when all five hold:** `pal_validate` returns `ok:true` and
-  `diagnosticCount:0` (quote both fields); every §5 action has a complete trace row; every runnable write/data-effect action
-  has passing `pal_exercise` evidence; no §12 criterion sits in PASS without its evidence
+  `diagnosticCount:0` (quote both fields); every write action has a complete trace row; every runnable write/data-effect action
+  has passing `pal_exercise` evidence; no acceptance check sits in PASS without its evidence
   class; every reviewed route has a clean desktop and mobile `pal_screenshot` capture (or a
-  recorded capture-unavailable human gate). Any one missing → CHANGES-NEEDED with fix tasks.
+  recorded capture-unavailable human gate). Any one missing → CHANGES-NEEDED with fixes.
 - **`pal_test` never outranks `pal_validate`.** pal_test proves the workflow COMPILES, nothing
   more; validate errors describe code that mis-renders or dies at runtime after a clean
   compile. "pal_test showed successful validation" is not a rebuttal to a validate error — the
@@ -215,7 +213,7 @@ gate, and other harnesses invoke the same CLI gate manually.
 
 ## How it fits the loop
 When final review is requested, pal-loop hands off here in a fresh context after the build. You
-return the verdict; pal-loop turns CHANGES-NEEDED items into fix tasks and re-reviews until PASS.
+return the verdict; pal-loop sends CHANGES-NEEDED items to its builder and re-reviews until PASS.
 
 ## What this skill does NOT do
 - Does not build or fix anything — verdict and fix tasks only.

@@ -90,7 +90,8 @@ test("USAGE documents browser-open preview default and no-open escape hatch", ()
     assert.doesNotMatch(USAGE, /palsync ctx |palsync usage start|palsync cost   \[/);
     assert.doesNotMatch(USAGE, /palsync context inspect/);
     assert.match(USAGE, /palsync cost record --model X --provider Y/);
-    assert.match(USAGE, /--tried .*automated workaround/);
+    assert.match(USAGE, /palsync goal-lint/);
+    assert.doesNotMatch(USAGE, /palsync (?:task|checkpoint|session-summary|spec-lint)\b/);
 });
 
 test("test forwards workflow targeting flags to pal_test", async () => {
@@ -138,77 +139,6 @@ test("test forwards workflow targeting flags to pal_test", async () => {
 
 test("parseFlags rejects a missing workflow-name value", () => {
     assert.throws(() => parseFlags(["--workflow-name"]), /--workflow-name requires a value/);
-});
-
-test("task CLI requires blocker reasons and writes status plus checkpoint once", async () => {
-    const ws = tmpWorkspace({ "EXECUTION.md": `## Tasks
-| id | task | status |
-| T1 | Build | todo |
-
-## Checkpoints
-- existing
-` });
-    const oldLog = console.log, oldError = console.error; const logs = [];
-    console.log = (...args) => logs.push(args.join(" ")); console.error = () => {};
-    try {
-        assert.equal(await run("task", ["T1", "blocked", "--dir", ws]), 1);
-        // Track C: a reason alone is not enough for blocked — --tried evidence is required too.
-        assert.equal(await run("task", ["T1", "blocked", "--reason", "Waiting", "--dir", ws]), 1);
-        const before = fs.readFileSync(require("node:path").join(ws, "EXECUTION.md"), "utf8");
-        assert.match(before, /\| T1 \| Build \| todo \|/);
-        assert.equal(await run("task", ["T1", "blocked", "--reason", "Waiting\nfor owner", "--tried", "pal_push\ntwice: 500", "--dir", ws]), 0);
-        assert.equal(await run("task", ["T1", "blocked", "--reason", "Waiting\nfor owner", "--tried=pal_push twice: 500", "--dir", ws]), 0);
-        assert.equal(await run("task", ["T1", "blocked", "--reason=Still waiting", "--tried=pal_validate: 0 errors", "--dir", ws]), 0);
-        const after = fs.readFileSync(require("node:path").join(ws, "EXECUTION.md"), "utf8");
-        assert.match(after, /\| T1 \| Build \| blocked \|/);
-        assert.equal((after.match(/BLOCKED T1 \[blocked\]: Waiting for owner \|\| tried: pal_push twice: 500/g) || []).length, 1);
-        assert.equal((after.match(/BLOCKED T1 \[blocked\]: Still waiting \|\| tried: pal_validate: 0 errors/g) || []).length, 1);
-        assert.match(logs.at(-1), /T1: blocked -> blocked/);
-        assert.doesNotMatch(logs.join("\n"), /undefined/);
-    } finally {
-        console.log = oldLog; console.error = oldError;
-        fs.rmSync(ws, { recursive: true, force: true });
-    }
-});
-
-test("task CLI blocks stale starts and completion but permits amendment recovery", async () => {
-    const ws = tmpWorkspace({
-        "SPEC.md": `status: approved
-reality_check: pass
-spec version: 2
-
-## 3. Sitemap
-home
-
-## 11. Constraints
-never
-`,
-        "EXECUTION.md": `spec: SPEC.md (status: approved)
-spec version: 1
-
-## Tasks
-| id | task | tier | spec ref | depends | status | success condition |
-| T1 | foundation | cheap | §3 | — | todo | pal_validate 0 errors; pal_test ok |
-
-## Checkpoints
-## Blockers
-`
-    });
-    const oldLog = console.log, oldError = console.error; const errors = [];
-    console.log = () => {}; console.error = value => errors.push(String(value));
-    try {
-        assert.equal(await run("task", ["T1", "in_progress", "--dir", ws]), 1);
-        assert.equal(await run("task", ["T1", "done", "--dir", ws]), 1);
-        assert.match(errors.join("\n"), /spec version/);
-        assert.equal(await run("task", ["T1", "blocked", "--reason", "awaiting approved reconciliation", "--tried", "pal_validate", "--dir", ws]), 0);
-        const executionFile = require("node:path").join(ws, "EXECUTION.md");
-        fs.writeFileSync(executionFile, fs.readFileSync(executionFile, "utf8").replace("spec version: 1", "spec version: 2"));
-        assert.equal(await run("task", ["T1", "in_progress", "--dir", ws]), 0);
-        assert.equal(await run("task", ["T1", "done", "--dir", ws]), 0);
-    } finally {
-        console.log = oldLog; console.error = oldError;
-        fs.rmSync(ws, { recursive: true, force: true });
-    }
 });
 
 test("parseFlags parses cost record fields", () => {
@@ -467,54 +397,3 @@ test("hooks requires check or repair and is registered in USAGE and SUBCOMMANDS"
     assert.match(errs.join("\n"), /--dir requires a value/);
 });
 
-test("task done warns once when no passing evidence exists for the current pushed version", async () => {
-    const path = require("node:path");
-    const exec = `## Tasks
-| id | task | status |
-| T1 | Build | in_progress |
-| T2 | Ship | in_progress |
-`;
-    const ws = tmpWorkspace({
-        "EXECUTION.md": exec,
-        ".palsync.json": JSON.stringify({ palGuid: "g1", lastModifiedDate: "m1", localHash: "h1" })
-    });
-    const oldLog = console.log, oldError = console.error; const errors = [];
-    console.log = () => {}; console.error = value => errors.push(String(value));
-    try {
-        assert.equal(await run("task", ["T1", "done", "--dir", ws]), 0);
-        assert.deepEqual(errors, ["warning: T1 marked done with no passing check recorded for the current pushed version"]);
-        errors.length = 0;
-        const row = (tool, hash) => JSON.stringify({ schema: "palsync/tool-evidence/1", tool, palGuid: "g1", sourceDigest: hash, successful: true });
-        fs.mkdirSync(path.join(ws, ".palsync"), { recursive: true });
-        fs.writeFileSync(path.join(ws, ".palsync", "tool-evidence.jsonl"), row("pal_screenshot", "old") + "\n");
-        assert.equal(await run("task", ["T2", "done", "--dir", ws]), 0);
-        assert.equal(errors.length, 1, "stale-version evidence does not count");
-        errors.length = 0;
-        fs.writeFileSync(path.join(ws, "EXECUTION.md"), exec);
-        fs.appendFileSync(path.join(ws, ".palsync", "tool-evidence.jsonl"), row("pal_screenshot", "h1") + "\n");
-        assert.equal(await run("task", ["T2", "done", "--dir", ws]), 0);
-        assert.deepEqual(errors, []);
-    } finally {
-        console.log = oldLog; console.error = oldError;
-        fs.rmSync(ws, { recursive: true, force: true });
-    }
-});
-
-test("task list --ready --all prints the frontier with parallel-safe marks", async () => {
-    const ws = tmpWorkspace({ "EXECUTION.md": `Parallel-safe: T2.  Sequential: T3.
-## Tasks
-| id | task | status |
-| T1 | Base | done |
-| T2 | A | todo |
-| T3 | B | todo |
-` });
-    const oldLog = console.log; const logs = [];
-    console.log = (...a) => logs.push(a.join(" "));
-    try {
-        assert.equal(await run("task", ["list", "--ready", "--all", "--dir", ws]), 0);
-        assert.deepEqual(logs, ["T2\tparallel-safe\t\u2014\tA", "T3\tserial\t\u2014\tB"]);
-    } finally {
-        console.log = oldLog;
-        fs.rmSync(ws, { recursive: true, force: true });
-    }
-});

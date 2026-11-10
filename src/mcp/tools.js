@@ -15,7 +15,7 @@ const { runExercise, formatExercise, applyRunId, redactStepValues, redactSecretF
 const { mergeWorkspace, formatMerge } = require("../core/merge");
 const { runSeoAudit, formatSeoAudit } = require("../core/seoAudit");
 const { runRegression, captureBaseline, captureApproval } = require("../core/regression");
-const { lintSpec, formatSpecLint } = require("../core/specLint");
+const { readGoal, lintGoal, formatGoalLint } = require("../core/goal");
 const { syncDatasets } = require("../core/datasets");
 const { searchTemplates, formatTemplates } = require("../core/templates");
 const { upsertData, deleteData, upsertDataList, deleteDataList } = require("../core/dataObjects");
@@ -27,7 +27,6 @@ const {
     formatImpactResult,
     createImpactError,
 } = require("../core/impactContext");
-const { cachedLint } = require("../core/lintCache");
 const { appendToolEvidence } = require("../core/usage");
 const { buildSessionStats, formatSessionStats } = require("../core/sessionStats");
 const { executeDatasetQuery } = require("../core/datasetQuery");
@@ -1707,15 +1706,55 @@ const TOOLS = [
         name: "pal_exercise",
         description: "Exercise last-pushed actions end-to-end and assert results. Read local markup first; do not discover fields or selectors by retries. Steps stop at the first failure. WEB steps use action+params; console/transaction opens its first screen with initial and reaches later screens by clicking rendered link text (step action/page is rejected there, never ignored). Scope duplicate controls with within and unique {{runId}}. waitFor waits a bounded time for the step's existing expect/absent to become true by polling visible text only (never replaying the mutation). Use after create/edit/delete.",
         inputShape: {
-            steps: z.array(exerciseStepSchema()).min(1).max(30).describe("Ordered; stops at first failure."),
+            steps: z.array(exerciseStepSchema()).min(1).max(30).optional().describe("Ordered; stops at first failure."),
             initial: exerciseInitialSchema().optional().describe("First screen to establish and verify before step 1."),
             workflow: z.enum(["console", "web", "transaction"]).optional().describe("Engine; default auto-detected."),
             browser: z.boolean().optional().describe("Force a real browser for a WEB pal instead of fetch."),
-            viewport: z.enum(["desktop", "mobile"]).optional().describe("Viewport; default desktop.")
+            viewport: z.enum(["desktop", "mobile"]).optional().describe("Viewport; default desktop."),
+            check: z.string().max(32).optional().describe("GOAL.md acceptance-check id: runs that check's script; omit steps/initial/workflow.")
         },
-        async run(ctx, { steps, workflow, viewport, initial, browser } = {}) {
+        async run(ctx, { steps, workflow, viewport, initial, browser, check } = {}) {
             const disabled = testingDisabledResult(ctx, "pal_exercise");
             if (disabled) return disabled;
+            // A GOAL.md check owns its whole script: mixing explicit exercise arguments with `check`
+            // would silently run something other than the approved script.
+            let goalCheck = null;
+            if (check !== undefined) {
+                if (steps !== undefined || initial !== undefined || workflow !== undefined || viewport !== undefined || browser !== undefined) {
+                    return { ran: false, check, message: "pal_exercise — check " + JSON.stringify(check) +
+                        " runs the GOAL.md script; omit steps, initial, workflow, viewport, and browser." };
+                }
+                if (!ctx.workspaceDir) {
+                    return { ran: false, check, message: "pal_exercise — check " + JSON.stringify(check) + " needs a workspace with GOAL.md." };
+                }
+                const parsedGoal = readGoal(ctx.workspaceDir);
+                if (!parsedGoal) {
+                    return { ran: false, check, message: "pal_exercise — no GOAL.md in " + ctx.workspaceDir + "; cannot resolve check " + JSON.stringify(check) + "." };
+                }
+                if (!parsedGoal.ok) {
+                    return { ran: false, check, message: "pal_exercise — GOAL.md is malformed: " + (parsedGoal.error || "it could not be parsed") };
+                }
+                goalCheck = parsedGoal.checks.find(value => value.id === check) || null;
+                if (!goalCheck) {
+                    const known = parsedGoal.checks.map(value => value.id);
+                    return { ran: false, check, message: "pal_exercise — GOAL.md has no acceptance check " + JSON.stringify(check) +
+                        (known.length ? "; known ids: " + known.join(", ") : "; it has no checks") + "." };
+                }
+                if (goalCheck.scriptError) {
+                    return { ran: false, check, message: "pal_exercise — GOAL.md acceptance check " + goalCheck.id + " has an invalid script: " + goalCheck.scriptError };
+                }
+                if (!goalCheck.script) {
+                    return { ran: false, check, message: "pal_exercise — GOAL.md acceptance check " + goalCheck.id + " has no exercise script; verify it by review." };
+                }
+                steps = goalCheck.script.steps;
+                workflow = goalCheck.script.workflow;
+                viewport = goalCheck.script.viewport;
+                initial = goalCheck.script.initial;
+                browser = goalCheck.script.browser;
+            }
+            if (!Array.isArray(steps) || !steps.length) {
+                return { ran: false, message: "pal_exercise — pass steps, or check with a GOAL.md acceptance-check id." };
+            }
             const res = await runExercise(ctx.session, ctx.record.palGuid, { steps, workflow, viewport, initial, browser, workspaceDir: ctx.workspaceDir });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             // Failure-only durable artifacts: a failed/blocked browser run with captured evidence
@@ -1761,7 +1800,7 @@ const TOOLS = [
                     workflow: String(res.kind || workflow || "unknown").slice(0, 40),
                     viewport: String(viewport || "desktop").slice(0, 40)
                 };
-                out.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, {
+                const evidence = {
                     tool: "pal_exercise",
                     palGuid: ctx.record.palGuid,
                     marker: ctx.record.lastModifiedDate,
@@ -1771,7 +1810,12 @@ const TOOLS = [
                     mode: res.mode,
                     summary,
                     sessionId: evidenceSessionId(ctx)
-                });
+                };
+                if (goalCheck) {
+                    evidence.check = goalCheck.id;
+                    evidence.scriptDigest = goalCheck.scriptDigest;
+                }
+                out.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, evidence);
                 if (!out.evidenceRecorded) out.message +=
                     "\n\n⚠ Behavior passed, but exercise evidence persistence failed. " +
                     "palsync review check will not count this run.";
@@ -1969,24 +2013,25 @@ const TOOLS = [
         }
     },
     {
-        name: "pal_spec_lint",
-        description: "Lint SPEC.md offline for the mechanical half of pal-spec's reality check: placeholders, dead §3 links, §8a field keys/types/sizes/indexes, §5 dataset references, the §12 floor, and the REGRESSION criterion when a baseline exists. Returns HARD_FLAG/FLAG/NOTE findings; design-level checks stay manual.",
+        name: "pal_goal_lint",
+        description: "Lint GOAL.md offline: parse errors, draft status, unverifiable acceptance checks, and exercise-script problems. Read-only; one line per finding plus a summary.",
         needsCtx: false,
-        inputShape: { spec: z.string().optional().describe("Path to the SPEC.md (default: SPEC.md in the workspace).") },
-        async run(ctx, { spec } = {}) {
-            const specPath = spec ? pathMod.resolve(spec) : pathMod.join(ctx.workspaceDir, "SPEC.md");
+        inputShape: {},
+        async run(ctx) {
+            const goalPath = pathMod.join(ctx.workspaceDir, "GOAL.md");
             let text;
-            try { text = fs.readFileSync(specPath, "utf8"); }
-            catch (e) { return { ran: false, message: "Could not read " + specPath + ": " + (e && e.message ? e.message : e) }; }
-            const specWorkspace = pathMod.dirname(specPath);
-            const res = cachedLint(ctx.workspaceDir, {
-                rel: pathMod.relative(ctx.workspaceDir, specPath).split(pathMod.sep).join("/"),
-                content: text,
-                mode: "spec-lint",
-                deps: [{ path: "baseline/baseline.json#present", content: String(fs.existsSync(pathMod.join(specWorkspace, "baseline", "baseline.json"))) }]
-            }, () => lintSpec(text, { workspaceDir: specWorkspace }));
+            try { text = fs.readFileSync(goalPath, "utf8"); }
+            catch (e) {
+                if (e && e.code === "ENOENT") {
+                    return { ran: true, findings: [], errors: 0, warnings: 0, message: "No GOAL.md in " + ctx.workspaceDir + "; nothing to lint." };
+                }
+                return { ran: false, message: "Could not read " + goalPath + ": " + (e && e.message ? e.message : e) };
+            }
+            const findings = lintGoal(text);
+            const errors = findings.filter(finding => finding.severity === "error").length;
+            const warnings = findings.filter(finding => finding.severity === "warn").length;
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
-            return Object.assign({ ran: true }, res, { message: formatSpecLint(res) });
+            return { ran: true, findings, errors, warnings, message: formatGoalLint(findings) };
         }
     },
     {
@@ -2479,7 +2524,7 @@ const TOOL_HINTS = {
     pal_screenshot: ["Capture rendered pal screen", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],
     pal_exercise: ["Exercise pal behavior", { readOnlyHint: false, destructiveHint: false, idempotentHint: false }],
     pal_seo_audit: ["Audit web page SEO", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
-    pal_spec_lint: ["Lint pal specification", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
+    pal_goal_lint: ["Lint pal goal", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_capture_baseline: ["Capture approved regression baseline", { readOnlyHint: false, destructiveHint: false, idempotentHint: false }],
     pal_regression: ["Run regression check", { readOnlyHint: true, destructiveHint: false, idempotentHint: true }],
     pal_pull: ["Pull pal changes", { readOnlyHint: false, destructiveHint: true, idempotentHint: false }],

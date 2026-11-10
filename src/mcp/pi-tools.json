@@ -576,6 +576,7 @@
       "type": "object",
       "properties": {
         "steps": {
+          "description": "Ordered; stops at first failure.",
           "minItems": 1,
           "maxItems": 30,
           "type": "array",
@@ -671,8 +672,7 @@
                 }
               }
             }
-          },
-          "description": "Ordered; stops at first failure."
+          }
         },
         "initial": {
           "description": "First screen to establish and verify before step 1.",
@@ -732,11 +732,13 @@
             "desktop",
             "mobile"
           ]
+        },
+        "check": {
+          "description": "GOAL.md acceptance-check id: runs that check's script; omit steps/initial/workflow.",
+          "type": "string",
+          "maxLength": 32
         }
-      },
-      "required": [
-        "steps"
-      ]
+      }
     },
     "annotations": {
       "readOnlyHint": false,
@@ -1062,17 +1064,12 @@
     ]
   },
   {
-    "name": "pal_spec_lint",
-    "title": "Lint pal specification",
-    "description": "Lint SPEC.md offline for the mechanical half of pal-spec's reality check: placeholders, dead §3 links, §8a field keys/types/sizes/indexes, §5 dataset references, the §12 floor, and the REGRESSION criterion when a baseline exists. Returns HARD_FLAG/FLAG/NOTE findings; design-level checks stay manual.",
+    "name": "pal_goal_lint",
+    "title": "Lint pal goal",
+    "description": "Lint GOAL.md offline: parse errors, draft status, unverifiable acceptance checks, and exercise-script problems. Read-only; one line per finding plus a summary.",
     "inputSchema": {
       "type": "object",
-      "properties": {
-        "spec": {
-          "description": "Path to the SPEC.md (default: SPEC.md in the workspace).",
-          "type": "string"
-        }
-      }
+      "properties": {}
     },
     "annotations": {
       "readOnlyHint": true,
@@ -1083,7 +1080,7 @@
       "spec"
     ],
     "keywords": [
-      "spec",
+      "goal",
       "lint"
     ]
   },

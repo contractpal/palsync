@@ -2,6 +2,11 @@
 
 > PalSync should be the **smallest, cheapest harness that reliably helps models produce correct Pals**.
 
+Assume a strong main model (Opus 5.5 / Sonnet 5.5 or better) with slightly weaker subagents. The
+user agrees the goal and its acceptance checks with the model; the model plans and builds. Do not
+add process that a strong model does better on its own — PalSync's value is platform knowledge,
+deterministic checks, and evidence that the goal was met.
+
 Every engineering decision should improve at least one of three goals without unnecessarily harming the others:
 
 **Simple. Efficient. Effective.**

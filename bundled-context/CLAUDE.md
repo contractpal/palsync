@@ -7,7 +7,7 @@ You are editing a **CloudPiston pal**, a proprietary server-side Java/JavaScript
 Load every skill the task touches.
 
 - New pal or significant change → `pal-spec`; bug fix or small, bounded enhancement → `pal-fix`. In an existing pal, inspect the area you are about to touch just in time — there is no mapping phase.
-- Existing `SPEC.md` / `EXECUTION.md` work → `pal-loop`; independent finished-build review → `pal-review`.
+- Approved `GOAL.md` to build → `pal-loop`; independent finished-build review → `pal-review`.
 - Markup/browser UI → `palbuilder-frontend`; workflow code → `palbuilder-workflow`; data/datasets → `palbuilder-data`.
 - Visible UI → `palbuilder-frontend` (CSS rule + `references/ui-quality.md`).
 - "Test console/web/transaction" → `shared/references/test-requests.md`.

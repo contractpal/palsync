@@ -2,7 +2,7 @@
 
 The single source of truth for how a console screen's **render** is verified, and when it falls back
 to a human. Every skill that touches console verification points here instead of restating it
-(pal-loop, pal-review, pal-spec's §12 + reality check).
+(pal-loop, pal-review, and the verifier).
 
 ## The distinction
 - **Compile** is agent-verifiable, always: `pal_test` runs `TestConsole.do` and returns fresh server
@@ -35,8 +35,8 @@ to a human. Every skill that touches console verification points here instead of
      `pal_screenshot` parses that block and returns `renderError` (message, workflow, function, line).
      **A non-null `renderError` is a hard FAIL — never `done`.** Read the fault, fix it, push, and
      screenshot again. `pal_test` passing does NOT clear this; only a clean render does.
-   - If `renderError` is null, judge the image against the §12 VISUAL criterion (renders per
-     the spec and `ui-quality.md`, no anti-slop fingerprints) exactly like a web render, and mark the task `done`
+   - If `renderError` is null, judge the image against the goal's review-only checks (renders per
+     the goal and `ui-quality.md`, no anti-slop fingerprints) exactly like a web render, and pass the check
      on that real evidence.
 3. **`captured:false, category:"targeting"`** → the browser rendered a DIFFERENT screen than you
    asked for. This is a FAIL, not a blocker: the reason names the requested action/paramKeys and the
@@ -45,8 +45,8 @@ to a human. Every skill that touches console verification points here instead of
 
 4. **`captured:false`** (no Chromium, auth expiry/login redirect, or replay failure/timeout) → do NOT mark the render
    `done`, and do NOT guess from HTML. Do the buildable part, verify everything else you can
-   (validate, test, data read-back), then set `needs-human` with a Blockers entry prefixed
-   `HUMAN GATE:` naming exactly what to eyeball (open screen X, confirm it renders + the §5 happy
+   (validate, test, data read-back), then report a human gate prefixed
+   `HUMAN GATE:` naming exactly what to eyeball (open screen X, confirm it renders + the happy
    path works). Never skip this silently.
 
 ## Why the fallback always stays paired

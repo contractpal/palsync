@@ -132,7 +132,7 @@ test("workspaceIgnore: git add -A excludes transient set while keeping source", 
         fs.mkdirSync(path.join(dir, "pages"), { recursive: true });
         fs.writeFileSync(path.join(dir, "pages", "index.html"), "<html></html>\n");
         fs.writeFileSync(path.join(dir, "pal.json"), "{}\n");
-        fs.writeFileSync(path.join(dir, "EXECUTION.md"), "# exec\n");
+        fs.writeFileSync(path.join(dir, "GOAL.md"), "# goal\n");
         fs.writeFileSync(path.join(dir, "REVIEW.md"), "# review\n");
         fs.mkdirSync(path.join(dir, ".palsync", "baseline"), { recursive: true });
         fs.writeFileSync(path.join(dir, ".palsync", "baseline", "snap.json"), "{}\n");
@@ -154,7 +154,7 @@ test("workspaceIgnore: git add -A excludes transient set while keeping source", 
         // Source/lifecycle must be present
         assert.ok(tracked.includes("pages/index.html"));
         assert.ok(tracked.includes("pal.json"));
-        assert.ok(tracked.includes("EXECUTION.md"));
+        assert.ok(tracked.includes("GOAL.md"));
         assert.ok(tracked.includes("REVIEW.md"));
         assert.ok(tracked.includes(".palsync/baseline/snap.json"));
         assert.ok(tracked.includes(".palsync/context-manifest.json"));
@@ -227,10 +227,10 @@ test("workspaceIgnore: migration removes already-tracked transients from index o
 });
 
 // ---------------------------------------------------------------------------
-// retained baseline/context/EXECUTION/review files
+// retained baseline/context/goal/review files
 // ---------------------------------------------------------------------------
 
-test("workspaceIgnore: baseline, context manifests, EXECUTION.md, REVIEW.md remain trackable", () => {
+test("workspaceIgnore: baseline, context manifests, GOAL.md, REVIEW.md remain trackable", () => {
     if (!gitAvailable()) return;
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-ignore-retain-"));
     try {
@@ -241,7 +241,7 @@ test("workspaceIgnore: baseline, context manifests, EXECUTION.md, REVIEW.md rema
         fs.writeFileSync(path.join(dir, ".palsync", "baseline", "pages_index.html"), "baseline\n");
         fs.writeFileSync(path.join(dir, ".palsync", "context-manifest.json"), "{}\n");
         fs.writeFileSync(path.join(dir, ".palsync", "context-manifest.prev.json"), "{}\n");
-        fs.writeFileSync(path.join(dir, "EXECUTION.md"), "# exec\n");
+        fs.writeFileSync(path.join(dir, "GOAL.md"), "# goal\n");
         fs.writeFileSync(path.join(dir, "REVIEW.md"), "# review\n");
         fs.writeFileSync(path.join(dir, ".palsync", "tool-evidence.jsonl"), "{}\n");
         fs.writeFileSync(path.join(dir, ".palsync.usage.json"), "{}\n");
@@ -251,7 +251,7 @@ test("workspaceIgnore: baseline, context manifests, EXECUTION.md, REVIEW.md rema
         assert.equal(checkIgnore(dir, ".palsync/baseline/pages_index.html"), false);
         assert.equal(checkIgnore(dir, ".palsync/context-manifest.json"), false);
         assert.equal(checkIgnore(dir, ".palsync/context-manifest.prev.json"), false);
-        assert.equal(checkIgnore(dir, "EXECUTION.md"), false);
+        assert.equal(checkIgnore(dir, "GOAL.md"), false);
         assert.equal(checkIgnore(dir, "REVIEW.md"), false);
         assert.equal(checkIgnore(dir, ".palsync/tool-evidence.jsonl"), true);
         assert.equal(checkIgnore(dir, ".palsync.usage.json"), true);
@@ -262,7 +262,7 @@ test("workspaceIgnore: baseline, context manifests, EXECUTION.md, REVIEW.md rema
         assert.ok(tracked.includes(".palsync/baseline/pages_index.html"));
         assert.ok(tracked.includes(".palsync/context-manifest.json"));
         assert.ok(tracked.includes(".palsync/context-manifest.prev.json"));
-        assert.ok(tracked.includes("EXECUTION.md"));
+        assert.ok(tracked.includes("GOAL.md"));
         assert.ok(tracked.includes("REVIEW.md"));
         assert.ok(!tracked.includes(".palsync/tool-evidence.jsonl"));
         assert.ok(!tracked.includes(".palsync.usage.json"));

@@ -84,7 +84,7 @@ env:     PALSYNC_WORKSPACE=/home/you/pals/isr
 
 It exposes: `pal_status`, `pal_validate`, `pal_testing`, `pal_test`, `pal_tunnel_test`, `pal_debug`,
 `pal_preview`, `pal_fetch`, `pal_screenshot`, `pal_exercise`, `pal_seo_audit`, `pal_context`,
-`pal_spec_lint`, `pal_regression`, `pal_sync_datasets`, `pal_data_set`, `pal_data_delete`,
+`pal_goal_lint`, `pal_regression`, `pal_sync_datasets`, `pal_data_set`, `pal_data_delete`,
 `pal_datalist_set`, `pal_datalist_delete`, `pal_pull`, `pal_merge`, `pal_push`, `pal_lock`,
 `pal_unlock` (24 tools — a modest context cost; keep other heavy MCP servers off the same session if
 context is tight).
@@ -153,12 +153,8 @@ palsync fetch about.html --expect "About us" --dir ~/pals/isr   # verify a page 
 palsync seo-audit --dir ~/pals/isr
 palsync sync-datasets --dir ~/pals/isr
 palsync regression --dir ~/pals/isr          # brownfield: check against baseline/baseline.json
-palsync spec-lint SPEC.md --dir ~/pals/isr   # offline mechanical reality-check of a spec
-palsync task list --ready --dir ~/pals/isr   # next runnable EXECUTION.md task (deps satisfied)
-palsync task T3 done --dir ~/pals/isr        # set exactly one task's status
-palsync task T4 blocked --reason "provider unavailable" --dir ~/pals/isr
-palsync checkpoint "T3 done: preview OK" --dir ~/pals/isr
-palsync completion check --dir ~/pals/isr    # all-done review / reasoned-handoff gate
+palsync goal-lint --dir ~/pals/isr           # offline lint of GOAL.md checks and exercise scripts
+palsync completion check --dir ~/pals/isr    # goal-check / reasoned-handoff gate
 palsync stats --dir ~/pals/isr               # one session report: model usage, tool footprint, context
 ```
 

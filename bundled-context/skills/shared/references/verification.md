@@ -60,14 +60,15 @@ already validated, and an exercise already starts with a fresh server compile.
 ## Final review
 
 `pal-review` is a real, independent, fresh-context review — it is powerful and unchanged. It
-runs **at the end of the work, once, or never**. Never between tasks.
+runs **at the end of the work, once, or never**. Never mid-build.
 
 - **off** — do not run it, and do not ask.
 - **ask** (default) — finish, then offer: *"Implementation complete. Run a final review?"*
 - **auto** — run it once at the end and summarize the verdict.
 
-All tasks done is a complete implementation. Completion is not blocked by a review that policy
-did not ask for; `palsync completion check` enforces review evidence only when `review: auto`.
+With a GOAL.md, the work is complete when every scripted acceptance check passes `pal_exercise
+{"check":"<id>"}` on the final pushed version (or is a recorded blocker); the completion gate
+enforces this. Completion is not blocked by a review that policy did not ask for; `palsync completion check` enforces review evidence only when `review: auto`.
 
 ## Say what you're doing
 

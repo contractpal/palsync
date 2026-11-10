@@ -5,7 +5,6 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { execFileSync } = require("node:child_process");
-const { parseTasks } = require("../src/core/taskState");
 const {
     TOOL_EVIDENCE_FILE, readToolEvidence, filterToolEvidence, phaseTotals
 } = require("../src/core/usage");
@@ -22,6 +21,40 @@ const SCENARIOS = {
 function readJson(file) {
     try { return JSON.parse(fs.readFileSync(file, "utf8")); }
     catch (error) { return null; }
+}
+
+// Frozen eval recorder: read the old EXECUTION.md task table only to count rows and done rows.
+// The lifecycle no longer owns a task table, but the historical benchmark rows must stay
+// comparable, so this minimal parse lives here instead of a shared production module.
+function parseTasks(text) {
+    const lines = String(text == null ? "" : text).split(/\r?\n/);
+    const start = lines.findIndex(line => /^##\s+Tasks\s*$/i.test(line));
+    if (start === -1) return { ok: false, missingSection: true, error: "No \"## Tasks\" section found in EXECUTION.md." };
+    let end = lines.length;
+    for (let i = start + 1; i < lines.length; i++) {
+        if (/^##\s+/.test(lines[i])) { end = i; break; }
+    }
+    const rows = [];
+    let statusIndex = -1;
+    let sawTable = false;
+    for (let i = start + 1; i < end; i++) {
+        const line = lines[i];
+        if (!/^\s*\|/.test(line)) {
+            if (sawTable) break;
+            continue;
+        }
+        const cells = line.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map(cell => cell.trim());
+        if (!sawTable) {
+            sawTable = true;
+            statusIndex = cells.findIndex(cell => /^status$/i.test(cell));
+            if (statusIndex === -1) return { ok: false, error: "EXECUTION.md task table has no status column." };
+            continue;
+        }
+        if (cells.every(cell => /^:?-{2,}:?$/.test(cell))) continue;
+        rows.push({ status: cells[statusIndex] || "" });
+    }
+    if (!sawTable) return { ok: false, error: "EXECUTION.md needs a ## Tasks table." };
+    return { ok: true, rows };
 }
 
 function parseArgs(argv) {
@@ -53,7 +86,8 @@ function reviewFields(review) {
     const text = String(review || "");
     const verdict = text.match(/^\s*(?:#{1,6}\s*)?verdict\s*:\s*(PASS|CHANGES-NEEDED|BROKEN)\b/im);
     const score = text.match(/(?:\*\*)?Total(?:\*\*)?\s*:\s*(\d+)\s*\/\s*(\d+)/i) ||
-        text.match(/§\s*12[^\n]*?\b(\d+)\s*\/\s*(\d+)/i);
+        text.match(/§\s*12[^\n]*?\b(\d+)\s*\/\s*(\d+)/i) ||
+        text.match(/^\s*checks\s*:\s*(\d+)\s*\/\s*(\d+)/im);
     return {
         verdict: verdict ? verdict[1].toUpperCase() : "BROKEN",
         score12: score ? score[1] + "/" + score[2] : null,

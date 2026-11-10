@@ -342,8 +342,8 @@ test("on-demand exercise guidance covers the delete-absent rule", async () => {
 
 test("on-demand shell rule allows every offline helper the skills require", () => {
     const doc = ci.syncDetails();
-    for (const helper of ["`palsync task`", "`checkpoint`", "`completion check`", "`review brief`/`review check`",
-        "`verify`", "`doctor`", "`session-summary`"]) {
+    for (const helper of ["`palsync goal-lint`", "`completion check`", "`review brief`/`review check`",
+        "`verify`", "`doctor`"]) {
         assert.ok(doc.includes(helper), "shell rule must allow " + helper);
     }
     assert.ok(!doc.includes("The ONLY shell exceptions"), "the rule must not forbid helpers the skills tell the agent to run");

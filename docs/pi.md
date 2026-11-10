@@ -2,7 +2,7 @@
 
 `palsync setup --agent pi` installs the native extension at `~/.pi/agent/extensions/palsync/`. Pi loads its TypeScript entry directly; no build step is required. After updating PalSync, rerun setup and reload Pi to install updated tool metadata.
 
-The extension exposes `pal_tools`, `pal_context`, `pal_validate`, `pal_spec_lint`, and `pal_stats` initially. All PalSync tool schemas are registered up front, as Pi's deferred-loading contract requires, but inactive schemas stay out of the prompt. `pal_tools({query})` activates matching tools additively using the deterministic groups `sync`, `browser`, `runtime`, `project`, and `spec`. Before calling a required inactive `pal_*` tool, query `pal_tools` once with its exact name; combine immediately needed names, but skip already-active tools. Its result immediately confirms that activated tools are callable on the next model response and states any `pal_impact`/`pal_ast` routing guidance. Pi keeps the same guidance in the system Guidelines while those tools are active. The agent must attempt the required activated tool directly; activation alone is not evidence of failure and does not justify falling back to the PalSync CLI. The MCP server starts only when a PalSync tool is first called; `pal_tools` only changes which tools Pi's prompt exposes and never starts or reconfigures the server.
+The extension exposes `pal_tools`, `pal_context`, `pal_validate`, `pal_goal_lint`, and `pal_stats` initially. All PalSync tool schemas are registered up front, as Pi's deferred-loading contract requires, but inactive schemas stay out of the prompt. `pal_tools({query})` activates matching tools additively using the deterministic groups `sync`, `browser`, `runtime`, `project`, and `spec`. Before calling a required inactive `pal_*` tool, query `pal_tools` once with its exact name; combine immediately needed names, but skip already-active tools. Its result immediately confirms that activated tools are callable on the next model response and states any `pal_impact`/`pal_ast` routing guidance. Pi keeps the same guidance in the system Guidelines while those tools are active. The agent must attempt the required activated tool directly; activation alone is not evidence of failure and does not justify falling back to the PalSync CLI. The MCP server starts only when a PalSync tool is first called; `pal_tools` only changes which tools Pi's prompt exposes and never starts or reconfigures the server.
 
 ## Existing pi-mcp installation
 
@@ -11,7 +11,7 @@ Do not serve PalSync through both integrations. If the general `pi-mcp` extensio
 ## Manual smoke
 
 1. Open Pi in a workspace containing `.palsync.json`.
-2. Confirm only `pal_tools`, `pal_context`, `pal_validate`, `pal_spec_lint`, and `pal_stats` are initially active.
+2. Confirm only `pal_tools`, `pal_context`, `pal_validate`, `pal_goal_lint`, and `pal_stats` are initially active.
 3. Call `pal_tools` with `browser testing`.
 4. Confirm preview, fetch, screenshot, exercise, SEO, and runtime-test tools were added and the original tools remain active.
 5. Call `pal_tools` with `project` and confirm its result includes routing guidance for `pal_impact` and `pal_ast`.
@@ -32,12 +32,8 @@ The native extension appends local JSONL to `.palsync/pi-usage.jsonl`:
 
 Text tokens use the same bytes/4 estimator as `pal_stats`; image estimates use pixel dimensions. Provider/model are recorded only when Pi reports them. Cost and currency remain `null` because tool-result events do not report billing. `pal_stats` treats this sidecar as a FALLBACK for the same tool results `.palsync.usage.json` already meters — the two are never summed — and never turns estimates into spend.
 
-Model-level session usage needs no agent-visible bookkeeping call. On the first agent turn the extension records either a build phase or, for the exact expanded bundled `pal-review` skill, a review phase; it closes build at `palsync session-summary`, review at `palsync review check`, or the active phase during awaited fail-open shutdown. It hands `pal_stats` current `ctx.sessionManager.getEntries()` counters and an internal session identity through MCP request `_meta` — transport metadata, not a tool parameter the model could invent values for. Historical windows and evidence remain preserved but are never reported as the current session.
+Model-level session usage needs no agent-visible bookkeeping call. On the first agent turn the extension records either a build phase or, for the exact expanded bundled `pal-review` skill, a review phase; it closes review at `palsync review check`, switches phase at the next boundary, or closes the active phase during awaited fail-open shutdown. It hands `pal_stats` current `ctx.sessionManager.getEntries()` counters and an internal session identity through MCP request `_meta` — transport metadata, not a tool parameter the model could invent values for. Historical windows and evidence remain preserved but are never reported as the current session.
 
 Pi 0.80.10 exposes compaction events but its `session_before_compact` result cannot contribute context or instructions. PalSync therefore installs no custom summarizer or compaction mutation; details refs remain available in tool trailers. Revisit when Pi provides an additive compaction-content API.
 
 Middleware order: PalSync semantic condensation → Agent Trim generic trimming → observers/telemetry. Agent Trim must preserve the final `Full result:` trailer.
-
-## Session handoff
-
-Before dispatching `pal-review` or stopping a session, run `palsync session-summary [--mode full|lite] [--next "<text>"] [--dir <workspace>]` to append the canonical two-line handoff summary. Counts and session number are derived from the parsed `EXECUTION.md` task table and the checkpoint is appended through the validated checkpoint gate in a single atomic write.

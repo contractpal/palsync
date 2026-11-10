@@ -132,7 +132,7 @@ The agent calls these for you — you never run them by hand:
 | `pal_datalist_delete` | Delete a pal-level DataList by name from `pal.json`. Local edit only; `pal_push` to send the removal. |
 | `pal_capture_baseline` | Explicitly capture/refresh the approved regression snapshot after operator approval of the exact Pal GUID and server revision; never runs on push. |
 | `pal_regression` | Compare the approved `baseline/baseline.json` regression snapshot; never captures it. |
-| `pal_spec_lint` | Lint a `SPEC.md` for the spec-to-ship workflow. |
+| `pal_goal_lint` | Lint a `GOAL.md` for the goal-to-ship workflow. |
 | `pal_status` | Server drift + un-pushed local changes + lock holder. |
 | `pal_diff` | Read-only compare of your tracked files with the server (default), a pre-pull snapshot (`pal_pull` with `snapshot:true` makes one), or the last-pull baseline. `path` adds line changes for one file. Never writes the workspace or takes the lock. |
 | `pal_lock` / `pal_unlock` | Acquire / release the pal lock. Auto-reclaims your own stale lock; never breaks another user's. |
@@ -159,12 +159,10 @@ palsync seo-audit       # on-page SEO audit of a web pal
 palsync sync-datasets   # provision dataset tables from pal.json (safe by default)
 palsync regression      # compare an approved regression baseline
 palsync regression capture --revision '<server marker>' --approval 'CAPTURE <pal-guid> @ <server marker>'  # explicit capture
-palsync spec-lint       # lint SPEC.md
+palsync goal-lint       # lint GOAL.md acceptance checks and exercise scripts
 palsync settings        # set verification and final-review preferences
 palsync verify          # explain the offline verification plan for local changes
-palsync task            # spec-to-ship task operations (`--reason` required for blocked states)
-palsync checkpoint      # spec-to-ship checkpointing
-palsync completion check # offline all-done review / reasoned-handoff gate
+palsync completion check # offline goal-check / reasoned-handoff gate
 palsync hooks check      # Claude Code hook-settings health (offline)
 palsync hooks repair     # migrate legacy hook entries / install missing ones (offline)
 palsync stats           # the one session report: model usage, tool footprint, context (offline; see below)
@@ -261,12 +259,12 @@ JS, data access, background jobs, WebSockets, email, and SEO done right.
 **UI quality:** `palbuilder-frontend` carries a short CSS-reuse rule and an on-demand
 `references/ui-quality.md` bar (hierarchy, states, contrast, 390px mobile) for visible UI work.
 
-**Spec-to-ship (autonomous builds):**
+**Goal-to-ship (autonomous builds):**
 
-1. **`pal-spec`** asks about what you want in plain language (no coding knowledge needed), confirms a plain-English summary, and writes `SPEC.md` (the approved product plan: users, journeys, rules, real copy, acceptance criteria, plus the technical schemas) and `EXECUTION.md` (the task list, which may evolve during the build without re-approval as long as the approved product stays the same).
-2. **`pal-loop`** executes it: one task → verify with the palsync tools → checkpoint → git commit → next. Any new session resumes from `EXECUTION.md`; blocked tasks escalate with the exact decision needed. Write-the-least-code restraint applies by default.
-3. **`pal-review`** checks a finished build against the spec in a fresh context and returns a verdict + fix tasks. It runs at the end only, and only when your review setting asks for it.
-4. **`pal-fix`** handles bugs and small enhancements without the full spec ceremony: reproduce (or inspect) → minimal diff → prove it.
+1. **`pal-spec`** asks about what you want in plain language (no coding knowledge needed), confirms a plain-English summary, and writes `GOAL.md` (the approved outcome and acceptance checks, each with a runnable `pal_exercise` script where it can be scripted, plus fixed contracts, constraints, and non-goals). A fresh-context reviewer checks every script against its sentence before you approve.
+2. **`pal-loop`** builds it: plan, delegate the code to a builder subagent, push, then verify the acceptance checks with `pal_exercise` and a fresh-context verifier. Failing checks go back to the same builder; after three rounds the check becomes a recorded blocker. Write-the-least-code restraint applies by default.
+3. **`pal-review`** checks a finished build against the goal in a fresh context and returns a verdict + fix list. It runs at the end only, and only when your review setting asks for it.
+4. **`pal-fix`** handles bugs and small enhancements without the goal ceremony: reproduce (or inspect) → minimal diff → prove it.
 
 Existing pals need no onboarding phase: inspect the area you are changing, use `pal_impact` when
 dependency risk is unclear, edit, and verify in proportion to the change.

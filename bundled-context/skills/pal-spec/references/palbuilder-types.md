@@ -1,6 +1,6 @@
 # PalBuilder types & primitives reference (for the pal-spec reality check)
 
-Purpose: give the REALITY CHECK something concrete to verify §8a field types and §10 primitives
+Purpose: give the planner something concrete to verify dataset field types and primitives
 against, instead of guessing. Only VERIFIED entries belong here. If you can't verify it, it goes
 in "UNVERIFIED — fill from builder" — never promoted to the verified table on a hunch.
 

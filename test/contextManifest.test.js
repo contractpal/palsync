@@ -8,12 +8,12 @@ const contextInject = require("../src/launcher/contextInject");
 const manifestApi = require("../src/core/contextManifest");
 
 test("context manifest is deterministic and workspace edits do not invalidate it", async () => {
-    const ws = tmpWorkspace({ "EXECUTION.md": "# Execution\n" });
+    const ws = tmpWorkspace({ "GOAL.md": "# Goal\n" });
     await contextInject.inject(ws, { palName: "Demo", agent: "claude" });
     const file = path.join(ws, manifestApi.MANIFEST);
     const first = fs.readFileSync(file, "utf8");
     const firstMtime = fs.statSync(file).mtimeMs;
-    fs.writeFileSync(path.join(ws, "EXECUTION.md"), "# Execution\nchanged\n");
+    fs.writeFileSync(path.join(ws, "GOAL.md"), "# Goal\nchanged\n");
     await new Promise(resolve => setTimeout(resolve, 20));
     await contextInject.inject(ws, { palName: "Demo", agent: "claude" });
     assert.equal(fs.readFileSync(file, "utf8"), first);
@@ -35,7 +35,7 @@ test("context manifest exposes eager stability and diagnoses a pal-name change",
         reason: "pal name changed"
     });
     const summary = manifestApi.eagerSummary(current);
-    assert.equal(current.sections.find(section => section.name === "tool-definitions").bytes, 31156);
+    assert.equal(current.sections.find(section => section.name === "tool-definitions").bytes, 31025);
     assert.ok(current.sections.every(section => !section.source.includes("\\")));
     assert.ok(summary.stablePrefixBytes > 0);
     assert.ok(summary.dynamicTailBytes > 0);

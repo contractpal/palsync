@@ -9,7 +9,7 @@ const {
     USAGE_FILE, TOOL_EVIDENCE_FILE, readSessionCost, phaseTotals,
     readToolEvidence, filterToolEvidence
 } = require("./usage");
-const { parseTasks, STATUSES } = require("./taskState");
+const goal = require("./goal");
 const { diffWorkspace } = require("./localDrift");
 const { FILENAME: PALSYNC_FILE } = require("./palsyncfile");
 const { findDuplicateSpans } = require("./duplicates");
@@ -226,7 +226,7 @@ function checkWorkspace(workspaceDir) {
         sourceDigest: record && record.localHash
     }), { reviewPath });
     const reviewMtimeMs = mtimeMs(reviewPath);
-    const freshnessSources = [PALSYNC_FILE, TOOL_EVIDENCE_FILE, "EXECUTION.md"]
+    const freshnessSources = [PALSYNC_FILE, TOOL_EVIDENCE_FILE, "GOAL.md"]
         .map(file => ({ file, mtimeMs: mtimeMs(path.join(workspaceDir, file)) }))
         .filter(source => source.mtimeMs !== null);
     const newestEvidence = freshnessSources.reduce((latest, source) =>
@@ -323,16 +323,20 @@ function toolCalls(ledger, name) {
     return tool && Number.isFinite(Number(tool.calls)) ? Number(tool.calls) : 0;
 }
 
-function taskEvidence(workspaceDir) {
-    try {
-        const parsed = parseTasks(fs.readFileSync(path.join(workspaceDir, "EXECUTION.md"), "utf8"));
-        if (!parsed.ok) return { available: false, detail: "unreadable (" + parsed.error + ")" };
-        const counts = Object.fromEntries(STATUSES.map(status => [status, 0]));
-        for (const row of parsed.rows) counts[row.status] = (counts[row.status] || 0) + 1;
-        return { available: true, total: parsed.rows.length, counts };
-    } catch (e) {
-        return { available: false, detail: "not available" };
-    }
+function goalEvidence(workspaceDir) {
+    const parsed = goal.readGoal(workspaceDir);
+    if (!parsed) return { available: false, detail: "no GOAL.md" };
+    if (!parsed.ok) return { available: false, detail: "malformed (" + (parsed.error || "it could not be parsed") + ")" };
+    const checks = goal.checkEvidence(workspaceDir, parsed);
+    const scripted = checks.filter(check => check.scripted).length;
+    return {
+        available: true,
+        total: checks.length,
+        scripted,
+        verified: checks.filter(check => check.verified).length,
+        reviewOnly: checks.length - scripted,
+        checks
+    };
 }
 
 function buildReviewBrief(workspaceDir) {
@@ -359,7 +363,7 @@ function buildReviewBrief(workspaceDir) {
         usageAvailable: usage !== null,
         tools: Object.fromEntries(REVIEW_TOOLS.map(name => [name, toolCalls(usage, name)])),
         cost: cost ? Object.assign({ available: true, entries: cost.entries }, phaseTotals(cost.entries)) : { available: false },
-        tasks: taskEvidence(workspaceDir)
+        goal: goalEvidence(workspaceDir)
     };
 }
 
@@ -422,10 +426,12 @@ function formatReviewBrief(brief) {
         lines.push("  review: not available");
         lines.push("  other: not available");
     }
-    lines.push("EXECUTION.md tasks: " + (brief.tasks.available ? brief.tasks.total + " total" : brief.tasks.detail));
-    for (const status of STATUSES) lines.push("  " + status + ": " + (brief.tasks.available ? brief.tasks.counts[status] || 0 : "not available"));
+    lines.push(brief.goal.available
+        ? "GOAL.md checks: " + brief.goal.scripted + " scripted (" + brief.goal.verified + " verified), " +
+            brief.goal.reviewOnly + " review-only"
+        : "GOAL.md checks: not available (" + brief.goal.detail + ")");
     lines.push("NO EVIDENCE — open source only for these:");
-    lines.push("- SPEC requirements not represented by the tool and task tallies above");
+    lines.push("- GOAL.md outcome and acceptance checks not represented by the tool and check tallies above");
     lines.push("- action-to-workflow-to-data traces not proven by a named exercise result");
     lines.push("- implementation constraints and workflow-payload-to-fragment contracts");
     return lines.join("\n");

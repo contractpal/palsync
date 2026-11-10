@@ -27,7 +27,7 @@ function activationGuidance(names) {
 
 // pal_stats is eager because pal-loop's completion requires it: a lazily routed stats tool would
 // cost every session a pal_tools round trip to reach a call the loop already knows it will make.
-const CORE_TOOLS = ["pal_validate", "pal_spec_lint", "pal_context", "pal_stats"];
+const CORE_TOOLS = ["pal_validate", "pal_goal_lint", "pal_context", "pal_stats"];
 
 function tokens(value) {
     return String(value || "").toLowerCase().match(/[a-z0-9_]+/g) || [];
@@ -137,7 +137,7 @@ function appendPiUsage(workspaceDir, event, model) {
 }
 
 function isPalsyncWorkspace(workspaceDir) {
-    return !!workspaceDir && [".palsync.json", "EXECUTION.md"].some(file => fs.existsSync(path.join(workspaceDir, file)));
+    return !!workspaceDir && [".palsync.json", "GOAL.md"].some(file => fs.existsSync(path.join(workspaceDir, file)));
 }
 
 // Match Pi's getSessionStats() accumulation exactly: assistant/tool-result message usage plus
@@ -161,12 +161,11 @@ function piUsageSnapshot(entries) {
 }
 
 // The only interpreted command. The session baseline is taken from Pi's own session_start, so no
-// agent-visible start call exists; pal-loop's required session-summary closes the build window at
-// the handoff instead of at process shutdown. No other Bash command is interpreted.
+// agent-visible start call exists; the review-check boundary closes the review window before the
+// handoff. No other Bash command is interpreted.
 function piUsageBoundary(event) {
     if (!event || String(event.toolName || "").toLowerCase() !== "bash") return null;
     const command = String(event.input && event.input.command || "");
-    if (/(?:^|[;&]\s*)palsync\s+session-summary\b/.test(command)) return { boundary: "end", phase: "build" };
     if (/(?:^|[;&]\s*)palsync\s+review\s+check\b/.test(command)) return { boundary: "end", phase: "review" };
     return null;
 }
@@ -205,7 +204,7 @@ function piAppendContent(event, text) {
 
 function completionFingerprint(workspaceDir, gate) {
     const hash = crypto.createHash("sha256").update(String(gate && gate.code || "UNKNOWN"));
-    for (const file of [".palsync.json", "EXECUTION.md", "REVIEW.md", ".palsync/tool-evidence.jsonl"]) {
+    for (const file of [".palsync.json", "GOAL.md", "REVIEW.md", ".palsync/tool-evidence.jsonl"]) {
         try { hash.update("\0" + file + "\0").update(fs.readFileSync(path.join(workspaceDir, file))); }
         catch (e) { hash.update("\0" + file + ":missing"); }
     }

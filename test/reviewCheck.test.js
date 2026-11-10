@@ -178,9 +178,9 @@ test("bias-capped PASS is detected under a decorated heading verdict", () => {
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("freshness ignores telemetry but tracks sync, execution, and tool evidence", () => {
-    for (const source of [usage.TOOL_EVIDENCE_FILE, ".palsync.json", "EXECUTION.md"]) {
-        const ws = evidenceWorkspace({ entries: [{ tool: "pal_exercise" }], files: source === "EXECUTION.md" ? { "EXECUTION.md": "## Tasks\n| id | status |\n| T1 | done |\n" } : {} });
+test("freshness ignores telemetry but tracks sync, goal, and tool evidence", () => {
+    for (const source of [usage.TOOL_EVIDENCE_FILE, ".palsync.json", "GOAL.md"]) {
+        const ws = evidenceWorkspace({ entries: [{ tool: "pal_exercise" }], files: source === "GOAL.md" ? { "GOAL.md": "# GOAL — demo\n\nstatus: approved\n" } : {} });
         if (source === usage.TOOL_EVIDENCE_FILE) appendEvidence(ws);
         const later = new Date(Date.now() + 2000);
         fs.utimesSync(path.join(ws, source), later, later);
@@ -270,11 +270,24 @@ test("review completion gate is identical across claude-code, pi, and opencode",
 });
 
 test("review brief and check agree while CLI-only evidence never renders N/0", () => {
-    const execution = `## Tasks
-| id | task | status |
-| --- | --- | --- |
-| T1 | Build | done |
-| T2 | Verify | todo |
+    const goalDoc = `# GOAL — demo
+
+status: approved
+
+## Outcome
+Ship it.
+
+## Acceptance checks
+
+### A1 — Create a request
+A request is created.
+
+\`\`\`json
+{ "workflow": "console", "steps": [ { "click": "New request", "expect": ["Request saved"] } ] }
+\`\`\`
+
+### A2 — Looks professional
+A human judges the screen professional.
 `;
     const ws = evidenceWorkspace({
         entries: [
@@ -282,7 +295,7 @@ test("review brief and check agree while CLI-only evidence never renders N/0", (
             { tool: "pal_exercise", runId: "two" },
             { tool: "pal_push" }
         ],
-        files: { "EXECUTION.md": execution },
+        files: { "GOAL.md": goalDoc },
         usageLedger: { tools: {
             pal_exercise: { calls: 0 }, pal_push: { calls: 0 }, pal_test: { calls: 2 }
         } }
@@ -317,14 +330,9 @@ session cost sidecar: available
   build: in=10 cached=2 out=3 cost=0.0100 USD
   review: in=4 cached=0 out=1 cost=0.0200 USD
   other: not available
-EXECUTION.md tasks: 2 total
-  todo: 1
-  in_progress: 0
-  done: 1
-  blocked: 0
-  needs-human: 0
+GOAL.md checks: 1 scripted (0 verified), 1 review-only
 NO EVIDENCE — open source only for these:
-- SPEC requirements not represented by the tool and task tallies above
+- GOAL.md outcome and acceptance checks not represented by the tool and check tallies above
 - action-to-workflow-to-data traces not proven by a named exercise result
 - implementation constraints and workflow-payload-to-fragment contracts`);
     assert.doesNotMatch(output, /\b\d+\/0\b/);
@@ -341,7 +349,7 @@ test("review brief reports evidence and usage sidecars independently", async () 
     assert.match(output, /MCP usage sidecar: not available/);
     assert.match(output, /pal_exercise: not available/);
     assert.match(output, /session cost sidecar: not available/);
-    assert.match(output, /EXECUTION\.md tasks: not available/);
+    assert.match(output, /GOAL\.md checks: not available \(no GOAL\.md\)/);
 
     const oldLog = console.log;
     const logged = [];

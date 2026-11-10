@@ -7,7 +7,6 @@ const { tmpWorkspace } = require("./helpers");
 const { cachedLint, keyFor, readStats, RULES_VERSION, RULE_VERSIONS, WORKSPACE_RULE_VERSIONS,
     pushGateRulesVersion } = require("../src/core/lintCache");
 const { validateWorkspace } = require("../src/core/validate");
-const { TOOLS } = require("../src/mcp/tools");
 
 test("content-addressed lint cache hits exactly and invalidates content/rules independently", () => {
     const ws = tmpWorkspace();
@@ -199,23 +198,5 @@ test("markup dependency fingerprints invalidate parseable changes", () => {
     fs.writeFileSync(path.join(ws, "pal.json"), JSON.stringify(pal));
     const nonParseable = validateWorkspace(ws);
     assert.ok(!nonParseable.findings.some(f => f.file === "fragments/track.html" && /inline|template/i.test(f.message)));
-    fs.rmSync(ws, { recursive: true, force: true });
-});
-
-test("pal_spec_lint cache invalidates when a regression baseline appears", async () => {
-    const ws = tmpWorkspace({ "SPEC.md": "# SPEC\n" });
-    const tool = TOOLS.find(value => value.name === "pal_spec_lint");
-    const first = await tool.run({ workspaceDir: ws }, {});
-    const afterFirst = readStats(ws);
-    await tool.run({ workspaceDir: ws }, {});
-    const afterRepeat = readStats(ws);
-    assert.equal(afterRepeat.hits, afterFirst.hits + 1);
-    fs.mkdirSync(path.join(ws, "baseline"), { recursive: true });
-    fs.writeFileSync(path.join(ws, "baseline", "baseline.json"), "{}\n");
-    const withBaseline = await tool.run({ workspaceDir: ws }, {});
-    const afterBaseline = readStats(ws);
-    assert.equal(afterBaseline.misses, afterRepeat.misses + 1);
-    assert.equal(first.baselinePresent, false);
-    assert.equal(withBaseline.baselinePresent, true);
     fs.rmSync(ws, { recursive: true, force: true });
 });

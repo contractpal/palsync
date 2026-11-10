@@ -5,7 +5,7 @@ description: "Load for an existing-pal bug fix or small, bounded enhancement (ad
 
 # pal-fix — bug fixes and small enhancements, minimal diff, prove it
 
-Two lightweight paths for an existing pal, with no SPEC.md, build plan, or approval round:
+Two lightweight paths for an existing pal, with no GOAL.md, build plan, or approval round:
 
 - **Bug fix** — reproduce → root cause → minimal correction → prove it (the fix loop below).
 - **Small enhancement** — inspect current behavior → one-line success condition → localized
@@ -15,7 +15,7 @@ Two lightweight paths for an existing pal, with no SPEC.md, build plan, or appro
 
 Route to **pal-spec** when the change needs a new page or screen, a new dataset or schema change,
 several connected workflows, a permission or security redesign, new destructive behavior, or would
-contradict an approved SPEC.md requirement or PROTECTED decision. Judge by risk and scope, not
+contradict an approved GOAL.md check, fixed contract, or constraint. Judge by risk and scope, not
 file count. A business rule the user has not decided is a question, not a guess.
 
 A fix to a widely-used fragment or workflow is still a fix — it just gets wider verification.

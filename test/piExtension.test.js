@@ -108,7 +108,7 @@ test("Pi usage telemetry is local, schema-stable, and never estimates cost", () 
     // Telemetry never writes outside a PalSync workspace — no stray .palsync/ in unrelated repos.
     assert.equal(appendPiUsage(ws, event, null), null);
     assert.equal(fs.existsSync(path.join(ws, ".palsync")), false);
-    fs.writeFileSync(path.join(ws, "EXECUTION.md"), "tasks");
+    fs.writeFileSync(path.join(ws, "GOAL.md"), "# goal\n");
     const file = appendPiUsage(ws, event, { provider: "anthropic", id: "model-x" });
     assert.ok(file);
     const stored = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -127,11 +127,10 @@ test("Pi usage snapshots match Pi's cumulative counters and boundaries stay narr
         { type: "message", message: { role: "user", usage: { input: 999, cacheRead: 999, output: 999, cacheWrite: 999, cost: { total: 9 } } } }
     ];
     assert.deepEqual(piUsageSnapshot(entries), { input: 15, cacheRead: 5, output: 3, cacheWrite: 1, cost: 0.06 });
-    assert.deepEqual(piUsageBoundary({ toolName: "bash", input: { command: "palsync session-summary --mode lite" } }), { boundary: "end", phase: "build" });
     // Measurement starts with the Pi session, so no agent-visible bookkeeping command exists.
     assert.equal(piUsageBoundary({ toolName: "bash", input: { command: "palsync usage start --phase build" } }), null);
     assert.deepEqual(piUsageBoundary({ toolName: "bash", input: { command: "palsync review check" } }), { boundary: "end", phase: "review" });
-    assert.equal(piUsageBoundary({ toolName: "bash", input: { command: "echo palsync session-summary" } }), null);
+    assert.equal(piUsageBoundary({ toolName: "bash", input: { command: "echo palsync review check" } }), null);
     const source = fs.readFileSync(path.join(__dirname, "..", "pi-extension", "index.ts"), "utf8");
     assert.match(source, /piUsageSnapshot\(ctx\.sessionManager\.getEntries\(\)\)/);
     assert.match(source, /palsync", \["usage", "capture"/);
@@ -164,7 +163,7 @@ test("Pi completion handling is settled, workspace-scoped, and loop-resistant", 
 
     const ws = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-pi-completion-"));
     assert.equal(isPalsyncWorkspace(ws), false);
-    fs.writeFileSync(path.join(ws, "EXECUTION.md"), "tasks");
+    fs.writeFileSync(path.join(ws, "GOAL.md"), "# goal\n");
     assert.equal(isPalsyncWorkspace(ws), true);
     const gate = { code: "REVIEW_FAILED", allow: false, message: "Review missing" };
     const fingerprint = completionFingerprint(ws, gate);

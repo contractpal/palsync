@@ -27,12 +27,12 @@ a duplicate `pal_test` and re-check with `pal_screenshot imageless:true`. Apply
 
 ## Polish
 
-After a visible-UI task passes verification, critique only the screenshots verification already
+After a visible-UI change passes verification, critique only the screenshots verification already
 took; polish never adds captures. A new page or layout change verifies at desktop + mobile, so
 its polish covers both; a small styling edit polishes against its single capture. List concrete
 issues against `ui-quality.md` and the chosen layout reference, plus any console/runtime errors
 in the result, as a numbered list. None → done. Otherwise fix all in one edit, push once,
-re-screenshot once, then done. One polish iteration per task; touch only the task's files;
+re-screenshot once, then done. One polish iteration per change; touch only the changed files;
 failure path is unchanged.
 
 Branch recovery (from `pal_screenshot`):
@@ -43,10 +43,9 @@ Branch recovery (from `pal_screenshot`):
   targeted; re-run with `expect:[...]`.
 - `captured:true` + `renderError` non-null → the workflow compiled but threw while rendering —
   fix, push, screenshot again; `pal_test` passing does NOT clear it.
-- `captured:true` + `renderError` null → judge the image against §12 VISUAL → `done`.
-- `captured:false` → do NOT guess from HTML: run `palsync task <id> needs-human --reason
-  "HUMAN GATE: <what the human must confirm>" --tried "<command + error>"`, naming exactly what
-  to eyeball, and continue with independent tasks.
+- `captured:true` + `renderError` null → judge the image against the goal's review-only checks.
+- `captured:false` → do NOT guess from HTML: report a `HUMAN GATE: <what a person must look at>`
+  with the command and error, and continue with the other checks.
 
 A render error fails even after a clean compile — full rule:
 `../../pal-review/references/console-render-verification.md`.
@@ -80,10 +79,10 @@ pal's own code.
 
 ## Datasets
 
-`pal_sync_datasets` after pushing a **§8a** definition (never §8b). Never provision §8b
-consumed datasets.
+`pal_sync_datasets` after pushing a new or changed dataset definition. Never provision a dataset
+the pal only consumes.
 
 ## Warnings
 
-Fix warnings, or checkpoint why each one is safe for this task before marking it `done`;
+Fix warnings, or record under `## Notes` in GOAL.md why each one is safe;
 warnings may push but are never silently ignored. Errors cannot be waived.

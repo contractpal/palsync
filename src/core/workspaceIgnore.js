@@ -7,7 +7,7 @@
 // has to remember pathspecs.
 //
 // Ignore EXACT paths only — never the whole .palsync directory. Baseline snapshots,
-// context manifests, EXECUTION.md, and REVIEW.md remain trackable.
+// context manifests, GOAL.md, and REVIEW.md remain trackable.
 //
 // Transient evidence per file:
 //   .agent-work-history/        — content-addressed run artifacts (metadata/notes) written by src/mcp/workHistory.js; ephemeral, rebuildable
@@ -17,12 +17,12 @@
 //   .palsync/session-cost.lock  — lock directory for session-cost writer in src/core/usage.js; transient lock, never source
 //   .palsync/run-usage.json     — immutable Pi build/review usage windows written at pal-loop boundaries
 //   .palsync/pi-usage.jsonl     — Pi extension telemetry written by src/core/piHelpers.js appendPiUsage; telemetry sidecar
-//   .palsync/tool-evidence.jsonl — durable exercise/push evidence written by src/core/usage.js appendToolEvidence; queried via API, not committed as source (committed evidence is REVIEW.md/EXECUTION.md)
+//   .palsync/tool-evidence.jsonl — durable exercise/push evidence written by src/core/usage.js appendToolEvidence; queried via API, not committed as source (committed evidence is REVIEW.md)
 //
 // Retained (MUST stay trackable):
 //   .palsync/baseline/          — drift baseline snapshots used by pre-push gate to block only NEW errors
 //   .palsync/context-manifest.json / .prev.json — injected context manifest for cost/insights
-//   EXECUTION.md, REVIEW.md     — lifecycle state
+//   GOAL.md, REVIEW.md          — lifecycle state
 //   pal.json, pages/, etc.      — source
 
 const fs = require("fs");

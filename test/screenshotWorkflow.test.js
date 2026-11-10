@@ -424,7 +424,7 @@ test("work-history and tool-evidence do not contain param values", async () => {
     const fs = require("node:fs");
     const pathMod = require("path");
     const { tmpWorkspace } = require("./helpers");
-    const ws = tmpWorkspace({ "EXECUTION.md": "# Execution\n" });
+    const ws = tmpWorkspace({ "GOAL.md": "# Goal\n" });
     // stub screenshot core to succeed
     const screenshotPath = require.resolve("../src/core/screenshot.js");
     const origScreenshot = require(screenshotPath);

@@ -19,7 +19,7 @@ claims by requiring evidence before every finding.
 
 Read these before writing:
 
-- `SPEC.md` and `EXECUTION.md` for the run.
+- `GOAL.md` for the run (or legacy `SPEC.md`/`EXECUTION.md`).
 - `REVIEW.md` if pal-review ran.
 - Tool transcripts and one `pal_stats` read (`palsync stats` outside an MCP harness).
 - Any prior report on the same spec in `/Users/apple/Documents/palsync/reports/` or `/Users/apple/Documents/palsync/archives/`.

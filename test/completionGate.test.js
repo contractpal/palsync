@@ -8,129 +8,166 @@ const completionGate = require("../src/core/completionGate");
 const { claudeStopOutput } = require("../src/core/completionHook");
 const { run, runHookCommand } = require("../src/cli/syncCommands");
 const usage = require("../src/core/usage");
-
-function execution(status = "done", checkpoint = "") {
-    return `## Tasks
-| id | task | status |
-| T1 | Build | ${status} |
-
-## Checkpoints
-${checkpoint}
-`;
-}
-
-function workspace(status = "done", checkpoint = "") {
-    return tmpWorkspace({
-        "EXECUTION.md": execution(status, checkpoint),
-        ".palsync.json": JSON.stringify({ palGuid: "PAL-1", lastModifiedDate: "M1" })
-    });
-}
+const { parseGoal } = require("../src/core/goal");
 
 function writeReview(ws, verdict = "PASS") {
     fs.writeFileSync(path.join(ws, "REVIEW.md"), `# REVIEW\nverdict: ${verdict}\n## §12 visual\n| criterion | result |\n|---|---|\n| copy matches | PASS |\n`);
 }
 
-test("completion state machine preserves non-applicable and work-in-progress replies", () => {
-    const absent = tmpWorkspace();
-    assert.deepEqual(completionGate.checkWorkspace(absent).state, "NOT_APPLICABLE");
-    const empty = tmpWorkspace({ "EXECUTION.md": "## Tasks\n| id | status |\n\n## Checkpoints\n" });
-    assert.equal(completionGate.checkWorkspace(empty).state, "NOT_APPLICABLE");
-    // An EXECUTION.md that never declares a "## Tasks" section is a workspace without task
-    // tracking, not a broken table. Treating it as MALFORMED made the gate unsatisfiable — the
-    // section is evaluator-owned, so the agent could not add it, and the Stop hook re-blocked every
-    // turn until the host force-overrode. The impact eval fixtures (bounded rename, no task table)
-    // hit exactly this on the first live arm.
-    const noTasks = tmpWorkspace({ "EXECUTION.md": "# Execution\n\n1. Rename the fragment.\n2. Push.\n" });
-    const noTasksGate = completionGate.checkWorkspace(noTasks);
-    assert.equal(noTasksGate.state, "NOT_APPLICABLE");
-    assert.equal(noTasksGate.allow, true);
-    assert.equal(claudeStopOutput(noTasksGate), null, "a task-free EXECUTION.md must not block the Stop hook");
-    // A section that IS present but broken stays actionable, so it still blocks.
-    const broken = tmpWorkspace({ "EXECUTION.md": "## Tasks\nno table here\n" });
-    assert.equal(completionGate.checkWorkspace(broken).state, "MALFORMED_EXECUTION");
-    fs.rmSync(noTasks, { recursive: true, force: true });
-    fs.rmSync(broken, { recursive: true, force: true });
-    for (const status of ["todo", "in_progress"]) {
-        const ws = workspace(status);
-        const gate = completionGate.checkWorkspace(ws);
-        assert.equal(gate.state, "WORK_IN_PROGRESS");
-        assert.equal(gate.allow, true);
-        fs.rmSync(ws, { recursive: true, force: true });
-    }
-    fs.rmSync(absent, { recursive: true, force: true });
-    fs.rmSync(empty, { recursive: true, force: true });
-});
+function goalText(status = "approved", blocker = "") {
+    return `# GOAL — Camera desk
 
-test("versioned execution plans without tasks cannot bypass completion", () => {
-    const spec = `status: approved
-reality_check: pass
-spec version: 1
+status: ${status}
 
-## 3. Sitemap
-home
+## Outcome
+Ship the request flow.
 
-## 11. Constraints
-never
-`;
-    const cases = [
-        ["missing Tasks section", "spec: SPEC.md (status: approved)\nspec version: 1\n\n# Execution\n"],
-        ["empty Tasks table", "spec: SPEC.md (status: approved)\nspec version: 1\n\n## Tasks\n| id | task | tier | spec ref | depends | status | success condition |\n\n## Checkpoints\n"]
-    ];
-    for (const [name, executionText] of cases) {
-        const ws = tmpWorkspace({ "SPEC.md": spec, "EXECUTION.md": executionText });
-        const gate = completionGate.checkWorkspace(ws, { review: "off" });
-        assert.equal(gate.state, "INCONSISTENT_CONTRACT", name);
-        assert.equal(gate.allow, false, name);
-        assert.equal(gate.completionPassed, false, name);
-        assert.match(gate.message, /Tasks/, name);
-        assert.ok(claudeStopOutput(gate), name + " must block the Stop hook");
-        fs.rmSync(ws, { recursive: true, force: true });
-    }
-});
+## Acceptance checks
 
-test("a stale approved execution contract cannot report successful completion", () => {
-    const ws = tmpWorkspace({
-        "SPEC.md": `status: approved
-reality_check: pass
-spec version: 2
+### A1 — Create a request
+A request is created and appears in the list.
 
-## 3. Sitemap
-home
+\`\`\`json
+{ "workflow": "console", "steps": [ { "click": "New request", "expect": ["Request saved"] } ] }
+\`\`\`
 
-## 11. Constraints
-never
-`,
-        "EXECUTION.md": `spec: SPEC.md (status: approved)
-spec version: 1
+### A2 — Looks professional
+A human judges the screen professional.
 
-## Tasks
-| id | task | tier | spec ref | depends | status | success condition |
-| T1 | foundation | cheap | §3 | — | done | pal_validate 0 errors; pal_test ok |
-
-## Checkpoints
 ## Blockers
-`
-    });
-    const gate = completionGate.checkWorkspace(ws, { review: "off" });
-    assert.equal(gate.state, "INCONSISTENT_CONTRACT");
-    assert.equal(gate.allow, false);
-    assert.equal(gate.completionPassed, false);
-    const executionFile = path.join(ws, "EXECUTION.md");
-    fs.writeFileSync(executionFile, fs.readFileSync(executionFile, "utf8").replace("spec version: 1", "spec version: 2"));
-    assert.equal(completionGate.checkWorkspace(ws, { review: "off" }).state, "COMPLETE");
-    fs.rmSync(ws, { recursive: true, force: true });
-});
+${blocker}
+`;
+}
 
-test("review=auto: all-done completion requires a current explicit PASS review", () => {
-    const ws = workspace();
-    // A PASS review also needs durable clean desktop+mobile render evidence; without these rows
-    // the gate would (correctly) stay REVIEW_FAILED even after the PASS verdict lands.
+function goalWorkspace({ status = "approved", blocker = "", record = { palGuid: "PAL-1", lastModifiedDate: "M1" } } = {}) {
+    const files = { "GOAL.md": goalText(status, blocker) };
+    if (record) files[".palsync.json"] = JSON.stringify(record);
+    return tmpWorkspace(files);
+}
+
+function addCheckEvidence(ws, { id = "A1", digest, marker = "M1", sourceDigest } = {}) {
+    const current = parseGoal(fs.readFileSync(path.join(ws, "GOAL.md"), "utf8"));
+    return usage.appendToolEvidence(ws, {
+        tool: "pal_exercise", palGuid: "PAL-1", marker, sourceDigest,
+        check: id, scriptDigest: digest || current.checks.find(check => check.id === id).scriptDigest,
+        runId: "run-goal-1", kind: "console", mode: "browser"
+    });
+}
+
+function verifiedGoalWorkspace(options) {
+    const ws = goalWorkspace(options);
+    addCheckEvidence(ws);
+    return ws;
+}
+
+function addCleanScreenshots(ws) {
     for (const viewportName of ["desktop", "mobile"]) {
         assert.equal(usage.appendToolEvidence(ws, {
             tool: "pal_screenshot", palGuid: "PAL-1", marker: "M1",
             route: "/", viewportName, renderClean: true
         }), true);
     }
+}
+
+test("completion without a GOAL.md is not applicable and never blocks", () => {
+    const absent = tmpWorkspace();
+    const gate = completionGate.checkWorkspace(absent);
+    assert.equal(gate.state, "NOT_APPLICABLE");
+    assert.equal(gate.allow, true);
+    assert.match(gate.message, /No GOAL\.md; completion enforcement does not apply/);
+    assert.equal(claudeStopOutput(gate), null, "no GOAL.md must not block the Stop hook");
+    fs.rmSync(absent, { recursive: true, force: true });
+});
+
+test("goal mode: an unapproved GOAL.md allows work", () => {
+    const ws = goalWorkspace({ status: "draft" });
+    const gate = completionGate.checkWorkspace(ws, { review: "off" });
+    assert.equal(gate.state, "NOT_APPLICABLE");
+    assert.equal(gate.allow, true);
+    assert.match(gate.message, /not approved yet/);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("goal mode: a malformed or checkless GOAL.md blocks", () => {
+    const broken = goalWorkspace();
+    fs.writeFileSync(path.join(broken, "GOAL.md"), goalText().replace('"steps": [ { "click": "New request", "expect": ["Request saved"] } ]', '"steps": []'));
+    assert.equal(completionGate.checkWorkspace(broken, { review: "off" }).state, "MALFORMED_GOAL");
+    fs.rmSync(broken, { recursive: true, force: true });
+
+    const checkless = tmpWorkspace({ "GOAL.md": "# GOAL — X\n\nstatus: approved\n\n## Outcome\nNothing.\n" });
+    assert.equal(completionGate.checkWorkspace(checkless, { review: "off" }).state, "MALFORMED_GOAL");
+    fs.rmSync(checkless, { recursive: true, force: true });
+});
+
+test("goal mode: an unverified scripted check blocks completion", () => {
+    const ws = goalWorkspace();
+    const gate = completionGate.checkWorkspace(ws, { review: "off" });
+    assert.equal(gate.state, "UNVERIFIED_CHECKS");
+    assert.equal(gate.allow, false);
+    assert.match(gate.message, /A1 \(run pal_exercise \{"check":"A1"\}\)/);
+    assert.match(gate.message, /goes back to the builder/);
+    assert.match(gate.message, /## Blockers/);
+    assert.deepStrictEqual(gate.checks, [
+        { id: "A1", scripted: true, verified: false, blocked: false },
+        { id: "A2", scripted: false, verified: false, blocked: false }
+    ]);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("goal mode: a stale script digest or old pushed version does not verify", () => {
+    const stale = goalWorkspace();
+    addCheckEvidence(stale, { digest: "0".repeat(64) });
+    assert.equal(completionGate.checkWorkspace(stale, { review: "off" }).state, "UNVERIFIED_CHECKS");
+    fs.rmSync(stale, { recursive: true, force: true });
+
+    const oldVersion = goalWorkspace({ record: { palGuid: "PAL-1", lastModifiedDate: "M2" } });
+    addCheckEvidence(oldVersion, { marker: "M1" });
+    assert.equal(completionGate.checkWorkspace(oldVersion, { review: "off" }).state, "UNVERIFIED_CHECKS");
+    fs.rmSync(oldVersion, { recursive: true, force: true });
+});
+
+test("goal mode: a blocked check hands off, and all verified checks complete", () => {
+    const blocked = goalWorkspace({ blocker: "- BLOCKED A1: owner-only data is missing || tried: reran the exercise after a push" });
+    const blockedGate = completionGate.checkWorkspace(blocked, { review: "off" });
+    assert.equal(blockedGate.state, "BLOCKED_HANDOFF");
+    assert.equal(blockedGate.allow, true);
+    assert.equal(blockedGate.completionPassed, false);
+    assert.deepStrictEqual(blockedGate.checks.map(check => check.blocked), [true, false]);
+    const blockedText = completionGate.formatCompletion(blockedGate);
+    assert.match(blockedText, /verify by review: A2/);
+    fs.rmSync(blocked, { recursive: true, force: true });
+
+    const verified = goalWorkspace();
+    addCheckEvidence(verified);
+    const gate = completionGate.checkWorkspace(verified, { review: "off" });
+    assert.equal(gate.state, "COMPLETE");
+    assert.equal(gate.allow, true);
+    assert.equal(gate.completionPassed, true);
+    assert.deepStrictEqual(gate.checks, [
+        { id: "A1", scripted: true, verified: true, blocked: false },
+        { id: "A2", scripted: false, verified: false, blocked: false }
+    ]);
+    assert.match(completionGate.formatCompletion(gate), /verify by review: A2/);
+    fs.rmSync(verified, { recursive: true, force: true });
+});
+
+test("goal mode: review=auto still requires a fresh PASS review after all checks verify", () => {
+    const ws = goalWorkspace();
+    addCheckEvidence(ws);
+    assert.equal(completionGate.checkWorkspace(ws, { review: "auto" }).state, "REVIEW_FAILED");
+    addCleanScreenshots(ws);
+    writeReview(ws, "PASS");
+    const gate = completionGate.checkWorkspace(ws, { review: "auto" });
+    assert.equal(gate.state, "COMPLETE");
+    assert.equal(gate.allow, true);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("review=auto: all-done completion requires a current explicit PASS review", () => {
+    const ws = verifiedGoalWorkspace();
+    // A PASS review also needs durable clean desktop+mobile render evidence; without these rows
+    // the gate would (correctly) stay REVIEW_FAILED even after the PASS verdict lands.
+    addCleanScreenshots(ws);
     assert.equal(completionGate.checkWorkspace(ws, { review: "auto" }).state, "REVIEW_FAILED");
     writeReview(ws, "CHANGES-NEEDED");
     assert.equal(completionGate.checkWorkspace(ws, { review: "auto" }).state, "REVIEW_FAILED");
@@ -140,32 +177,16 @@ test("review=auto: all-done completion requires a current explicit PASS review",
     assert.equal(complete.allow, true);
     assert.equal(complete.completionPassed, true);
     const future = new Date(Date.now() + 2000);
-    fs.utimesSync(path.join(ws, "EXECUTION.md"), future, future);
+    fs.utimesSync(path.join(ws, "GOAL.md"), future, future);
     assert.equal(completionGate.checkWorkspace(ws, { review: "auto" }).state, "REVIEW_FAILED");
     fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("terminal handoffs require matching machine-readable reasons", () => {
-    const missing = workspace("blocked");
-    const bad = completionGate.checkWorkspace(missing);
-    assert.equal(bad.state, "MISSING_BLOCKER_REASON");
-    assert.match(bad.message, /palsync task T1 blocked --reason/);
-    fs.rmSync(missing, { recursive: true, force: true });
-
-    for (const [status, state] of [["blocked", "BLOCKED_HANDOFF"], ["needs-human", "BLOCKED_HANDOFF"]]) {
-        const ws = workspace(status, `- BLOCKED T1 [${status}]: owner action required`);
-        const gate = completionGate.checkWorkspace(ws);
-        assert.equal(gate.state, state);
-        assert.equal(gate.allow, true);
-        assert.equal(gate.completionPassed, false);
-        fs.rmSync(ws, { recursive: true, force: true });
-    }
-});
-
-test("malformed EXECUTION deterministically fails plain CLI", async () => {
-    const ws = tmpWorkspace({ "EXECUTION.md": "## Tasks\nnot a table\n" });
+test("malformed GOAL deterministically fails plain CLI", async () => {
+    const ws = goalWorkspace();
+    fs.writeFileSync(path.join(ws, "GOAL.md"), goalText().replace('"steps": [ { "click": "New request", "expect": ["Request saved"] } ]', '"steps": []'));
     const gate = completionGate.checkWorkspace(ws);
-    assert.equal(gate.state, "MALFORMED_EXECUTION");
+    assert.equal(gate.state, "MALFORMED_GOAL");
     assert.equal(gate.allow, false);
     const oldLog = console.log; console.log = () => {};
     try { assert.equal(await run("completion", ["check", "--dir", ws]), 1); }
@@ -177,7 +198,7 @@ test("Claude Stop output uses block decision JSON, while hook exceptions fail op
     assert.deepEqual(output, { decision: "block", reason: "Review missing" });
     assert.equal(claudeStopOutput({ allow: true }), null);
 
-    const ws = workspace();
+    const ws = verifiedGoalWorkspace();
     const oldLog = console.log, oldError = console.error; const logged = [];
     console.log = value => logged.push(value); console.error = () => {};
     process.env.PALSYNC_REVIEW = "auto";
@@ -199,7 +220,7 @@ test("Claude Stop output uses block decision JSON, while hook exceptions fail op
 // against a build nobody had asked it to touch. Re-blocking did not buy enforcement; it coerced
 // unattended, lock-taking work and punished exactly the behavior the ethos asks for.
 test("the completion gate blocks once per stop chain, then yields without going silent", async () => {
-    const ws = workspace();
+    const ws = verifiedGoalWorkspace();
     process.env.PALSYNC_REVIEW = "auto";
     const message = completionGate.checkWorkspace(ws, { review: "auto" }).message;
     const oldLog = console.log, oldError = console.error; const logged = [];
@@ -228,7 +249,7 @@ test("a passing gate stays silent whether or not the hook is already continuing"
 });
 
 test("the review-failed message states scope so it cannot conscript an unrelated session", () => {
-    const ws = workspace();
+    const ws = verifiedGoalWorkspace();
     const gate = completionGate.checkWorkspace(ws, { review: "auto" });
     assert.equal(gate.state, "REVIEW_FAILED");
     assert.equal(gate.allow, false);
@@ -246,12 +267,12 @@ test("the review-failed message states scope so it cannot conscript an unrelated
 // REVIEW.md from an earlier build cannot trap an unrelated session.
 test("review=off and review=ask complete without any review", () => {
     for (const review of ["off", "ask"]) {
-        const ws = workspace();
+        const ws = verifiedGoalWorkspace();
         const gate = completionGate.checkWorkspace(ws, { review });
         assert.equal(gate.state, "COMPLETE");
         assert.equal(gate.allow, true);
         assert.equal(gate.completionPassed, true);
-        assert.match(gate.message, /Implementation complete/);
+        assert.match(gate.message, /All goal acceptance checks are verified/);
         assert.match(gate.message, review === "ask" ? /Ask me/ : /Off/);
         assert.equal(claudeStopOutput(gate), null, "a satisfied gate never blocks Stop");
         fs.rmSync(ws, { recursive: true, force: true });
@@ -260,28 +281,28 @@ test("review=off and review=ask complete without any review", () => {
 
 test("stale review state cannot trap completion when review is not automatic", () => {
     for (const review of ["off", "ask"]) {
-        const ws = workspace();
+        const ws = verifiedGoalWorkspace();
         writeReview(ws, "CHANGES-NEEDED");
         const future = new Date(Date.now() + 2000);
-        fs.utimesSync(path.join(ws, "EXECUTION.md"), future, future);
+        fs.utimesSync(path.join(ws, "GOAL.md"), future, future);
         assert.equal(completionGate.checkWorkspace(ws, { review }).state, "COMPLETE");
         fs.rmSync(ws, { recursive: true, force: true });
     }
 });
 
-test("review never becomes a requirement between tasks", () => {
+test("review never becomes a requirement while goal checks are unverified", () => {
     for (const review of ["off", "ask", "auto"]) {
-        const ws = workspace("in_progress");
+        const ws = goalWorkspace();
         const gate = completionGate.checkWorkspace(ws, { review });
-        assert.equal(gate.state, "WORK_IN_PROGRESS");
-        assert.equal(gate.allow, true);
-        assert.doesNotMatch(gate.message, /review/i, "an unfinished build is never asked for a review");
+        assert.equal(gate.state, "UNVERIFIED_CHECKS");
+        assert.equal(gate.allow, false);
+        assert.doesNotMatch(gate.message, /review/i, "an unverified goal is never asked for a review");
         fs.rmSync(ws, { recursive: true, force: true });
     }
 });
 
 test("an explicit review mode overrides the saved preference", () => {
-    const ws = workspace();
+    const ws = verifiedGoalWorkspace();
     process.env.PALSYNC_REVIEW = "auto";
     try {
         assert.equal(completionGate.checkWorkspace(ws).state, "REVIEW_FAILED", "env override applies");

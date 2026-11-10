@@ -1,168 +1,117 @@
 ---
 name: pal-loop
-description: "Execute or resume approved SPEC.md + EXECUTION.md tasks faithfully: inspect, edit, cheap feedback, push, verify in proportion to the change."
+description: "Build an approved GOAL.md to done: plan the work yourself, delegate building to subagents, verify every acceptance check with a fresh-context verifier, push, and prove each scripted check with pal_exercise."
 ---
 
-# pal-loop — execution state machine
+# pal-loop — build an approved goal
 
 ## Core authority
 
-Execute the approved **SPEC.md** faithfully. Its product contract is authoritative: never
-silently change what it promises, expand scope, invent requirements, or amend it. A genuine
-ambiguity or product conflict is a blocker or an amendment-path event, not permission to guess.
-How it gets built is yours to improve: a simpler route that keeps every approved product
-statement true is an implementation change recorded in **EXECUTION.md** — no amendment
-(`../pal-spec/references/amendment-path.md` → "What needs an amendment").
-Durable task and build state lives in EXECUTION.md, not only in model context.
+The approved **GOAL.md** is the contract: its outcome, acceptance checks, fixed contracts,
+constraints, and non-goals. Never change a check sentence, the outcome, or a fixed contract
+without the user. Everything else — the plan, the file layout, the order of work — is yours.
+Plan in your head or in a scratch file; nothing gates the plan. Build what the goal needs and
+no more.
 
-`pal-loop` orchestrates foundational `palbuilder-*` skills; it does not replace or
-summarize them. Do not substitute generic programming or web knowledge for a
-required PalBuilder skill.
+The goal is **done** when every scripted check passes `pal_exercise {"check":"<id>"}` on the
+final pushed version, and the verifier passes every review-only check. The completion gate
+(Stop hook, `palsync completion check`) enforces the scripted half from durable tool evidence.
 
-**How much to verify, and whether a final review runs, is decided in exactly one place:**
-[`../shared/references/verification.md`](../shared/references/verification.md). Read it once
-per session. Nothing in this skill overrides it.
+How much to verify per change, and whether a final review runs, is decided in
+[`../shared/references/verification.md`](../shared/references/verification.md). Read it once.
+
+`pal-loop` orchestrates the `palbuilder-*` skills; it never replaces them. Never invent
+PalBuilder syntax from generic web knowledge.
+
+## Roles (goal eval 2026-11: cheapest and as correct as every other topology)
+
+- **You (main agent):** plan, brief, review diffs, run the checks, decide. Keep your context
+  small; you do not write most of the code.
+- **Builder:** one subagent (a mid-tier model such as Sonnet) that writes the code. One writer
+  at a time in a checkout. Reuse the **same builder** for fixes (send it the failures), so it keeps
+  what it learned. Give it: the goal path, the part to build, the skills to load, the fixed
+  contracts, and "push, then report files changed and pushes; do not claim behavior".
+- **Verifier:** a **new** subagent with no conversation history, given only GOAL.md and this
+  instruction: "run `pal_exercise {"check":"<id>"}` for every scripted check, judge each
+  review-only check from `pal_screenshot` captures (desktop + mobile) against
+  `palbuilder-frontend/references/ui-quality.md`, run `pal_validate` and `pal_test` for each
+  workflow, do not edit files, return PASS/FAIL per check with the tool output for each FAIL."
+
+No subagents available → you do both roles, and still verify against GOAL.md, not memory.
 
 ## The cycle
 
 ```
-understand → inspect only what is needed → edit → cheap feedback → push
-           → proportional verification → next task
+start → plan → build (builder) → push → verify (verifier) → fix (same builder) → … → done
 ```
 
 ### 1. Start
 
-Only this:
+- In Pi, before calling a required inactive `pal_*` tool, call `pal_tools` once with its exact name,
+  then call it directly.
+- `pal_status` (activate it first in Pi if inactive); server newer than your last pull → `pal_pull` before edits.
+- Not a git repo → `git init && git add -A && git commit -m "loop start"`. Commit an
+  uncommitted approved GOAL.md first. Never stash, reset, or discard uncommitted work.
+- Run `palsync doctor` only on first setup or when a failure points at the environment.
 
-- In Pi, before calling a required inactive `pal_*` tool, call `pal_tools` once with its exact name (combine immediately needed names when useful), then call it directly. Skip activation when it is already active; do not retry an inactive tool or use the CLI merely because activation was needed.
-- Read EXECUTION.md (`palsync task list --ready`) — on resume it outranks model memory.
-- `pal_status` (activate it first in Pi if inactive); server newer than your last pull → `pal_pull` before editing.
-- Not a git repo → `git init && git add -A && git commit -m "loop start"`.
-- Uncommitted SPEC.md/EXECUTION.md are the newly approved plan: commit them before the first task. Never `git stash`, reset, or discard uncommitted work.
+### 2. Plan
 
-Do **not** run broad health checks just because a session started. Run `palsync doctor` when
-setting up for the first time, when the environment or dependencies changed, when configuration
-looks broken, when a failure points at the environment, or when the user asks. Do not run
-`pal_test` or capture render baselines before a task needs them.
-[references/session-start.md](references/session-start.md) holds the status-transition and git
-mechanics; open it when you need them.
+Read GOAL.md and the workspace. Decide the data, workflows, pages, and fragments, and the
+order to build them in. Load the owning skills just in time: `palbuilder-frontend` (with
+`references/ui-quality.md`), `palbuilder-workflow`, `palbuilder-data`, and any other surface
+skill. Before creating the first page, fragment, script, style, workflow, or dataset, read
+`../palbuilder-core/references/pal-json.md`: every created Pal object uses its typed manifest wrapper
+(`{ "string", "<Type>": {...} }`); never guess or flatten it. Dataset field
+types: `../pal-spec/references/palbuilder-types.md`. New pal: start
+from the template with `cp` per [references/execute.md](references/execute.md).
 
-### 2. Pick
+Split the build only where it helps: a slice a builder can push and you can check. Most pals
+need one to three builder briefs, not a task list.
 
-Run `palsync task list --ready`. The returned ticket, its spliced SPEC sections, and
-§11 constraints are the complete task requirement. Surface assumptions; no eligible
-task means enter **Complete** below.
+### 3. Build
 
-Before farming a task to a subagent, read
-[references/delegation.md](references/delegation.md). Delegation is optional; the
-orchestrator owns verification and state transitions.
+Brief the builder. It follows [references/execute.md](references/execute.md) and the owning
+skills, runs `pal_impact` before it edits a shared page or fragment, pushes, and runs
+`pal_sync_datasets` after it pushes a new dataset definition. Review its diff yourself (`git
+diff`) for scope, duplication, and contract names before you verify.
 
-### 3. Prepare
+### 4. Verify
 
-Mark the selected task `in_progress` through the task CLI, immediately.
+Runtime tools see only the pushed version: push first. Run `pal_validate` and the cheap
+checks yourself after each builder slice. When a slice covers checks, run their
+`pal_exercise {"check":"<id>"}` yourself; for the final verification, start the fresh-context
+verifier. [references/verify-mechanics.md](references/verify-mechanics.md) explains how to read
+screenshot, exercise, and dataset results.
 
-Load exactly the SPEC §9 skills needed for this task, just in time:
+A failed check is a defect in the build until proven otherwise. If the script is wrong (a
+selector, a wait, a scope), fix only its mechanics, keep every assertion its sentence needs,
+and record the change and reason under `## Notes` in GOAL.md. Never weaken a check to pass.
 
-- frontend task → `palbuilder-frontend` (includes `references/ui-quality.md`)
-- workflow task → `palbuilder-workflow`
-- data task → `palbuilder-data`
-- any other platform surface → its corresponding owning `palbuilder-*` skill
+### 5. Fix
 
-Before creating the first page, fragment, script, style, workflow, or dataset in this
-session, read `../palbuilder-core/references/pal-json.md` through its file-backed and
-named-entry examples. This is mandatory and only needs to happen once per session
-unless the needed entry type was not covered. Every created Pal object must use its
-real typed manifest wrapper; never guess or flatten the `{ "string", "<Type>": {...} }`
-shape. SPEC §8a datasets are CREATE definitions: follow `palbuilder-data` plus the
-manifest/schema guidance and sync them after creation. SPEC §8b datasets are CONSUMED
-dependencies: never create or alter them. Before the first UI markup or CSS, read
-`palbuilder-frontend/references/ui-quality.md`. At T-final, cite concrete screenshot findings
-against it. No vision means no visual verdict: record a `HUMAN GATE`.
+Send every failure (check id + tool output) to the same builder in one brief. Push, then
+re-verify only the failed checks plus anything the fix touched. Do a final full verifier run
+before done. After **three** verify rounds that still fail on one check, stop on that check:
+add `- BLOCKED <id>: <reason> || tried: <what you tried>` under `## Blockers` in GOAL.md.
 
-### 4. Execute
+If a bad version was pushed, restore the known-good local source and push it again; git alone
+does not restore the server.
 
-Read [references/execute.md](references/execute.md) now. Make the smallest
-spec-traceable change, reuse existing code and platform primitives before adding
-anything, and touch only the files the change needs (plus a focused prefactor when the
-existing structure fights the change — see execute.md).
-Follow the owning PalBuilder skills for platform syntax and semantics. Run `pal_impact`
-before editing an existing page or fragment other files reference (silent for new
-files). Run free `pal_ast` `mode:"search"` whenever a touched class, attribute, or
-function may have other consumers. `pal_ast` `apply:true` is only for an identical
-mechanical change across three or more spec-ref-named files, after a dry run whose
-diff is checkpointed and followed by one `pal_push`.
+### 6. Done
 
-### 5. Verify
-
-Batch the task's edits, then push — runtime tools only see the pushed version. Pick the
-checks from [`../shared/references/verification.md`](../shared/references/verification.md):
-its risk table decides which of compile / render / behavior / regression apply here, and
-`palsync verify` prints that plan for your current diff. Say in one plain sentence why an
-expensive check is running, before running it.
-
-Read [references/verify-mechanics.md](references/verify-mechanics.md) for HOW to run and read
-a check (screenshot branch recovery, console targeting, exercise failures, dataset sync,
-warning waivers). Every success-condition clause needs current tool evidence; an attempted
-check, a compile, or a chat assertion is not a PASS.
-
-### 6. Resolve
-
-**Pass:** mark the task `done`, checkpoint concise evidence, and commit the completed
-task. Re-read the success condition verbatim before `done` and cite evidence for every
-clause. One completed task gets one commit.
-
-**Polish (visible UI tasks):** once verification passes, run one polish pass per
-`references/verify-mechanics.md` (Polish) before `done`. Visual/UX only; never change approved
-SPEC copy or behavior.
-
-**Fail:** list every error the failed push or check reported, fix them all in one pass, then
-re-verify once; do not use force or bypass flags to bury a failure. After
-two unsuccessful attempts, use the session-start transition procedure to record
-`blocked` or `needs-human` with the required evidence. Inspect
-state before replaying an action that might have changed data. If a bad version was
-pushed, restore the known-good local source and re-push it (pull/merge first when
-server drift requires it); git alone does not restore the server.
-
-### 7. Continue
-
-**Mode:** in `full`, unmet §5 edge-case handling or §12 per-feature criteria is a
-defect and blocks; in `lite`, verify the required floor and happy-path criterion for
-each primary action without manufacturing full-mode rigor.
-
-Run `palsync task list --ready --all`. With subagents and 2+ `parallel-safe` tasks, run them as
-a batch per `references/delegation.md`; otherwise take the next single ready task. There is
-**no review pause between tasks** and no per-task regression sweep: step 5 already proved what
-changed.
-
-End the session when the user asks, when only terminally blocked tasks remain, when context
-has degraded, or when the work is complete. Finish the current task, leave none
-`in_progress`, commit, and run `palsync session-summary`.
-Do not auto-continue via the Claude Stop hook or Pi queue. Report what shipped, each blocker and required decision,
-human gates, and next work. Never end a turn with unchecked tasks unless every remaining task
-is terminally blocked; name every blocker explicitly. For a formal QA/eval report, use the
-`qa-report` skill.
-
-### 8. Complete
-
-When no eligible task remains, read [references/handoff.md](references/handoff.md).
-Summarize what changed, what was checked, and what was deliberately not checked and why.
-Then follow the `review` setting: **off** → finish; **ask** → offer a final review and let
-the user decide; **auto** → dispatch one fresh-context `pal-review` and report its verdict.
-`palsync completion check` states which of those applies.
+`palsync completion check` must report `COMPLETE` or `BLOCKED_HANDOFF`. Commit. Report: what
+shipped, the check results, each blocker, human gates (`captured:false` screenshots name
+exactly what a person must look at), and decisions you made (also under `## Notes`). Then follow
+the `review` setting: **off** → finish; **ask** → offer a final review; **auto** → run one
+fresh-context `pal-review` and report its verdict. Session stats: call `pal_stats` once if wanted
+(the only telemetry read). For a formal QA/eval report, use the `qa-report` skill.
 
 ## Hard invariants
 
-- Never silently edit SPEC.md. For an amendment path, use
-  `../pal-spec/references/amendment-path.md`: write an amendment proposal;
-  propose → human approve → apply → reconcile EXECUTION.md → re-gate → continue. The loop never silently self-amends.
-- Never violate §11 NEVER constraints.
-- Never create or alter a §8b consumed dataset.
-- Never invent missing copy, facts, or assets.
-- Never weaken a task or success condition to make it pass.
-- Runtime tools verify the pushed version; push before runtime checks.
-- Every success-condition clause needs evidence.
-- Failed or unrun verification is not PASS.
-- Destructive operations obey confirmation gates.
-- Task-state changes are written durably.
-- Completed tasks get a checkpoint and git commit.
-- Never deploy; deployment is human-only.
+- Never edit a check sentence, the outcome, or a fixed contract without the user.
+- Never weaken or delete a check, or write a blocker, to finish faster.
+- Never invent copy, facts, or assets. Never violate a constraint or non-goal.
+- Never create or alter a dataset the goal says the pal only consumes.
+- Runtime tools verify the pushed version: push before runtime checks.
+- A claim without tool evidence is not a pass. Failed or unrun verification is not PASS.
+- Destructive operations obey confirmation gates. Never deploy; deployment is human-only.

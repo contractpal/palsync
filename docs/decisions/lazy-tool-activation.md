@@ -13,7 +13,7 @@ The static MCP surface remains available when lazy loading is unsupported or the
 Claude Code now boots the FULL static set (profile "claude" = all tools, no pal_tools).
 Claude Code re-renders the entire prompt prefix when the tool list changes, so a mid-session
 pal_tools activation guaranteed full-prefix KV-cache invalidations — and every real session
-activated at least once, because the 3-tool core (pal_validate, pal_spec_lint, pal_context)
+activated at least once, because the 3-tool core (pal_validate, pal_goal_lint, pal_context)
 cannot push, test, or preview. Lazy loading there saved schema tokens once while invalidating
 the whole cached prefix on every activation: a net loss.
 

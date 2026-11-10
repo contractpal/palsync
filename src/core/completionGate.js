@@ -1,89 +1,29 @@
 "use strict";
 // Offline completion state machine. It decides only whether lifecycle completion enforcement
 // applies and whether its deterministic evidence is satisfied; it performs no writes or I/O beyond
-// reading workspace files through taskState/reviewCheck.
-const fs = require("fs");
-const path = require("path");
-const { parseTasks, STATUSES, BLOCKED_STATUSES, terminalReasonState, executableContract } = require("./taskState");
+// reading workspace files through reviewCheck/goal.
+//
+// One mode: GOAL.md. Completion requires passing, script-tagged pal_exercise evidence for the
+// CURRENT pushed version. A workspace without GOAL.md is not under completion enforcement.
 const reviewCheck = require("./reviewCheck");
 const policy = require("./policy");
+const goal = require("./goal");
 
 function result(state, allow, completionPassed, message, extra = {}) {
     return Object.assign({ state, code: state, allow, completionPassed, message }, extra);
 }
 
-function checkWorkspace(workspaceDir, { review } = {}) {
-    const reviewMode = policy.normalize(review, policy.REVIEW_MODES) || policy.resolve().review;
-    const file = path.join(workspaceDir, "EXECUTION.md");
-    let text;
-    try { text = fs.readFileSync(file, "utf8"); }
-    catch (e) {
-        if (e && e.code === "ENOENT") return result("NOT_APPLICABLE", true, false, "No EXECUTION.md; completion enforcement does not apply.");
-        return result("MALFORMED_EXECUTION", false, false, "Cannot read EXECUTION.md: " + (e.message || e));
-    }
-    const isVersioned = /^(?:spec|spec version):\s*/im.test(text);
-    let contract;
-    function versionedContract() {
-        if (contract) return contract;
-        let specText;
-        try { specText = fs.readFileSync(path.join(workspaceDir, "SPEC.md"), "utf8"); }
-        catch { specText = null; }
-        contract = executableContract(text, specText);
-        return contract;
-    }
-    function inconsistentContract() {
-        const value = versionedContract();
-        return result("INCONSISTENT_CONTRACT", false, false, value.error, { contract: value });
-    }
-    const parsed = parseTasks(text);
-    // An EXECUTION.md with no "## Tasks" section at all is not a malformed task table — it is a
-    // workspace that does not use task tracking, exactly like a Tasks table with no rows below.
-    // Blocking it created an UNSATISFIABLE gate: the section is evaluator-owned, so the agent
-    // cannot add it, and the Stop hook re-blocked every turn until the host force-overrode. The
-    // impact eval fixtures (a bounded rename, no task table) hit this on the first live arm.
-    if (!parsed.ok && parsed.missingSection) {
-        if (isVersioned) return inconsistentContract();
-        return result("NOT_APPLICABLE", true, false,
-            "EXECUTION.md has no \"## Tasks\" section; completion enforcement does not apply.");
-    }
-    if (!parsed.ok) return result("MALFORMED_EXECUTION", false, false, parsed.error);
-    if (!parsed.rows.length) {
-        if (isVersioned) return inconsistentContract();
-        return result("NOT_APPLICABLE", true, false, "EXECUTION.md has no task rows; completion enforcement does not apply.");
-    }
-    const invalid = parsed.rows.filter(row => !STATUSES.includes(row.status));
-    if (invalid.length) return result("MALFORMED_EXECUTION", false, false,
-        "EXECUTION.md has invalid task status: " + invalid.map(row => row.id + "=" + row.status).join(", ") + ".");
-    if (parsed.rows.some(row => row.status === "todo" || row.status === "in_progress")) {
-        return result("WORK_IN_PROGRESS", true, false, "Tasks remain todo/in_progress; normal work or proactive handoff may continue.");
-    }
-    const nonDone = parsed.rows.filter(row => row.status !== "done");
-    if (nonDone.length) {
-        const reasonState = terminalReasonState(text);
-        if (!reasonState.ok) return result("MALFORMED_EXECUTION", false, false, reasonState.error);
-        if (reasonState.missing.length) {
-            const commands = reasonState.missing.map(row => "palsync task " + row.id + " " + row.status + " --reason \"<why>\"");
-            return result("MISSING_BLOCKER_REASON", false, false,
-                "Terminal task(s) lack reason checkpoints: " + reasonState.missing.map(row => row.id).join(", ") + ". Run: " + commands.join("; "),
-                { missing: reasonState.missing.map(row => row.id) });
-        }
-        if (nonDone.every(row => BLOCKED_STATUSES.includes(row.status))) {
-            return result("BLOCKED_HANDOFF", true, false, "Terminal blocked/human handoff recorded with reasons.");
-        }
-    }
-    // A versioned plan remains a joint SPEC + EXECUTION contract through the final completion
-    // verdict. Non-versioned task tables are legacy/small-fix tracking and intentionally stay
-    // outside this approval workflow.
-    if (isVersioned && !versionedContract().ok) return inconsistentContract();
-    // Review is a user preference, not a lifecycle law. Only `auto` makes an independent review
-    // part of completion; under `off`/`ask` the work is complete when the work is done, and a stale
-    // REVIEW.md from an earlier build is not even read (it used to trap unrelated sessions).
+// Review is a user preference, not a lifecycle law. Only `auto` makes an independent review part
+// of completion; under `off`/`ask` the work is complete when the work is done, and a stale
+// REVIEW.md from an earlier build is not even read (it used to trap unrelated sessions).
+// `allDone` and `complete` are the mode-specific sentences; the review semantics stay identical.
+function completeWithReview(workspaceDir, reviewMode, extra, { allDone, complete }) {
     if (reviewMode !== "auto") {
         return result("COMPLETE", true, true,
-            "Implementation complete. Final review: not run because your preference is " +
+            complete + " Final review: not run because your preference is " +
             policy.REVIEW_LABEL[reviewMode] + "." +
             (reviewMode === "ask" ? " Offer to run pal-review; the user decides." : ""),
-            { reviewMode });
+            Object.assign({ reviewMode }, extra));
     }
     const reviewState = reviewCheck.checkWorkspace(workspaceDir);
     if (!reviewState.ok || reviewState.verdict !== "PASS") {
@@ -92,25 +32,83 @@ function checkWorkspace(workspaceDir, { review } = {}) {
         // started an unrequested review of a stale build. A gate must say what is unmet and what
         // satisfies it; it must not conscript whatever session happens to end its turn in the workspace.
         return result("REVIEW_FAILED", false, false,
-            "All tasks are done, and your review preference is Automatic: a fresh pal-review recording " +
+            allDone + ", and your review preference is Automatic: a fresh pal-review recording " +
             "REVIEW.md result: PASS is required before this build can be called complete. " +
             "If finishing this build IS your current task, run pal-review, then `palsync completion check` " +
             "again. If it is not — you were asked to do something else, or you need an owner decision — " +
             "report this blocker and stop. Do not start a review on your own initiative.",
-            { reviewMode, review: reviewState, reviewOutput: reviewCheck.formatReviewCheck(reviewState) });
+            Object.assign({ reviewMode, review: reviewState, reviewOutput: reviewCheck.formatReviewCheck(reviewState) }, extra));
     }
-    return result("COMPLETE", true, true, "All tasks are done and independent review PASS is current.",
-        { reviewMode, review: reviewState });
+    return result("COMPLETE", true, true, complete + " Independent review PASS is current.",
+        Object.assign({ reviewMode, review: reviewState }, extra));
+}
+
+function checkGoal(workspaceDir, parsed, reviewMode) {
+    if (!parsed.ok) {
+        return result("MALFORMED_GOAL", false, false,
+            "GOAL.md is malformed: " + (parsed.error || "it could not be parsed"));
+    }
+    if (parsed.status !== "approved") {
+        return result("NOT_APPLICABLE", true, false,
+            "GOAL.md is not approved yet; the interview is in progress.");
+    }
+    const invalid = parsed.checks.filter(check => check.scriptError);
+    if (!parsed.checks.length) {
+        return result("MALFORMED_GOAL", false, false,
+            "GOAL.md has no acceptance checks; goal mode cannot verify completion.");
+    }
+    if (invalid.length) {
+        return result("MALFORMED_GOAL", false, false,
+            "GOAL.md acceptance-check script(s) are invalid: " +
+            invalid.map(check => check.id + " (" + check.scriptError + ")").join(", ") + ".");
+    }
+    const checks = goal.checkEvidence(workspaceDir, parsed);
+    const unverified = checks.filter(check => check.scripted && !check.verified && !check.blocked);
+    if (unverified.length) {
+        return result("UNVERIFIED_CHECKS", false, false,
+            "GOAL.md acceptance checks are not verified against the current pushed version: " +
+            unverified.map(check => check.id + " (run pal_exercise {\"check\":\"" + check.id + "\"})").join(", ") +
+            ". If finishing this goal IS your current task: a failing check goes back to the builder, and a " +
+            "check that cannot pass after real attempts goes in GOAL.md \"## Blockers\" with the reason and " +
+            "what was tried. If it is not (a later push made the evidence stale while you did other work), " +
+            "report that these checks need a re-run and stop; do not start a goal build on your own initiative.",
+            { checks });
+    }
+    const blocked = checks.filter(check => check.blocked);
+    if (blocked.length) {
+        return result("BLOCKED_HANDOFF", true, false,
+            "All script-verified goal checks pass or are blocked; terminal blocked/human handoff recorded for: " +
+            blocked.map(check => check.id).join(", ") + ".",
+            { checks });
+    }
+    return completeWithReview(workspaceDir, reviewMode, { checks }, {
+        allDone: "All script-verified goal checks pass",
+        complete: "All goal acceptance checks are verified."
+    });
+}
+
+function checkWorkspace(workspaceDir, { review } = {}) {
+    const reviewMode = policy.normalize(review, policy.REVIEW_MODES) || policy.resolve().review;
+    const parsedGoal = goal.readGoal(workspaceDir);
+    if (!parsedGoal) {
+        return result("NOT_APPLICABLE", true, false,
+            "No GOAL.md; completion enforcement does not apply.");
+    }
+    return checkGoal(workspaceDir, parsedGoal, reviewMode);
 }
 
 function formatCompletion(value) {
     const heading = value.state === "COMPLETE" ? "COMPLETE"
         : value.state === "BLOCKED_HANDOFF" ? "BLOCKED HANDOFF"
-        : value.state === "WORK_IN_PROGRESS" || value.state === "NOT_APPLICABLE" ? "WORK IN PROGRESS"
+        : value.state === "NOT_APPLICABLE" ? "WORK IN PROGRESS"
         : "FAIL";
     const lines = ["palsync completion check — " + heading, "state: " + value.state, value.message];
     if (value.state === "COMPLETE" && value.reviewMode === "ask") {
         lines.push("Ask the user: run a final review, or finish?");
+    }
+    if ((value.state === "COMPLETE" || value.state === "BLOCKED_HANDOFF") && Array.isArray(value.checks)) {
+        const reviewOnly = value.checks.filter(check => !check.scripted).map(check => check.id);
+        if (reviewOnly.length) lines.push("verify by review: " + reviewOnly.join(", "));
     }
     if (value.reviewOutput) lines.push(value.reviewOutput);
     return lines.join("\n");

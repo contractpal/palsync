@@ -172,13 +172,11 @@ test("report template routes every cost & usage number through one pal_stats rea
 // bookkeeping call, and a completed loop reads stats exactly once, through pal_stats.
 test("pal-loop needs no telemetry bookkeeping call and exactly one stats read", () => {
     const loop = read(PAL_LOOP);
-    const handoff = read(path.join(path.dirname(PAL_LOOP), "references", "handoff.md"));
     for (const command of ["palsync usage start", "palsync usage end", "palsync cost record", "palsync ctx"]) {
         assert.ok(!loop.includes(command), "pal-loop must not ask for " + command);
-        assert.ok(!handoff.includes(command), "handoff must not ask for " + command);
     }
-    assert.equal(handoff.match(/pal_stats/g).length, 1, "exactly one agent-visible stats call");
-    assert.match(handoff, /only telemetry read/);
+    assert.equal(loop.match(/pal_stats/g).length, 1, "exactly one agent-visible stats call");
+    assert.match(loop, /only telemetry read/);
 });
 
 test("pal-loop end-of-run guidance points to the qa-report skill", () => {

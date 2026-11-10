@@ -54,15 +54,9 @@ const USAGE = [
     "  palsync stats  [--dir <workspace>]                           One session report: model usage (when the harness reports it), PalSync tool calls/bytes, injected context, evidence (offline)",
     "  palsync cost record --model X --provider Y --in N --cached N --out N [--cost N] [--currency USD] [--phase build|review] [--dir <ws>]",
     "  palsync review check|brief [--dir <workspace>]              Check REVIEW.md evidence or print the pre-review evidence ledger (offline)",
-    "  palsync completion check [--dir <workspace>]                Enforce all-done independent review or allow a reasoned handoff (offline)",
+    "  palsync completion check [--dir <workspace>]                Enforce goal-check completion or allow a reasoned handoff (offline)",
     "  palsync regression [capture --revision <marker> --approval <phrase>] [--keep-lock] [--dir <ws>]  Compare or explicitly capture baseline/baseline.json",
-    "  palsync spec-lint [<SPEC.md>] [--dir <ws>]                   Joint SPEC.md + EXECUTION.md mechanical approval gate (offline)",
-    "  palsync session-summary [--mode full|lite] [--next <text>] [--dir <ws>] Append the canonical two-line session handoff summary (offline, derived)",
-    "  palsync task list [--ready [--all]] [--dir <ws>]               List EXECUTION.md tasks; --ready prints the ready ticket plus its spec ref sections and \u00A711; --ready --all lists the whole ready frontier, marking parallel-safe tasks",
-    "  palsync task <id> <status> [--reason \"<why>\"] [--tried \"<workaround>\"] [--dir <ws>]",
-    "                                                               Set one task status; --reason is required for blocked|needs-human,",
-    "                                                               --tried (the automated workaround you attempted) also for blocked|needs-human",
-    "  palsync checkpoint \"<line>\" [--dir <ws>]                     Append a line to EXECUTION.md's Checkpoints section",
+    "  palsync goal-lint [--dir <ws>]                               Lint GOAL.md acceptance checks and exercise scripts (offline)",
     "  palsync sync-datasets [--datasets a,b] [--recreate] [--keep-lock] [--dir <ws>]",
     "                                                               Provision dataset tables from pal.json (safe by default)",
     "  palsync hook completion|guard|post-write --mode claude|json [--dir <ws>] [--event <json>]  Agent-harness hook adapters (event on stdin or --event; always exit 0).",
@@ -184,53 +178,6 @@ async function buildCliContext(dir) {
     }
 }
 
-async function runSessionSummary(argv) {
-    const ts = require("../core/taskState");
-    let dir = process.cwd(); let mode; let next; let showHelp = false;
-    for (let i = 0; i < argv.length; i++) {
-        const a = argv[i];
-        if (a === "--dir") { dir = argv[++i]; if (!dir) { console.error("--dir requires a value"); return 1; } }
-        else if (a.startsWith("--dir=")) dir = a.slice("--dir=".length);
-        else if (a === "--mode") { mode = argv[++i]; if (!mode) { console.error("--mode requires a value"); return 1; } }
-        else if (a.startsWith("--mode=")) mode = a.slice("--mode=".length);
-        else if (a === "--next") { next = argv[++i]; if (next === undefined) { console.error("--next requires a value"); return 1; } }
-        else if (a.startsWith("--next=")) next = a.slice("--next=".length);
-        else if (a === "--help" || a === "-h") showHelp = true;
-        else { console.error("Unknown flag for session-summary: " + a + "\n\n" + USAGE); return 1; }
-    }
-    if (showHelp) {
-        console.log("Usage: palsync session-summary [--mode full|lite] [--next <text>] [--dir <workspace>]\n" +
-            "  Derive session number and status counts from EXECUTION.md and append the canonical\n" +
-            "  two-line handoff summary through the checkpoint validation gate.\n\n" +
-            "  --mode full|lite   Session mode (default: parsed from EXECUTION.md \"mode:\" header)\n" +
-            "  --next <text>      Explicit Next state (required when no single ready task is unambiguous)\n" +
-            "  --dir <workspace>  Workspace directory (default: current directory)\n");
-        return 0;
-    }
-    const file = path.join(path.resolve(dir), "EXECUTION.md");
-    let text;
-    try { text = ts.readExecution(file); }
-    catch (e) { console.error("Could not read " + file + " \u2014 " + (e && e.message ? e.message : e)); return 1; }
-    // Validate mode flag early so a typo fails fast without touching the file
-    if (mode !== undefined && mode !== null && String(mode).toLowerCase() !== "full" && String(mode).toLowerCase() !== "lite") {
-        console.error("session-summary failed: Invalid mode \"" + mode + "\". Use full or lite. (nothing changed)");
-        return 1;
-    }
-    const result = ts.buildSessionSummary(text, { mode, next });
-    if (!result.ok) {
-        console.error("session-summary failed: " + result.error + " (nothing changed)");
-        return 1;
-    }
-    // Single atomic write via the repo's EXECUTION helper
-    try { ts.writeExecution(file, result.text); }
-    catch (e) { console.error("Could not write " + file + " \u2014 " + (e && e.message ? e.message : e)); return 1; }
-    // Verify we wrote exactly once and did not create a sidecar
-    console.log("Session summary appended:\n  " + result.summary.replace(/\n/g, "\n  "));
-    return 0;
-}
-
-// `palsync task` / `palsync checkpoint` — OFFLINE EXECUTION.md edits (no login/lock). Their args
-// aren't the shared --force/--workflow set, so they get their own tolerant parsing.
 // `palsync settings` — the saved verification/review preferences (~/.palsync/config.json). No
 // workspace, no login. Bare + a real terminal opens the same picker the launcher uses.
 async function runSettings(argv) {
@@ -266,86 +213,6 @@ async function runSettings(argv) {
     console.log("  review:       " + policy.REVIEW_LABEL[current.review] + " — " + policy.REVIEW_HELP[current.review]);
     console.log("Change with: palsync settings verification standard review ask");
     return 0;
-}
-
-async function runTaskCommand(cmd, argv) {
-    const ts = require("../core/taskState");
-    let dir = process.cwd(); const pos = []; let ready = false; let all = false; let reason; let tried;
-    for (let i = 0; i < argv.length; i++) {
-        const a = argv[i];
-        if (a === "--dir") dir = argv[++i];
-        else if (a.startsWith("--dir=")) dir = a.slice("--dir=".length);
-        else if (a === "--ready") ready = true;
-        else if (a === "--all") all = true;
-        else if (a === "--reason") { reason = argv[++i]; if (reason === undefined) { console.error("--reason requires a value"); return 1; } }
-        else if (a.startsWith("--reason=")) reason = a.slice("--reason=".length);
-        else if (a === "--tried") { tried = argv[++i]; if (tried === undefined) { console.error("--tried requires a value"); return 1; } }
-        else if (a.startsWith("--tried=")) tried = a.slice("--tried=".length);
-        else pos.push(a);
-    }
-    const file = path.join(path.resolve(dir), "EXECUTION.md");
-    let text;
-    try { text = ts.readExecution(file); }
-    catch (e) { console.error("Could not read " + file + " — " + (e && e.message ? e.message : e)); return 1; }
-
-    if (cmd === "checkpoint") {
-        const line = pos.join(" ");
-        const r = ts.appendCheckpoint(text, line);
-        if (!r.ok) { console.error("checkpoint failed: " + r.error + " (nothing changed)"); return 1; }
-        ts.writeExecution(file, r.text);
-        console.log("Checkpoint appended:\n  - " + line.replace(/[\r\n]+/g, " ").trim());
-        return 0;
-    }
-    // cmd === "task"
-    if (pos.length === 0 || pos[0] === "list") {
-        if (ready && all) {
-            const f = ts.readyFrontier(text);
-            if (!f.ok) { console.error("task list failed: " + f.error); return 1; }
-            if (!f.tasks.length) { console.log("No ready task \u2014 every todo is blocked by an unfinished dependency, or none remain."); return 1; }
-            for (const t of f.tasks) console.log(t.id + "\t" + (t.parallelSafe ? "parallel-safe" : "serial") + "\t" + (t.depends.length ? "depends:" + t.depends.join(",") : "\u2014") + "\t" + t.task);
-            return 0;
-        }
-        if (ready) {
-            const specFile = path.join(path.resolve(dir), "SPEC.md");
-            let specText;
-            try { specText = fs.readFileSync(specFile, "utf8"); }
-            catch { specText = null; }
-            const rendered = ts.renderReadyTicket(text, specText);
-            if (!rendered.ok) {
-                if (rendered.noReady) { console.log(rendered.error); return 1; }
-                console.error(rendered.error);
-                return 1;
-            }
-            process.stdout.write(rendered.ticket);
-            return 0;
-        }
-        const r = ts.listTasks(text, { ready });
-        if (!r.ok) { console.error("task list failed: " + r.error); return 1; }
-        for (const t of r.tasks) console.log(t.id + "\t" + t.status + "\t" + (t.depends.length ? "depends:" + t.depends.join(",") : "—") + "\t" + t.task);
-        return 0;
-    }
-    if (pos.length >= 2) {
-        // Versioned execution plans are jointly approved contracts. Legacy/small-fix task tables
-        // have no contract frontmatter and retain their existing lightweight status workflow.
-        if ((pos[1] === "in_progress" || pos[1] === "done") && /^(?:spec|spec version):\s*/im.test(text)) {
-            let specText;
-            try { specText = fs.readFileSync(path.join(path.resolve(dir), "SPEC.md"), "utf8"); }
-            catch { specText = null; }
-            const contract = ts.executableContract(text, specText);
-            if (!contract.ok) { console.error("task update failed: " + contract.error + " (nothing changed)"); return 1; }
-        }
-        const r = ts.setStatusWithReason(text, pos[0], pos[1], reason, tried);
-        if (!r.ok) { console.error("task update failed: " + r.error + " (nothing changed)"); return 1; }
-        if (r.unchanged) { console.log(r.id + " already " + pos[1] + " — no change."); return 0; }
-        ts.writeExecution(file, r.text);
-        console.log(r.id + ": " + r.from + " -> " + r.to);
-        if (r.to === "done" && !require("../core/reviewCheck").hasCurrentEvidence(path.resolve(dir))) {
-            console.error("warning: " + r.id + " marked done with no passing check recorded for the current pushed version");
-        }
-        return 0;
-    }
-    console.error("Usage: palsync task list [--ready [--all]] | palsync task <id> <status> [--reason \"<why>\"] [--tried \"<workaround>\"] | palsync checkpoint \"<line>\"");
-    return 1;
 }
 
 function readStdin() {
@@ -400,12 +267,10 @@ async function runHookCommand(argv, inputText) {
 // command (test seam for the user-level settings file location); other commands ignore it.
 async function run(cmd, argv, opts) {
     if (cmd === "settings") return runSettings(argv);
-    if (cmd === "task" || cmd === "checkpoint") return runTaskCommand(cmd, argv);
-    if (cmd === "session-summary" || cmd === "session_summary") return runSessionSummary(argv);
     if (cmd === "hook") return runHookCommand(argv);
     // `palsync hooks check|repair` — OFFLINE recovery surface for stale Claude Code hook
     // settings (no .palsync.json, no login), dispatched before parseFlags/buildCliContext like
-    // task/checkpoint. `opts` is the test seam for the user-level settings file location.
+    // the other offline commands. `opts` is the test seam for the user-level settings file location.
     if (cmd === "hooks") return require("./hooksCommand").run(argv, opts || {});
     // #15: `palsync ctx inspect <path>` used to dump the generic USAGE block — whose first line is
     // `palsync validate`'s usage — because parseFlags throws USAGE on an extra positional. `ctx` takes
@@ -497,17 +362,18 @@ async function run(cmd, argv, opts) {
         return 0;
     }
 
-    // spec-lint is OFFLINE: reads a SPEC.md (+ optional sibling baseline/), no login/lock.
-    if (cmd === "spec-lint") {
-        const { lintSpec, formatSpecLint } = require("../core/specLint");
-        const specPath = path.resolve(flags._positional || path.join(dir, "SPEC.md"));
+
+    // goal-lint is OFFLINE: lints GOAL.md in the workspace, no login/lock.
+    if (cmd === "goal-lint") {
+        const { lintGoal, formatGoalLint } = require("../core/goal");
+        const goalPath = path.join(dir, "GOAL.md");
         let text;
-        try { text = require("fs").readFileSync(specPath, "utf8"); }
-        catch (e) { console.error("Could not read " + specPath + " — " + (e && e.message ? e.message : e)); return 1; }
-        const res = lintSpec(text, { workspaceDir: path.dirname(specPath) });
-        console.log("palsync spec-lint — " + specPath + "\n");
-        console.log(formatSpecLint(res));
-        return res.counts.HARD_FLAG > 0 ? 1 : 0;
+        try { text = fs.readFileSync(goalPath, "utf8"); }
+        catch (e) { console.error("Could not read " + goalPath + " — " + (e && e.message ? e.message : e)); return 1; }
+        const findings = lintGoal(text);
+        console.log("palsync goal-lint — " + goalPath + "\n");
+        console.log(formatGoalLint(findings));
+        return findings.some(finding => finding.severity === "error") ? 1 : 0;
     }
 
     const ctx = await buildCliContext(dir);
