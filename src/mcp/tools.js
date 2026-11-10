@@ -2469,7 +2469,7 @@ const TOOLS = [
     },
     {
         name: "pal_dataset_query",
-        description: "Query a bounded page of dataset rows from the current Pal (read-only). Validates dataset and columns against the local pal.json before the server call. Uses the dedicated QUERY_DATASET operation only. Returns totalRecords for the filter; use limit:1 when you only need a count.",
+        description: "Query a bounded page of dataset rows from the current Pal (read-only). Validates dataset and columns against the local pal.json before the server call. Uses the dedicated QUERY_DATASET operation only. Returns totalRecords for the filter; use limit:1 when you only need a count. To wait for a background job, use pal_exercise waitFor, not repeated queries.",
         needsLock: false,
         inputShape: {
             dataset: z.string().describe("Dataset name as defined in pal.json."),
