@@ -506,6 +506,7 @@ function exerciseStepSchema(doc = true) {
         as: d(z.string().optional(), "With login: test-account alias to sign in as; omit to use the developer's own account."),
         within: d(z.string().optional(), "CSS scope when click text matches multiple elements."),
         upload: d(z.string().optional(), "Workspace-relative file for the screen's c:upload widget; submitted for you."),
+        download: d(z.union([z.boolean(), z.string()]).optional(), "Save a file this step downloads (initial action or click): true keeps the served name, a string sets the saved filename. Waits up to 30 s; returns the saved path."),
         expect: d(z.array(z.string()).optional(), "Visible strings required after this step."),
         absent: d(z.array(z.string()).optional(), "Unique visible strings forbidden after this step."),
         waitFor: d(z.object({
@@ -520,7 +521,7 @@ function exerciseInitialSchema(doc = true) {
         action: d(z.string().optional(), "Console/transaction action, c:a form: name or name?key=value."),
         params: d(z.record(z.union([z.string(), z.number(), z.boolean()])).optional(), "Action params; conflicts with the action suffix are rejected."),
         page: d(z.string().optional(), "WEB route to load first."),
-        expect: d(z.array(z.string()).optional(), "Visible strings proving this screen; no step runs until seen.")
+        expect: d(z.array(z.string()).optional(), "Visible strings proving this screen; no step runs until seen. Omit only when the initial action downloads (add a download step).")
     });
 }
 
@@ -924,6 +925,28 @@ function persistExerciseFailure(ctx, res, steps, viewport) {
     artifacts.metadata = writeRunMetadata(run, metadata);
     if (!artifacts.metadata) artifacts.incomplete.push(FILE_NAMES.metadata);
     return artifacts;
+}
+
+// A download produced by an exercise action (a PDF report, a CSV export) is durable evidence the
+// agent must be able to read, so it is saved into ONE work-history run for that exercise call.
+// Created lazily: most exercises download nothing.
+function exerciseDownloadSink(ctx) {
+    let run = null;
+    const downloads = [];
+    return (download) => {
+        if (!ctx.workspaceDir) return null;
+        run = run || createWorkHistoryRun(ctx.workspaceDir, { tool: "pal_exercise", feature: "download" });
+        if (!run) return null;
+        const filePath = writeArtifactFile(run, download.file, download.buffer);
+        if (!filePath) return null;
+        downloads.push({ file: pathMod.basename(filePath), bytes: download.buffer.length });
+        writeRunMetadata(run, {
+            palGuid: ctx.record.palGuid,
+            palName: ctx.record.palName,
+            downloads
+        });
+        return { path: filePath };
+    };
 }
 
 // ---- MCP error classification (server.js sets isError from these marks) ------------------------
@@ -1811,7 +1834,8 @@ const TOOLS = [
             if (!Array.isArray(steps) || !steps.length) {
                 return { ran: false, toolError: true, message: "pal_exercise — pass steps, or check with a GOAL.md acceptance-check id." };
             }
-            const res = await runExercise(ctx.session, ctx.record.palGuid, { steps, workflow, viewport, initial, browser, workspaceDir: ctx.workspaceDir });
+            const res = await runExercise(ctx.session, ctx.record.palGuid, { steps, workflow, viewport, initial, browser, workspaceDir: ctx.workspaceDir },
+                { saveDownload: exerciseDownloadSink(ctx) });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             // Failure-only durable artifacts: a failed/blocked browser run with captured evidence
             // persists steps.json, browser-events.json, the accessibility snapshot (or screen-hints

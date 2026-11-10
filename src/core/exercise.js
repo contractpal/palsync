@@ -19,6 +19,7 @@
 const { checkExpect } = require("./preview");
 const crypto = require("crypto");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { stableStringify } = require("./stableStringify");
 const testAccounts = require("../platform/testAccounts");
@@ -26,7 +27,7 @@ const { detectRenderError } = require("./screenshot");
 const { sanitizeUrl, sanitizeResourceUrl, releaseBrowser, waitForRenderablePage } = require("./browser");
 // Target normalization, the authenticated bootstrap, the state oracle and the retry boundary are
 // shared with pal_screenshot — neither tool may interpret a console action differently.
-const { normalizeTarget, openAuthenticatedScreen, attemptWithFreshTest, deriveWebBase, describeTargetMismatch, readMatchText, withBound } = require("./browserTarget");
+const { normalizeTarget, openAuthenticatedScreen, attemptWithFreshTest, deriveWebBase, describeTargetMismatch, readMatchText, withBound, isDownloadAbort } = require("./browserTarget");
 
 const MAX_STEPS = 30;
 const LOGIN_FORM_TIMEOUT_MS = 8000;
@@ -70,6 +71,12 @@ const ACTION_TIMEOUT_MS = 5000; // one fill/select/click
 // waitForScreenSettle showed exactly this - a change landing at 4s was reported as unchanged
 // because the old ~3s budget gave up first).
 const SETTLE_TIMEOUT_MS = 10000; // matches PalBuilder's default server-side workflow timeout
+// A console action can return a download instead of a screen (c:createDownloadResponse). The
+// browser never renders that response, so the file itself is the step's evidence.
+const DOWNLOAD_QUEUE_MAX = 3;     // pending downloads kept per run
+const DOWNLOAD_TIMEOUT_MS = 30000; // how long a download step waits for the file
+const DOWNLOAD_MAX_BYTES = 50 * 1024 * 1024; // refuse a file that would exhaust process memory
+const DOWNLOAD_PDF_MAGIC = "%PDF";
 // Style/font settling is screenshot-only evidence — behavior checks assert visible text, which
 // does not depend on it — so exercise navigations skip it.
 const EXERCISE_NAV_OPTS = { gotoTimeout: NAV_TIMEOUT_MS, loadTimeout: LOAD_TIMEOUT_MS, idleTimeout: IDLE_TIMEOUT_MS, skipStyleSettle: true };
@@ -370,8 +377,11 @@ function validateSteps(steps) {
     steps.forEach((s, i) => {
         const at = "step " + (i + 1);
         if (!s || typeof s !== "object") { errs.push(at + " is not an object"); return; }
-        if (!s.action && !s.page && !s.fill && !s.click && !s.upload && !s.login && !(s.expect && s.expect.length) && !(s.absent && s.absent.length)) {
-            errs.push(at + " does nothing — give it an action, page, fill, click, upload, login, expect, or absent");
+        if (!s.action && !s.page && !s.fill && !s.click && !s.upload && !s.login && !s.download && !(s.expect && s.expect.length) && !(s.absent && s.absent.length)) {
+            errs.push(at + " does nothing — give it an action, page, fill, click, upload, login, download, expect, or absent");
+        }
+        if (s.download !== undefined && s.download !== true && (typeof s.download !== "string" || !s.download.trim())) {
+            errs.push(at + " download must be true (keep the served filename) or a non-empty filename to save");
         }
         if (s.login !== undefined && s.login !== true) errs.push(at + " login must be true (it signs in on the platform login page the previous step reached)");
         if (s.as !== undefined && (typeof s.as !== "string" || !s.as.trim() || !s.login)) {
@@ -599,6 +609,9 @@ function stepLabel(step) {
     if (step.login) bits.push(step.as ? "login as " + JSON.stringify(scrubCredentials(step.as)) : "login");
     if (step.fill) bits.push("fill{" + Object.keys(step.fill).join(",") + "}");
     if (step.upload) bits.push("upload " + JSON.stringify(scrubCredentials(step.upload)));
+    if (step.download) bits.push(typeof step.download === "string"
+        ? "download " + JSON.stringify(scrubCredentials(sanitizeDownloadName(step.download)))
+        : "download");
     if (step.click) bits.push("click " + JSON.stringify(scrubCredentials(step.click)));
     if (step.within) bits.push("within " + JSON.stringify(scrubCredentials(step.within)));
     if (!bits.length) bits.push("assert-only");
@@ -765,7 +778,7 @@ async function findUploadTarget(pg) {
 }
 
 function needsBrowser(steps) {
-    return steps.some(s => s.fill || s.click || s.upload || s.login);
+    return steps.some(s => s.fill || s.click || s.upload || s.login || s.download);
 }
 
 function hasWaitFor(steps) {
@@ -889,6 +902,126 @@ function failureEvidenceLines(res) {
     return lines;
 }
 
+// ---- downloads -------------------------------------------------------------------------------
+
+// A pal action can answer with a file instead of a screen (c:createDownloadResponse). Playwright
+// reports that as a `download` event and aborts the navigation (net::ERR_ABORTED or "Download is
+// starting"). Events are queued from before the initial navigation, so a download produced by
+// `initial` is ready for the first download step. The queue is bounded: a page that downloads
+// repeatedly must not grow memory.
+function createDownloadCollector() {
+    const queue = [];
+    const waiters = [];
+    const wake = () => { while (waiters.length && queue.length) waiters.shift()(); };
+    return {
+        attach(pg) {
+            if (!pg || typeof pg.on !== "function") return;
+            pg.on("download", (d) => {
+                if (queue.length >= DOWNLOAD_QUEUE_MAX) return;
+                queue.push(d);
+                wake();
+            });
+        },
+        hasPending() { return queue.length > 0; },
+        // Consume the next queued download, or resolve null after the bounded wait.
+        next({ timeoutMs = DOWNLOAD_TIMEOUT_MS } = {}) {
+            if (queue.length) return Promise.resolve(queue.shift());
+            return new Promise((resolve) => {
+                let timer = null;
+                const onDownload = () => { if (timer) clearTimeout(timer); resolve(queue.shift() || null); };
+                waiters.push(onDownload);
+                timer = setTimeout(() => {
+                    const i = waiters.indexOf(onDownload);
+                    if (i !== -1) waiters.splice(i, 1);
+                    resolve(null);
+                }, timeoutMs);
+            });
+        },
+        // Wait for a download WITHOUT consuming it (used when a navigation abort may mean a file).
+        waitForAny(timeoutMs = DOWNLOAD_TIMEOUT_MS) {
+            if (queue.length) return Promise.resolve(true);
+            return new Promise((resolve) => {
+                let timer = null;
+                const check = () => {
+                    if (!queue.length) return;
+                    if (timer) clearTimeout(timer);
+                    const i = waiters.indexOf(check);
+                    if (i !== -1) waiters.splice(i, 1);
+                    resolve(true);
+                };
+                waiters.push(check);
+                timer = setTimeout(() => {
+                    const i = waiters.indexOf(check);
+                    if (i !== -1) waiters.splice(i, 1);
+                    resolve(queue.length > 0);
+                }, timeoutMs);
+            });
+        }
+    };
+}
+
+// Never let a suggested/requested name escape the artifact directory.
+function sanitizeDownloadName(name) {
+    const base = path.basename(String(name || "").replace(/\\/g, "/")).trim();
+    const safe = base.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[.-]+$/, "").slice(0, 90);
+    return safe || "download";
+}
+
+async function readDownloadBuffer(download) {
+    if (typeof download.createReadStream === "function") {
+        const stream = await download.createReadStream();
+        const chunks = [];
+        let bytes = 0;
+        for await (const chunk of stream) {
+            bytes += chunk.length;
+            if (bytes > DOWNLOAD_MAX_BYTES) throw new Error("the download is larger than " + (DOWNLOAD_MAX_BYTES / (1024 * 1024)) + " MB");
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
+        return Buffer.concat(chunks);
+    }
+    const filePath = typeof download.path === "function" ? await download.path() : null;
+    if (!filePath) throw new Error("the download offers no stream or local path");
+    const stat = fs.statSync(filePath);
+    if (stat.size > DOWNLOAD_MAX_BYTES) throw new Error("the download is larger than " + (DOWNLOAD_MAX_BYTES / (1024 * 1024)) + " MB");
+    return fs.readFileSync(filePath);
+}
+
+// No workspace (or no sink) still yields a readable file rather than losing the download.
+function saveDownloadToTemp(file, buffer) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-download-"));
+    const filePath = path.join(dir, file);
+    fs.writeFileSync(filePath, buffer);
+    return { path: filePath };
+}
+
+// Save one downloaded file and report what it is. `%PDF` in the first four bytes is the only
+// format claim PalSync makes; page counts are not inferred (compressed PDFs defeat cheap regexes).
+async function saveDownloadedFile(download, requested, deps, workspaceDir) {
+    if (typeof download.failure === "function") {
+        let failure = null;
+        try { failure = await download.failure(); } catch (e) { failure = e && e.message ? e.message : String(e); }
+        if (failure) return { error: "the download failed (" + failure + ")" };
+    }
+    let buffer;
+    try { buffer = await readDownloadBuffer(download); }
+    catch (e) {
+        return { error: "could not read the downloaded file (" + (e && e.message ? e.message : String(e)) + ")" };
+    }
+    const served = typeof download.suggestedFilename === "function" ? download.suggestedFilename() : "";
+    const file = sanitizeDownloadName(typeof requested === "string" ? requested : served);
+    const pdf = buffer.length >= DOWNLOAD_PDF_MAGIC.length &&
+        buffer.subarray(0, DOWNLOAD_PDF_MAGIC.length).toString("latin1") === DOWNLOAD_PDF_MAGIC;
+    let saved = null;
+    try {
+        saved = deps.saveDownload ? await deps.saveDownload({ file, buffer }) : saveDownloadToTemp(file, buffer);
+    } catch (e) { saved = null; }
+    if (!saved || !saved.path) {
+        return { error: "downloaded " + file + " (" + buffer.length + " bytes) but could not save it" +
+            (workspaceDir ? " under the workspace work-history directory." : " to a temporary directory.") };
+    }
+    return { file, path: saved.path, bytes: buffer.length, pdf };
+}
+
 // ---- the runner ------------------------------------------------------------------------------
 
 // Exercise the pal. Returns a structured result; never throws on a normal failure.
@@ -900,7 +1033,7 @@ function failureEvidenceLines(res) {
 // path and runs on the final screen after every step passed, before the browser closes.
 async function runExercise(session, guid, { steps, workflow, viewport, workspaceDir, initial, browser, capture } = {}, deps = {}) {
     const runId = makeRunId(steps, takeExerciseOrdinal(workspaceDir));
-    const problems = validateSteps(steps).concat(validateInitial(initial))
+    const problems = validateSteps(steps).concat(validateInitial(initial, steps))
         // Resolve upload paths before a test instance is minted: a missing fixture or a path that
         // escapes the workspace is a request problem, not a browser failure.
         .concat((Array.isArray(steps) ? steps : []).map((s, i) => {
@@ -991,9 +1124,11 @@ async function runExercise(session, guid, { steps, workflow, viewport, workspace
 }
 
 // Validate the optional initial-target request. Shape only — target normalization happens once in
-// runExercise via the shared normalizeTarget.
-function validateInitial(initial) {
+// runExercise via the shared normalizeTarget. When a later step saves a download, the initial action
+// itself may return the file and never render a screen, so its expect may be omitted.
+function validateInitial(initial, steps) {
     if (initial === undefined || initial === null) return [];
+    const downloads = Array.isArray(steps) && steps.some(s => s && s.download);
     if (typeof initial !== "object" || Array.isArray(initial)) return ["initial must be an object with action/params/page/expect"];
     const errs = [];
     const known = new Set(["action", "params", "page", "expect"]);
@@ -1012,7 +1147,7 @@ function validateInitial(initial) {
     // An expect-only initial stays valid — it verifies the pal's default screen, which needs no
     // targeting navigation to reach. Caught here, in request validation, before any Test/browser
     // work starts.
-    if ((initial.action || initial.page) && (initial.expect === undefined ||
+    if ((initial.action || initial.page) && !downloads && (initial.expect === undefined ||
         (Array.isArray(initial.expect) && initial.expect.every(x => typeof x === "string" && x.trim()) && !initial.expect.length))) {
         errs.push("initial.action/page targets a specific screen, so initial.expect must list at least one non-empty visible string proving that screen — a targeted exercise must verify its initial state before any step runs");
     }
@@ -1127,6 +1262,8 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
     const acceptedDialogs = [];
     let finalVisibleText = "";
     let potentialMutationStarted = false;
+    // Armed before the initial navigation: the first screen's action may itself be the download.
+    const downloads = steps.some(s => s && s.download) ? createDownloadCollector() : null;
 
     const open = await openAuthenticatedScreen(t, {
         viewport,
@@ -1135,8 +1272,10 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
         navOpts: EXERCISE_NAV_OPTS,
         contextTimeouts: { action: ACTION_TIMEOUT_MS, navigation: NAV_TIMEOUT_MS },
         stateTimeout: evidenceTimeout,
+        downloads,
         onPage: (pg) => {
             if (capture && capture.onPage) capture.onPage(pg);
+            if (downloads) downloads.attach(pg);
             // Listeners attach BEFORE any navigation so console/page errors, failed requests and
             // HTTP >= 400 responses during the auth redirect are captured too.
             events = attachBrowserEvidence(pg);
@@ -1190,6 +1329,14 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
                     category: "behavior", potentialMutationStarted, failedStep: i + 1, steps: results
                 }, pg, step, events, evidenceTimeout);
             };
+            // A download aborts its navigation; Playwright still reports an error although the
+            // file was produced. Only a declared download step may treat that abort as success.
+            const downloadAborted = async (e) => {
+                if (!step.download || !downloads) return false;
+                if (!isDownloadAbort(e && e.message ? e.message : e)) return false;
+                return downloads.waitForAny(deps.downloadAbortWaitMs != null ? deps.downloadAbortWaitMs : 1500);
+            };
+            let stepDownload = null;
             try {
                 if (isWeb && (step.page || step.action)) {
                     let path = step.page || "";
@@ -1198,7 +1345,11 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
                         const qs = new URLSearchParams(Object.assign({ action: step.action }, step.params || {}));
                         path += (path.indexOf("?") === -1 ? "?" : "&") + qs.toString();
                     }
-                    await (deps.waitForRenderablePage || waitForRenderablePage)(pg, base + String(path).replace(/^\/+/, ""), EXERCISE_NAV_OPTS);
+                    try {
+                        await (deps.waitForRenderablePage || waitForRenderablePage)(pg, base + String(path).replace(/^\/+/, ""), EXERCISE_NAV_OPTS);
+                    } catch (e) {
+                        if (!await downloadAborted(e)) throw e;
+                    }
                 }
                 if (step.login) {
                     // Platform login only: the platform's own /login form (#cp-login). Anything else
@@ -1258,8 +1409,23 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
                     if (target.error) return fail(target.error + "." + formatScreenHints(await screenHints(pg, evidenceTimeout)));
                     const before = await screenFingerprint(pg, evidenceTimeout);
                     potentialMutationStarted = true;
-                    await target.locator.click({ timeout: ACTION_TIMEOUT_MS });
-                    await waitForScreenSettle(pg, before);
+                    try {
+                        await target.locator.click({ timeout: ACTION_TIMEOUT_MS });
+                    } catch (e) {
+                        if (!await downloadAborted(e)) throw e;
+                    }
+                    // A download leaves the current page in place; the saved file is the evidence.
+                    if (!step.download) await waitForScreenSettle(pg, before);
+                }
+                if (step.download) {
+                    const waitMs = deps.downloadTimeoutMs != null ? deps.downloadTimeoutMs : DOWNLOAD_TIMEOUT_MS;
+                    const download = downloads ? await downloads.next({ timeoutMs: waitMs }) : null;
+                    if (!download) {
+                        return fail("no file was downloaded within " + Math.max(1, Math.round(waitMs / 1000)) + " s — the initial action or click did not produce a download." +
+                            formatScreenHints(await screenHints(pg, evidenceTimeout)));
+                    }
+                    stepDownload = await saveDownloadedFile(download, step.download, deps, workspaceDir);
+                    if (stepDownload.error) return fail(stepDownload.error);
                 }
             } catch (e) {
                 if (step.page || step.action || step.click || step.login) {
@@ -1297,7 +1463,7 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
                         const dialogs = acceptedDialogs.splice(0);
                         const hints = await screenHints(pg, evidenceTimeout);
                         results.push({ step: i + 1, label: stepLabel(step), pass: false,
-                            expect: lastChk.expect, absent: lastChk.absent, renderError: lastRenderError, dialogs, hints, url: sanitizeUrl(pg.url()) });
+                            expect: lastChk.expect, absent: lastChk.absent, renderError: lastRenderError, dialogs, hints, url: sanitizeUrl(pg.url()), download: stepDownload });
                         return attachEvidence({
                             ran: true, kind: t.kind, mode: "browser", pass: false, status: "failed",
                             category: "behavior", potentialMutationStarted, failedStep: i + 1, steps: results
@@ -1308,14 +1474,14 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
                         finalVisibleText = lastText;
                         const dialogs = acceptedDialogs.splice(0);
                         results.push({ step: i + 1, label: stepLabel(step), pass: true,
-                            expect: lastChk.expect, absent: lastChk.absent, renderError: null, dialogs, hints: null, url: sanitizeUrl(pg.url()) });
+                            expect: lastChk.expect, absent: lastChk.absent, renderError: null, dialogs, hints: null, url: sanitizeUrl(pg.url()), download: stepDownload });
                         break;
                     }
                     if (now() >= deadline) {
                         const dialogs = acceptedDialogs.splice(0);
                         const hints = await screenHints(pg, evidenceTimeout);
                         results.push({ step: i + 1, label: stepLabel(step), pass: false,
-                            expect: lastChk.expect, absent: lastChk.absent, renderError: null, dialogs, hints, url: sanitizeUrl(pg.url()) });
+                            expect: lastChk.expect, absent: lastChk.absent, renderError: null, dialogs, hints, url: sanitizeUrl(pg.url()), download: stepDownload });
                         return attachEvidence({
                             ran: true, kind: t.kind, mode: "browser", pass: false, status: "failed",
                             category: "behavior", potentialMutationStarted, failedStep: i + 1, steps: results
@@ -1338,7 +1504,7 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
             const hints = pass ? null : await screenHints(pg, evidenceTimeout);
             if (pass) finalVisibleText = text;
             results.push({ step: i + 1, label: stepLabel(step), pass,
-                           expect: chk.expect, absent: chk.absent, renderError, dialogs, hints, url: sanitizeUrl(pg.url()) });
+                           expect: chk.expect, absent: chk.absent, renderError, dialogs, hints, url: sanitizeUrl(pg.url()), download: stepDownload });
             if (!pass) return attachEvidence({
                 ran: true, kind: t.kind, mode: "browser", pass: false, status: "failed",
                 category: "behavior", potentialMutationStarted, failedStep: i + 1, steps: results
@@ -1414,6 +1580,11 @@ function formatExercise(res) {
     if (res.warnings && res.warnings.length) lines.push("  warnings:\n  - " + res.warnings.join("\n  - "));
     for (const s of res.steps || []) {
         lines.push((s.pass ? "  ✓ " : "  ✗ ") + "step " + s.step + " [" + s.label + "]");
+        if (s.download) {
+            lines.push("      download saved: " + s.download.path + " (" + s.download.bytes + " bytes" +
+                (s.download.pdf ? ", PDF" : "") + ")");
+            if (s.download.pdf) lines.push("      Read the PDF with the Read tool: " + s.download.path);
+        }
         if (s.error) lines.push("      error: " + s.error);
         for (const r of s.expect || []) {
             lines.push("      expect " + JSON.stringify(r.string) + ": " + (r.found ? "found in visible text" :
@@ -1439,4 +1610,4 @@ function formatExercise(res) {
     return lines.join("\n");
 }
 
-module.exports = { runExercise, resolveLoginCredentials, exerciseByFetch, exerciseByBrowser, validateSteps, validateInitial, webInitialPath, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, makeRunId, readExerciseOrdinal, takeExerciseOrdinal, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, makeFinalSnapshot, BROWSER_EVENTS_CAP, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };
+module.exports = { runExercise, resolveLoginCredentials, exerciseByFetch, exerciseByBrowser, validateSteps, validateInitial, webInitialPath, lintSteps, checkStep, checkBrowserStep, stepLabel, needsBrowser, hasWaitFor, formatExercise, applyRunId, makeRunId, readExerciseOrdinal, takeExerciseOrdinal, resolveClickTarget, browserFailureMessage, redactStepValues, redactSecretForms, makeFinalSnapshot, createDownloadCollector, sanitizeDownloadName, DOWNLOAD_TIMEOUT_MS, BROWSER_EVENTS_CAP, MAX_STEPS, WAIT_DEFAULT_TIMEOUT_MS, WAIT_MAX_TIMEOUT_MS, WAIT_DEFAULT_INTERVAL_MS, WAIT_MIN_INTERVAL_MS, FINAL_TEXT_CAP, FINAL_TEXT_TRUNCATE_MARK };

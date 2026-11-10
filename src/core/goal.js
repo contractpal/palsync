@@ -41,7 +41,7 @@ function parseScript(raw) {
     if (!Array.isArray(value.steps) || value.steps.length === 0) {
         return { script: null, scriptError: "steps must be a non-empty array" };
     }
-    const problems = validateSteps(value.steps).concat(validateInitial(value.initial));
+    const problems = validateSteps(value.steps).concat(validateInitial(value.initial, value.steps));
     if (value.workflow !== undefined && !SCRIPT_WORKFLOWS.includes(value.workflow)) {
         problems.push("workflow must be console, web, or transaction");
     }

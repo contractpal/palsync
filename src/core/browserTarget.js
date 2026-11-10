@@ -125,6 +125,12 @@ function withBound(promise, ms, fallback) {
 
 const STATE_TIMEOUT_MS = 5000;
 
+// Playwright reports a navigation that became a file download as net::ERR_ABORTED (older) or
+// "Download is starting" (current Chromium). Neither is a navigation failure when a file arrived.
+function isDownloadAbort(message) {
+    return /net::ERR_ABORTED|Download is starting/i.test(String(message || ""));
+}
+
 // What is the browser actually showing? Bounded, credential-free, and cheap.
 async function observeScreen(pg, boundMs = STATE_TIMEOUT_MS) {
     try {
@@ -270,7 +276,7 @@ function browserPrimitives(deps = {}) {
 // action could execute — a missing/failed browser, or a login redirect (an unauthenticated console
 // request is bounced to login, so the action was never dispatched). Any failure after an
 // action-bearing navigation was issued sets potentialMutationStarted and is never retryable.
-async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, onPage, afterLanding, afterLandingMutates, contextTimeouts, stateTimeout } = {}, deps = {}) {
+async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, onPage, afterLanding, afterLandingMutates, contextTimeouts, stateTimeout, downloads } = {}, deps = {}) {
     const prim = browserPrimitives(deps);
     const isWeb = t.kind === "web";
     if (!prim.loadChromium()) {
@@ -318,8 +324,18 @@ async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, o
         potentialMutationStarted = resolved.dispatched;
         await prim.waitForRenderablePage(pg, resolved.url, navOpts || {});
     } catch (e) {
-        const landedLogin = (() => { try { return !isWeb && prim.isLoginRedirect(pg.url()); } catch { return false; } })();
         const msg = (e && e.message ? e.message.split("\n")[0] : String(e)).replace(/https?:\/\/\S+/g, "<url>");
+        // A console action may return a download instead of a screen (c:createDownloadResponse).
+        // Playwright cancels the navigation and rejects with net::ERR_ABORTED; the file, queued by
+        // the caller's download collector, is the result. This is NOT a targeting failure and must
+        // never be retried — the action was already dispatched.
+        if (downloads && isDownloadAbort(msg) &&
+            await downloads.waitForAny(deps.downloadAbortWaitMs != null ? deps.downloadAbortWaitMs : 1500)) {
+            return { ok: true, browser, bctx, pg, viewport: vp, authDiagnostics: withLanding(pg),
+                     state: { verified: null, expect: [], observed: { title: null, headings: [] } },
+                     potentialMutationStarted, downloadStarted: true };
+        }
+        const landedLogin = (() => { try { return !isWeb && prim.isLoginRedirect(pg.url()); } catch { return false; } })();
         return { ok: false, browser, bctx, pg, viewport: vp, authDiagnostics: withLanding(pg),
                  status: "blocked", category: landedLogin ? "auth" : "navigation",
                  retryable: landedLogin || !resolved.dispatched,
@@ -413,7 +429,7 @@ async function attemptWithFreshTest(session, guid, testOpts, attempt, deps = {})
 }
 
 module.exports = {
-    normalizeTarget, buildTargetUrl, observeScreen, verifyState, readMatchText, describeTargetMismatch, isScalar,
+    normalizeTarget, buildTargetUrl, observeScreen, verifyState, readMatchText, describeTargetMismatch, isScalar, isDownloadAbort,
     deriveWebBase, resolveTargetUrl, openAuthenticatedScreen, attemptWithFreshTest, STATE_TIMEOUT_MS,
     authDiagnostics, formatAuthDiagnostics, withPalTestTurn, withBound
 };
