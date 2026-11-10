@@ -25,23 +25,33 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 RUNS="$ROOT/eval/runs"
 MAP="$SCRIPT_DIR/runs.map"
-SPECS="$ROOT/eval/specs/01_crud_equipment_checkout"
-GOAL_MD="$SCRIPT_DIR/01_equipment_checkout/GOAL.md"
+
+# Folder prefix -> frozen arm-A spec dir and goal scenario dir.
+scenario_dirs() {
+  case "$1" in
+    goal01_*) echo "$ROOT/eval/specs/01_crud_equipment_checkout $SCRIPT_DIR/01_equipment_checkout" ;;
+    goal03_*) echo "$ROOT/eval/specs/03_console_tx_service_requests $SCRIPT_DIR/03_service_requests" ;;
+    *) echo "" ;;
+  esac
+}
 
 DO_SETUP=0
 DO_RESET=0
-for arg in "$@"; do
-  case "$arg" in
+ONLY=""
+while [ $# -gt 0 ]; do
+  case "$1" in
     --setup) DO_SETUP=1 ;;
     --reset) DO_RESET=1 ;;
-    *) echo "unknown argument: $arg (use --setup and/or --reset)" >&2; exit 1 ;;
+    --only) shift; ONLY="${1:-}" ;;
+    *) echo "unknown argument: $1 (use --setup, --reset, --only <folder-prefix>)" >&2; exit 1 ;;
   esac
+  shift
 done
 
+# --only limits every phase (including --reset) to folders with this prefix.
+selected() { [ -z "$ONLY" ] || case "$1" in "$ONLY"*) return 0 ;; *) return 1 ;; esac; }
+
 [ -f "$MAP" ] || { echo "missing $MAP" >&2; exit 1; }
-[ -f "$GOAL_MD" ] || { echo "missing $GOAL_MD" >&2; exit 1; }
-[ -f "$SPECS/SPEC.md" ] || { echo "missing $SPECS/SPEC.md" >&2; exit 1; }
-[ -f "$SPECS/EXECUTION.md" ] || { echo "missing $SPECS/EXECUTION.md" >&2; exit 1; }
 
 valid_folder() {
   case "$1" in
@@ -54,12 +64,18 @@ valid_folder() {
 # cannot leave two competing instruction sets in place. Never writes oracle.json.
 stage() {
   local folder="$1" arm="$2"
-  local dest="$RUNS/$folder"
+  local dest="$RUNS/$folder" dirs specs goal
+  dirs="$(scenario_dirs "$folder")"
+  [ -n "$dirs" ] || { echo "  ! $folder: unknown scenario prefix, skipped" >&2; return 1; }
+  specs="${dirs%% *}"; goal="${dirs##* }"
+  for f in "$specs/SPEC.md" "$specs/EXECUTION.md" "$goal/GOAL.md"; do
+    [ -f "$f" ] || { echo "  ! missing $f" >&2; return 1; }
+  done
   mkdir -p "$dest"
   rm -f "$dest/SPEC.md" "$dest/EXECUTION.md" "$dest/GOAL.md"
   case "$arm" in
-    A) cp "$SPECS/SPEC.md" "$SPECS/EXECUTION.md" "$dest/" ;;
-    B|C|D) cp "$GOAL_MD" "$dest/" ;;
+    A) cp "$specs/SPEC.md" "$specs/EXECUTION.md" "$dest/" ;;
+    B|C|D) cp "$goal/GOAL.md" "$dest/" ;;
     *) echo "  ! $folder: unknown arm \"$arm\", skipped" >&2; return 1 ;;
   esac
   printf '%s\n' "$arm" > "$dest/.eval-arm"
@@ -71,6 +87,7 @@ if [ "$DO_RESET" -eq 1 ]; then
   while read -r folder _pal _arm _rest; do
     [ -z "${folder:-}" ] && continue
     case "$folder" in \#*) continue ;; esac
+  selected "$folder" || continue
     if ! valid_folder "$folder"; then
       echo "  ! refusing unsafe folder name: $folder" >&2
       continue
@@ -88,6 +105,7 @@ echo "== STAGE =="
 while read -r folder pal arm url _rest; do
   [ -z "${folder:-}" ] && continue
   case "$folder" in \#*) continue ;; esac
+  selected "$folder" || continue
   if ! valid_folder "$folder"; then
     echo "  ! $folder: unsafe folder name, skipped" >&2
     continue
@@ -126,6 +144,7 @@ fi
 while read -r folder pal arm url _rest; do
   [ -z "${folder:-}" ] && continue
   case "$folder" in \#*) continue ;; esac
+  selected "$folder" || continue
   valid_folder "$folder" || continue
   dest="$RUNS/$folder"
   echo "  setup $folder  (pal: $pal, arm: $arm)"

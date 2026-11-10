@@ -25,7 +25,15 @@ const os = require("os");
 const path = require("path");
 
 const ROW_SCHEMA = "palsync/goal-eval-row/1";
-const ORACLE_DEFAULT = path.join(__dirname, "..", "eval", "goal", "01_equipment_checkout", "oracle.json");
+const GOAL_DIR = path.join(__dirname, "..", "eval", "goal");
+const ORACLE_BY_PREFIX = { goal01_: "01_equipment_checkout", goal03_: "03_service_requests" };
+
+// The run folder prefix names its scenario; unknown prefixes fall back to scenario 01.
+function defaultOracle(workspaceDir) {
+    const folder = path.basename(path.resolve(workspaceDir || "."));
+    const prefix = Object.keys(ORACLE_BY_PREFIX).find(p => folder.startsWith(p));
+    return path.join(GOAL_DIR, ORACLE_BY_PREFIX[prefix || "goal01_"], "oracle.json");
+}
 const SCORES_FILE = path.join(__dirname, "..", "eval", "goal", "scores.jsonl");
 
 // Files that carry task instructions (not pal source) and directories that never hold pal source.
@@ -68,7 +76,7 @@ function parseArgs(argv) {
         arm: String(flags.arm).toUpperCase(),
         trial,
         visual,
-        oracle: path.resolve(flags.oracle || ORACLE_DEFAULT),
+        oracle: path.resolve(flags.oracle || defaultOracle(flags.dir)),
         dryRun: flags.dryRun
     };
 }

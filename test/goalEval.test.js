@@ -11,19 +11,29 @@ const {
 } = require("../scripts/score-goal-eval");
 const { tmpWorkspace } = require("./helpers");
 
-const ORACLE_FILE = path.join(__dirname, "..", "eval", "goal", "01_equipment_checkout", "oracle.json");
+const GOAL_DIR = path.join(__dirname, "..", "eval", "goal");
+const ORACLE_FILES = fs.readdirSync(GOAL_DIR)
+    .map(name => path.join(GOAL_DIR, name, "oracle.json"))
+    .filter(file => fs.existsSync(file));
 const CHECK_KINDS = new Set(["exercise", "source-contains", "validate", "test", "human"]);
 
-function readOracle() {
-    return JSON.parse(fs.readFileSync(ORACLE_FILE, "utf8"));
+function readOracles() {
+    return ORACLE_FILES.map(file => JSON.parse(fs.readFileSync(file, "utf8")));
+}
+
+// Every check of every scenario, so each guard covers all oracles.
+function allChecks() {
+    return readOracles().flatMap(oracle => oracle.checks);
 }
 
 test("oracle.json parses and every exercise check passes step validation", () => {
-    const oracle = readOracle();
-    assert.equal(oracle.schema, "palsync/goal-oracle/1");
-    assert.ok(Array.isArray(oracle.checks) && oracle.checks.length > 0, "oracle has checks");
+    assert.ok(ORACLE_FILES.length >= 2, "found the scenario oracles");
+    for (const oracle of readOracles()) {
+        assert.equal(oracle.schema, "palsync/goal-oracle/1");
+        assert.ok(Array.isArray(oracle.checks) && oracle.checks.length > 0, "oracle has checks");
+    }
     const seen = new Set();
-    for (const check of oracle.checks) {
+    for (const check of allChecks()) {
         assert.ok(typeof check.id === "string" && check.id, "every check has an id");
         assert.ok(!seen.has(check.id), "duplicate check id " + check.id);
         seen.add(check.id);
@@ -44,7 +54,7 @@ test("oracle.json parses and every exercise check passes step validation", () =>
 test("oracle exercise variants carry no preflight lint errors", () => {
     // runExercise refuses steps with lint errors before it opens a browser, so an oracle variant
     // with one could never pass, whatever the build.
-    for (const check of readOracle().checks) {
+    for (const check of allChecks()) {
         if (check.kind !== "exercise") continue;
         for (const variant of checkVariants(check)) {
             assert.deepEqual(lintSteps(variant.steps).errors, [],

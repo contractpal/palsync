@@ -60,6 +60,17 @@ models inside one comparison.
 - `costUsd`, `durationMs`, `numTurns` from Claude Code's JSON result.
 - `pushes`, `failedPushes` from PalSync tool evidence and usage.
 
+## Scenario 03 (harder)
+
+`03_service_requests/` adds a console plus a transaction page. Its runs are `goal03_*` in
+`runs.map` (arms A, B, D; two trials each). Stage only these with `setup.sh --only goal03_`. The
+scorer picks the oracle from the folder prefix.
+
+`R7_customer_completion` is scored by hand from the source: the transaction workflow must find
+the row by `txId`, set `status`, `resolutionNote`, and `completedAt`, and show the required copy.
+A fresh test transaction has no `serviceRequests` row, so `pal_exercise` cannot check it.
+Calibration: `goal03_A1` passed 10/10 automatic checks with no oracle change.
+
 ## Decision rule
 
 Goal mode wins if an arm in B–D has an oracle pass rate equal to or higher than A across 3

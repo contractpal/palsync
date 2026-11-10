@@ -1,0 +1,226 @@
+{
+  "schema": "palsync/goal-oracle/1",
+  "scenario": "03_service_requests",
+  "note": "Evaluator-owned. Never copy into a run workspace. Each exercise check is self-contained: it creates its own {{runId}} records. A check with variants passes when any variant passes: a goal leaves the UI shape to the model. Calibrate against a known-good build before scoring (README).",
+  "workflow": "console",
+  "checks": [
+    {
+      "id": "R1_create",
+      "goal": 1,
+      "kind": "exercise",
+      "steps": [
+        {
+          "click": "New request",
+          "expect": [
+            "Customer email",
+            "Description"
+          ]
+        },
+        {
+          "fill": {
+            "customerEmail": "c{{runId}}@example.com",
+            "description": "Printer jam {{runId}}"
+          },
+          "click": "Create request",
+          "expect": [
+            "c{{runId}}@example.com"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "R2_email_checked",
+      "goal": 2,
+      "kind": "exercise",
+      "steps": [
+        {
+          "click": "New request"
+        },
+        {
+          "fill": {
+            "customerEmail": "not-an-email",
+            "description": "Bad email {{runId}}"
+          },
+          "click": "Create request",
+          "expect": [
+            "Enter a valid customer email."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "R3_description_required",
+      "goal": 3,
+      "kind": "exercise",
+      "steps": [
+        {
+          "click": "New request"
+        },
+        {
+          "fill": {
+            "customerEmail": "c{{runId}}@example.com",
+            "description": ""
+          },
+          "click": "Create request",
+          "expect": [
+            "Description is required."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "R4_filter",
+      "goal": 4,
+      "kind": "exercise",
+      "steps": [
+        {
+          "click": "New request",
+          "expect": [
+            "Customer email",
+            "Description"
+          ]
+        },
+        {
+          "fill": {
+            "customerEmail": "c{{runId}}@example.com",
+            "description": "Filter me {{runId}}"
+          },
+          "click": "Create request",
+          "expect": [
+            "c{{runId}}@example.com"
+          ]
+        },
+        {
+          "fill": {
+            "status": "Cancelled"
+          },
+          "click": "Filter",
+          "absent": [
+            "c{{runId}}@example.com"
+          ]
+        },
+        {
+          "fill": {
+            "status": "Open"
+          },
+          "click": "Filter",
+          "expect": [
+            "c{{runId}}@example.com"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "R5_detail",
+      "goal": 5,
+      "kind": "exercise",
+      "steps": [
+        {
+          "click": "New request",
+          "expect": [
+            "Customer email",
+            "Description"
+          ]
+        },
+        {
+          "fill": {
+            "customerEmail": "c{{runId}}@example.com",
+            "description": "Detail me {{runId}}"
+          },
+          "click": "Create request",
+          "expect": [
+            "c{{runId}}@example.com"
+          ]
+        },
+        {
+          "click": "View",
+          "within": "tr:has-text(\"c{{runId}}@example.com\")",
+          "expect": [
+            "Detail me {{runId}}",
+            "c{{runId}}@example.com"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "R6_cancel",
+      "goal": 6,
+      "kind": "exercise",
+      "steps": [
+        {
+          "click": "New request",
+          "expect": [
+            "Customer email",
+            "Description"
+          ]
+        },
+        {
+          "fill": {
+            "customerEmail": "c{{runId}}@example.com",
+            "description": "Cancel me {{runId}}"
+          },
+          "click": "Create request",
+          "expect": [
+            "c{{runId}}@example.com"
+          ]
+        },
+        {
+          "click": "View",
+          "within": "tr:has-text(\"c{{runId}}@example.com\")"
+        },
+        {
+          "click": "Cancel request",
+          "expect": [
+            "Cancelled"
+          ],
+          "absent": [
+            "Cancel request"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "R7_customer_completion",
+      "goal": 7,
+      "kind": "human",
+      "rubric": "Open a created request's transaction as the customer; confirm the heading, description, note field, Confirm complete, the thank-you line, and that the console row becomes Completed with the note and completed time. Designed after calibration (README)."
+    },
+    {
+      "id": "R8_empty_state",
+      "goal": 8,
+      "kind": "source-contains",
+      "text": "No service requests found.",
+      "why": "Shared eval data makes a live empty list unreliable; require the exact copy in pal source."
+    },
+    {
+      "id": "R9a_validate",
+      "goal": 9,
+      "kind": "validate",
+      "maxErrors": 0
+    },
+    {
+      "id": "R9b_compile_console",
+      "goal": 9,
+      "kind": "test",
+      "workflow": "console",
+      "maxNotes": 0
+    },
+    {
+      "id": "R9c_compile_transaction",
+      "goal": 9,
+      "kind": "test",
+      "workflow": "transaction",
+      "maxNotes": 0
+    },
+    {
+      "id": "R9d_visual",
+      "goal": 9,
+      "kind": "human",
+      "rubric": "Score desktop + mobile screenshots of the request list, new-request form, detail, and transaction page 0-2 on: focal point/primary action, spacing, typography hierarchy, alignment, state clarity, responsive layout. Record the average."
+    }
+  ],
+  "limits": [
+    "R1 cannot prove a live transaction exists; R5/R7 human review covers the transaction state.",
+    "R2/R3 check the message only; they cannot prove nothing was written."
+  ]
+}

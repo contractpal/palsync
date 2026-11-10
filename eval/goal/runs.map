@@ -13,3 +13,10 @@ goal01_C3   goal-01-c3   C
 goal01_D1   goal-01-d1   D
 goal01_D2   goal-01-d2   D
 goal01_D3   goal-01-d3   D
+# Scenario 03 (service requests: console + transaction). Arms A, B, D only.
+goal03_A1   goal-03-a1   A
+goal03_A2   goal-03-a2   A
+goal03_B1   goal-03-b1   B
+goal03_B2   goal-03-b2   B
+goal03_D1   goal-03-d1   D
+goal03_D2   goal-03-d2   D
