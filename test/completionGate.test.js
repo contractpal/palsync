@@ -272,7 +272,7 @@ test("review=off and review=ask complete without any review", () => {
         assert.equal(gate.state, "COMPLETE");
         assert.equal(gate.allow, true);
         assert.equal(gate.completionPassed, true);
-        assert.match(gate.message, /All scripted acceptance checks are verified; review-only: A2\./);
+        assert.match(gate.message, /All scripted acceptance checks are verified\./);
         assert.match(gate.message, review === "ask" ? /Ask me/ : /Off/);
         assert.equal(claudeStopOutput(gate), null, "a satisfied gate never blocks Stop");
         fs.rmSync(ws, { recursive: true, force: true });

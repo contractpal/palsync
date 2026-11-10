@@ -1692,7 +1692,8 @@ const TOOLS = [
                 "\n  " + (visualGate.complete
                     ? "Responsive coverage (pal-review): desktop and mobile captured for this screen."
                     : visualGate.missing.length
-                        ? "Responsive coverage (pal-review): " + visualGate.missing.join(" and ") + " not yet captured for this screen."
+                        ? "Responsive coverage (pal-review): clean " + visualGate.missing.join(" and ") + " capture still needed for this screen" +
+                            (visualGate.missing.includes(visualGate.viewportName) ? "; this capture was not clean." : ".")
                         : "Responsive coverage (pal-review): this screen is covered; still missing clean captures for " + visualGate.incomplete.join(", ") + ".") +
                 (echoedPng ? "\n  PNG saved to: " + echoedPng : "") +
                 (echoedAudit ? "\n  Design audit saved to: " + echoedAudit : "") + errBlock + auditBlock +
