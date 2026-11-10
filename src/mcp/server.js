@@ -109,11 +109,17 @@ function createServer(getCtx, workspaceDir) {
                     const content = (res && Array.isArray(res.content))
                         ? res.content
                         : [{ type: "text", text: res.message || stableStringify(res, 2) }];
+                    // ONE central isError rule: a result is an MCP error only when the tool marked it
+                    // toolError (invalid request / unusable environment) or set isError itself. A
+                    // behavioral outcome — a failed exercise, a render error, a compile/validation
+                    // finding, a push/lock refusal — is a normal result the agent must read, never an
+                    // error. Flagged text must stand alone: Pi throws with the joined text only.
+                    const toolError = !!(res && (res.toolError === true || res.isError === true));
                     // T3: meter palsync's own context contribution (bytes + est. tokens returned to the agent).
                     if (ctx && ctx.workspaceDir) {
                         const stats = usage.contentStats(content);
                         usage.recordToolCall(ctx.workspaceDir, t.name, stats.bytes, stats.tokens, {
-                            errored: !!(res && res.isError),
+                            errored: toolError,
                             rawBytes: res && res._usage && res._usage.rawBytes != null ? res._usage.rawBytes : stats.bytes,
                             returnedBytes: stats.bytes,
                             resultCacheHits: Math.max(0, lintCache.readStats(workspaceDir).hits - cacheBefore.hits),
@@ -121,8 +127,8 @@ function createServer(getCtx, workspaceDir) {
                             durationMs: Number(process.hrtime.bigint() - started) / 1e6
                         });
                     }
-                    if (res && Array.isArray(res.content)) return { content, isError: res.isError };
-                    return { content };
+                    if (res && Array.isArray(res.content)) return { content, isError: toolError ? true : res.isError };
+                    return toolError ? { content, isError: true } : { content };
                 } catch (err) {
                     logErr("tool '" + t.name + "' failed: " + stackOf(err));
                     const content = [{ type: "text", text: "palsync tool '" + t.name + "' failed: " + (err && err.message ? err.message : String(err)) }];

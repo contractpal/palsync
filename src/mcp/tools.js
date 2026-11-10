@@ -926,6 +926,40 @@ function persistExerciseFailure(ctx, res, steps, viewport) {
     return artifacts;
 }
 
+// ---- MCP error classification (server.js sets isError from these marks) ------------------------
+// Mark a result toolError ONLY when the tool could not do its operation: the REQUEST was invalid
+// (bad steps/expect/workflow/dataset) or the ENVIRONMENT was unavailable (Playwright/Chromium
+// missing, credentials or login session unusable). A behavioral outcome — a failed exercise, a
+// render error, a compile/validation finding, a push/lock refusal — is a normal result and must
+// stay unmarked. The message of a marked result must stand alone: Pi throws with only the text.
+const SCREENSHOT_INVALID_BLOCKED = new Set([
+    // src/core/screenshot.js request problems
+    "invalid-expect", "invalid-steps", "web-action-not-allowed",
+    "unknown-workflow-type", "unknown-workflow-name",
+    // src/core/browserTarget.js normalizeTarget request problems
+    "invalid-params", "params-require-action", "invalid-action",
+    "reserved-param", "conflicting-params"
+]);
+
+function exerciseToolError(res) {
+    if (!res || typeof res !== "object") return false;
+    if (res.invalid === true || res.status === "invalid") return true;
+    if (res.available === false) return true; // Playwright/Chromium not installed
+    return res.status === "blocked" && (res.category === "credentials" || res.category === "auth");
+}
+
+function screenshotToolError(res) {
+    if (!res || typeof res !== "object") return false;
+    if (res.available === false) return true; // Playwright/Chromium not installed
+    if (res.status === "blocked" && res.category === "auth") return true; // login session unusable
+    return res.captured !== true && SCREENSHOT_INVALID_BLOCKED.has(res.blocked);
+}
+
+function datasetQueryToolError(result) {
+    if (!result || result.ok !== false) return false;
+    return result.error === "dataset is required" || /^REFUSED: /.test(result.error || "");
+}
+
 const TOOLS = [
     {
         name: "pal_status",
@@ -1510,6 +1544,7 @@ const TOOLS = [
             const res = await runScreenshot(ctx.session, ctx.record.palGuid, { page, viewport, fullPage, imageless, workflow, workflowName, action, params, expect, initial, steps, workspaceDir: ctx.workspaceDir });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
             if (!res.captured) {
+                if (screenshotToolError(res)) res.toolError = true;
                 let persistNote = "";
                 if (res.available === false) {
                     res.evidenceRecorded = appendToolEvidence(ctx.workspaceDir, Object.assign(evidenceBase(screenshotEvidenceIdentity({ kind: workflow, workflowName: normalizedWorkflowName, page, action })), {
@@ -1742,7 +1777,7 @@ const TOOLS = [
             let goalCheck = null;
             if (check !== undefined) {
                 if (steps !== undefined || initial !== undefined || workflow !== undefined || viewport !== undefined || browser !== undefined) {
-                    return { ran: false, check, message: "pal_exercise — check " + JSON.stringify(check) +
+                    return { ran: false, check, toolError: true, message: "pal_exercise — check " + JSON.stringify(check) +
                         " runs the GOAL.md script; omit steps, initial, workflow, viewport, and browser." };
                 }
                 if (!ctx.workspaceDir) {
@@ -1774,7 +1809,7 @@ const TOOLS = [
                 browser = goalCheck.script.browser;
             }
             if (!Array.isArray(steps) || !steps.length) {
-                return { ran: false, message: "pal_exercise — pass steps, or check with a GOAL.md acceptance-check id." };
+                return { ran: false, toolError: true, message: "pal_exercise — pass steps, or check with a GOAL.md acceptance-check id." };
             }
             const res = await runExercise(ctx.session, ctx.record.palGuid, { steps, workflow, viewport, initial, browser, workspaceDir: ctx.workspaceDir });
             if (ctx.lifecycle) ctx.lifecycle.onActivity();
@@ -1807,6 +1842,7 @@ const TOOLS = [
             // Functional exercise proves behavior, not responsive visual quality. Only paired,
             // audited pal_screenshot captures can satisfy the page-level render gate.
             const out = Object.assign({}, res, { message: formatExercise(res) });
+            if (exerciseToolError(res)) out.toolError = true;
             if (res.ran === true && res.pass === true) {
                 const boundedUnique = values => [...new Set(values.map(value => String(value).slice(0, 80)))].slice(0, 10);
                 const summary = {
@@ -2493,7 +2529,9 @@ const TOOLS = [
             const result = await executeDatasetQuery(ctx.workspaceDir, ctx.session, ctx.record.palGuid, args,
                 () => resolvePalForRead(ctx));
             if (!result.ok) {
-                return { ok: false, error: result.error, message: result.error };
+                const out = { ok: false, error: result.error, message: result.error };
+                if (datasetQueryToolError(result)) out.toolError = true;
+                return out;
             }
             const note = result.truncated ? " (truncated to fit response cap)" : "";
             const rowsJson = stableStringify(result.rows, 2);
