@@ -1,0 +1,15 @@
+# eval/goal/runs.map — one line per goal-eval run (4 arms x 3 trials).
+# Columns: <folder> <server_pal_name> <arm> [cloud_url]
+# folder is created under eval/runs/. Each run needs its own EMPTY console pal.
+goal01_A1   goal-01-a1   A
+goal01_A2   goal-01-a2   A
+goal01_A3   goal-01-a3   A
+goal01_B1   goal-01-b1   B
+goal01_B2   goal-01-b2   B
+goal01_B3   goal-01-b3   B
+goal01_C1   goal-01-c1   C
+goal01_C2   goal-01-c2   C
+goal01_C3   goal-01-c3   C
+goal01_D1   goal-01-d1   D
+goal01_D2   goal-01-d2   D
+goal01_D3   goal-01-d3   D
