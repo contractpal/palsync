@@ -81,9 +81,14 @@ function checkGoal(workspaceDir, parsed, reviewMode) {
             blocked.map(check => check.id).join(", ") + ".",
             { checks });
     }
+    // Scripted checks are verified by pal_exercise evidence above; review-only checks have no
+    // script, so naming them keeps the message from claiming more than the gate proved.
+    const reviewOnly = checks.filter(check => !check.scripted).map(check => check.id);
     return completeWithReview(workspaceDir, reviewMode, { checks }, {
         allDone: "All script-verified goal checks pass",
-        complete: "All goal acceptance checks are verified."
+        complete: reviewOnly.length
+            ? "All scripted acceptance checks are verified; review-only: " + reviewOnly.join(", ") + "."
+            : "All goal acceptance checks are verified."
     });
 }
 

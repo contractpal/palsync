@@ -199,6 +199,33 @@ describe("runTest workflow selection", () => {
         assert.equal(res.kind, "transaction");
     });
 
+    test("preferAction picks console over the default web workflow", async () => {
+        const { runTest } = require("../src/core/test.js");
+        const res = await runTest({}, "guid", { preferAction: true });
+        assert.equal(res.ran, true);
+        assert.equal(res.kind, "console");
+        assert.equal(testWorkflowCalls[0], "Console");
+    });
+
+    test("preferAction falls back to transaction when no console workflow exists", async () => {
+        const lockMod = require(require.resolve("../src/core/lock"));
+        lockMod.acquireByGuid = async () => ({ acquired: true, resolved: { id: "pal-1" }, getPalResp: { pal: { workflows: { entry: [
+            { string: "main.web", Workflow: { workflowType: 9 } },
+            { string: "tx", Workflow: { workflowType: 2 } }
+        ] } } } });
+        const { runTest } = require("../src/core/test.js");
+        const res = await runTest({}, "guid", { preferAction: true });
+        assert.equal(res.kind, "transaction");
+        assert.equal(testWorkflowCalls[0], "Pal");
+    });
+
+    test("explicit kind still wins over preferAction", async () => {
+        const { runTest } = require("../src/core/test.js");
+        const res = await runTest({}, "guid", { kind: "web", preferAction: true });
+        assert.equal(res.kind, "web");
+        assert.equal(testWorkflowCalls[0], "Web");
+    });
+
     test("console-system validates through System without treating its opaque job token as a URL", async () => {
         const { runTest } = require("../src/core/test.js");
         const res = await runTest({}, "guid", { kind: "console-system" });

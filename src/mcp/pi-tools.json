@@ -619,7 +619,7 @@
                 }
               },
               "click": {
-                "description": "Exact visible text or simple selector to click.",
+                "description": "Exact visible text, aria-label, or CSS selector to click.",
                 "type": "string"
               },
               "login": {

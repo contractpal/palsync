@@ -191,13 +191,27 @@ function serverNoteSeverity(note, validated) {
     return validated ? "warn" : "error";
 }
 
+// Server ValidationResult carries lineNumber; local notes may use line. Only a positive finite
+// number is a usable source location — -1 means "no line".
+function serverNoteLine(note) {
+    if (!note || typeof note !== "object") return null;
+    // XML-parsed notes may carry the number as a string ("12").
+    const line = Number(note.lineNumber !== undefined ? note.lineNumber : note.line);
+    return Number.isInteger(line) && line > 0 ? line : null;
+}
+
 function serverFindings(notes, validated) {
-    return (notes || []).map(note => ({
-        severity: serverNoteSeverity(note, validated),
-        code: note.group || "serverValidation",
-        file: note.object || null,
-        message: note.message || "Server validation note"
-    }));
+    return (notes || []).map(note => {
+        const finding = {
+            severity: serverNoteSeverity(note, validated),
+            code: note.group || "serverValidation",
+            file: note.object || null,
+            message: note.message || "Server validation note"
+        };
+        const line = serverNoteLine(note);
+        if (line != null) finding.line = line;
+        return finding;
+    });
 }
 
 function seoEnvelopeResults(res) {
@@ -475,7 +489,8 @@ function recordScreenshotEvidence(ctx, { route, viewportName, clean }) {
         return evidence.desktop !== true || evidence.mobile !== true;
     });
     const complete = Object.keys(ctx.renderViewportEvidence).length > 0 && incomplete.length === 0;
-    return { complete, route: routeKey, viewportName, clean: clean === true, incomplete };
+    const missing = ["desktop", "mobile"].filter(v => ctx.renderViewportEvidence[routeKey][v] !== true);
+    return { complete, route: routeKey, viewportName, clean: clean === true, incomplete, missing };
 }
 
 // pal_exercise step and initial-screen shapes. pal_screenshot reuses them without per-field
@@ -487,7 +502,7 @@ function exerciseStepSchema(doc = true) {
         action: d(z.string().optional(), "WEB workflow action invoked with query params."),
         params: d(z.record(z.union([z.string(), z.number()])).optional(), "WEB action query parameters."),
         fill: d(z.record(z.union([z.string(), z.number()])).optional(), "Input name/value pairs to fill before clicking."),
-        click: d(z.string().optional(), "Exact visible text or simple selector to click."),
+        click: d(z.string().optional(), "Exact visible text, aria-label, or CSS selector to click."),
         login: d(z.boolean().optional(), "Sign in on the platform login page the previous step reached; credentials are filled in for you and never shown."),
         as: d(z.string().optional(), "With login: test-account alias to sign in as; omit to use the developer's own account."),
         within: d(z.string().optional(), "CSS scope when click text matches multiple elements."),
@@ -548,7 +563,9 @@ function formatValidation(notes) {
     const fmt = (title, xs) => {
         const grouped = new Map();
         for (const value of xs) {
-            const text = (value.group || "?") + "/" + (value.object || "(general)") + ": " + value.message;
+            const line = serverNoteLine(value);
+            const text = (value.group || "?") + "/" + (value.object || "(general)") + ": " + value.message +
+                (line != null ? " (line " + line + ")" : "");
             grouped.set(text, (grouped.get(text) || 0) + 1);
         }
         return title + " (" + xs.length + "):\n" + Array.from(grouped, ([text, count]) =>
@@ -1672,7 +1689,11 @@ const TOOLS = [
                 (fullPage ? " (full page)" : "") + "\n  url=" + res.url + stateLine +
                 "\n  " + formatStyleStatus(res.styleStatus) +
                 "\n  " + formatDesignAudit(res.designAudit) +
-                "\n  Visual gate: " + (visualGate.complete ? "complete" : "incomplete; clean desktop + mobile still required for " + visualGate.incomplete.join(", ")) +
+                "\n  " + (visualGate.complete
+                    ? "Responsive coverage (pal-review): desktop and mobile captured for this screen."
+                    : visualGate.missing.length
+                        ? "Responsive coverage (pal-review): " + visualGate.missing.join(" and ") + " not yet captured for this screen."
+                        : "Responsive coverage (pal-review): this screen is covered; still missing clean captures for " + visualGate.incomplete.join(", ") + ".") +
                 (echoedPng ? "\n  PNG saved to: " + echoedPng : "") +
                 (echoedAudit ? "\n  Design audit saved to: " + echoedAudit : "") + errBlock + auditBlock +
                 (evidenceRecorded ? "" : persistWarning);

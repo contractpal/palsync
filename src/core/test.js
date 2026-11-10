@@ -105,6 +105,8 @@ function buildPreviewUrl(session, token, kind, profileId, workflowName) {
 //   kind: "console" | "console-system" | "web" | "transaction" (optional — auto-detected from the pal's workflows)
 //   workflowName: which workflow to run for console/transaction (optional; defaults to the
 //                 first of that kind, sans extension)
+//   preferAction: auto-detect console, then transaction, before the default web-first pick. Use
+//                 when the caller dispatches a console/transaction action; a WEB pal cannot.
 //   resolved: a previously-resolved pal (see core/resolve.js's resolveServerPalByGuid /
 //             refreshResolvedPal) to skip lock.acquireByGuid's own full-account resolve walk —
 //             callers that run this repeatedly against the same pal (e.g. Chip's ribbon) should
@@ -112,7 +114,7 @@ function buildPreviewUrl(session, token, kind, profileId, workflowName) {
 // Returns { ran, kind, success, validated, validation, profiles, _previewUrl, blocked }.
 // _previewUrl is underscored to signal "internal, do not surface" — the tool layer opens it and
 // drops it from the response.
-async function runTest(session, guid, { kind, workflowName, resolved } = {}) {
+async function runTest(session, guid, { kind, workflowName, resolved, preferAction } = {}) {
     const lk = await lock.acquireByGuid(session, guid, { force: false, resolved });
     if (!lk.acquired) {
         return { ran: false, blocked: lk.blocked || "no-lock", holder: lk.holder, since: lk.since };
@@ -155,7 +157,8 @@ async function runTest(session, guid, { kind, workflowName, resolved } = {}) {
         }
         chosen = owner;
     } else {
-        chosen = avail.find(a => a.kind === "web") || avail[0];
+        chosen = (preferAction && (avail.find(a => a.kind === "console") || avail.find(a => a.kind === "transaction"))) ||
+            avail.find(a => a.kind === "web") || avail[0];
     }
     if (!chosen || !chosen.endpoint) return { ran: false, blocked: "unknown-workflow-type", kind, availableKinds: avail.map(a => a.kind) };
 

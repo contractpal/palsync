@@ -516,7 +516,9 @@ async function runScreenshot(session, guid, { page, viewport, fullPage, imageles
         }
     };
 
-    const res = await attemptWithFreshTest(session, guid, { kind: workflow, workflowName }, capture, deps);
+    // An action/params target only works on console/transaction, so prefer those kinds when the
+    // caller supplied one; without a target the default web-first auto-detection stays.
+    const res = await attemptWithFreshTest(session, guid, { kind: workflow, workflowName, preferAction: !!target }, capture, deps);
     if (res && typeof res === "object") delete res.retryable;
     return res;
 }

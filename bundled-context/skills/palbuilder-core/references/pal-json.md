@@ -197,7 +197,7 @@ asks for a desktop binding. It does not set the console icon or label.
 ```
 
 Same `{ "string", "<Type>" }` wrapper as every other section. `DesktopBinding` has exactly two
-fields worth setting: `name` and `icon`. `DesktopLabel`/`DesktopImage`/`consoleLabel`/`consoleImage`
+fields worth setting: `name` (the tile label) and `icon`. `DesktopLabel`/`DesktopImage`/`consoleLabel`/`consoleImage`
 are not `DesktopBinding` fields — the console icon/label are `consoleSettings.desktopImage`/`desktopLabel`.
 
 ---

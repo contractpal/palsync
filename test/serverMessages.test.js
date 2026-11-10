@@ -40,6 +40,19 @@ test("formatValidation: classifies known server noise as informational", () => {
     assert.match(out, /Console Desktop Image required/);
 });
 
+test("formatValidation: server line numbers are printed and part of the dedupe key", () => {
+    const out = formatValidation([
+        { group: "workflow", object: "equipment", message: "Unexpected token", lineNumber: 12 },
+        { group: "workflow", object: "equipment", message: "Unexpected token", lineNumber: 12 },
+        { group: "workflow", object: "equipment", message: "Unexpected token", lineNumber: 34 },
+        { group: "workflow", object: "equipment", message: "Unexpected token", lineNumber: -1 }
+    ]);
+    assert.match(out, /workflow\/equipment: Unexpected token \(line 12\) \(×2\)/);
+    assert.match(out, /workflow\/equipment: Unexpected token \(line 34\)/);
+    assert.match(out, /workflow\/equipment: Unexpected token$/m);
+    assert.doesNotMatch(out, /line -1/);
+});
+
 test("formatValidation: benign-only notes do not read as blockers", () => {
     const out = formatValidation([{ group: "workflow", object: "Validation", message: "vCPU: 1, batchSize: 1" }]);
     assert.match(out, /No blocking server validation notes/);

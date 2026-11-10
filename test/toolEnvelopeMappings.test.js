@@ -199,3 +199,14 @@ test("serverFindings honors server note code severity", () => {
     ]), ["error", "error", "error", "warn", "info", "warn"]);
     assert.strictEqual(serverFindings([{ message: "no code" }], false)[0].severity, "error");
 });
+
+test("serverFindings carries a positive server line number and drops invalid ones", () => {
+    const [withLine, withLineField, invalid] = serverFindings([
+        { code: 1, message: "Unexpected token", lineNumber: 12 },
+        { code: 1, message: "Unexpected token", line: 7 },
+        { code: 1, message: "Unexpected token", lineNumber: -1 }
+    ], false);
+    assert.strictEqual(withLine.line, 12);
+    assert.strictEqual(withLineField.line, 7);
+    assert.ok(!("line" in invalid), "line -1 must not become a finding line");
+});

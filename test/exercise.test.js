@@ -1145,9 +1145,73 @@ test("resolveClickTarget: ambiguous click suggests nearby unique within selector
 });
 
 test("resolveClickTarget: missing click reports the exact resolved Playwright locator", async () => {
-    const pg = { getByText() { return { async count() { return 0; } }; } };
+    const empty = { async count() { return 0; } };
+    const pg = {
+        getByText() { return empty; },
+        getByLabel() { return empty; },
+        locator() { return empty; }
+    };
     const out = await resolveClickTarget(pg, { click: "Save" });
     assert.match(out.error, /resolved Playwright locator: getByText\("Save", \{ exact: true \}\)/);
+    assert.match(out.error, /getByLabel\("Save", \{ exact: true \}\)/);
+    assert.match(out.error, /tried in order; none matched/);
+});
+
+test("resolveClickTarget: falls back to the aria-label when no exact text matches", async () => {
+    const target = { async count() { return 1; }, first() { return this; } };
+    const pg = {
+        getByText() { return { async count() { return 0; } }; },
+        getByLabel(text, opts) { assert.equal(text, "Reconnect"); assert.equal(opts.exact, true); return target; },
+        locator() { throw new Error("CSS strategy must not run when the aria-label matches"); }
+    };
+    const out = await resolveClickTarget(pg, { click: "Reconnect" });
+    assert.strictEqual(out.locator, target);
+});
+
+test("resolveClickTarget: CSS attribute selectors resolve after text and label miss", async () => {
+    const target = { async count() { return 1; }, first() { return this; } };
+    const pg = {
+        getByText() { return { async count() { return 0; } }; },
+        getByLabel() { return { async count() { return 0; } }; },
+        locator(sel) { assert.equal(sel, 'summary[aria-label="Reconnect"]'); return target; }
+    };
+    const out = await resolveClickTarget(pg, { click: 'summary[aria-label="Reconnect"]' });
+    assert.strictEqual(out.locator, target);
+});
+
+test("resolveClickTarget: exact text still wins over a matching aria-label", async () => {
+    const target = { async count() { return 1; }, first() { return this; } };
+    const pg = {
+        getByText(text) { assert.equal(text, "Save"); return target; },
+        getByLabel() { throw new Error("label strategy must not run when text matches"); },
+        locator() { throw new Error("CSS strategy must not run when text matches"); }
+    };
+    const out = await resolveClickTarget(pg, { click: "Save" });
+    assert.strictEqual(out.locator, target);
+});
+
+test("resolveClickTarget: a bare word never falls back to a CSS tag selector", async () => {
+    const empty = { async count() { return 0; } };
+    const pg = {
+        getByText() { return empty; },
+        getByLabel() { return empty; },
+        locator() { throw new Error("CSS strategy must not run for a bare word like \"Header\""); }
+    };
+    const out = await resolveClickTarget(pg, { click: "Header" });
+    assert.match(out.error, /nothing to click matching "Header"/);
+    assert.doesNotMatch(out.error, /locator\("Header"\)/);
+});
+
+test("resolveClickTarget: invalid CSS selector after text and label miss is a clean miss", async () => {
+    const empty = { async count() { return 0; } };
+    const pg = {
+        getByText() { return empty; },
+        getByLabel() { return empty; },
+        locator() { throw new Error("Unexpected token while parsing css selector"); }
+    };
+    const out = await resolveClickTarget(pg, { click: "summary[aria-label=" });
+    assert.match(out.error, /nothing to click matching "summary\[aria-label="/);
+    assert.match(out.error, /none matched/);
 });
 
 test("browserFailureMessage distinguishes a timed-out login redirect from a genuine timeout", () => {

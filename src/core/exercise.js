@@ -658,8 +658,10 @@ async function findWithinCandidates(scope, clickText) {
 async function resolveClickTarget(pg, step) {
     const c = step.click.trim();
     let scope = pg;
-    const resolved = (step.within ? "locator(" + JSON.stringify(step.within) + ")." : "") +
-        (/^[#.]/.test(c) ? "locator(" + JSON.stringify(c) + ")" : "getByText(" + JSON.stringify(c) + ", { exact: true })");
+    const prefix = step.within ? "locator(" + JSON.stringify(step.within) + ")." : "";
+    const textLocator = "getByText(" + JSON.stringify(c) + ", { exact: true })";
+    const labelLocator = "getByLabel(" + JSON.stringify(c) + ", { exact: true })";
+    const cssLocator = "locator(" + JSON.stringify(c) + ")";
     if (step.within) {
         const scopes = pg.locator(step.within);
         const scopeCount = await scopes.count();
@@ -672,10 +674,42 @@ async function resolveClickTarget(pg, step) {
         scope = scopes.first();
     }
 
-    const loc = /^[#.]/.test(c) ? scope.locator(c) : scope.getByText(c, { exact: true });
-    const count = await loc.count();
+    // Exact visible text wins, then the element's aria-label, then a bare CSS selector. A
+    // malformed selector can throw, so each attempt is guarded: a throw counts as no match
+    // instead of masking the text/label misses.
+    const tried = [];
+    let loc;
+    let resolved;
+    let count = 0;
+    if (/^[#.]/.test(c)) {
+        loc = scope.locator(c);
+        resolved = prefix + cssLocator;
+        tried.push(resolved);
+        count = await loc.count();
+    } else {
+        const strategies = [
+            [textLocator, () => scope.getByText(c, { exact: true })],
+            [labelLocator, () => scope.getByLabel(c, { exact: true })]
+        ];
+        // Only selector-shaped labels fall back to CSS: a bare word like "Header" or "Menu" is
+        // also a valid tag selector and would silently click an unrelated <header>/<menu>.
+        if (/[\[\]#.:>=()]/.test(c)) strategies.push([cssLocator, () => scope.locator(c)]);
+        for (const [name, make] of strategies) {
+            tried.push(prefix + name);
+            try {
+                loc = make();
+                count = await loc.count();
+            } catch (e) {
+                count = 0;
+            }
+            if (count > 0) {
+                resolved = prefix + name;
+                break;
+            }
+        }
+    }
     if (count === 0) {
-        return { error: "nothing to click matching \"" + c + "\"" + (step.within ? " within \"" + step.within + "\"" : "") + "; resolved Playwright locator: " + resolved };
+        return { error: "nothing to click matching \"" + c + "\"" + (step.within ? " within \"" + step.within + "\"" : "") + "; resolved Playwright locator: " + tried.join(", ") + " (tried in order; none matched)" };
     }
     if (count > 1) {
         const candidates = await findWithinCandidates(scope, c);
@@ -905,7 +939,7 @@ async function runExercise(session, guid, { steps, workflow, viewport, workspace
     }
     deps = Object.assign({}, deps, { resolveLogin });
     const browserFn = deps.exerciseByBrowser || exerciseByBrowser;
-    const res = await attemptWithFreshTest(session, guid, { kind: workflow }, async (t) => {
+    const res = await attemptWithFreshTest(session, guid, { kind: workflow, preferAction: !!(start && start.target) }, async (t) => {
         if (!t.ran) {
             return { ran: false, blocked: t.blocked, holder: t.holder,
                      status: "blocked", category: "environment", retryable: false,

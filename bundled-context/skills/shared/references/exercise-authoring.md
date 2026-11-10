@@ -10,7 +10,7 @@ visible click label, and row/card container used by `within`. Do not discover se
 exercise calls; a failed call stops at its first failure and later steps do not run.
 
 Batch a create → edit → delete flow into one `steps` call. Web steps use
-`{action, params, expect}`; console steps use `{fill:{name:value}, click:"<exact link text>", expect:[...]}`
+`{action, params, expect}`; console steps use `{fill:{name:value}, click:"<exact text, aria-label, or CSS selector>", expect:[...]}`
 and select their first screen with `initial:{action, params, expect}` — a step-level `action`/`page`
 is rejected on a console pal. A console opens on its list view, so click Add/Create before filling
 the create form. Split flows longer
