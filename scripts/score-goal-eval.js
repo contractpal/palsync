@@ -177,25 +177,34 @@ function exerciseDetail(result, check) {
     return detail;
 }
 
+// A goal leaves the UI shape to the model, so one behavior can have several valid step scripts
+// (e.g. a separate checkout form, or an inline name field in the row). The check passes when
+// any variant passes; a check without `variants` has one unnamed variant.
+function checkVariants(check) {
+    if (Array.isArray(check.variants) && check.variants.length) return check.variants;
+    return [{ name: "default", steps: check.steps }];
+}
+
 async function runExerciseCheck(workspaceDir, check, oracleWorkflow, getContext) {
-    const ctx = await getContext();
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-goal-steps-"));
-    const stepsFile = path.join(tempDir, "steps-" + check.id + ".json");
-    try {
-        fs.writeFileSync(stepsFile, JSON.stringify(check.steps, null, 2) + "\n", "utf8");
-        const steps = JSON.parse(fs.readFileSync(stepsFile, "utf8"));
-        const tool = require("../src/mcp/tools").TOOLS.find(item => item.name === "pal_exercise");
-        const result = await tool.run(ctx, {
-            steps,
-            workflow: check.workflow || oracleWorkflow
-        });
-        const pass = !!(result && result.ran === true && result.pass === true &&
-            (!check.expectDialog || hasDialog(result, check.expectDialog)));
-        return { pass, detail: exerciseDetail(result, check) };
-    } finally {
-        fs.rmSync(tempDir, { recursive: true, force: true });
-        await releaseWorkspaceLock(ctx);
+    const tool = require("../src/mcp/tools").TOOLS.find(item => item.name === "pal_exercise");
+    const details = [];
+    for (const variant of checkVariants(check)) {
+        const ctx = await getContext();
+        try {
+            const result = await tool.run(ctx, {
+                steps: JSON.parse(JSON.stringify(variant.steps)),
+                workflow: check.workflow || oracleWorkflow
+            });
+            const pass = !!(result && result.ran === true && result.pass === true &&
+                (!check.expectDialog || hasDialog(result, check.expectDialog)));
+            const detail = exerciseDetail(result, check);
+            if (pass) return { pass, variant: variant.name, detail: (variant.name === "default" ? "" : variant.name + ": ") + detail };
+            details.push(variant.name + ": " + detail);
+        } finally {
+            await releaseWorkspaceLock(ctx);
+        }
     }
+    return { pass: false, detail: details.join(" | ") };
 }
 
 function runValidateCheck(workspaceDir, check) {
@@ -414,6 +423,7 @@ if (require.main === module) {
 
 module.exports = {
     ROW_SCHEMA,
+    checkVariants,
     claimedDone,
     falseDone,
     listSourceFiles,

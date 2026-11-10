@@ -1,7 +1,7 @@
 {
   "schema": "palsync/goal-oracle/1",
   "scenario": "01_equipment_checkout",
-  "note": "Evaluator-owned. Never copy into a run workspace. Each exercise check is self-contained: it creates its own {{runId}} records. Calibrate against a known-good build before scoring (README).",
+  "note": "Evaluator-owned. Never copy into a run workspace. Each exercise check is self-contained: it creates its own {{runId}} records. Calibrate against a known-good build before scoring (README). A check with variants passes when any variant passes: a goal leaves the UI shape to the model.",
   "workflow": "console",
   "checks": [
     {
@@ -53,34 +53,68 @@
       "id": "C3_checkout",
       "goal": 3,
       "kind": "exercise",
-      "steps": [
+      "variants": [
         {
-          "click": "Add equipment"
-        },
-        {
-          "fill": {
-            "name": "Camera {{runId}}"
-          },
-          "click": "Save",
-          "expect": [
-            "Camera {{runId}}"
+          "name": "form",
+          "steps": [
+            {
+              "click": "Add equipment"
+            },
+            {
+              "fill": {
+                "name": "Camera {{runId}}"
+              },
+              "click": "Save",
+              "expect": [
+                "Camera {{runId}}"
+              ]
+            },
+            {
+              "click": "Check out",
+              "within": "tr:has-text(\"Camera {{runId}}\")"
+            },
+            {
+              "fill": {
+                "checkedOutTo": "Pat {{runId}}"
+              },
+              "click": "Check out",
+              "expect": [
+                "Camera {{runId}}",
+                "Pat {{runId}}",
+                "Checked out to"
+              ],
+              "within": "a:text-is(\"Check out\"):not(tr a), button:text-is(\"Check out\"):not(tr button)"
+            }
           ]
         },
         {
-          "click": "Check out",
-          "within": "tr:has-text(\"Camera {{runId}}\")"
-        },
-        {
-          "fill": {
-            "checkedOutTo": "Pat {{runId}}"
-          },
-          "click": "Check out",
-          "expect": [
-            "Camera {{runId}}",
-            "Pat {{runId}}",
-            "Checked out to"
-          ],
-          "within": ":has(input[name=\"checkedOutTo\"]):has(:text-is(\"Check out\")):not(:has(:has(input[name=\"checkedOutTo\"]):has(:text-is(\"Check out\"))))"
+          "name": "row",
+          "steps": [
+            {
+              "click": "Add equipment"
+            },
+            {
+              "fill": {
+                "name": "Camera {{runId}}"
+              },
+              "click": "Save",
+              "expect": [
+                "Camera {{runId}}"
+              ]
+            },
+            {
+              "fill": {
+                "checkedOutTo": "Pat {{runId}}"
+              },
+              "click": "Check out",
+              "expect": [
+                "Camera {{runId}}",
+                "Pat {{runId}}",
+                "Checked out to"
+              ],
+              "within": "tr:has-text(\"Camera {{runId}}\")"
+            }
+          ]
         }
       ]
     },
@@ -88,32 +122,64 @@
       "id": "C4_assignee_required",
       "goal": 4,
       "kind": "exercise",
-      "steps": [
+      "variants": [
         {
-          "click": "Add equipment"
-        },
-        {
-          "fill": {
-            "name": "Projector {{runId}}"
-          },
-          "click": "Save",
-          "expect": [
-            "Projector {{runId}}"
+          "name": "form",
+          "steps": [
+            {
+              "click": "Add equipment"
+            },
+            {
+              "fill": {
+                "name": "Projector {{runId}}"
+              },
+              "click": "Save",
+              "expect": [
+                "Projector {{runId}}"
+              ]
+            },
+            {
+              "click": "Check out",
+              "within": "tr:has-text(\"Projector {{runId}}\")"
+            },
+            {
+              "fill": {
+                "checkedOutTo": ""
+              },
+              "click": "Check out",
+              "expect": [
+                "Enter a name to check this item out."
+              ],
+              "within": "a:text-is(\"Check out\"):not(tr a), button:text-is(\"Check out\"):not(tr button)"
+            }
           ]
         },
         {
-          "click": "Check out",
-          "within": "tr:has-text(\"Projector {{runId}}\")"
-        },
-        {
-          "fill": {
-            "checkedOutTo": ""
-          },
-          "click": "Check out",
-          "expect": [
-            "Enter a name to check this item out."
-          ],
-          "within": ":has(input[name=\"checkedOutTo\"]):has(:text-is(\"Check out\")):not(:has(:has(input[name=\"checkedOutTo\"]):has(:text-is(\"Check out\"))))"
+          "name": "row",
+          "steps": [
+            {
+              "click": "Add equipment"
+            },
+            {
+              "fill": {
+                "name": "Projector {{runId}}"
+              },
+              "click": "Save",
+              "expect": [
+                "Projector {{runId}}"
+              ]
+            },
+            {
+              "fill": {
+                "checkedOutTo": ""
+              },
+              "click": "Check out",
+              "expect": [
+                "Enter a name to check this item out."
+              ],
+              "within": "tr:has-text(\"Projector {{runId}}\")"
+            }
+          ]
         }
       ]
     },
@@ -121,41 +187,83 @@
       "id": "C5_checkin",
       "goal": 5,
       "kind": "exercise",
-      "steps": [
+      "variants": [
         {
-          "click": "Add equipment"
-        },
-        {
-          "fill": {
-            "name": "Tripod {{runId}}"
-          },
-          "click": "Save",
-          "expect": [
-            "Tripod {{runId}}"
+          "name": "form",
+          "steps": [
+            {
+              "click": "Add equipment"
+            },
+            {
+              "fill": {
+                "name": "Tripod {{runId}}"
+              },
+              "click": "Save",
+              "expect": [
+                "Tripod {{runId}}"
+              ]
+            },
+            {
+              "click": "Check out",
+              "within": "tr:has-text(\"Tripod {{runId}}\")"
+            },
+            {
+              "fill": {
+                "checkedOutTo": "Sam {{runId}}"
+              },
+              "click": "Check out",
+              "expect": [
+                "Sam {{runId}}"
+              ],
+              "within": "a:text-is(\"Check out\"):not(tr a), button:text-is(\"Check out\"):not(tr button)"
+            },
+            {
+              "click": "Check in",
+              "within": "tr:has-text(\"Tripod {{runId}}\")",
+              "expect": [
+                "Tripod {{runId}}"
+              ],
+              "absent": [
+                "Sam {{runId}}"
+              ]
+            }
           ]
         },
         {
-          "click": "Check out",
-          "within": "tr:has-text(\"Tripod {{runId}}\")"
-        },
-        {
-          "fill": {
-            "checkedOutTo": "Sam {{runId}}"
-          },
-          "click": "Check out",
-          "expect": [
-            "Sam {{runId}}"
-          ],
-          "within": ":has(input[name=\"checkedOutTo\"]):has(:text-is(\"Check out\")):not(:has(:has(input[name=\"checkedOutTo\"]):has(:text-is(\"Check out\"))))"
-        },
-        {
-          "click": "Check in",
-          "within": "tr:has-text(\"Tripod {{runId}}\")",
-          "expect": [
-            "Tripod {{runId}}"
-          ],
-          "absent": [
-            "Sam {{runId}}"
+          "name": "row",
+          "steps": [
+            {
+              "click": "Add equipment"
+            },
+            {
+              "fill": {
+                "name": "Tripod {{runId}}"
+              },
+              "click": "Save",
+              "expect": [
+                "Tripod {{runId}}"
+              ]
+            },
+            {
+              "fill": {
+                "checkedOutTo": "Sam {{runId}}"
+              },
+              "click": "Check out",
+              "expect": [
+                "Sam {{runId}}"
+              ],
+              "within": "tr:has-text(\"Tripod {{runId}}\")"
+            },
+            {
+              "click": "Check in",
+              "within": "tr:has-text(\"Tripod {{runId}}\")",
+              "expect": [
+                "Tripod {{runId}}"
+              ],
+              "absent": [
+                "Sam {{runId}}"
+              ]
+            }
           ]
         }
       ]
@@ -164,48 +272,97 @@
       "id": "C6_edit_keeps_checkout",
       "goal": 6,
       "kind": "exercise",
-      "steps": [
+      "variants": [
         {
-          "click": "Add equipment"
-        },
-        {
-          "fill": {
-            "name": "Old {{runId}}"
-          },
-          "click": "Save",
-          "expect": [
-            "Old {{runId}}"
+          "name": "form",
+          "steps": [
+            {
+              "click": "Add equipment"
+            },
+            {
+              "fill": {
+                "name": "Old {{runId}}"
+              },
+              "click": "Save",
+              "expect": [
+                "Old {{runId}}"
+              ]
+            },
+            {
+              "click": "Check out",
+              "within": "tr:has-text(\"Old {{runId}}\")"
+            },
+            {
+              "fill": {
+                "checkedOutTo": "Lee {{runId}}"
+              },
+              "click": "Check out",
+              "expect": [
+                "Lee {{runId}}"
+              ],
+              "within": "a:text-is(\"Check out\"):not(tr a), button:text-is(\"Check out\"):not(tr button)"
+            },
+            {
+              "click": "Edit",
+              "within": "tr:has-text(\"Old {{runId}}\")"
+            },
+            {
+              "fill": {
+                "name": "New {{runId}}"
+              },
+              "click": "Save",
+              "expect": [
+                "New {{runId}}",
+                "Lee {{runId}}"
+              ],
+              "absent": [
+                "Old {{runId}}"
+              ]
+            }
           ]
         },
         {
-          "click": "Check out",
-          "within": "tr:has-text(\"Old {{runId}}\")"
-        },
-        {
-          "fill": {
-            "checkedOutTo": "Lee {{runId}}"
-          },
-          "click": "Check out",
-          "expect": [
-            "Lee {{runId}}"
-          ],
-          "within": ":has(input[name=\"checkedOutTo\"]):has(:text-is(\"Check out\")):not(:has(:has(input[name=\"checkedOutTo\"]):has(:text-is(\"Check out\"))))"
-        },
-        {
-          "click": "Edit",
-          "within": "tr:has-text(\"Old {{runId}}\")"
-        },
-        {
-          "fill": {
-            "name": "New {{runId}}"
-          },
-          "click": "Save",
-          "expect": [
-            "New {{runId}}",
-            "Lee {{runId}}"
-          ],
-          "absent": [
-            "Old {{runId}}"
+          "name": "row",
+          "steps": [
+            {
+              "click": "Add equipment"
+            },
+            {
+              "fill": {
+                "name": "Old {{runId}}"
+              },
+              "click": "Save",
+              "expect": [
+                "Old {{runId}}"
+              ]
+            },
+            {
+              "fill": {
+                "checkedOutTo": "Lee {{runId}}"
+              },
+              "click": "Check out",
+              "expect": [
+                "Lee {{runId}}"
+              ],
+              "within": "tr:has-text(\"Old {{runId}}\")"
+            },
+            {
+              "click": "Edit",
+              "within": "tr:has-text(\"Old {{runId}}\")"
+            },
+            {
+              "fill": {
+                "name": "New {{runId}}"
+              },
+              "click": "Save",
+              "expect": [
+                "New {{runId}}",
+                "Lee {{runId}}"
+              ],
+              "absent": [
+                "Old {{runId}}"
+              ]
+            }
           ]
         }
       ]
@@ -267,6 +424,7 @@
   "limits": [
     "C2 checks the message only; it cannot prove that no row was written, because the GOAL does not fix a visible column for the filled category.",
     "C3 cannot assert row-scoped 'not available'; C5 covers the status round trip.",
-    "The checkout-form submit is scoped to the innermost element that holds both the checkedOutTo input and a \"Check out\" control, so any form layout works."
+    "The checkout-form submit is scoped to the clickable \"Check out\" link or button outside table rows, because a valid form may also carry a \"Check out\" heading (calibration 2026-11-10, run goal01_C1).",
+    "C3-C6 accept two UI shapes: a separate checkout form, or a checkedOutTo field inside the row (calibration 2026-11-10, run goal01_C2). Other valid shapes (e.g. a modal) still need a new variant."
   ]
 }

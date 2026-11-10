@@ -7,7 +7,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { validateSteps, validateInitial, lintSteps } = require("../src/core/exercise");
 const {
-    claimedDone, falseDone, sourceContains, claudeResultFields, exerciseDialogs, hasDialog
+    checkVariants, claimedDone, falseDone, sourceContains, claudeResultFields, exerciseDialogs, hasDialog
 } = require("../scripts/score-goal-eval");
 const { tmpWorkspace } = require("./helpers");
 
@@ -30,32 +30,33 @@ test("oracle.json parses and every exercise check passes step validation", () =>
         assert.ok(Number.isInteger(check.goal), check.id + " has an integer goal");
         assert.ok(CHECK_KINDS.has(check.kind), check.id + " has a known kind");
         if (check.kind !== "exercise") continue;
-        assert.ok(Array.isArray(check.steps) && check.steps.length > 0, check.id + " has steps");
-        assert.deepEqual(validateSteps(check.steps), [], check.id + " steps must be valid");
+        for (const variant of checkVariants(check)) {
+            const label = check.id + "/" + variant.name;
+            assert.ok(Array.isArray(variant.steps) && variant.steps.length > 0, label + " has steps");
+            assert.deepEqual(validateSteps(variant.steps), [], label + " steps must be valid");
+        }
         if (check.initial !== undefined) {
             assert.deepEqual(validateInitial(check.initial), [], check.id + " initial must be valid");
         }
     }
 });
 
-test("oracle exercise checks pass the absent/expect misuse rule", () => {
-    // An absent value that is a substring of an expected or filled value can never disappear.
-    // runExercise treats this lint error as invalid steps, so the oracle must not contain one.
-    for (const check of readOracle().checks) {
-        if (check.kind !== "exercise") continue;
-        const errors = lintSteps(check.steps).errors
-            .filter(message => /absent value .* is a substring/.test(message));
-        assert.deepEqual(errors, [], check.id + " must not assert an impossible absence");
-    }
-});
-
-test("oracle exercise checks carry no preflight lint errors", () => {
-    // runExercise refuses steps with lint errors before it opens a browser, so an oracle check
+test("oracle exercise variants carry no preflight lint errors", () => {
+    // runExercise refuses steps with lint errors before it opens a browser, so an oracle variant
     // with one could never pass, whatever the build.
     for (const check of readOracle().checks) {
         if (check.kind !== "exercise") continue;
-        assert.deepEqual(lintSteps(check.steps).errors, [], check.id + " must have no preflight lint error");
+        for (const variant of checkVariants(check)) {
+            assert.deepEqual(lintSteps(variant.steps).errors, [],
+                check.id + "/" + variant.name + " must have no preflight lint error");
+        }
     }
+});
+
+test("checkVariants wraps plain steps and keeps declared variants", () => {
+    assert.deepEqual(checkVariants({ steps: [{ click: "A" }] }), [{ name: "default", steps: [{ click: "A" }] }]);
+    const variants = [{ name: "form", steps: [] }, { name: "row", steps: [] }];
+    assert.equal(checkVariants({ variants }), variants);
 });
 
 test("claimedDone reads the last non-empty RESULT line", () => {

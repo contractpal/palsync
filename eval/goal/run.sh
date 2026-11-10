@@ -46,6 +46,10 @@ fi
 mkdir -p "$WS/.eval"
 
 MODEL="${MAIN_MODEL:-claude-opus-5-5}"
+# Isolation: a clean Claude config dir keeps the operator's user hooks, agents, CLAUDE.md, and
+# model proxy out of the run. It holds only a copy of the Claude login (.credentials.json).
+EVAL_CONFIG="${EVAL_CLAUDE_CONFIG_DIR:-$HOME/.palsync-eval/claude-config}"
+if [ -f "$EVAL_CONFIG/.credentials.json" ]; then CLEAN_CONFIG=true; else CLEAN_CONFIG=false; EVAL_CONFIG=""; fi
 START="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 COMMIT="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 CLAUDE_VERSION="$(claude --version 2>/dev/null | head -n 1 || echo unknown)"
@@ -55,7 +59,9 @@ echo "run $FOLDER (arm $ARM, model $MODEL) at $START"
 set +e
 (
   cd "$WS"
+  if [ -n "$EVAL_CONFIG" ]; then export CLAUDE_CONFIG_DIR="$EVAL_CONFIG"; fi
   claude --model "$MODEL" --dangerously-skip-permissions --output-format json \
+    --mcp-config .mcp.json --strict-mcp-config \
     -p "$(cat "$PROMPT")" > .eval/claude-result.json
 )
 RC=$?
@@ -64,9 +70,9 @@ set -e
 END="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 node - "$WS/.eval/run-meta.json" "$FOLDER" "$ARM" "$MODEL" "$START" "$END" \
-  "$COMMIT" "$CLAUDE_VERSION" "$RC" <<'NODE'
+  "$COMMIT" "$CLAUDE_VERSION" "$RC" "$CLEAN_CONFIG" <<'NODE'
 const fs = require("fs");
-const [file, folder, arm, model, start, end, palsyncCommit, claudeVersion, rc] = process.argv.slice(2);
+const [file, folder, arm, model, start, end, palsyncCommit, claudeVersion, rc, cleanConfig] = process.argv.slice(2);
 const meta = {
     schema: "palsync/goal-run-meta/1",
     folder,
@@ -76,7 +82,8 @@ const meta = {
     end,
     palsyncCommit,
     claudeVersion,
-    exitCode: Number(rc)
+    exitCode: Number(rc),
+    cleanConfig: cleanConfig === "true"
 };
 fs.writeFileSync(file, JSON.stringify(meta, null, 2) + "\n", "utf8");
 NODE

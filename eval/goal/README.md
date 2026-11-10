@@ -26,8 +26,11 @@ models inside one comparison.
 - PalSync commit (`git rev-parse --short HEAD`), Claude Code version (`claude --version`).
 - Review preference: `palsync settings review off` for every arm. Scoring uses the oracle, not
   REVIEW.md. Restore your own preference after the eval.
-- User-level Claude config: your `~/.claude` hooks, agents, and CLAUDE.md load into every run
-  and change the result. Run from a clean user config, or record that it was not clean.
+- User-level Claude config: your `~/.claude` hooks, agents, CLAUDE.md, and env load into every
+  run and change the result. `run.sh` isolates each run with `CLAUDE_CONFIG_DIR` set to
+  `$EVAL_CLAUDE_CONFIG_DIR` (default `~/.palsync-eval/claude-config`) when that dir holds a copy
+  of your `.credentials.json`, and loads only the workspace `.mcp.json`. It records
+  `cleanConfig` in `.eval/run-meta.json`.
 - One empty pal per run (names in `runs.map`). A dirty pal invalidates the run.
 
 ## Steps
