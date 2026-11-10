@@ -1019,6 +1019,10 @@ async function saveDownloadedFile(download, requested, deps, workspaceDir) {
         return { error: "downloaded " + file + " (" + buffer.length + " bytes) but could not save it" +
             (workspaceDir ? " under the workspace work-history directory." : " to a temporary directory.") };
     }
+    if (!pdf && /\.pdf$/i.test(file)) {
+        return { error: "downloaded " + file + " (" + buffer.length + " bytes, saved to " + saved.path +
+            ") but it is not a PDF (no %PDF header)" };
+    }
     return { file, path: saved.path, bytes: buffer.length, pdf };
 }
 
@@ -1310,7 +1314,7 @@ async function exerciseByBrowser(t, steps, viewport, deps = {}, start = null, wo
                 ran: false, kind: t.kind, status: "blocked", category: open.category,
                 retryable: open.retryable === true, potentialMutationStarted, steps: results,
                 reason: open.reason,
-                remediation: open.category === "auth"
+                remediation: open.remediation ? open.remediation : open.category === "auth"
                     ? "Refresh authentication before trying again."
                     : "Refresh navigation/authentication before trying again."
             };

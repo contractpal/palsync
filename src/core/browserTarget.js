@@ -331,6 +331,14 @@ async function openAuthenticatedScreen(t, { viewport, target, expect, navOpts, o
         // never be retried — the action was already dispatched.
         if (downloads && isDownloadAbort(msg) &&
             await downloads.waitForAny(deps.downloadAbortWaitMs != null ? deps.downloadAbortWaitMs : 1500)) {
+            // A download leaves no screen, so a declared initial expect can never be checked.
+            // Refuse instead of passing with the expect silently skipped.
+            if (Array.isArray(expect) && expect.length) {
+                return { ok: false, browser, bctx, pg, viewport: vp, authDiagnostics: withLanding(pg),
+                         status: "blocked", category: "steps", retryable: false, potentialMutationStarted,
+                         reason: "The initial action returned a file download, so initial.expect cannot be checked",
+                         remediation: "Remove initial.expect; the download step is the evidence." };
+            }
             return { ok: true, browser, bctx, pg, viewport: vp, authDiagnostics: withLanding(pg),
                      state: { verified: null, expect: [], observed: { title: null, headings: [] } },
                      potentialMutationStarted, downloadStarted: true };

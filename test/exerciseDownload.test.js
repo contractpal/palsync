@@ -191,6 +191,37 @@ describe("download steps in the browser runner", () => {
         assert.equal(res.pass, true, JSON.stringify(res));
         assert.equal(tests, 1, "a download abort must not trigger attemptWithFreshTest");
     });
+
+    test("an initial download with a declared initial.expect never passes", async () => {
+        const pg = fakePage();
+        const res = await runExercise(null, "g", {
+            steps: [{ download: "report.pdf" }],
+            initial: { action: "previewReportPdf?id=6", expect: ["Report"] },
+            workflow: "console"
+        }, fakeDeps(pg, {
+            downloadTimeoutMs: 50,
+            saveDownload: ({ file }) => ({ path: "/ws/run/" + file }),
+            waitForRenderablePage: async () => {
+                pg.emit("download", fakeDownload("served.pdf", PDF));
+                throw new Error("page.goto: Download is starting at https://secure.test/console");
+            },
+            runTest: async () => ({ ran: true, validated: true, kind: "console", _previewUrl: "https://secure.test/console" })
+        }));
+        assert.notEqual(res.pass, true, JSON.stringify(res));
+        assert.match(JSON.stringify(res), /initial\.expect cannot be checked/);
+    });
+
+    test("a .pdf download without the %PDF header fails the step", async () => {
+        const pg = fakePage({ emitOnClick: () => pg.emit("download", fakeDownload("report.pdf", Buffer.from("<html>error</html>"))) });
+        const res = await exerciseByBrowser(
+            { kind: "console", _previewUrl: "https://secure.test/console" },
+            [{ click: "Export", download: "report.pdf" }],
+            undefined,
+            fakeDeps(pg, { downloadTimeoutMs: 50, saveDownload: ({ file }) => ({ path: "/ws/run/" + file }) })
+        );
+        assert.notEqual(res.pass, true, JSON.stringify(res.steps));
+        assert.match(JSON.stringify(res), /not a PDF/);
+    });
 });
 
 // ---- real Chromium: a Content-Disposition attachment is a download, not an error --------------
