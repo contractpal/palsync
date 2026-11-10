@@ -2,6 +2,7 @@
 // Live GetPal.do answers carry no lastModifiedDate, and the MCP lock caches an identity-only
 // `resolved` ({id, guid, profileId}). pull() must still return a fresh drift marker, else the
 // record keeps the old one: status says "server newer" forever and every push refuses on drift.
+// The marker is read before the content, so a push between the reads can only cause a drift refusal.
 const { test } = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
@@ -16,12 +17,13 @@ const MARKER = "2026-11-10 12:18:36.0";
 async function withServer(getPal, fn) {
     const names = ["getPal", "getProfileList", "getGroupList", "getPalList"];
     const orig = names.map(n => CloudPistonAPIManager[n]);
-    const calls = { list: 0 };
-    CloudPistonAPIManager.getPal = async () => getPal;
+    const calls = { list: 0, order: [] };
+    CloudPistonAPIManager.getPal = async () => { calls.order.push("content"); return getPal; };
     CloudPistonAPIManager.getProfileList = async () => ({ profileList: { "com.contractpal.pal.ProfileInfo": [{ profileId: "P1" }] } });
     CloudPistonAPIManager.getGroupList = async () => ({ groupList: { "com.contractpal.pal.GroupInfo": [{ groupId: "G1" }] } });
     CloudPistonAPIManager.getPalList = async () => {
         calls.list++;
+        calls.order.push("marker");
         return { palInfoList: { PalInfoEx: [{ id: "ID2", guid: "G", lastModifiedDate: MARKER }] } };
     };
     const ws = tmpWorkspace({});
@@ -41,11 +43,11 @@ test("pull() reads the marker from the pal list when GetPal.do and the cached id
     });
 });
 
-test("pull() makes no extra lookup when GetPal.do carries the marker", async () => {
-    const pal = Object.assign({ lastModifiedDate: "2026-11-11 08:00:00.0" }, PAL);
-    await withServer({ success: true, pal }, async (ws, calls) => {
-        const res = await pull(SESSION, "G", ws, { resolved: { id: "ID", guid: "G", profileId: "P1" } });
-        assert.equal(res.resolved.lastModifiedDate, "2026-11-11 08:00:00.0");
-        assert.equal(calls.list, 0);
+test("pull() replaces an old cached marker and reads the marker before the content", async () => {
+    await withServer({ success: true, pal: PAL }, async (ws, calls) => {
+        const pre = { id: "ID", guid: "G", profileId: "P1", lastModifiedDate: "2026-11-05 09:00:00.0" };
+        const res = await pull(SESSION, "G", ws, { resolved: pre });
+        assert.equal(res.resolved.lastModifiedDate, MARKER);
+        assert.deepEqual(calls.order, ["marker", "content"]);
     });
 });

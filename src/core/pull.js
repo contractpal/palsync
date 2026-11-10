@@ -15,7 +15,7 @@ const fs = require("fs/promises");
 const path = require("path");
 const { CloudPistonAPIManager } = require("../../lib/apiManager");
 const { Pal } = require("../../lib/pal");
-const { resolveServerPalByGuid, timestampText } = require("./resolve");
+const { resolveServerPalByGuid, refreshResolvedPal, timestampText } = require("./resolve");
 // Named baselineStore (not `baseline`) on purpose: pull()'s options already destructure a
 // `baseline` (the fileHashes map for the sync decision), which would shadow this inside the fn.
 const baselineStore = require("./baseline");
@@ -243,6 +243,11 @@ async function pull(session, guid, targetDir, { baseline = null, resolved: pre =
     if (!resolved) {
         throw new Error("GUID " + guid + " not found on " + session.environment.url);
     }
+    // Live GetPal.do responses carry no lastModifiedDate (verified 2026-11-10: only layout.exportDate),
+    // and a cached `pre` holds no marker or an old one. So read the pal-list marker for a cached
+    // `pre`, and read it BEFORE the content: a push between the two reads then leaves the marker
+    // older than the content (a safe drift refusal), never newer (a silent overwrite of that push).
+    const listed = pre ? (await refreshResolvedPal(session, pre) || await resolveServerPalByGuid(session, guid)) : resolved;
     const palResp = await CloudPistonAPIManager.getPal(session, resolved.id);
     if (!palResp || !palResp.success || !palResp.pal) {
         throw new Error("GetPal.do failed for id " + resolved.id);
@@ -305,15 +310,8 @@ async function pull(session, guid, targetDir, { baseline = null, resolved: pre =
     // fetched regardless of whether `resolved` was cached) — not `resolved.lastModifiedDate`,
     // which goes stale the moment `resolved` is a session-long-cached identity reused across
     // pulls rather than freshly re-derived each time.
-    // Live GetPal.do responses carry no lastModifiedDate (verified 2026-11-10: only layout.exportDate),
-    // and the lock's cached `resolved` is identity-only ({id, guid, profileId}). Without a marker the
-    // record keeps the old one, so status reports "server newer" forever and every push hits drift.
-    // Re-resolve once in that case to read the marker the pal list reports.
-    let freshMarker = timestampText(serverPal && serverPal.lastModifiedDate);
-    if (!freshMarker && !resolved.lastModifiedDate) {
-        const listed = await resolveServerPalByGuid(session, guid);
-        freshMarker = timestampText(listed && listed.lastModifiedDate);
-    }
+    // Without it the record keeps the old marker: status says "server newer" forever and pushes refuse.
+    const freshMarker = timestampText(serverPal && serverPal.lastModifiedDate) || timestampText(listed && listed.lastModifiedDate);
     const freshResolved = freshMarker ? Object.assign({}, resolved, { lastModifiedDate: freshMarker }) : resolved;
 
     // A repository pal arrives as structure only (its files are empty placeholders until fetched) —

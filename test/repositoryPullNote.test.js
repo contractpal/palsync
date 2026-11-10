@@ -23,12 +23,18 @@ function serverResponse(repositoryPal) {
     };
 }
 
+// pull() also reads the drift marker from the pal list; an empty account keeps it offline.
 async function withServer(resp, fn) {
-    const orig = CloudPistonAPIManager.getPal;
+    const names = ["getPal", "getProfileList"];
+    const orig = names.map(n => CloudPistonAPIManager[n]);
     CloudPistonAPIManager.getPal = async () => resp;
+    CloudPistonAPIManager.getProfileList = async () => ({});
     const ws = tmpWorkspace({});
     try { await fn(ws); }
-    finally { CloudPistonAPIManager.getPal = orig; fs.rmSync(ws, { recursive: true, force: true }); }
+    finally {
+        names.forEach((n, i) => { CloudPistonAPIManager[n] = orig[i]; });
+        fs.rmSync(ws, { recursive: true, force: true });
+    }
 }
 
 const SESSION = { environment: { url: "https://example.invalid" } };
