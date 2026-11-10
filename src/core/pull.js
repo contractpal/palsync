@@ -305,7 +305,15 @@ async function pull(session, guid, targetDir, { baseline = null, resolved: pre =
     // fetched regardless of whether `resolved` was cached) — not `resolved.lastModifiedDate`,
     // which goes stale the moment `resolved` is a session-long-cached identity reused across
     // pulls rather than freshly re-derived each time.
-    const freshMarker = timestampText(serverPal && serverPal.lastModifiedDate);
+    // Live GetPal.do responses carry no lastModifiedDate (verified 2026-11-10: only layout.exportDate),
+    // and the lock's cached `resolved` is identity-only ({id, guid, profileId}). Without a marker the
+    // record keeps the old one, so status reports "server newer" forever and every push hits drift.
+    // Re-resolve once in that case to read the marker the pal list reports.
+    let freshMarker = timestampText(serverPal && serverPal.lastModifiedDate);
+    if (!freshMarker && !resolved.lastModifiedDate) {
+        const listed = await resolveServerPalByGuid(session, guid);
+        freshMarker = timestampText(listed && listed.lastModifiedDate);
+    }
     const freshResolved = freshMarker ? Object.assign({}, resolved, { lastModifiedDate: freshMarker }) : resolved;
 
     // A repository pal arrives as structure only (its files are empty placeholders until fetched) —
