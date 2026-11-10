@@ -13,7 +13,7 @@ basis that could not be reproduced.
 
 | Runtime | Section | Source | Bytes | Est. tokens | Loading |
 |---|---|---|---:|---:|---|
-| All | `tool-definitions` | `src/mcp/tools.js` | 30,600 | 7,650 | release-stable |
+| All | `tool-definitions` | `src/mcp/tools.js` | 30,541 | 7,636 | release-stable |
 | All | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 4,922 | 1,231 | release-stable |
 | All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 2,497 | 625 | release-stable |
 | Claude | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,519 | 380 | workspace-stable |

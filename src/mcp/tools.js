@@ -506,7 +506,7 @@ function exerciseStepSchema(doc = true) {
         as: d(z.string().optional(), "With login: test-account alias to sign in as; omit to use the developer's own account."),
         within: d(z.string().optional(), "CSS scope when click text matches multiple elements."),
         upload: d(z.string().optional(), "Workspace-relative file for the screen's c:upload widget; submitted for you."),
-        download: d(z.union([z.boolean(), z.string()]).optional(), "Save a file this step downloads (initial action or click): true keeps the served name, a string sets the saved filename. Waits up to 30 s; returns the saved path."),
+        download: d(z.union([z.boolean(), z.string()]).optional(), "Save the file this step's click on a c:download control downloads: true keeps the served name, a string sets the saved filename. Waits up to 30 s; returns the saved path."),
         expect: d(z.array(z.string()).optional(), "Visible strings required after this step."),
         absent: d(z.array(z.string()).optional(), "Unique visible strings forbidden after this step."),
         waitFor: d(z.object({
@@ -521,7 +521,7 @@ function exerciseInitialSchema(doc = true) {
         action: d(z.string().optional(), "Console/transaction action, c:a form: name or name?key=value."),
         params: d(z.record(z.union([z.string(), z.number(), z.boolean()])).optional(), "Action params; conflicts with the action suffix are rejected."),
         page: d(z.string().optional(), "WEB route to load first."),
-        expect: d(z.array(z.string()).optional(), "Visible strings proving this screen; no step runs until seen. Omit only when the initial action downloads (add a download step).")
+        expect: d(z.array(z.string()).optional(), "Visible strings proving this screen; no step runs until seen.")
     });
 }
 

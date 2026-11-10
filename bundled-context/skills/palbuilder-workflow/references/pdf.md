@@ -80,10 +80,10 @@ any other page.
 ## Notes
 
 - Name the file in `toPdf("<name>.pdf")`; it becomes the download filename.
-- Verify the download with `pal_exercise`: `initial: { action: "downloadPdf" }` with
-  `steps: [{ download: "report.pdf" }]`, or a `{ click: "Download", download: true }` step. The
-  result gives the saved path under `.agent-work-history/`; read that PDF with the Read tool.
-  `initial.expect` can be omitted when the initial action downloads.
+- `c.createDownloadResponse()` works only for a request from `<c:download>` (server API note);
+  dispatched any other way it returns null. Verify with a `pal_exercise` step
+  `{ click: "Download", download: true }` on that control. The result gives the saved path under
+  `.agent-work-history/`; read that PDF with the Read tool.
 - To pass data into the printed page, the sample does not — it prints static markup. Anything
   dynamic is not covered by the sample; verify before assuming payload/EL binding works for
   `toPdf`.

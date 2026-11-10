@@ -62,16 +62,17 @@ the step-count cap (still 30 steps).
 
 ## Files a step downloads
 
-A console action can return a file instead of a screen (`c:createDownloadResponse`, for example
-a PDF report). Add `download` to the step that produces the file: `true` keeps the served
-filename, or a string sets the saved name. The action can be `initial` (the first screen) or a
-`click`. The file is saved under `.agent-work-history/`, and the result gives its path, byte size,
-and whether the first bytes are `%PDF`. Read the saved PDF with the Read tool. A download step
-waits up to 30 s; no file in that time is a step failure. When `initial` downloads the file,
-`initial.expect` can be omitted, because no screen renders.
+A console action can return a file instead of a screen (`c.createDownloadResponse()`, for example
+a PDF report). The server allows this only for a request from a `<c:download>` control, so click
+that control: as `initial.action`, the download response is null. Add `download` to the click
+step: `true` keeps the served filename, or a string sets the saved name. The file is saved under
+`.agent-work-history/`, and the result gives its path, byte size, and whether the first bytes are
+`%PDF`. Read the saved PDF with the Read tool. A download step waits up to 30 s; no file in that
+time is a step failure.
 
 ```js
-initial: { action: "previewReportPdf?id=6" }, steps: [{ download: "report.pdf" }]
+initial: { action: "openReport?id=6", expect: ["Download PDF"] },
+steps: [{ click: "Download PDF", download: "report.pdf" }]
 ```
 
 ## Failure evidence

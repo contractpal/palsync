@@ -649,7 +649,7 @@
                 "type": "string"
               },
               "download": {
-                "description": "Save a file this step downloads (initial action or click): true keeps the served name, a string sets the saved filename. Waits up to 30 s; returns the saved path.",
+                "description": "Save the file this step's click on a c:download control downloads: true keeps the served name, a string sets the saved filename. Waits up to 30 s; returns the saved path.",
                 "anyOf": [
                   {
                     "type": "boolean"
@@ -724,7 +724,7 @@
               "type": "string"
             },
             "expect": {
-              "description": "Visible strings proving this screen; no step runs until seen. Omit only when the initial action downloads (add a download step).",
+              "description": "Visible strings proving this screen; no step runs until seen.",
               "type": "array",
               "items": {
                 "type": "string"
