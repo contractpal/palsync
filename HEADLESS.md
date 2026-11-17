@@ -127,9 +127,57 @@ codex mcp add palsync --env PALSYNC_WORKSPACE=/home/you/pals/isr --env CP_USER=y
 **Claude Code** — `setup` writes `.mcp.json` in the workspace; Claude Code auto-discovers it. Set
 `CP_PASS`/`CP_USER` in the environment Claude Code runs in (headless boxes).
 
-**Hermes Agent (Nous Research) / any other MCP client** — add a local stdio MCP server with the
-command + env above. Hermes connects to any MCP server; it owns the model (OpenRouter / Anthropic /
-DeepSeek / local) and the human-approval gateway (Telegram, etc.).
+**Hermes Agent (Nous Research)** — Hermes owns the model (OpenRouter / Anthropic / DeepSeek /
+local) and the human-approval gateway (Telegram, etc.). palsync has no `--agent hermes`; three
+manual steps wire it up.
+
+1. Create the workspace in **AGENTS.md mode**:
+
+   ```sh
+   palsync setup --pal "ISR SEO Dashboard" --dir ~/pals/isr --agent opencode
+   ```
+
+   Do not use the default (Claude) mode for Hermes. It writes a `CLAUDE.md` stub that pulls the
+   PalBuilder rules in through an `@CLAUDE.palsync.md` import, which only Claude Code resolves —
+   Hermes would load the stub without the rules. `--agent opencode` inlines the full rules into
+   `AGENTS.md` and puts the skills in `.agents/skills/`, both of which Hermes reads. (It also
+   writes an `opencode.json` and `.opencode/commands/`; Hermes ignores them, and neither holds a
+   secret.) Avoid `--agent codex` / `--agent pi` here — they edit `~/.codex/config.toml` or
+   install a Pi extension.
+
+2. Register the MCP server and the skills in `~/.hermes/config.yaml`:
+
+   ```yaml
+   mcp_servers:
+     palsync:
+       command: "node"
+       args: ["/abs/path/to/palsync/bin/palsync-mcp.js"]
+       env:
+         PALSYNC_WORKSPACE: "/home/you/pals/isr"
+         CP_USER: "${CP_USER}"
+         CP_PASS: "${CP_PASS}"
+
+   skills:
+     external_dirs:
+       - /home/you/pals/isr/.agents/skills
+   ```
+
+   Put `CP_USER` / `CP_PASS` in `~/.hermes/.env`; Hermes expands `${VAR}` in `config.yaml`, so
+   the password stays out of the config file. Hermes MCP config is per **profile**, not per
+   project: for several pals, use one Hermes profile per pal (`hermes -p <profile>`), each with
+   its own `config.yaml`.
+
+   Why `external_dirs`: Hermes loads project-local `.agents/skills/` only inside a git checkout
+   and only after `hermes skills trust`. A palsync workspace is not a git repo, so point Hermes
+   at the skills folder directly.
+
+3. Start Hermes in the workspace so it reads `AGENTS.md`: `hermes --in ~/pals/isr` (or `cd`
+   there first). Hermes reads the context file from its launch directory.
+
+Hermes config reference: <https://hermes-agent.nousresearch.com/docs/reference/mcp-config-reference>,
+skills: <https://hermes-agent.nousresearch.com/docs/user-guide/features/skills>.
+
+**Any other MCP client** — add a local stdio MCP server with the command + env above.
 
 **Pi** — `palsync setup --agent pi` (or `palsync --agent pi`) prepares the workspace with the
 `.agents/skills/` + `AGENTS.md` open standard and launches `pi`. Users do not register a Pi MCP
