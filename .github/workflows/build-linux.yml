@@ -10,7 +10,10 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned (not ubuntu-latest): node-pty's pty.node links against the build host's glibc, so a
+    # newer runner produces an AppImage that dies on older distros (Fedora 40 hit GLIBC_2.42).
+    # Build on the oldest supported runner so the binary runs on anything newer.
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
