@@ -127,55 +127,54 @@ codex mcp add palsync --env PALSYNC_WORKSPACE=/home/you/pals/isr --env CP_USER=y
 **Claude Code** — `setup` writes `.mcp.json` in the workspace; Claude Code auto-discovers it. Set
 `CP_PASS`/`CP_USER` in the environment Claude Code runs in (headless boxes).
 
-**Hermes Agent (Nous Research)** — Hermes owns the model (OpenRouter / Anthropic / DeepSeek /
-local) and the human-approval gateway (Telegram, etc.). palsync has no `--agent hermes`; three
-manual steps wire it up.
+**Hermes Agent (Nous Research) → Claude Code** — Hermes orchestrates (task intake, the human
+approval gateway on Telegram etc.) and hands the pal work to Claude Code through its bundled
+`claude-code` skill. Claude Code does the build with palsync's full Claude setup: the
+`CLAUDE.md` rules import, `.claude/skills/`, the guard/completion hooks, and `.mcp.json`.
 
-1. Create the workspace in **AGENTS.md mode**:
+1. Create the workspace in the default (Claude) mode:
 
    ```sh
-   palsync setup --pal "ISR SEO Dashboard" --dir ~/pals/isr --agent opencode
+   palsync setup --pal "ISR SEO Dashboard" --dir ~/pals/isr
    ```
 
-   Do not use the default (Claude) mode for Hermes. It writes a `CLAUDE.md` stub that pulls the
-   PalBuilder rules in through an `@CLAUDE.palsync.md` import, which only Claude Code resolves —
-   Hermes would load the stub without the rules. `--agent opencode` inlines the full rules into
-   `AGENTS.md` and puts the skills in `.agents/skills/`, both of which Hermes reads. (It also
-   writes an `opencode.json` and `.opencode/commands/`; Hermes ignores them, and neither holds a
-   secret.) Avoid `--agent codex` / `--agent pi` here — they edit `~/.codex/config.toml` or
-   install a Pi extension.
+   This also pre-approves the `palsync` server in `~/.claude/settings.json`, so Claude Code does
+   not prompt for it.
 
-2. Register the MCP server and the skills in `~/.hermes/config.yaml`:
+2. Log in to Claude Code once on the box (`claude auth login`, or `claude setup-token` for a
+   long-lived token).
+
+3. Let the credentials reach Claude Code. Put `CP_USER` / `CP_PASS` in `~/.hermes/.env`. Hermes
+   strips sensitive variables from the commands it runs, so forward them in
+   `~/.hermes/config.yaml`:
 
    ```yaml
-   mcp_servers:
-     palsync:
-       command: "node"
-       args: ["/abs/path/to/palsync/bin/palsync-mcp.js"]
-       env:
-         PALSYNC_WORKSPACE: "/home/you/pals/isr"
-         CP_USER: "${CP_USER}"
-         CP_PASS: "${CP_PASS}"
-
-   skills:
-     external_dirs:
-       - /home/you/pals/isr/.agents/skills
+   terminal:
+     env_passthrough:
+       - CP_USER
+       - CP_PASS
    ```
 
-   Put `CP_USER` / `CP_PASS` in `~/.hermes/.env`; Hermes expands `${VAR}` in `config.yaml`, so
-   the password stays out of the config file. Hermes MCP config is per **profile**, not per
-   project: for several pals, use one Hermes profile per pal (`hermes -p <profile>`), each with
-   its own `config.yaml`.
+   `claude` inherits them, and the `palsync-mcp` server it starts inherits them from `claude`.
+   `.mcp.json` holds only `PALSYNC_WORKSPACE` — never the password.
 
-   Why `external_dirs`: Hermes loads project-local `.agents/skills/` only inside a git checkout
-   and only after `hermes skills trust`. A palsync workspace is not a git repo, so point Hermes
-   at the skills folder directly.
+4. Have Hermes run Claude Code in print mode from the workspace:
 
-3. Start Hermes in the workspace so it reads `AGENTS.md`: `hermes --in ~/pals/isr` (or `cd`
-   there first). Hermes reads the context file from its launch directory.
+   ```sh
+   cd ~/pals/isr && claude -p "<task>" \
+     --mcp-config .mcp.json \
+     --allowedTools "mcp__palsync,Skill,Read,Edit,Write,Glob,Grep" \
+     --output-format json --max-turns 60
+   ```
 
-Hermes config reference: <https://hermes-agent.nousresearch.com/docs/reference/mcp-config-reference>,
-skills: <https://hermes-agent.nousresearch.com/docs/user-guide/features/skills>.
+   Print mode skips the trust dialog and denies (does not prompt for) any tool not in
+   `--allowedTools`. `mcp__palsync` allows every palsync tool. `--output-format json` returns a
+   `session_id`; pass it to `claude -p --resume <id> "<follow-up>"` to continue. Pal builds run
+   long, so run the command in the background or give Hermes a long terminal timeout.
+
+   **Human approval before a push:** Hermes cannot see tool calls inside Claude Code. To gate
+   pushes, deny them in the build run (`--disallowedTools "mcp__palsync__pal_push"`), have Hermes
+   ask the human, then `--resume` the session without that flag.
 
 **Any other MCP client** — add a local stdio MCP server with the command + env above.
 
