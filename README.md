@@ -124,7 +124,7 @@ The agent calls these for you — you never run them by hand:
 | `pal_screenshot` | Screenshot the rendered pal (Chromium) so the agent can see its own UI. |
 | `pal_exercise` | Drive the rendered pal in a browser to exercise a user flow. |
 | `pal_context` | Load focused PalSync contract sections on demand for sync, file-creation, and dataset work. |
-| `pal_seo_audit` | On-page SEO audit of a web pal — title/description, canonical, `og:` tags, JSON-LD, H1, img alt, … Every finding carries the exact fix. |
+| `pal_seo_audit` | On-page SEO audit of a web pal — title/description, canonical, `og:` tags, JSON-LD validity, heading order, `lang`, image dimensions, thin content, img alt, … Every finding carries the exact fix. |
 | `pal_sync_datasets` | Create/update dataset tables from `pal.json`. Never deletes data by default; destructive `recreate` requires an exact typed confirmation. |
 | `pal_data_set` | Create/update a pal-level Data map (`pal.getData("name")`) in `pal.json` — full replace of that name's key/value set. Local edit only; `pal_push` to send it. |
 | `pal_data_delete` | Delete a pal-level Data map by name from `pal.json`. Local edit only; `pal_push` to send the removal. |

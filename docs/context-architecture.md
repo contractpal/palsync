@@ -15,7 +15,7 @@ basis that could not be reproduced.
 |---|---|---|---:|---:|---|
 | All | `tool-definitions` | `src/mcp/tools.js` | 30,541 | 7,636 | release-stable |
 | All | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 4,922 | 1,231 | release-stable |
-| All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 2,497 | 625 | release-stable |
+| All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 2,564 | 641 | release-stable |
 | Claude | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,519 | 380 | workspace-stable |
 | Codex/OpenCode/Pi | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,650 | 413 | workspace-stable |
 | All | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 7,992 | 1,998 | on-demand |
@@ -32,7 +32,7 @@ basis that could not be reproduced.
 | All | `skill-body:palbuilder-email` | `bundled-context/skills/palbuilder-email/SKILL.md` | 5,690 | 1,423 | on-demand |
 | All | `skill-body:palbuilder-frontend` | `bundled-context/skills/palbuilder-frontend/SKILL.md` | 10,089 | 2,523 | on-demand |
 | All | `skill-body:palbuilder-realtime` | `bundled-context/skills/palbuilder-realtime/SKILL.md` | 4,992 | 1,248 | on-demand |
-| All | `skill-body:palbuilder-seo` | `bundled-context/skills/palbuilder-seo/SKILL.md` | 9,624 | 2,406 | on-demand |
+| All | `skill-body:palbuilder-seo` | `bundled-context/skills/palbuilder-seo/SKILL.md` | 10,809 | 2,703 | on-demand |
 | All | `skill-body:palbuilder-workflow` | `bundled-context/skills/palbuilder-workflow/SKILL.md` | 12,379 | 3,095 | on-demand |
 | All | `skill-body:qa-report` | `bundled-context/skills/qa-report/SKILL.md` | 7,426 | 1,857 | on-demand |
 

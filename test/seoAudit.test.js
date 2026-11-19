@@ -5,7 +5,7 @@
 // bug live (test/stage instances route every path through the workflow).
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { auditRobotsTxt, auditSitemapXml, auditCrawlerFile } = require("../src/core/seoAudit");
+const { auditRobotsTxt, auditSitemapXml, auditCrawlerFile, auditHtml } = require("../src/core/seoAudit");
 
 function severities(findings) { return findings.map(f => f.severity + ":" + f.rule); }
 
@@ -74,4 +74,78 @@ test("auditCrawlerFile: 404 on llms.txt (optional) is only a warning", () => {
 test("auditCrawlerFile: llms.txt present (200) has no checks beyond presence", () => {
     const findings = auditCrawlerFile("llms", "llms.txt", { status: 200, html: "# Anything" }, false);
     assert.deepEqual(findings, []);
+});
+
+// ---- auditHtml: newer on-page checks (all warnings) ----
+
+function htmlWarnings(result, rule) {
+    return result.findings.filter(f => f.rule === rule && f.severity === "warn");
+}
+function passedRule(result, rule) {
+    return result.passed.some(p => p.rule === rule);
+}
+
+test("auditHtml htmlLang: missing lang warns, declared lang passes", () => {
+    const missing = auditHtml("<html><body><p>x</p></body></html>");
+    assert.equal(htmlWarnings(missing, "htmlLang").length, 1);
+    const declared = auditHtml("<html lang=\"en\"><body><p>x</p></body></html>");
+    assert.equal(htmlWarnings(declared, "htmlLang").length, 0);
+    assert.ok(passedRule(declared, "htmlLang"));
+});
+
+test("auditHtml robotsNoindex: noindex warns, index passes", () => {
+    const blocked = auditHtml("<html lang=\"en\"><head><meta name=\"robots\" content=\"noindex, follow\"/></head><body></body></html>");
+    assert.equal(htmlWarnings(blocked, "robotsNoindex").length, 1);
+    const indexable = auditHtml("<html lang=\"en\"><head><meta name=\"robots\" content=\"index, follow\"/></head><body></body></html>");
+    assert.equal(htmlWarnings(indexable, "robotsNoindex").length, 0);
+    assert.ok(passedRule(indexable, "robotsNoindex"));
+});
+
+test("auditHtml canonicalMultiple: two canonicals warn, one passes", () => {
+    const two = auditHtml("<html lang=\"en\"><head>" +
+        "<link rel=\"canonical\" href=\"https://example.com/a\"/>" +
+        "<link rel=\"canonical\" href=\"https://example.com/b\"/>" +
+        "</head><body></body></html>");
+    assert.equal(htmlWarnings(two, "canonicalMultiple").length, 1);
+    const one = auditHtml("<html lang=\"en\"><head><link rel=\"canonical\" href=\"https://example.com/a\"/></head><body></body></html>");
+    assert.equal(htmlWarnings(one, "canonicalMultiple").length, 0);
+    assert.ok(passedRule(one, "canonicalMultiple"));
+});
+
+test("auditHtml headingSkip: h1 to h3 warns, sequential headings pass", () => {
+    const skip = auditHtml("<html lang=\"en\"><body><h1>Top</h1><h3>Skipped</h3></body></html>");
+    assert.equal(htmlWarnings(skip, "headingSkip").length, 1);
+    const clean = auditHtml("<html lang=\"en\"><body><h1>Top</h1><h2>Next</h2><h3>Then</h3></body></html>");
+    assert.equal(htmlWarnings(clean, "headingSkip").length, 0);
+    assert.ok(passedRule(clean, "headingSkip"));
+});
+
+test("auditHtml jsonLdInvalid: broken JSON and missing @type warn, valid block passes", () => {
+    const broken = auditHtml("<html lang=\"en\"><head>" +
+        "<script type=\"application/ld+json\">{ not json }</script>" +
+        "<script type=\"application/ld+json\">{\"@context\":\"https://schema.org\"}</script>" +
+        "</head><body></body></html>");
+    const brokenFindings = htmlWarnings(broken, "jsonLdInvalid");
+    assert.equal(brokenFindings.length, 1);
+    assert.match(brokenFindings[0].message, /block 1 is not valid JSON[\s\S]*block 2 has no @type/);
+    const valid = auditHtml("<html lang=\"en\"><head><script type=\"application/ld+json\">" +
+        "{\"@context\":\"https://schema.org\",\"@type\":\"WebSite\"}</script></head><body></body></html>");
+    assert.equal(htmlWarnings(valid, "jsonLdInvalid").length, 0);
+    assert.ok(passedRule(valid, "jsonLdInvalid"));
+});
+
+test("auditHtml imgDimensions: missing width/height warns, both present pass", () => {
+    const missing = auditHtml("<html lang=\"en\"><body><img src=\"../Images/a.jpg\" alt=\"A\"/></body></html>");
+    assert.equal(htmlWarnings(missing, "imgDimensions").length, 1);
+    const sized = auditHtml("<html lang=\"en\"><body><img src=\"../Images/a.jpg\" alt=\"A\" width=\"800\" height=\"600\"/></body></html>");
+    assert.equal(htmlWarnings(sized, "imgDimensions").length, 0);
+    assert.ok(passedRule(sized, "imgDimensions"));
+});
+
+test("auditHtml thinContent: under 150 words warns, 150+ words pass", () => {
+    const thin = auditHtml("<html lang=\"en\"><body><p>Short page.</p></body></html>");
+    assert.equal(htmlWarnings(thin, "thinContent").length, 1);
+    const full = auditHtml("<html lang=\"en\"><body><p>" + Array(160).fill("word").join(" ") + "</p></body></html>");
+    assert.equal(htmlWarnings(full, "thinContent").length, 0);
+    assert.ok(passedRule(full, "thinContent"));
 });

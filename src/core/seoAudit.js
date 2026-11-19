@@ -78,6 +78,13 @@ function auditHtml(html, { url = "" } = {}) {
         add("error", "canonicalRelative", "The canonical URL is RELATIVE (\"" + canonicalHref + "\"). Canonicals must be absolute. Fix: use the full https:// URL of this page.");
     } else ok("canonical", "canonical present and absolute");
 
+    // ---- duplicate canonicals ----
+    const canonicalTags = html.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/gi) || [];
+    if (canonicalTags.length > 1) {
+        const hrefs = canonicalTags.map(t => (t.match(/href=["']([^"']*)["']/i) || [])[1] || "(no href)").slice(0, 5);
+        add("warn", "canonicalMultiple", "The page has " + canonicalTags.length + " canonical links (" + hrefs.join(", ") + "). Search engines may ignore all of them. Fix: keep exactly ONE <link rel=\"canonical\"> pointing at this page's absolute URL.");
+    } else if (canonicalTags.length === 1) ok("canonicalMultiple", "exactly one canonical link");
+
     // ---- Open Graph + twitter ----
     const OG_REQUIRED = ["og:title", "og:description", "og:image", "og:url", "og:type"];
     const missingOg = OG_REQUIRED.filter(k => !metaContent(metas, k));
@@ -108,15 +115,64 @@ function auditHtml(html, { url = "" } = {}) {
     else if (h1s.length > 1) add("warn", "h1", "The page has " + h1s.length + " <h1> elements — there should be exactly ONE. Fix: keep the main headline as <h1>; demote the others to <h2>.");
     else ok("h1", "exactly one <h1>");
 
+    // ---- heading order ----
+    const headingLevels = [];
+    const headingRe = /<h([1-6])\b[^>]*>/gi;
+    let hm;
+    while ((hm = headingRe.exec(html))) headingLevels.push(Number(hm[1]));
+    const headingSkips = [];
+    for (let i = 1; i < headingLevels.length; i++) {
+        if (headingLevels[i] - headingLevels[i - 1] > 1) headingSkips.push("h" + headingLevels[i - 1] + " → h" + headingLevels[i]);
+    }
+    if (headingSkips.length) {
+        add("warn", "headingSkip", "Heading level jumps by more than one (" + headingSkips.slice(0, 3).join(", ") + "). A skipped level breaks the outline screen readers use to navigate. Fix: step down one level at a time (h1 → h2 → h3); style with CSS, not with a bigger tag.");
+    } else if (headingLevels.length) ok("headingSkip", "headings step down one level at a time");
+
     // ---- viewport ----
     if (!metas.some(x => x.key === "viewport")) {
         add("error", "viewport", "No viewport meta — the page is not mobile-friendly in Google's eyes (mobile-first indexing). Fix: add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /> in <head>.");
     } else ok("viewport", "viewport meta present");
 
+    // ---- html lang ----
+    const htmlTag = (html.match(/<html\b[^>]*>/i) || [])[0];
+    if (!htmlTag || !/\slang=(?:"[^"]+"|'[^']+'|[^\s>]+)/i.test(htmlTag)) {
+        add("warn", "htmlLang", "The <html> tag has no lang attribute. Search engines and screen readers use it to know the page language. Fix: write <html lang=\"en\"> (use the page's real language code).");
+    } else ok("htmlLang", "<html> declares its language");
+
+    // ---- robots noindex ----
+    const robots = metaContent(metas, "robots");
+    if (robots && /\bnoindex\b/i.test(robots)) {
+        add("warn", "robotsNoindex", "The robots meta contains noindex — search engines will drop this page from results. Fix: remove \"noindex\" from pages meant to rank; keep it only on staging or thank-you pages.");
+    } else ok("robotsNoindex", "no noindex directive");
+
     // ---- structured data ----
     if (!/<script[^>]*type=["']application\/ld\+json["']/i.test(html)) {
         add("warn", "structuredData", "No JSON-LD structured data. Schema markup earns rich results and helps AI/answer engines cite you. Fix: add a <script type=\"application/ld+json\"> block in the PAGE <head> (allowed there — only fragments reject <script>) with Organization or WebSite schema. The palbuilder-seo skill has a copy-paste recipe.");
     } else ok("structuredData", "JSON-LD present");
+
+    // ---- JSON-LD validity ----
+    // Runs on rendered HTML, so ${...} template output is already resolved before this sees it.
+    const jsonLdBlocks = [];
+    const jsonLdRe = /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+    let jm;
+    while ((jm = jsonLdRe.exec(html))) jsonLdBlocks.push(jm[1].trim());
+    const badJsonLd = [];
+    for (let i = 0; i < jsonLdBlocks.length; i++) {
+        let data;
+        try { data = JSON.parse(jsonLdBlocks[i]); }
+        catch (e) { badJsonLd.push("block " + (i + 1) + " is not valid JSON (" + e.message + ")"); continue; }
+        const items = Array.isArray(data) ? data : [data];
+        for (const item of items) {
+            if (!item || typeof item !== "object") { badJsonLd.push("block " + (i + 1) + " is not a JSON object"); break; }
+            if (!item["@context"]) { badJsonLd.push("block " + (i + 1) + " has no @context"); break; }
+            if (!item["@type"] && !(Array.isArray(item["@graph"]) && item["@graph"].length)) {
+                badJsonLd.push("block " + (i + 1) + " has no @type or @graph"); break;
+            }
+        }
+    }
+    if (badJsonLd.length) {
+        add("warn", "jsonLdInvalid", "JSON-LD problem: " + badJsonLd.join("; ") + ". Search engines cannot read invalid structured data, so rich results are lost. Fix: JSON-LD must be real JSON — double quotes, no trailing commas/comments — with @context and @type (or @graph).");
+    } else if (jsonLdBlocks.length) ok("jsonLdInvalid", "JSON-LD parses and has @context + @type/@graph");
 
     // ---- img alt ----
     const imgs = html.match(/<img\b[^>]*>/gi) || [];
@@ -125,6 +181,27 @@ function auditHtml(html, { url = "" } = {}) {
         const srcs = noAlt.map(t => (t.match(/src=["']([^"']*)["']/i) || [])[1] || "(no src)").slice(0, 5);
         add("warn", "imgAlt", noAlt.length + " <img> tag(s) have no alt attribute (" + srcs.join(", ") + (noAlt.length > 5 ? ", …" : "") + "). Images without alt are invisible to image search and screen readers. Fix: add alt=\"describe the image\" (or alt=\"\" if purely decorative).");
     } else if (imgs.length) ok("imgAlt", "all " + imgs.length + " <img> tags have alt");
+
+    // ---- img dimensions (CLS) ----
+    const noDims = imgs.filter(t => !(/\bwidth=/i.test(t) && /\bheight=/i.test(t)));
+    if (noDims.length) {
+        const srcs = noDims.map(t => (t.match(/src=["']([^"']*)["']/i) || [])[1] || "(no src)").slice(0, 5);
+        add("warn", "imgDimensions", noDims.length + " <img> tag(s) have no width and height attributes (" + srcs.join(", ") + (noDims.length > 5 ? ", …" : "") + "). Without them the browser reserves no space and the page shifts as images load (CLS — a Core Web Vital). Fix: add the image's real pixel size as width=\"…\" height=\"…\"; control display size with CSS instead.");
+    } else if (imgs.length) ok("imgDimensions", "all " + imgs.length + " <img> tags declare width and height");
+
+    // ---- thin content ----
+    const bodyMatch = html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
+    const visibleText = (bodyMatch ? bodyMatch[1] : html)
+        .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&[a-z#0-9]+;/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    const wordCount = visibleText ? visibleText.split(" ").length : 0;
+    if (wordCount < 150) {
+        add("warn", "thinContent", "The page has only " + wordCount + " words of visible body text — thin for a page that should rank. Search engines may treat it as low-value. Fix: add specific copy answering the page's topic (who it is for, what it does, proof, next step); 150+ words is the floor, not the target.");
+    } else ok("thinContent", wordCount + " words of visible text");
 
     const errors = findings.filter(f => f.severity === "error").length;
     const warnings = findings.filter(f => f.severity === "warn").length;

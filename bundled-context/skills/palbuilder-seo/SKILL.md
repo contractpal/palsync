@@ -1,6 +1,6 @@
 ---
 name: palbuilder-seo
-description: "Load with palbuilder-frontend for public WEB-pal SEO: head, content/structured data, sitemap/robots, performance, and pal_seo_audit. Not console pals."
+description: "Load with palbuilder-frontend for public WEB-pal SEO: head, structured data, sitemap/robots/llms.txt, performance, content/E-E-A-T, AI search (GEO), images, hreflang, local, audits via pal_seo_audit. Not console pals."
 ---
 
 # PalBuilder SEO Skill (web pals)
@@ -8,6 +8,20 @@ description: "Load with palbuilder-frontend for public WEB-pal SEO: head, conten
 Read this before writing any WEB pal page `<head>`. After pushing, run **`pal_seo_audit`** —
 it fetches the page exactly as crawlers see it and checks every head-recipe rule below, plus
 robots.txt/sitemap.xml/llms.txt. Fix every ERROR it reports.
+
+## Task router — read the reference that matches the task
+
+| Task | Read |
+|---|---|
+| Write or review a page `<head>` (title, description, canonical, og, JSON-LD) | the recipe below, then `references/structured-data.md` |
+| Serve robots.txt / sitemap.xml / llms.txt from the workflow | `references/crawler-files.md` |
+| Run a full-site audit and write the report | `references/audit-workflow.md` |
+| Fix crawlability, indexing, canonicals, redirects, URLs, 404s | `references/technical.md` |
+| Write page copy, fix thin content, add E-E-A-T signals | `references/content-eeat.md` |
+| Get cited by AI answer engines (GEO), tune llms.txt / AI crawler rules | `references/geo-ai-search.md` |
+| Fix images (alt, dimensions, lazy loading, formats, weight) | `references/images.md` |
+| Add hreflang, or a local-business pal with a physical address | `references/international-local.md` |
+| Improve Lighthouse performance / Core Web Vitals | `references/loading-speed.md` |
 
 The substrate facts you need (verified live, across two production pals):
 
@@ -164,9 +178,11 @@ canonical/og:url point at THAT page's URL.
 1. Write the page following this skill → `pal_push` (its gate includes offline validation; use
    standalone `pal_validate` only for diagnosis between edits).
 2. When the active verification plan includes SEO, run **`pal_seo_audit`** — it fetches the rendered page and checks: title/description lengths,
-   canonical, the 5 og: tags + absolute og:image/og:url, twitter:card, one `<h1>`, viewport,
-   JSON-LD presence, img alt coverage, non-ASCII attribute values, and robots.txt/sitemap.xml/
-   llms.txt (fallthrough-to-homepage, content-type, required content).
+   canonical (including duplicate canonical links), the 5 og: tags + absolute og:image/og:url,
+   twitter:card, one `<h1>`, heading order, viewport, `<html lang>`, robots noindex, JSON-LD
+   presence and validity, img alt coverage, img width/height, thin content (<150 words),
+   non-ASCII attribute values, and robots.txt/sitemap.xml/llms.txt (fallthrough-to-homepage,
+   content-type, required content).
 3. Fix every ERROR; review every WARNING. Re-push, re-audit until it reports
    "SEO AUDIT PASSED".
 
