@@ -5,9 +5,15 @@
 //
 // One mode: GOAL.md. Completion requires passing, script-tagged pal_exercise evidence for the
 // CURRENT pushed version. A workspace without GOAL.md is not under completion enforcement.
-const reviewCheck = require("./reviewCheck");
+const fs = require("fs");
+const path = require("path");
 const policy = require("./policy");
-const goal = require("./goal");
+// goal and reviewCheck load ~30 ms of modules. The Stop hook calls checkWorkspace in every project,
+// and most have no GOAL.md, so load them only when a GOAL.md exists.
+const lazy = {
+    get goal() { return require("./goal"); },
+    get reviewCheck() { return require("./reviewCheck"); }
+};
 
 function result(state, allow, completionPassed, message, extra = {}) {
     return Object.assign({ state, code: state, allow, completionPassed, message }, extra);
@@ -25,7 +31,7 @@ function completeWithReview(workspaceDir, reviewMode, extra, { allDone, complete
             (reviewMode === "ask" ? " Offer to run pal-review; the user decides." : ""),
             Object.assign({ reviewMode }, extra));
     }
-    const reviewState = reviewCheck.checkWorkspace(workspaceDir);
+    const reviewState = lazy.reviewCheck.checkWorkspace(workspaceDir);
     if (!reviewState.ok || reviewState.verdict !== "PASS") {
         // Scope-aware on purpose. The bare imperative this replaced ("Run pal-review, then ... again")
         // was read as an order by a session that had been asked to do something else entirely, and it
@@ -37,7 +43,7 @@ function completeWithReview(workspaceDir, reviewMode, extra, { allDone, complete
             "If finishing this build IS your current task, run pal-review, then `palsync completion check` " +
             "again. If it is not — you were asked to do something else, or you need an owner decision — " +
             "report this blocker and stop. Do not start a review on your own initiative.",
-            Object.assign({ reviewMode, review: reviewState, reviewOutput: reviewCheck.formatReviewCheck(reviewState) }, extra));
+            Object.assign({ reviewMode, review: reviewState, reviewOutput: lazy.reviewCheck.formatReviewCheck(reviewState) }, extra));
     }
     return result("COMPLETE", true, true, complete + " Independent review PASS is current.",
         Object.assign({ reviewMode, review: reviewState }, extra));
@@ -62,7 +68,7 @@ function checkGoal(workspaceDir, parsed, reviewMode) {
             "GOAL.md acceptance-check script(s) are invalid: " +
             invalid.map(check => check.id + " (" + check.scriptError + ")").join(", ") + ".");
     }
-    const checks = goal.checkEvidence(workspaceDir, parsed);
+    const checks = lazy.goal.checkEvidence(workspaceDir, parsed);
     const unverified = checks.filter(check => check.scripted && !check.verified && !check.blocked);
     if (unverified.length) {
         return result("UNVERIFIED_CHECKS", false, false,
@@ -92,9 +98,15 @@ function checkGoal(workspaceDir, parsed, reviewMode) {
     });
 }
 
+// Same answer as goal.readGoal() returning null (ENOENT only); any other error falls through to readGoal.
+function goalFileMissing(workspaceDir) {
+    try { fs.statSync(path.join(workspaceDir, "GOAL.md")); return false; }
+    catch (e) { return Boolean(e && e.code === "ENOENT"); }
+}
+
 function checkWorkspace(workspaceDir, { review } = {}) {
     const reviewMode = policy.normalize(review, policy.REVIEW_MODES) || policy.resolve().review;
-    const parsedGoal = goal.readGoal(workspaceDir);
+    const parsedGoal = goalFileMissing(workspaceDir) ? null : lazy.goal.readGoal(workspaceDir);
     if (!parsedGoal) {
         return result("NOT_APPLICABLE", true, false,
             "No GOAL.md; completion enforcement does not apply.");

@@ -30,7 +30,10 @@ const SUBCOMMANDS = ["push", "pull", "merge", "status", "test", "preview", "open
 // own MCP server.
 const subcmd = argv[0] && !argv[0].startsWith("-") ? argv[0].replace(/_/g, "-") : undefined;
 if (SUBCOMMANDS.includes(subcmd)) {
-    const handler = subcmd === "icon" ? require("../src/cli/iconCommand") : require("../src/cli/syncCommands");
+    // `hook` runs on every agent Edit/Write/Stop in every project, so it skips syncCommands' heavy imports.
+    const handler = subcmd === "icon" ? require("../src/cli/iconCommand")
+        : subcmd === "hook" ? require("../src/cli/hookCommand")
+        : require("../src/cli/syncCommands");
     handler.run(subcmd, argv.slice(1))
         .then(code => process.exit(code))
         .catch(err => {
