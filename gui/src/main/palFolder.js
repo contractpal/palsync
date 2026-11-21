@@ -46,4 +46,19 @@ function tabFromRecord(folderPath, record) {
     };
 }
 
-module.exports = { validatePalFolder, tabFromRecord };
+// Dashboard row data, read straight from each pal's .palsync.json — no server call, no agent start.
+// A pal whose record is unreadable still gets a row (just without the extras).
+async function readSummary(pal, cloudNameByUrl) {
+    let record = null;
+    try { record = await palsyncfile.read(pal.path); } catch (e) { /* summary is best-effort */ }
+    const cloudUrl = (record && record.cloudUrl) || pal.cloudEndpoint || null;
+    return {
+        path: pal.path,
+        cloudUrl,
+        cloudName: (cloudUrl && cloudNameByUrl[cloudUrl]) || null,
+        lastModifiedDate: record ? record.lastModifiedDate : null,
+        pulledAt: record ? record.pulledAt : null
+    };
+}
+
+module.exports = { validatePalFolder, tabFromRecord, readSummary };

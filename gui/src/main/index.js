@@ -360,6 +360,13 @@ ipcMain.handle("pal:syncPalsync", async (event, { palPath }) => {
     });
 });
 
+ipcMain.handle("pal:summaries", async () => {
+    if (!currentWorkspace) return [];
+    const cloudNameByUrl = {};
+    for (const c of cloudWizard.listClouds()) cloudNameByUrl[c.url] = c.name;
+    return Promise.all(currentWorkspace.pals.map(p => palFolder.readSummary(p, cloudNameByUrl)));
+});
+
 ipcMain.handle("pal:setAgent", async (event, { palPath, agentId }) => {
     if (!currentWorkspace) return { error: "No workspace open." };
     const pal = currentWorkspace.pals.find(p => p.path === palPath);

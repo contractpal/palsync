@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld("palsyncGui", {
     chooseFolder: () => ipcRenderer.invoke("pal:chooseFolder"),
     addPalFromFolder: (folderPath) => ipcRenderer.invoke("pal:addFromFolder", folderPath),
     removePalFromWorkspace: (palPath) => ipcRenderer.invoke("pal:removeFromWorkspace", palPath),
+    palSummaries: () => ipcRenderer.invoke("pal:summaries"),
     setPalAgent: (palPath, agentId) => ipcRenderer.invoke("pal:setAgent", { palPath, agentId }),
 
     listAgents: () => ipcRenderer.invoke("agents:list"),
