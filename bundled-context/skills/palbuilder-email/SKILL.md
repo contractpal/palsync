@@ -52,7 +52,7 @@ time — you only find out by exercising the real action.
 
 ```js
 var email = c.createEmail("templateName");    // "templateName" = the emails/ file name, no extension
-email.setSubject("Your subject line");        // overrides whatever the template's own subject is
+email.setSubject("Your subject line");        // OPTIONAL: per-send override of the template's emailSubject (pal.json)
 email.setString("someVar", value);             // populates ${someVar} in the template body
 var jobId = email.sendToAddress(toEmail);      // sends AND sets the recipient; returns a job id, or "BLOCKED"
 ```
@@ -78,24 +78,32 @@ leave `"content": ""`):
 
 ```json
 { "string": "templateName.html", "Email": { "content": "", "contentType": "text/html",
-  "filename": "templateName.html" } }
+  "filename": "templateName.html", "emailSubject": "Your subject line" } }
 ```
 
+### Setting the subject
+
+The template's subject is the **`emailSubject`** property on the `Email` entry in `pal.json`.
+Set it there — that is the template-level subject, and it clears the server's
+`Email does not have a subject.` validation note.
+
+`setSubject()` in workflow code is **optional**: use it only when the subject must vary per send
+(e.g. include a name or order number), where it overrides `emailSubject`. Don't assume a pal
+"always" sets the subject in workflow — a static subject belongs in `emailSubject`, and the
+workflow can simply omit `setSubject()`.
+
+Confirmed **not to work** as a subject: a `"subject"` key on the `Email` entry (wrong name — use
+`emailSubject`) and a `<title>` tag inside the email HTML (ignored; doesn't survive a push+pull
+round trip).
+
 After a push+pull round trip, the server adds its own fields (`"text": false`, and — same as
-every other content type — it may reformat/reindent the file). Confirmed **not to work**: adding
-a `"subject"` key to the `Email` entry in `pal.json`, and adding a `<title>` tag inside the email
-HTML — neither cleared the server's `Email does not have a subject.` validation note, and neither
-survived a push+pull round trip unchanged. **Set the subject in code with `setSubject()`** — the
-validation note about a missing template-level subject persists regardless (confirmed harmless:
-push still returns `save OK`, and the email sends with the correct runtime subject once Enterprise
-SMTP is available) — treat it like the other cosmetic, non-fatal validation notes this platform
-emits (see `palbuilder-frontend`'s CSS-linter note), not a real error.
+every other content type — it may reformat/reindent the file).
 
 The body uses the same `${var}` EL substitution as pages/fragments:
 
 ```html
 <html>
-    <head><title>Your subject line</title></head>
+    <head></head>
     <body>
         <p>Your value is: <strong>${someVar}</strong></p>
     </body>
