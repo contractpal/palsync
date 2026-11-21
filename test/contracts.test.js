@@ -68,6 +68,23 @@ test("inline pal.getDataSet(...).getRecords(..., name) satisfies c:list name", (
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("pal-level DataList in pal.json datalists satisfies c:list name", () => {
+    const dir = tmpWorkspace({
+        "pal.json": basePalJson({ datalists: { entry: [{ string: "wards", DataList: { cols: [] } }] } }),
+        "workflows/console.js": "function run(controller) { payload.addDataList(pal.getDataList('wards')); }",
+        "fragments/list.html": [
+            "<c:ignore xmlns:c=\"contractpal\">",
+            "  <c:list name=\"wards\" id=\"w\">",
+            "    <p>${w.ward}</p>",
+            "  </c:list>",
+            "</c:ignore>",
+        ].join("\n"),
+    });
+    const findings = lintContracts(dir).filter(f => f.rule === "listNameContract");
+    assert.strictEqual(findings.length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("dead ajax-target — no matching id anywhere is a warning", () => {
     const dir = tmpWorkspace({
         "workflows/console.js": "function run(controller) {}",

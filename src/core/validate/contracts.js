@@ -688,6 +688,11 @@ function lintContracts(snapshotOrDir) {
     const contextWorkflowFiles = workflowFiles.concat(unshadowedResources(snapshot.resourceWorkflows, snapshot.workflows));
 
     const listNames = collectListNames(contextWorkflowFiles);
+    // Pal-level DataLists (pal.json datalists.entry) are attached via pal.getDataList(), not produced in workflow code.
+    const palDataLists = snapshot.palJson && snapshot.palJson.parsed && snapshot.palJson.parsed.datalists;
+    for (const e of (palDataLists && Array.isArray(palDataLists.entry)) ? palDataLists.entry : []) {
+        if (e && typeof e.string === "string") listNames.add(e.string);
+    }
     checkListNameContract(markupFiles, listNames, findings);
 
     checkAjaxTargetExists(markupFiles, findings, resourceMarkupFiles);
