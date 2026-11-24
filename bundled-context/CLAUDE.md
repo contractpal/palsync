@@ -10,6 +10,7 @@ Load every skill the task touches.
 - Approved `GOAL.md` to build → `pal-loop`; independent finished-build review → `pal-review`.
 - Markup/browser UI → `palbuilder-frontend`; workflow code → `palbuilder-workflow`; data/datasets → `palbuilder-data`.
 - Visible UI → `palbuilder-frontend` (CSS rule + `references/ui-quality.md`).
+- Mockup or design image to build/match → `ui-replicate` with `palbuilder-frontend`.
 - "Test console/web/transaction" → `shared/references/test-requests.md`.
 - Manifest/structure/restricted workflow-JS questions → `palbuilder-core`. Load other matching `palbuilder-*` skills when relevant.
 - A "REPOSITORY PAL" note, or 0-byte files in a repository pal or under `.resources/` → `palbuilder-core/references/repository-pal.md`: those are not-downloaded placeholders, never empty content.

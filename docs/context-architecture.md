@@ -14,10 +14,11 @@ basis that could not be reproduced.
 | Runtime | Section | Source | Bytes | Est. tokens | Loading |
 |---|---|---|---:|---:|---|
 | All | `tool-definitions` | `src/mcp/tools.js` | 30,541 | 7,636 | release-stable |
-| All | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 4,922 | 1,231 | release-stable |
-| All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 2,564 | 641 | release-stable |
+| All | `contract-doc` | `bundled-context/CLAUDE.md + generator stamp` | 5,009 | 1,253 | release-stable |
+| All | `skill-catalog` | `bundled-context/skills/*/SKILL.md#frontmatter` | 2,787 | 697 | release-stable |
 | Claude | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,519 | 380 | workspace-stable |
-| Codex/OpenCode/Pi | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,650 | 413 | workspace-stable |
+| Codex/OpenCode | `sync-section` | `src/launcher/contextInject.js#syncSection` | 1,650 | 413 | workspace-stable |
+| Pi | `sync-section` | `src/launcher/contextInject.js#syncSection` | 2,081 | 521 | workspace-stable |
 | All | `sync-workflow` | `src/launcher/contextInject.js#syncDetails` | 7,992 | 1,998 | on-demand |
 | All | `creating-files` | `src/launcher/contextInject.js#syncDetails` | 4,978 | 1,245 | on-demand |
 | All | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,524 | 881 | on-demand |
@@ -35,6 +36,7 @@ basis that could not be reproduced.
 | All | `skill-body:palbuilder-seo` | `bundled-context/skills/palbuilder-seo/SKILL.md` | 10,809 | 2,703 | on-demand |
 | All | `skill-body:palbuilder-workflow` | `bundled-context/skills/palbuilder-workflow/SKILL.md` | 12,379 | 3,095 | on-demand |
 | All | `skill-body:qa-report` | `bundled-context/skills/qa-report/SKILL.md` | 7,426 | 1,857 | on-demand |
+| All | `skill-body:ui-replicate` | `bundled-context/skills/ui-replicate/SKILL.md` | 3,785 | 947 | on-demand |
 
 <!-- palsync generated: end -->
 
@@ -55,5 +57,6 @@ work cannot churn generated context.
 
 - Claude Code documents deferred tool search; other supported hosts do not expose equivalent
   third-party behavior, so PalSync does not dynamically register profiles.
-- Pi uses CLI instructions and its installed MCP adapter does not surface server instructions.
+- Pi receives PalSync context through `AGENTS.md`; its MCP client does not surface server
+  instructions.
 - Provider prompt-cache status is not observable. Manifest percentages are local estimates only.
