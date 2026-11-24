@@ -35,7 +35,7 @@ const USAGE = [
     "  --user <username>    account (default: env CP_USER, else the single keychain account)",
     "  --profile <name>     narrow by profile name (disambiguates a duplicate pal name)",
     "  --group <name>       narrow by group name",
-    "  --agent claude|codex|pi|opencode|gemini|cursor|copilot  which agent's context/MCP to write (default: claude; pi installs the native lazy-loading extension globally)",
+    "  --agent claude|codex|pi|opencode|gemini|cursor|copilot  which agent's context/MCP to write (default: claude; pi writes .pi/mcp.json with palsync + Playwright and launches with codemode)",
     "  --overwrite-local    if the workspace has un-pushed local edits, overwrite them (default: refuse)",
     "  --json               machine-readable result",
     "",
@@ -126,12 +126,12 @@ async function run(argv) {
     const result = await workspace.setup({ session, cloudUrl, sel, workspaceDir, agent: flags.agent, onDrift, log });
 
     if (flags.agent === "pi") {
-        const pi = result.mcpRegistration || await registerPi.register({ installExtension: true });
+        const pi = result.mcpRegistration || await registerPi.registerProject(workspaceDir);
         result.mcpRegistration = pi;
-        result.mcpConfig = null;
+        result.mcpConfig = pi.filePath;
         if (!flags.json) {
-            log((pi.written ? "Native Pi extension installed at " : "Native Pi extension current at ") + pi.filePath + ". No project file written.");
-            if (pi.collisionGuidance) log("⚠ " + pi.collisionGuidance);
+            log("Pi MCP servers (palsync + playwright) registered at " + pi.filePath + ".");
+            log("Open the folder once in Pi and approve the project trust prompt; launch with --tools +codemode.");
         }
     }
 
@@ -150,7 +150,7 @@ async function run(argv) {
         console.log("\nWorkspace ready: " + workspaceDir);
         console.log("  pulled " + result.pulledFiles + " code files + " + result.dataFiles + " data/schema files; skills injected.");
         console.log("  Connect your agent's MCP client to the palsync server with env PALSYNC_WORKSPACE=" + workspaceDir);
-        console.log("  (Claude Code/Copilot: .mcp.json written. OpenCode: opencode.json written. Codex: .codex/config.toml written, project marked trusted in ~/.codex/config.toml. Gemini CLI: .gemini/settings.json written. Cursor: .cursor/mcp.json written. Hermes: see the headless docs.)");
+        console.log("  (Claude Code/Copilot: .mcp.json written. OpenCode: opencode.json written. Codex: .codex/config.toml written, project marked trusted in ~/.codex/config.toml. Gemini CLI: .gemini/settings.json written. Cursor: .cursor/mcp.json written. Pi: .pi/mcp.json written. Hermes: see the headless docs.)");
         console.log("  Auth: set CP_PASS in the agent's environment so the MCP server can authenticate headless.");
     }
     return 0;

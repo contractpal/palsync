@@ -62,7 +62,10 @@ function loadWorkspace(hooks = {}) {
         [paths.register]: { register: async () => { calls.push({ what: "register" }); return { filePath: ".mcp.json" }; } },
         [paths.registerCodexProject]: { registerCodexProject: async () => ({ filePath: ".codex/config.toml" }) },
         [paths.registerOpencode]: { registerOpencode: async () => ({ filePath: "opencode.json" }) },
-        [paths.registerPi]: { register: async () => ({ filePath: "pi-ext" }) },
+        [paths.registerPi]: { registerProject: async (dir) => {
+            calls.push({ what: "registerPiProject", dir });
+            return { filePath: path.join(dir, ".pi", "mcp.json") };
+        } },
         [paths.registerGemini]: { registerGemini: async () => ({ filePath: ".gemini/settings.json" }) },
         [paths.registerCursor]: { registerCursor: async () => ({ filePath: ".cursor/mcp.json" }) },
         [paths.registerCopilot]: { registerCopilot: async () => ({ filePath: ".mcp.json" }) },
@@ -131,6 +134,18 @@ test("normal setup pulls, locks, fetches resources, injects, registers — in th
     assert.equal(record.username, "dev@example.com");
     assert.equal(record.workspaceDir, h.workspaceDir);
     assert.ok(record.fileHashes["pal.json"]);
+});
+
+test("Pi setup registers project MCP servers instead of installing the native extension", async () => {
+    const h = harness();
+    const result = await h.workspace.setup({
+        session: h.session, cloudUrl: "https://cloud.example", sel: SEL,
+        workspaceDir: h.workspaceDir, agent: "pi"
+    });
+    assert.deepEqual(h.calls.map(c => c.what),
+        ["pull", "lock", "resources", "inject", "registerPiProject"]);
+    assert.equal(h.calls.find(c => c.what === "registerPiProject").dir, h.workspaceDir);
+    assert.equal(result.mcpConfig, path.join(h.workspaceDir, ".pi", "mcp.json"));
 });
 
 test("an already-resolved pal skips the account walk in BOTH pull and lock", async () => {

@@ -85,6 +85,7 @@ if (argv[0] === "help" || argv.includes("--help") || argv.includes("-h")) {
         "  palsync upgrade [--check]   self-update to the latest commit on the default branch\n" +
         "  palsync --dir <path>    exact workspace folder for THIS SESSION ONLY (the remembered folder is kept; same path meaning as setup --dir)\n" +
         "  palsync --agent codex|pi|opencode   use Codex, Pi, or OpenCode instead of Claude Code (default: claude)\n" +
+        "                         pi: palsync + Playwright MCP servers from .pi/mcp.json, launched with --tools +codemode\n" +
         "  palsync --eval [spec]   benchmark-harness mode: pick a spec, force create-pal, inject SPEC.md\n" +
         "  palsync --settings      choose how much checking PalSync does, and whether to review at the end\n" +
         "  palsync --version       print the build\n\n" +
@@ -108,6 +109,7 @@ if (subcmd && subcmd !== "setup" && subcmd !== "upgrade") {
 // --agent <claude|codex|pi>: choose the coding agent. Default Claude Code (and, when the flag is
 // absent, the interactive picker still runs — agentFlag stays undefined). Threaded through
 // preflight (which agent's binary to check) and run() → setup() (injection + MCP destinations).
+// Pi is launched with --tools +codemode (src/launcher/agents.js) and reads .pi/mcp.json.
 // Validated against the agents registry (single source of truth) so new agents need no change here.
 function parseAgentFlag(args) {
     let val;

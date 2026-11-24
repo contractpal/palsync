@@ -287,6 +287,18 @@ test("Pi extension wires promptGuidelines and immediate activation guidance", ()
     assert.match(source, /details:\s*\{\s*activated:\s*names\s*\}/);
 });
 
+test("Pi extension stands down when the project .pi/mcp.json serves palsync", () => {
+    const source = fs.readFileSync(path.join(__dirname, "..", "pi-extension", "index.ts"), "utf8");
+    assert.match(source, /function projectServesPalsync\(cwd: string\): boolean/);
+    assert.match(source, /readFileSync\(join\(cwd, "\.pi", "mcp\.json"\), "utf8"\)/);
+    assert.match(source, /server\.enabled !== false/);
+    const standDown = source.indexOf("if (projectServesPalsync(ctx.cwd))");
+    assert.ok(standDown !== -1, "session_start checks the project MCP config");
+    assert.ok(standDown < source.indexOf("client = new PalsyncClient(ctx.cwd)"),
+        "stand-down must run before the native client starts");
+    assert.match(source.slice(standDown, standDown + 400), /sessionId = null;[\s\S]*return;/);
+});
+
 test("Pi routing guidance is entrypoint-local and the installer replaces index.ts last", () => {
     const source = fs.readFileSync(path.join(__dirname, "..", "pi-extension", "index.ts"), "utf8");
     assert.match(source, /const TOOL_GUIDELINES/);
@@ -313,4 +325,32 @@ test("Pi installer copies owned extension files idempotently and reports pi-mcp"
     assert.deepStrictEqual(routeTools("datasets", installedMetadata).sort(),
         ["pal_dataset_query", "pal_sync_datasets"]);
     fs.rmSync(homeDir, { recursive: true, force: true });
+});
+
+test("Pi project registration writes palsync + playwright and preserves user servers", async () => {
+    const { buildMcpConfig } = require("../src/mcp/register");
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-pi-project-"));
+    fs.mkdirSync(path.join(ws, ".pi"), { recursive: true });
+    fs.writeFileSync(path.join(ws, ".pi", "mcp.json"), JSON.stringify({
+        mcpServers: { mine: { command: "my-server", args: ["--flag"] } }
+    }));
+
+    const result = await registerPi.registerProject(ws, { chipSessionId: "chip-1" });
+    assert.equal(result.filePath, path.join(ws, ".pi", "mcp.json"));
+    const written = JSON.parse(fs.readFileSync(result.filePath, "utf8"));
+    assert.deepStrictEqual(written.mcpServers.palsync,
+        buildMcpConfig(ws, { chipSessionId: "chip-1" }).mcpServers.palsync,
+        "palsync entry must match Claude Code's .mcp.json entry, including the Chip session id");
+    assert.deepStrictEqual(written.mcpServers.playwright,
+        { command: "npx", args: ["-y", "@playwright/mcp@latest", "--headless"] });
+    assert.deepStrictEqual(written.mcpServers.mine, { command: "my-server", args: ["--flag"] },
+        "user-configured servers survive registration");
+    assert.deepStrictEqual(result.config, written);
+
+    const fresh = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-pi-project-"));
+    await registerPi.registerProject(fresh);
+    assert.ok(fs.existsSync(path.join(fresh, ".pi", "mcp.json")), "registerProject creates .pi/");
+
+    fs.rmSync(ws, { recursive: true, force: true });
+    fs.rmSync(fresh, { recursive: true, force: true });
 });

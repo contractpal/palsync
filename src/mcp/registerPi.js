@@ -3,8 +3,13 @@
 const fs = require("fs/promises");
 const os = require("os");
 const path = require("path");
+const { buildMcpConfig, mergeJsonConfig } = require("./register");
 
 const SOURCE_DIR = path.join(__dirname, "..", "..", "pi-extension");
+// Pi 1.6 reads project MCP servers from <workspace>/.pi/mcp.json (the same "mcpServers" shape as
+// Claude's .mcp.json). Playwright rides along so a Pi session can drive a browser without a
+// separate extension; --headless keeps remote/CI boxes working.
+const PLAYWRIGHT_SERVER = { command: "npx", args: ["-y", "@playwright/mcp@latest", "--headless"] };
 // Replace dependencies before the entrypoint so an interrupted setup leaves the old index with
 // compatible helpers instead of loading a new index against stale helper exports.
 const FILES = ["helpers.js", "tools.json", "index.ts"];
@@ -37,6 +42,17 @@ async function install({ homeDir = os.homedir(), sourceDir = SOURCE_DIR } = {}) 
     return { filePath: path.join(dir, "index.ts"), dir, written, installed: true };
 }
 
+// Project-scoped Pi registration (the CLI path): merge palsync + Playwright into
+// <workspaceDir>/.pi/mcp.json, preserving any servers the user already configured. Pi requires
+// the project to be trusted; it asks the user on first open, so nothing is pre-approved here.
+async function registerProject(workspaceDir, opts = {}) {
+    const filePath = path.join(workspaceDir, ".pi", "mcp.json");
+    const palsync = buildMcpConfig(workspaceDir, opts).mcpServers.palsync;
+    const cfg = { mcpServers: Object.assign({}, { palsync }, { playwright: PLAYWRIGHT_SERVER }) };
+    const config = await mergeJsonConfig(filePath, cfg, "mcpServers");
+    return { filePath, config };
+}
+
 async function register({ installExtension = false, homeDir = os.homedir(), sourceDir = SOURCE_DIR } = {}) {
     const nativePath = path.join(homeDir, ".pi", "agent", "extensions", "palsync", "index.ts");
     const thirdPartyPath = path.join(homeDir, ".pi", "agent", "extensions", "mcp", "index.ts");
@@ -56,4 +72,4 @@ async function register({ installExtension = false, homeDir = os.homedir(), sour
             : null, installCommand };
 }
 
-module.exports = { register, install, installCommand, SOURCE_DIR, FILES, SHARED_SOURCES };
+module.exports = { register, registerProject, install, installCommand, SOURCE_DIR, FILES, SHARED_SOURCES };

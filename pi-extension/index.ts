@@ -1,6 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import metadata from "./tools.json";
 import helpers from "./helpers.js";
 
@@ -19,6 +21,21 @@ const GUIDELINE_ORDER = ["pal_impact", "pal_ast"];
 function promptGuidelinesFor(toolName: string): string[] {
   const line = TOOL_GUIDELINES[toolName];
   return line ? [line] : [];
+}
+
+// When the workspace's project MCP config serves palsync, Pi's own MCP client exposes the same
+// server and tools. This global extension must stand down, or every pal_* tool appears twice.
+// Inlined with node:fs on purpose: during setup or /reload Pi can briefly observe an older cached
+// helpers.js, and the entrypoint must never require a newly-added helper export. Parse failures
+// count as "not present" (fail open) so a broken file never disables the extension.
+function projectServesPalsync(cwd: string): boolean {
+  try {
+    const config = JSON.parse(readFileSync(join(cwd, ".pi", "mcp.json"), "utf8"));
+    const server = config?.mcpServers?.palsync;
+    return !!server && server.enabled !== false;
+  } catch (error) {
+    return false;
+  }
 }
 
 function activationGuidance(names: string[]): string[] {
@@ -156,6 +173,11 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
     if (!isPalsyncWorkspace(ctx.cwd)) return;
     sessionId = randomUUID();
     activePhase = null;
+    if (projectServesPalsync(ctx.cwd)) {
+      sessionId = null;
+      ctx.ui.notify("PalSync native extension disabled: .pi/mcp.json already serves palsync through Pi's MCP client.", "info");
+      return;
+    }
     if (hasPiMcpCollision(pi.getActiveTools())) {
       sessionId = null;
       ctx.ui.notify("PalSync native extension disabled: pi-mcp is already serving palsync. Configure that server with lifecycle:\"lazy\" or disable one integration.", "warning");

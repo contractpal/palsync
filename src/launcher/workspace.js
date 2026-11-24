@@ -320,10 +320,9 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
         log("  registered with Codex — project-scoped, no longer a shared global entry");
         log("  marked trusted in ~/.codex/config.toml so Codex actually reads " + reg.filePath);
     } else if (agent === "pi") {
-        log("installing native PalSync Pi extension (no project file written)");
-        reg = await registerPi.register({ installExtension: true });
-        log(reg.written ? "  installed native Pi extension" : "  native Pi extension already current");
-        if (reg.collisionGuidance) log("  ⚠ " + reg.collisionGuidance);
+        log("registering palsync + playwright MCP servers with Pi (.pi/mcp.json)");
+        reg = await registerPi.registerProject(workspaceDir);
+        log("  Pi asks once to trust this folder, then loads both servers (launched with codemode)");
     } else if (agent === "opencode") {
         log("registering palsync MCP server with OpenCode (opencode.json)");
         reg = await registerOpencode(workspaceDir);
@@ -359,7 +358,7 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
         resources,
         injected,
         agent,
-        mcpConfig: reg.filePath || null,   // .mcp.json path (Claude) or null (Codex uses its own config)
+        mcpConfig: reg.filePath || null,   // the agent's config path (e.g. .mcp.json, .pi/mcp.json) or null
         mcpRegistration: reg,
         record
     };

@@ -1,6 +1,10 @@
 # Pi integration
 
-`palsync setup --agent pi` installs the native extension at `~/.pi/agent/extensions/palsync/`. Pi loads its TypeScript entry directly; no build step is required. After updating PalSync, rerun setup and reload Pi to install updated tool metadata.
+`palsync --agent pi` (and `palsync setup --agent pi`) writes Pi 1.6's project MCP config at `.pi/mcp.json` with two servers: `palsync` (the same node command Claude Code gets in `.mcp.json`) and `playwright` (`npx -y @playwright/mcp@latest --headless`). Pi asks once whether to trust the folder; after that it loads both. The launcher runs `pi --tools +codemode`, so the MCP tools are deferred: every `pal_*` tool is `mcp__palsync__pal_*`, called from a `codemode` script as `tools.mcp__palsync__pal_validate({...})`, and browser tools are `mcp__playwright__browser_*`. Chain calls in one script and return only the needed output; `searchTools()` / `describeTool()` show the schemas.
+
+## Native extension (GUI and legacy installs)
+
+The Chip GUI still installs the native extension at `~/.pi/agent/extensions/palsync/`. Pi loads its TypeScript entry directly; no build step is required. The extension stands down when the workspace's `.pi/mcp.json` serves palsync (unless that entry has `"enabled": false`), so the server and its tools are never duplicated. After updating PalSync, rerun setup and reload Pi to install updated tool metadata.
 
 The extension exposes `pal_tools`, `pal_context`, `pal_validate`, `pal_goal_lint`, and `pal_stats` initially. All PalSync tool schemas are registered up front, as Pi's deferred-loading contract requires, but inactive schemas stay out of the prompt. `pal_tools({query})` activates matching tools additively using the deterministic groups `sync`, `browser`, `runtime`, `project`, and `spec`. Before calling a required inactive `pal_*` tool, query `pal_tools` once with its exact name; combine immediately needed names, but skip already-active tools. Its result immediately confirms that activated tools are callable on the next model response and states any `pal_impact`/`pal_ast` routing guidance. Pi keeps the same guidance in the system Guidelines while those tools are active. The agent must attempt the required activated tool directly; activation alone is not evidence of failure and does not justify falling back to the PalSync CLI. The MCP server starts only when a PalSync tool is first called; `pal_tools` only changes which tools Pi's prompt exposes and never starts or reconfigures the server.
 
@@ -8,9 +12,9 @@ The extension exposes `pal_tools`, `pal_context`, `pal_validate`, `pal_goal_lint
 
 Do not serve PalSync through both integrations. If the general `pi-mcp` extension is installed, add an explicit `palsync` server entry to its configuration with `"lifecycle":"lazy"`; that prevents its `.palsync.json` auto-detection from eagerly exposing the duplicate static tool set. PalSync reports the collision but never edits third-party configuration.
 
-## Manual smoke
+## Native extension manual smoke
 
-1. Open Pi in a workspace containing `.palsync.json`.
+1. Open Pi in a workspace containing `.palsync.json` but no `.pi/mcp.json` palsync entry (otherwise the extension stands down).
 2. Confirm only `pal_tools`, `pal_context`, `pal_validate`, `pal_goal_lint`, and `pal_stats` are initially active.
 3. Call `pal_tools` with `browser testing`.
 4. Confirm preview, fetch, screenshot, exercise, SEO, and runtime-test tools were added and the original tools remain active.

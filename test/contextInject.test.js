@@ -289,7 +289,7 @@ test("every injected flavor routes sync details through pal_context", async () =
     }
 });
 
-test("Pi gets the same pal_* tool contract as other harnesses (its native extension serves the tools)", async () => {
+test("Pi gets the same pal_* tool contract as other harnesses, remapped for MCP + codemode", async () => {
     const ws = tmpWorkspace();
     await ci.inject(ws, { palName: "Demo", agent: "pi" });
     const md = fs.readFileSync(path.join(ws, "AGENTS.md"), "utf8");
@@ -297,6 +297,22 @@ test("Pi gets the same pal_* tool contract as other harnesses (its native extens
     assert.ok(md.includes("locked for your session"), "Pi's MCP server holds the session lock like every harness");
     assert.ok(!/palsync CLI; locks are per-command/.test(md), "Pi must not be told to drive palsync through the shell");
     assert.ok(fs.existsSync(path.join(ws, ".agents/skills/palbuilder-workflow/SKILL.md")), "Pi gets skills at .agents/");
+    // Pi-only block: names the actual tool ids and the codemode calling convention.
+    assert.match(md, /`\.pi\/mcp\.json`/, "Pi doc names the project MCP config");
+    assert.match(md, /`mcp__palsync__pal_\*`/, "Pi doc states the MCP tool-name prefix");
+    assert.match(md, /`codemode` tool/);
+    assert.match(md, /tools\.mcp__palsync__pal_validate\(\{\.\.\.\}\)/);
+    assert.match(md, /`mcp__playwright__browser_\*`/);
+    assert.match(md, /searchTools\(\)/);
+    fs.rmSync(ws, { recursive: true, force: true });
+});
+
+test("the Pi codemode block appears only in Pi's AGENTS.md", async () => {
+    const ws = tmpWorkspace();
+    await ci.inject(ws, { palName: "Demo", agent: "codex" });
+    const md = fs.readFileSync(path.join(ws, "AGENTS.md"), "utf8");
+    assert.ok(!md.includes("mcp__palsync__"), "Codex doc must not carry Pi's MCP naming");
+    assert.ok(!md.includes("codemode"), "Codex doc must not mention codemode");
     fs.rmSync(ws, { recursive: true, force: true });
 });
 

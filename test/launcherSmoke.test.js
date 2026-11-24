@@ -95,7 +95,7 @@ stub("src/launcher/selection", {
 stub("src/core/createPal", { createNewPal: async () => ({ guid: PAL.guid, name: PAL.name }), listKeys: async () => [] });
 stub("src/mcp/registerCodexProject", { registerCodexProject: async () => ({ filePath: ".codex/config.toml" }) });
 stub("src/mcp/registerOpencode", { registerOpencode: async () => ({ filePath: "opencode.json" }) });
-stub("src/mcp/registerPi", { register: async () => ({ filePath: "pi-ext" }) });
+stub("src/mcp/registerPi", { registerProject: async (dir) => ({ filePath: path.join(dir, ".pi", "mcp.json") }) });
 stub("src/mcp/registerGemini", { registerGemini: async () => ({ filePath: ".gemini/settings.json" }) });
 stub("src/mcp/registerCursor", { registerCursor: async () => ({ filePath: ".cursor/mcp.json" }) });
 stub("src/mcp/registerCopilot", { registerCopilot: async () => ({ filePath: ".mcp.json" }) });

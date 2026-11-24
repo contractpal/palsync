@@ -8,12 +8,13 @@ const { commandOnPath } = require("../platform/commandOnPath");
 
 // `mcp` = how palsync registers its sync server for this agent: "claude" (.mcp.json),
 // "codex" (project-scoped .codex/config.toml + trust entry in ~/.codex/config.toml — see
-// registerCodexProject.js), "pi" (pi-mcp extension), "opencode" (opencode.json), or false.
-// `key` is the --agent flag value.
+// registerCodexProject.js), "pi" (project-scoped .pi/mcp.json: palsync + Playwright; the launcher
+// adds codemode so deferred MCP tools are callable from a script), "opencode" (opencode.json),
+// or false. `key` is the --agent flag value.
 const AGENTS = [
     { id: "claude-code", key: "claude", label: "Claude Code", command: "claude", args: [], mcp: "claude" },
     { id: "codex", key: "codex", label: "Codex", command: "codex", args: [], mcp: "codex" },
-    { id: "pi", key: "pi", label: "Pi", command: "pi", args: [], mcp: "pi" },
+    { id: "pi", key: "pi", label: "Pi", command: "pi", args: ["--tools", "+codemode"], mcp: "pi" },
     { id: "opencode", key: "opencode", label: "OpenCode", command: "opencode", args: [], mcp: "opencode" },
     { id: "gemini", key: "gemini", label: "Gemini CLI", command: "gemini", args: [], mcp: "gemini" },
     { id: "cursor", key: "cursor", label: "Cursor", command: "cursor-agent", args: [], mcp: "cursor" },
@@ -57,9 +58,10 @@ function launch(agent, { cwd, stdio = "inherit" } = {}) {
     const child = spawn(agent.command, agent.args, { cwd, stdio, shell: useShell });
     child.on("error", (err) => {
         if (err && err.code === "ENOENT") {
+            const manual = [agent.command].concat(agent.args || []).join(" ");
             process.stderr.write(
                 "\nCould not launch '" + agent.command + "'. Make sure " + agent.label + " is installed and on PATH.\n" +
-                "Your workspace is ready — open it manually:  cd " + cwd + " && " + agent.command + "\n"
+                "Your workspace is ready — open it manually:  cd " + cwd + " && " + manual + "\n"
             );
         } else {
             process.stderr.write("\nFailed to launch agent: " + (err && err.message ? err.message : err) + "\n");
