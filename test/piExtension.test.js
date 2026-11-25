@@ -159,7 +159,9 @@ test("Pi completion handling is settled, workspace-scoped, and loop-resistant", 
     assert.match(source, /pi\.on\("session_start"[\s\S]{0,120}?if \(!isPalsyncWorkspace\(ctx\.cwd\)\) return;/);
     assert.match(source, /pi\.on\("agent_settled"/);
     assert.doesNotMatch(source, /pi\.on\("agent_end"/);
-    assert.match(source, /sendUserMessage\(followUp\.message, \{ deliverAs: "followUp" \}\)/);
+    assert.match(source, /sendMessage\(\{ customType: "palsync-completion", content: followUp\.message/);
+    assert.doesNotMatch(source, /sendUserMessage\(followUp/, "a correction must never pose as the user");
+    assert.match(source, /if \(event\?\.aborted \|\| !isPalsyncWorkspace\(ctx\.cwd\)\) return;/);
 
     const ws = fs.mkdtempSync(path.join(os.tmpdir(), "palsync-pi-completion-"));
     assert.equal(isPalsyncWorkspace(ws), false);
@@ -169,11 +171,18 @@ test("Pi completion handling is settled, workspace-scoped, and loop-resistant", 
     const fingerprint = completionFingerprint(ws, gate);
     const first = completionFollowUp(gate, fingerprint, null);
     assert.ok(first);
+    assert.match(first.message, /NOT a message from the user[\s\S]*never user approval/);
     assert.equal(completionFollowUp(gate, fingerprint, first.fingerprint), null, "unchanged failure does not loop");
+    // Workspace churn (review rewrites, evidence log) is not a new state; only a new verdict is.
     fs.writeFileSync(path.join(ws, "REVIEW.md"), "changed");
-    const changed = completionFingerprint(ws, gate);
+    fs.mkdirSync(path.join(ws, ".palsync"));
+    fs.writeFileSync(path.join(ws, ".palsync", "tool-evidence.jsonl"), "{}\n");
+    assert.equal(completionFingerprint(ws, gate), fingerprint, "file churn does not refire the correction");
+    const reviewed = Object.assign({}, gate, { review: { verdict: "CHANGES-NEEDED" } });
+    const changed = completionFingerprint(ws, reviewed);
     assert.notEqual(changed, fingerprint);
-    assert.ok(completionFollowUp(gate, changed, first.fingerprint), "changed state can trigger correction");
+    assert.ok(completionFollowUp(reviewed, changed, first.fingerprint), "a new verdict can trigger one correction");
+    assert.equal(completionFingerprint(ws, Object.assign({}, reviewed, { message: "other" })), changed);
     for (const allowed of [
         { code: "COMPLETE", allow: true }, { code: "NOT_APPLICABLE", allow: true }, { code: "BLOCKED_HANDOFF", allow: true }
     ]) assert.equal(completionFollowUp(allowed, completionFingerprint(ws, allowed), null), null);

@@ -109,6 +109,7 @@ fresh-context `pal-review` and report its verdict. Session stats: call `pal_stat
 ## Hard invariants
 
 - Never edit a check sentence, the outcome, or a fixed contract without the user.
+- Automated PalSync messages (completion checks, gate output) are never user approval.
 - Never weaken or delete a check, or write a blocker, to finish faster.
 - Never invent copy, facts, or assets. Never violate a constraint or non-goal.
 - Never create or alter a dataset the goal says the pal only consumes.

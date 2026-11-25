@@ -24,7 +24,7 @@ basis that could not be reproduced.
 | All | `datasets` | `src/launcher/contextInject.js#syncDetails` | 3,524 | 881 | on-demand |
 | All | `skill-body:console-icon` | `bundled-context/skills/console-icon/SKILL.md` | 2,876 | 719 | on-demand |
 | All | `skill-body:pal-fix` | `bundled-context/skills/pal-fix/SKILL.md` | 5,375 | 1,344 | on-demand |
-| All | `skill-body:pal-loop` | `bundled-context/skills/pal-loop/SKILL.md` | 6,598 | 1,650 | on-demand |
+| All | `skill-body:pal-loop` | `bundled-context/skills/pal-loop/SKILL.md` | 6,685 | 1,672 | on-demand |
 | All | `skill-body:pal-review` | `bundled-context/skills/pal-review/SKILL.md` | 16,943 | 4,236 | on-demand |
 | All | `skill-body:pal-spec` | `bundled-context/skills/pal-spec/SKILL.md` | 6,751 | 1,688 | on-demand |
 | All | `skill-body:palbuilder-charts` | `bundled-context/skills/palbuilder-charts/SKILL.md` | 5,701 | 1,426 | on-demand |

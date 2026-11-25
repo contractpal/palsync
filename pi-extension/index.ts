@@ -224,8 +224,9 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
     if (additions.length) activate(additions);
   });
 
-  pi.on("agent_settled", async (_event, ctx) => {
-    if (!isPalsyncWorkspace(ctx.cwd)) return;
+  pi.on("agent_settled", async (event: any, ctx) => {
+    // A user abort means "stop": never queue a correction turn after it.
+    if (event?.aborted || !isPalsyncWorkspace(ctx.cwd)) return;
     try {
       const result = await pi.exec("palsync", ["hook", "completion", "--mode", "json", "--dir", ctx.cwd], { timeout: 5000 });
       if (result.code !== 0 || !result.stdout.trim()) return;
@@ -235,7 +236,8 @@ export default function palsyncExtension(pi: ExtensionAPI): void {
       const followUp = completionFollowUp(gate, fingerprint, lastCompletionFingerprint);
       if (followUp) {
         lastCompletionFingerprint = followUp.fingerprint;
-        pi.sendUserMessage(followUp.message, { deliverAs: "followUp" });
+        pi.sendMessage({ customType: "palsync-completion", content: followUp.message, display: true },
+          { deliverAs: "followUp", triggerTurn: true });
       }
       if (gate.state === "BLOCKED_HANDOFF") {
         ctx.ui.setStatus("palsync-completion", "PalSync: blocked handoff recorded");

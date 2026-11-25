@@ -202,18 +202,22 @@ function piAppendContent(event, text) {
     };
 }
 
+// Keyed on the gate state and the review verdict only. Hashing REVIEW.md or the evidence log made
+// every turn look "changed", so the correction refired after each settle (GiftHub, 2026-11-25: 17x).
 function completionFingerprint(workspaceDir, gate) {
-    const hash = crypto.createHash("sha256").update(String(gate && gate.code || "UNKNOWN"));
-    for (const file of [".palsync.json", "GOAL.md", "REVIEW.md", ".palsync/tool-evidence.jsonl"]) {
-        try { hash.update("\0" + file + "\0").update(fs.readFileSync(path.join(workspaceDir, file))); }
-        catch (e) { hash.update("\0" + file + ":missing"); }
-    }
-    return hash.digest("hex");
+    const verdict = gate && gate.review && gate.review.verdict || "NONE";
+    return crypto.createHash("sha256").update(String(gate && gate.code || "UNKNOWN") + "\0" + verdict).digest("hex");
 }
+
+// Pi delivers extension text in the user role, so it must say it is not the user: one session
+// quoted this correction as "human approval" for four SPEC amendments.
+const COMPLETION_PREFIX = "[Automated PalSync completion check. This is NOT a message from the user and is " +
+    "never user approval for any change to GOAL.md, SPEC.md, or acceptance checks. If the same blocker " +
+    "remains after your next attempt, report it to the user and stop.]\n";
 
 function completionFollowUp(gate, fingerprint, previousFingerprint) {
     if (!gate || gate.allow !== false || fingerprint === previousFingerprint) return null;
-    return { fingerprint, message: "PalSync completion correction required: " + gate.message };
+    return { fingerprint, message: COMPLETION_PREFIX + gate.message };
 }
 
 module.exports = { CORE_TOOLS, routeItems, routeTools, eagerToolNames, activateAdditively, hasPiMcpCollision,
