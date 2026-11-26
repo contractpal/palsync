@@ -96,7 +96,7 @@ contextBridge.exposeInMainWorld("palsyncGui", {
     },
 
     listWorkflowFiles: (palPath, kind) => ipcRenderer.invoke("pal:listWorkflowFiles", { palPath, kind }),
-    testWorkflow: (palPath, kind, browserId, mode, workflowName) => ipcRenderer.invoke("pal:testWorkflow", { palPath, kind, browserId, mode, workflowName }),
+    testWorkflow: (palPath, kind, browserId, mode, workflowName, action, profileId, transactionMode) => ipcRenderer.invoke("pal:testWorkflow", { palPath, kind, browserId, mode, workflowName, action, profileId, transactionMode }),
 
     listTunnelWorkflows: (palPath) => ipcRenderer.invoke("pal:listTunnelWorkflows", palPath),
     runTunnel: (palPath, action, workflow, payload) => ipcRenderer.invoke("pal:runTunnel", { palPath, action, workflow, payload }),

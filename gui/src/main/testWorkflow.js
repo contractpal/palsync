@@ -15,11 +15,11 @@ const { resolvePal } = require("./resolveCached");
 // kind's workflow files to target when a pal has more than one (optional — runTest defaults to
 // the first). Returns runTest()'s result (never the credential-bearing _previewUrl to the
 // renderer — the caller in index.js strips it).
-async function testWorkflow(workspaceDir, kind, workflowName, chipSessionId) {
+async function testWorkflow(workspaceDir, kind, workflowName, chipSessionId, action, profileId, transactionMode) {
     const { session, record } = await sessionForFolder(workspaceDir, chipSessionId);
     // See resolveCached.js — avoids walking the whole account on every ribbon click.
     const resolved = await resolvePal(session, workspaceDir, record.palGuid);
-    return runTest(session, record.palGuid, { kind, workflowName, resolved });
+    return runTest(session, record.palGuid, { kind, workflowName, resolved, action, profileId, transactionMode });
 }
 
 module.exports = { testWorkflow };

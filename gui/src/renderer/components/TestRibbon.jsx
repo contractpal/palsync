@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import QrCodeModal from "./QrCodeModal.jsx";
 import TunnelPanel from "./TunnelPanel.jsx";
 import SystemWorkflowDialog from "./SystemWorkflowDialog.jsx";
+import ActionWorkflowDialog from "./ActionWorkflowDialog.jsx";
 import WebServicesPanel from "./WebServicesPanel.jsx";
 
 // Split-button per area: the main button launches with the default browser immediately, the
@@ -37,6 +38,7 @@ export default function TestRibbon({ pal, debugVisible, onToggleDebug, statsVisi
     const [qr, setQr] = useState(null); // { label, dataUrl }
     const [showTunnel, setShowTunnel] = useState(false);
     const [showSystem, setShowSystem] = useState(false);
+    const [actionDialog, setActionDialog] = useState(null); // { kind, label } | null
     const [showWebServices, setShowWebServices] = useState(false);
     const [syncCheck, setSyncCheck] = useState(null); // { outdated, current, latest } | null
     const [syncConfirming, setSyncConfirming] = useState(false);
@@ -135,7 +137,19 @@ export default function TestRibbon({ pal, debugVisible, onToggleDebug, statsVisi
                         <span className="ribbon-sep" />
                     </>
                 )}
-                {AREAS.map(({ kind, label }) => (
+                {AREAS.map(({ kind, label }) => kind !== "web" ? (
+                    // Console/Transaction get the same intermediate screen as the Java PalBuilder
+                    // IDE: choose the workflow and an optional starting action first.
+                    <button
+                        className="ribbon-btn standalone"
+                        key={kind}
+                        disabled={busyKind !== null}
+                        onClick={() => setActionDialog({ kind, label })}
+                        title={"Test " + label + " — choose workflow and action"}
+                    >
+                        {label}…
+                    </button>
+                ) : (
                     <div className={"ribbon-split" + (busyKind === kind ? " busy" : "")} key={kind}>
                         <button
                             className="ribbon-btn"
@@ -214,6 +228,7 @@ export default function TestRibbon({ pal, debugVisible, onToggleDebug, statsVisi
                 <span className={"ribbon-status" + (status.error ? " error" : "")}>{status.text}</span>
             )}
             {qr && <QrCodeModal label={qr.label} dataUrl={qr.dataUrl} onClose={() => setQr(null)} />}
+            {actionDialog && <ActionWorkflowDialog pal={pal} kind={actionDialog.kind} label={actionDialog.label} browsers={browsers} defaultId={defaultId} onClose={() => setActionDialog(null)} />}
             {showSystem && <SystemWorkflowDialog pal={pal} onClose={() => setShowSystem(false)} />}
             {showTunnel && <TunnelPanel pal={pal} onClose={() => setShowTunnel(false)} />}
             {showWebServices && <WebServicesPanel pal={pal} onClose={() => setShowWebServices(false)} />}

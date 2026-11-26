@@ -88,7 +88,7 @@ function appendQueryParam(urlString, key, value) {
 // Build the runnable preview URL. CREDENTIAL-BEARING — never return/log this; hand straight to
 // the browser opener. profileId/workflowName only matter for console/transaction.
 // Uses URL and URLSearchParams for all selection fields (no manual string concatenation).
-function buildPreviewUrl(session, token, kind, profileId, workflowName) {
+function buildPreviewUrl(session, token, kind, profileId, workflowName, action) {
     if (kind === "web") return token;
     let url = token;
     if (session.sessionAuthToken) {
@@ -98,6 +98,8 @@ function buildPreviewUrl(session, token, kind, profileId, workflowName) {
     }
     if (profileId) url = appendQueryParam(url, "nxProfileId", profileId);
     if (workflowName) url = appendQueryParam(url, "cp-workflow", normalizeWorkflowName(workflowName));
+    // Same as the Java IDE's Test Console/Transaction dialog: the action rides as cp-ws-doaction.
+    if (action && String(action).trim()) url = appendQueryParam(url, "cp-ws-doaction", String(action).trim());
     return url;
 }
 
@@ -107,6 +109,8 @@ function buildPreviewUrl(session, token, kind, profileId, workflowName) {
 //                 first of that kind, sans extension)
 //   preferAction: auto-detect console, then transaction, before the default web-first pick. Use
 //                 when the caller dispatches a console/transaction action; a WEB pal cannot.
+//   transactionMode: "new" | "last" (transaction only) — open a fresh transaction or continue the
+//                 last one; omitted keeps the plain token link.
 //   resolved: a previously-resolved pal (see core/resolve.js's resolveServerPalByGuid /
 //             refreshResolvedPal) to skip lock.acquireByGuid's own full-account resolve walk —
 //             callers that run this repeatedly against the same pal (e.g. Chip's ribbon) should
@@ -114,7 +118,7 @@ function buildPreviewUrl(session, token, kind, profileId, workflowName) {
 // Returns { ran, kind, success, validated, validation, profiles, _previewUrl, blocked }.
 // _previewUrl is underscored to signal "internal, do not surface" — the tool layer opens it and
 // drops it from the response.
-async function runTest(session, guid, { kind, workflowName, resolved, preferAction } = {}) {
+async function runTest(session, guid, { kind, workflowName, resolved, preferAction, action, profileId: requestedProfileId, transactionMode } = {}) {
     const lk = await lock.acquireByGuid(session, guid, { force: false, resolved });
     if (!lk.acquired) {
         return { ran: false, blocked: lk.blocked || "no-lock", holder: lk.holder, since: lk.since };
@@ -169,6 +173,17 @@ async function runTest(session, guid, { kind, workflowName, resolved, preferActi
     const validated = !!(resp && resp.validated);
     const profiles = (resp && resp.profileList && resp.profileList["com.contractpal.pal.ProfileInfo"]) || [];
 
+    // Transaction tests return three links (same as the Java IDE's Test Transaction dialog): the
+    // plain token, a start-a-new-transaction URL, and — only when one exists — a continue-the-last-
+    // transaction URL. transactionMode picks between the latter two so both scenarios are testable.
+    let launchUrl = resp && resp.token;
+    let transactionBlocked = null;
+    if (chosen.kind === "transaction" && transactionMode) {
+        const picked = transactionMode === "last" ? resp.lastTransactionUrl : resp.newTransactionUrl;
+        if (picked) launchUrl = picked;
+        else if (transactionMode === "last") transactionBlocked = "no-last-transaction";
+    }
+
     // console-system (TestSystem.do) is a backend job workflow with no rendered page at all —
     // found live (David, 2026-09-10): the ribbon dialog was wrongly offering a browser
     // picker/QR code for it, both meaningless here. Per David, resp.token for this kind is the
@@ -180,12 +195,14 @@ async function runTest(session, guid, { kind, workflowName, resolved, preferActi
     let previewUrl = null;
     // Keep preview construction strict for renderable workflows, but never let an enrichment
     // failure change the server's compile verdict.
-    if (!isJob && validated && resp.token) {
+    if (!isJob && validated && launchUrl && !transactionBlocked) {
         const wfName = chosen.kind === "web" ? null
             : (hasWorkflowName ? normalizedRequested : (chosen.files[0] ? normalizeWorkflowName(chosen.files[0]) : "main"));
-        const profileId = chosen.kind === "web" ? null : (profiles[0] && profiles[0].profileId);
+        // An explicit pick (Chip's Test dialog) wins; otherwise the first profile, as before.
+        const profileId = chosen.kind === "web" ? null
+            : (requestedProfileId || (profiles[0] && profiles[0].profileId));
         try {
-            previewUrl = buildPreviewUrl(session, resp.token, chosen.kind, profileId, wfName);
+            previewUrl = buildPreviewUrl(session, launchUrl, chosen.kind, profileId, wfName, action);
         } catch {
             previewUrl = null;
         }
@@ -195,6 +212,8 @@ async function runTest(session, guid, { kind, workflowName, resolved, preferActi
         ran: true, kind: chosen.kind, endpoint: chosen.endpoint, success, validated,
         validation, messages, profiles: profiles.map(p => ({ name: p.profileName, id: p.profileId })),
         availableKinds: avail.map(a => a.kind),
+        transactionBlocked,
+        hasLastTransaction: chosen.kind === "transaction" ? !!(resp && resp.lastTransactionUrl) : undefined,
         // rawToken = the unmodified resp.token. For WEB it's a directly-fetchable URL on
         // webpals.cloudpiston.com (no auth needed — verified live). _previewUrl carries cp-auth
         // for the console browser-open path and must never be returned to the agent.

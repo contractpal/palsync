@@ -609,9 +609,9 @@ ipcMain.handle("pal:listWorkflowFiles", async (event, { palPath, kind }) => {
     catch (e) { return { error: e && e.message ? e.message : String(e), files: [] }; }
 });
 
-ipcMain.handle("pal:testWorkflow", async (event, { palPath, kind, browserId, mode, workflowName }) => {
+ipcMain.handle("pal:testWorkflow", async (event, { palPath, kind, browserId, mode, workflowName, action, profileId, transactionMode }) => {
     try {
-        const res = await testWorkflow.testWorkflow(palPath, kind, workflowName, await ensurePalSessionId(palPath));
+        const res = await testWorkflow.testWorkflow(palPath, kind, workflowName, await ensurePalSessionId(palPath), action, profileId, transactionMode);
         let opened = null;
         let qrDataUrl = null;
         if (res.ran && res._previewUrl) {
