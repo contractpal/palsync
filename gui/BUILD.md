@@ -189,6 +189,10 @@ step needed for a CI-signed build. Requires the app registration behind `AZURE_C
 the "Artifact Signing Certificate Profile Signer" role on the `ContractPal-Signing` account's
 `contractpal-prod` certificate profile.
 
+The CI build scripts (`build:*:ci`) do not bump the version. Before you dispatch a CI release build,
+run `.github/workflows/bump-version.yml` (Actions → Bump version → Run workflow) once. It commits the
+new `gui/package.json` version to `main`, so all three platform builds share one version.
+
 ## Producing a real installer (Mac) — signing, notarizing, and publishing
 
 **Correction, 2026-09-14, same day this was first written: the build/package steps genuinely

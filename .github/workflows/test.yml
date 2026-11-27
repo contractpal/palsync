@@ -1,0 +1,36 @@
+name: Test
+
+# Runs the full test suite (node --test, ~6 s locally) on every push to main and every PR, so a
+# failing test blocks a change in CI instead of surfacing later as a fix commit. Bot version-bump
+# commits carry [skip ci] and change only gui/package*.json, so they are skipped.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # postinstall downloads Chromium; the browser tests also need its system libraries,
+      # which only `playwright install --with-deps` provides on a bare runner.
+      - name: Install dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run tests
+        run: npm test
