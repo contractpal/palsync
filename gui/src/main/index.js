@@ -324,7 +324,13 @@ ipcMain.handle("workspace:delete", async (event, filePath) => {
 // ---- IPC: add pal (existing folder only, MVP) ----
 
 ipcMain.handle("pal:chooseFolder", async () => {
-    const defaultPath = appState.getDefaultPalFolderDir(userDataDir()) || undefined;
+    // Same base the cloud flow uses: the configured default pal folder, else ~/PalBuilder
+    // (only if it exists, so the dialog doesn't fall back to something odd).
+    let defaultPath = appState.getDefaultPalFolderDir(userDataDir());
+    if (!defaultPath) {
+        const fallback = path.join(require("os").homedir(), "PalBuilder");
+        defaultPath = fs.existsSync(fallback) ? fallback : undefined;
+    }
     const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
         title: "Add Pal — Choose its folder",
         properties: ["openDirectory"],
