@@ -762,7 +762,7 @@ test("preflight checks the agent that was chosen, and Pi/Gemini never trigger a 
         input: "",
         env: Object.assign({}, process.env, { PATH: "", HOME: tmpDir() })
     });
-    for (const agent of ["pi", "codex", "opencode", "gemini", "cursor", "copilot"]) {
+    for (const agent of ["pi", "codex", "opencode", "gemini", "cursor", "copilot", "antigravity"]) {
         const res = runWith(agent);
         assert.equal(res.status, 0, agent + " should not need Claude Code: " + res.stderr);
         assert.ok(!/npm install -g @anthropic-ai\/claude-code/.test(res.stderr),

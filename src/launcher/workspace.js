@@ -28,6 +28,7 @@ const registerPi = require("../mcp/registerPi");
 const { registerGemini } = require("../mcp/registerGemini");
 const { registerCursor } = require("../mcp/registerCursor");
 const { registerCopilot } = require("../mcp/registerCopilot");
+const { registerAntigravity } = require("../mcp/registerAntigravity");
 const { hashWorkspace, hashPaths, listScopedFiles } = require("../core/workspaceHash");
 const { snapshotWorkspace } = require("../core/snapshot");
 const { diffWorkspace, describeDiff } = require("../core/localDrift");
@@ -288,14 +289,10 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
     // CLAUDE.md is not wiped by pull (sync only touches files inside the 14 manifest folders
     // + pal.json) — inject() reads the user's existing CLAUDE.md and merges its managed block
     // in place.
+    const AGENTS_MD_LABELS = { codex: "Codex", pi: "Pi", opencode: "OpenCode", gemini: "Gemini CLI",
+        cursor: "Cursor", copilot: "GitHub Copilot CLI", antigravity: "Antigravity" };
     log("injecting CLAUDE.md + skills" +
-        (agent === "codex" ? " + AGENTS.md/.agents (Codex)" : agent === "pi" ? " + AGENTS.md/.agents (Pi)" :
-         agent === "opencode" ? " + AGENTS.md/.agents (OpenCode)" : ""));
-    // KNOWN GAP: Gemini CLI/Cursor/Copilot fall through to the Claude-only CLAUDE.md branch below
-    // (contextInject.inject only special-cases codex/pi/opencode for AGENTS.md/.agents) — those
-    // three agents don't read CLAUDE.md natively (Cursor/Copilot read AGENTS.md; Gemini CLI reads
-    // its own GEMINI.md), so they currently get MCP tools registered but no injected context doc.
-    // Tracked in gui/BACKLOG.md; MCP registration below is unaffected either way.
+        (AGENTS_MD_LABELS[agent] ? " + AGENTS.md/.agents (" + AGENTS_MD_LABELS[agent] + ")" : ""));
     onStep({ step: "inject", status: "start" });
     const injected = await contextInject.inject(workspaceDir, {
         palName: sel.pal.name, agent, policy: require("../core/policy").resolve()
@@ -329,6 +326,9 @@ async function setup({ session, cloudUrl, sel, workspaceDir, agent = "claude", o
     } else if (agent === "gemini") {
         log("registering palsync MCP server with Gemini CLI (.gemini/settings.json)");
         reg = await registerGemini(workspaceDir);
+    } else if (agent === "antigravity") {
+        log("registering palsync MCP server with Antigravity (.agents/mcp_config.json)");
+        reg = await registerAntigravity(workspaceDir);
     } else if (agent === "cursor") {
         log("registering palsync MCP server with Cursor (.cursor/mcp.json)");
         reg = await registerCursor(workspaceDir);

@@ -11,6 +11,7 @@ const { registerOpencode } = require("palsync/src/mcp/registerOpencode");
 const { registerGemini } = require("palsync/src/mcp/registerGemini");
 const { registerCursor } = require("palsync/src/mcp/registerCursor");
 const { registerCopilot } = require("palsync/src/mcp/registerCopilot");
+const { registerAntigravity } = require("palsync/src/mcp/registerAntigravity");
 const { registerCodexProject, patchEnv: patchCodexEnv } = require("palsync/src/mcp/registerCodexProject");
 const registerPi = require("palsync/src/mcp/registerPi");
 const { MCP_BIN } = require("palsync/src/mcp/register");
@@ -30,6 +31,7 @@ const REGISTRARS = {
     "gemini": { configFile: path.join(".gemini", "settings.json"), register: registerGemini },
     "cursor": { configFile: path.join(".cursor", "mcp.json"), register: registerCursor },
     "copilot": { configFile: ".mcp.json", register: registerCopilot },
+    "antigravity": { configFile: path.join(".agents", "mcp_config.json"), register: registerAntigravity },
     "codex": { configFile: path.join(".codex", "config.toml"), register: registerCodexProject, format: "toml" }
 };
 
@@ -172,9 +174,8 @@ async function ensureChipSessionId(filePath, configFile, chipSessionId, format) 
 // sync-contract guidance for the whole session). writeIfChanged/mergeManaged inside inject()
 // make this idempotent and cheap, same as MCP registration below, so it's safe to call on every
 // console launch rather than only once. Same known gap as the CLI (documented in
-// workspace.js): Gemini CLI/Cursor/Copilot fall through to the Claude-only CLAUDE.md branch
-// since they don't read CLAUDE.md/AGENTS.md natively — harmless no-op for those three, and
-// they're already being phased out of Chip's own agent list.
+// workspace.js): that gap is now closed — Gemini CLI/Cursor/Copilot/Antigravity get AGENTS.md +
+// .agents/skills from inject() like Codex/Pi/OpenCode do.
 async function ensureContextInjected(agentId, workspaceDir) {
     let palName;
     try {

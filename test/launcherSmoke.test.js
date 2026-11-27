@@ -99,6 +99,7 @@ stub("src/mcp/registerPi", { registerProject: async (dir) => ({ filePath: path.j
 stub("src/mcp/registerGemini", { registerGemini: async () => ({ filePath: ".gemini/settings.json" }) });
 stub("src/mcp/registerCursor", { registerCursor: async () => ({ filePath: ".cursor/mcp.json" }) });
 stub("src/mcp/registerCopilot", { registerCopilot: async () => ({ filePath: ".mcp.json" }) });
+stub("src/mcp/registerAntigravity", { registerAntigravity: async () => ({ filePath: ".agents/mcp_config.json" }) });
 
 const launcher = require(path.join(root, "src/launcher/index.js"));
 const recent = require(path.join(root, "src/platform/recentPals.js"));

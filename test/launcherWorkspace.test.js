@@ -23,6 +23,7 @@ const paths = {
     registerGemini: require.resolve("../src/mcp/registerGemini"),
     registerCursor: require.resolve("../src/mcp/registerCursor"),
     registerCopilot: require.resolve("../src/mcp/registerCopilot"),
+    registerAntigravity: require.resolve("../src/mcp/registerAntigravity"),
     merge: require.resolve("../src/core/merge")
 };
 
@@ -69,6 +70,7 @@ function loadWorkspace(hooks = {}) {
         [paths.registerGemini]: { registerGemini: async () => ({ filePath: ".gemini/settings.json" }) },
         [paths.registerCursor]: { registerCursor: async () => ({ filePath: ".cursor/mcp.json" }) },
         [paths.registerCopilot]: { registerCopilot: async () => ({ filePath: ".mcp.json" }) },
+        [paths.registerAntigravity]: { registerAntigravity: async () => ({ filePath: ".agents/mcp_config.json" }) },
         [paths.merge]: { mergeWorkspace: async () => ({ merged: false, reason: "not used" }) }
     };
     const saved = new Map();

@@ -18,7 +18,8 @@ const AGENTS = [
     { id: "opencode", key: "opencode", label: "OpenCode", command: "opencode", args: [], mcp: "opencode" },
     { id: "gemini", key: "gemini", label: "Gemini CLI", command: "gemini", args: [], mcp: "gemini" },
     { id: "cursor", key: "cursor", label: "Cursor", command: "cursor-agent", args: [], mcp: "cursor" },
-    { id: "copilot", key: "copilot", label: "GitHub Copilot CLI", command: "copilot", args: [], mcp: "copilot" }
+    { id: "copilot", key: "copilot", label: "GitHub Copilot CLI", command: "copilot", args: [], mcp: "copilot" },
+    { id: "antigravity", key: "antigravity", label: "Antigravity", command: "agy", args: [], mcp: "antigravity" }
     // future: { id: "cline", ... }
 ];
 

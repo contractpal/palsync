@@ -90,8 +90,8 @@ palsync --version        # confirm the build
 
 Install trouble? See [Troubleshooting](#troubleshooting).
 
-The setup wizard also asks which coding agent to launch — Claude Code (default), Codex, Pi, or
-OpenCode. You can skip the question with `--agent <name>`; that choice is remembered per pal, so a
+The setup wizard also asks which coding agent to launch — Claude Code (default), Codex, Pi,
+OpenCode, Gemini CLI, Cursor, GitHub Copilot CLI, or Google Antigravity (`agy`). You can skip the question with `--agent <name>`; that choice is remembered per pal, so a
 recent launch opens the agent you used last time. Only the chosen agent's prerequisites are checked
 — picking Pi or Codex never asks you to install Claude Code. A workspace carries files for exactly
 one agent at a time; switching agents swaps the palsync-owned files cleanly (your own notes in
@@ -100,7 +100,7 @@ one agent at a time; switching agents swaps the palsync-owned files cleanly (you
 | Flag | What it does |
 |------|--------------|
 | `--version`, `-v` | Print the build version and exit. |
-| `--agent <name>` | Coding agent: `claude` (default), `codex`, `pi`, or `opencode`. Overrides the remembered agent. |
+| `--agent <name>` | Coding agent: `claude` (default), `codex`, `pi`, `opencode`, `gemini`, `cursor`, `copilot`, or `antigravity`. Overrides the remembered agent. |
 | `--dir <path>` | Use this exact folder as the workspace for **this session only** — the remembered folder is left unchanged (same path meaning as `palsync setup --dir`). |
 | `--eval [spec]` | Benchmark-harness mode (non-interactive eval runs). |
 | `--help`, `-h` | Usage help. |

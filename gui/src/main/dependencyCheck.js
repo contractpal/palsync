@@ -12,13 +12,16 @@ const { commandOnPath } = require("palsync/src/platform/commandOnPath");
 // case) — the agents Chip can actually register MCP for today. Claude Code is the recommended
 // default; list stays in sync with what Chip really supports.
 // Claude Code, OpenCode, Pi, and Codex are the agents David has confirmed/asked to treat as
-// real today (2026-09-14) — Gemini CLI, Cursor, GitHub Copilot CLI, and Kiro CLI were removed
-// from the checklist at his request until their support actually ships.
+// real today (2026-09-14) — Cursor, GitHub Copilot CLI, and Kiro CLI were removed from the
+// checklist at his request until their support actually ships. Antigravity was added (2026-11-27)
+// now that it gets AGENTS.md context + MCP registration; Gemini CLI stays off the checklist
+// (Antigravity is its successor) but remains launchable via --agent gemini.
 const SUPPORTED_AGENTS = [
     { id: "claude-code", command: "claude", label: "Claude Code", docsUrl: "https://docs.claude.com/en/docs/claude-code", recommended: true },
     { id: "opencode", command: "opencode", label: "OpenCode", docsUrl: "https://opencode.ai/docs/" },
     { id: "pi", command: "pi", label: "Pi", docsUrl: "https://pi.dev/" },
-    { id: "codex", command: "codex", label: "Codex", docsUrl: "https://developers.openai.com/codex/cli/" }
+    { id: "codex", command: "codex", label: "Codex", docsUrl: "https://developers.openai.com/codex/cli/" },
+    { id: "antigravity", command: "agy", label: "Antigravity", docsUrl: "https://antigravity.google/docs" }
 ];
 
 // Only Claude Code gets a health probe: its npm wrapper can be on PATH yet unusable (native

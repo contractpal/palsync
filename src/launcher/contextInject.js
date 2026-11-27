@@ -628,10 +628,14 @@ async function contextStatus(workspaceDir) {
 // palsync-owned artifacts so a workspace carries exactly the files its agent reads.
 //   claude → .claude/skills + CLAUDE.palsync.md (the owned doc) + a tiny CLAUDE.md block that
 //            `@CLAUDE.palsync.md`-imports it. Claude Code reads CLAUDE.md and resolves the import.
-//   codex/pi/opencode → .agents/skills + AGENTS.md carrying the full doc inline (their @import
+//   codex/pi/opencode/gemini/cursor/copilot/antigravity → .agents/skills + AGENTS.md carrying the full doc inline (their @import
 //            support is unreliable; Claude Code does not read .agents/ or AGENTS.md — verified).
 //            All three drive palsync through the pal_* tools (Pi through Pi's built-in MCP client,
 //            where the tools are named mcp__palsync__pal_* and run through codemode).
+// Agents that read AGENTS.md + .agents/skills natively (Gemini CLI additionally gets AGENTS.md
+// added to its context.fileName by registerGemini). Everything else is Claude.
+const AGENTS_MD_AGENTS = ["codex", "pi", "opencode", "gemini", "cursor", "copilot", "antigravity"];
+
 async function inject(workspaceDir, { palName, agent = "claude", policy = policyDefaults } = {}) {
     // Ensure transient artifacts are ignored and already-tracked copies are migrated
     // out of the index. This keeps task commits focused on source while leaving disk
@@ -644,7 +648,7 @@ async function inject(workspaceDir, { palName, agent = "claude", policy = policy
     const skillNames = skills.map(s => s.name);
     const keep = skillNames.concat(SHARED_REFERENCES);
 
-    if (agent === "codex" || agent === "pi" || agent === "opencode") {
+    if (AGENTS_MD_AGENTS.includes(agent)) {
         await copySkillSet(workspaceDir, ".agents", skills);
         await copySharedReferences(workspaceDir, ".agents");
         const prunedAgents = await pruneSkills(workspaceDir, ".agents", keep);
